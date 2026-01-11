@@ -49,7 +49,7 @@
     # Development
     vscode
     code-cursor
-    zed-editor
+    pkgs-stable.zed-editor
     flutter
     android-studio-full
     android-tools

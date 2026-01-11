@@ -208,7 +208,6 @@ in
     steghide                # Steganography tool
     stegseek                # Steghide cracker
     zsteg                   # PNG/BMP stego
-    outguess                # Steganography
     stegsolve               # Image analysis
     
     # === NETWORK TOOLS ===
@@ -438,7 +437,6 @@ in
     tor                     # Anonymous network
     
     # === STRESS TESTING ===
-    siege                   # HTTP tester
     vegeta                  # HTTP load tester
     hey                     # HTTP benchmarker
     ddosify                 # DDoS simulator
