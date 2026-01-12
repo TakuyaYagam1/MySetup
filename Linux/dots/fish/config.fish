@@ -78,6 +78,7 @@ if status is-interactive
     alias ...='cd ../..'
     alias h='history'
     alias bottles='flatpak run com.usebottles.bottles'
+    alias jwt='node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
     command -v bat &>/dev/null && alias cat='bat'
     command -v rg &>/dev/null && alias grep='rg'
     command -v fd &>/dev/null && alias find='fd'

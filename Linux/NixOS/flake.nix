@@ -30,6 +30,8 @@
       url = "github:jacopone/antigravity-nix";
     };
 
+    templ.url = "github:a-h/templ";
+
     nix-snapd = {
       url = "github:nix-community/nix-snapd";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -42,8 +44,8 @@
 
     # Zapret for russian users
     # Based on 
-    # [https://github.com/kartavkun/zapret-discord-youtube](https://github.com/kartavkun/zapret-discord-youtube)
-    # [https://github.com/bol-van/zapret](https://github.com/bol-van/zapret)
+    # https://github.com/kartavkun/zapret-discord-youtube
+    # https://github.com/bol-van/zapret
     zapret-discord-youtube = {
       url = "github:kartavkun/zapret-discord-youtube";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -56,7 +58,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-stable, home-manager, nix-snapd, zapret-discord-youtube, lanzaboote, ... }@inputs:
+  outputs = { self, nixpkgs, nixpkgs-stable, home-manager, nix-snapd, zapret-discord-youtube, lanzaboote, templ, ... }@inputs:
   let
     system = "x86_64-linux";
     
@@ -73,13 +75,17 @@
 
         ./configuration.nix
 
-        ({ ... }: {
+        ({ pkgs, ... }: {
           nixpkgs.overlays = [ 
             inputs.antigravity.overlays.default
             
             (final: prev: {
               vmware-workstation = pkgs-stable.vmware-workstation;
             })
+          ];
+
+          environment.systemPackages = with pkgs; [
+            inputs.templ.packages.${system}.templ
           ];
         })
 
@@ -107,3 +113,4 @@
     };
   };
 }
+
