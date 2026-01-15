@@ -22,6 +22,7 @@
     
     # Office & Communication
     libreoffice-qt6-fresh
+    wpsoffice
     onlyoffice-desktopeditors
     spotify
     telegram-desktop
@@ -58,6 +59,7 @@
     android-tools
     scrcpy
     qtcreator
+    obsidian
     
     # Screenshot & Screen capture
     grim
