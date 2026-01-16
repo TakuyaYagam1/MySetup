@@ -20,7 +20,7 @@
     ./services/observability.nix
     ./services/virtualization.nix
     ./services/system-services.nix
-    ./services/zapret.nix
+    # ./services/zapret.nix
     
     # Programs
     ./programs/desktop.nix
