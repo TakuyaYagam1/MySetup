@@ -15,54 +15,48 @@ This configuration uses a modular file structure for better maintainability and 
 
 ### Bootloader Selection (GRUB vs Secure Boot)
 
-**Dual Boot Windows + NixOS**: Supports GRUB and Secure Boot (lanzaboote).
+**Configuration Location**: `system/boot/`
 
-**Location**: `system/boot/` directory, select one in `configuration.nix`
+**Instructions**:
+Select the appropriate bootloader configuration in `configuration.nix`.
 
 #### GRUB (Default)
 
-```
+Ensure `grub.nix` is imported and `secure.nix` is commented out:
+
+```nix
 imports = [ ./system/boot/grub.nix ]; # Comment secure.nix
 ```
 
 #### Secure Boot (lanzaboote)
 
-**These parameters may vary depending on the motherboards, but the essence remains the same, you need to enable secure boot and clear the keys. My example is explained based on the asus prime z790-p motherboard.**
+**Requirement**: Active Secure Boot in BIOS with cleared keys.
 
-**How to Enable Secure Boot (Step-by-Step):**
+1. **BIOS Configuration**:
+   - Enter BIOS -> Secure Boot.
+   - Select "Clear Secure Boot Keys" (Setup Mode).
+   - Set OS Type to "Windows UEFI Mode".
+   - Save & Exit.
 
-1. Prepare BIOS:
+2. **NixOS Configuration**:
+   - Edit `configuration.nix`: Enable `secure.nix`, disable `grub.nix`.
 
-   Enter BIOS → Secure Boot.
-
-   Select "Clear Secure Boot Keys" (Reset to Setup Mode).
-
-   Set OS Type to Windows UEFI Mode. 
-
-   Set Key Management to Custom (if available). 
-
-   Save & Exit.
-
-2. Install Lanzaboote in NixOS:
-
-   Edit configuration.nix: Enable secure.nix, disable grub.nix.
-
-   ```
-   imports = [ ./system/boot/secure.nix ]; # Comment grub.nix 
+   ```nix
+   imports = [ ./system/boot/secure.nix ]; # Comment grub.nix
    ```
 
-   Rebuild system:
+   - Rebuild system:
 
-   ```
+   ```bash
    sudo nixos-rebuild boot --install-bootloader --flake .#NixOS
    ```
 
-**After lanzaboote install (one-time)**:
+3. **Key Enrollment** (One-time):
 
-```
-sudo sbctl create-keys
-sudo sbctl enroll-keys --microsoft
-```
+   ```bash
+   sudo sbctl create-keys
+   sudo sbctl enroll-keys --microsoft
+   ```
 
 #### Migrating from GRUB (Troubleshooting)
 
@@ -103,23 +97,16 @@ This package requires VPN/VPS connection for installation within the Russian Fed
 
 ### GPU Configuration (NVIDIA / AMD)
 
-This configuration includes support for NVIDIA GPUs but requires manual activation depending on your hardware.
+**Configuration Location**: `system/hardware.nix` and `system/nvidia-drivers.nix`
 
-**Location**: `system/hardware.nix` (or wherever you placed the GPU config)
+**NVIDIA Users**:
+To enable NVIDIA drivers, uncomment the corresponding import in `configuration.nix`. Do not edit the hardware configuration directly unless necessary.
 
-Uncomment the NVIDIA drivers section in your config file before installation:
-
-```
-services.xserver.videoDrivers = [ "nvidia" ];
-
-hardware.nvidia = {
-  modesetting.enable = true;
-  powerManagement.enable = false;
-  powerManagement.finegrained = false;
-  open = false;
-  nvidiaSettings = true;
-  package = config.boot.kernelPackages.nvidiaPackages.stable;
-};
+```nix
+imports = [
+  # ...
+  ./system/nvidia-drivers.nix # Uncomment this line
+];
 ```
 
 ### Password Configuration
@@ -298,48 +285,45 @@ Linux/NixOS/
 │
 ├── system/                       # Core system configuration
     ├── boot/                     # 
-│   │   ├── grub.nix                    # Kernel, bootloader, GRUB theme
-    │   └── secure.nix                  # Secure Boot (lanzaboote) if u using dualboot with secure boot
+│   │   ├── grub.nix              # Kernel, bootloader, GRUB theme
+│   │   └── secure.nix            # Secure Boot (lanzaboote)
 │   ├── locale.nix                # Timezone, i18n, keyboard layout
 │   ├── networking.nix            # Network, firewall, DNS
-│   ├── security.nix              # Polkit, SSH daemon
-│   ├── power.nix                 # Power management, backlight
-│   ├── hardware.nix              # Graphics, Bluetooth
-│   └── nix.nix                   # Nix settings, garbage collection, overlays
+│   ├── security.nix              # Polkit, SSH daemon, user permissions
+│   ├── power.nix                 # Power management settings
+│   ├── hardware.nix              # Hardware-specific configurations
+│   ├── nvidia-drivers.nix        # NVIDIA specific configuration (Optional)
+│   └── nix.nix                   # Nix settings, garbage collection
 │
 ├── services/                     # System services
-│   ├── display.nix               # SDDM, Hyprland
-│   ├── databases.nix             # PostgreSQL, MySQL, Redis (optional)
-│   ├── observability.nix         # Grafana, Prometheus, Loki (disabled by default)
-│   ├── virtualization.nix        # Docker, Podman, libvirt, VirtualBox
-│   ├── system-services.nix       # D-Bus, GVFS, NetworkManager applet
-│   └── zapret.nix                # DPI Bypass (YouTube/Discord fix)
+│   ├── display.nix               # SDDM, Hyprland configuration
+│   ├── databases.nix             # PostgreSQL, MySQL, Redis
+│   ├── system-services.nix       # Essential system services
+│   └── zapret.nix                # DPI Bypass configuration
 │
 ├── programs/                     # Program configurations
-│   ├── desktop.nix               # Thunar file manager
-│   ├── gaming.nix                # Steam, GameMode
-│   ├── shell.nix                 # Fish shell
-│   ├── development.nix           # nix-ld libraries for development
-│   └── system-tools.nix          # ADB, VPN tools
+│   ├── desktop.nix               # GUI applications configuration
+│   ├── gaming.nix                # Gaming platform (Steam, etc.)
+│   ├── shell.nix                 # Shell environment (Fish)
+│   └── development.nix           # Development tools
 │
 ├── packages/                     # Package lists
-│   ├── system-packages.nix       # Core system utilities
-│   ├── dev-tools.nix             # Development tools (Go, Node, K8s, etc.)
-│   └── fonts.nix                 # Font packages
+│   ├── system-packages.nix       # Base system packages
+│   ├── dev-tools.nix             # Development related packages
+│   └── fonts.nix                 # System fonts
 │
 ├── users/                        # User management
-│   └── takuya.nix                # User configuration, groups, activation scripts
+│   └── takuya.nix                # User definitions
 │
 ├── home/                         # Home Manager configuration
-│   ├── home.nix                  # Caelestia shell configuration
-│   ├── desktop.nix               # GTK, Qt, cursor themes
-│   ├── apps.nix                  # GUI applications
-│   └── dev-packages.nix          # Python packages and development tools
+│   ├── home.nix                  # Main Home Manager file
+│   └── ...                       # Other HM modules
 │
-├── dots/                         # User dotfiles
-│   └── install.fish              # Dotfiles installation script
+├── dots/                         # Dotfiles installation scripts
+│   └── install.fish              # Main installation script
 │
-├── grub-theme/                   # GRUB bootloader theme
+├── grub-theme/                   # GRUB bootloader theme (Meowrch)
+├── sddm-theme/                   # Custom SDDM theme (Meowrch)
 └── Wallpapers/                   # Wallpaper collection
 ```
 
@@ -348,7 +332,7 @@ Linux/NixOS/
 ### Desktop Environment
 
 - **Compositor**: Hyprland (Wayland)
-- **Display Manager**: SDDM with Astronaut theme
+- **Display Manager**: SDDM with **Meowrch** custom theme
 - **Shell**: Fish with Starship prompt
 - **File Manager**: Thunar with plugins
 - **Theme**: Dark theme (Papirus icons, Bibata cursors, adw-gtk3)

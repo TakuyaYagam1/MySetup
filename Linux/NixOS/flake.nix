@@ -105,9 +105,15 @@
           };
         }
 
-        ({ ... }: {
+        ({ pkgs, ... }: {
           services.flatpak.enable = true;   
-          services.snap.enable = true;      
+          services.snap.enable = true;
+
+          xdg.portal = {
+            enable = true;
+            extraPortals = with pkgs; [ xdg-desktop-portal-gtk ];
+            config.common.default = "*";
+          };
         })
       ];
     };

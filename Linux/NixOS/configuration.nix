@@ -10,6 +10,7 @@
     ./system/locale.nix
     ./system/networking.nix
     ./system/security.nix
+    # ./system/nvidia-drivers.nix
     ./system/power.nix
     ./system/hardware.nix
     ./system/nix.nix

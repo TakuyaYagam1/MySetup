@@ -1,7 +1,17 @@
 { pkgs, ... }:
 
 let
-  grubThemeSource = ../grub-theme;
+  meowrchGrubTheme = pkgs.stdenv.mkDerivation {
+    pname = "meowrch-grub-theme";
+    version = "1.0";
+    src = ../../grub-theme;
+    
+    dontBuild = true;
+    installPhase = ''
+      mkdir -p $out
+      cp -r ./* $out/
+    '';
+  };
 in
 {
   boot = {
@@ -26,7 +36,7 @@ in
         useOSProber = true;
         configurationLimit = 10;
         gfxmodeEfi = "2560x1600";
-        theme = "/boot/grub/themes/grub-theme";
+        theme = meowrchGrubTheme;
       };
     };
   };
@@ -36,10 +46,4 @@ in
     size = 32 * 1024;
   }];
 
-  system.activationScripts.copyGrubTheme = ''
-    if [ -d "${grubThemeSource}" ]; then
-      mkdir -p /boot/grub/themes
-      ${pkgs.rsync}/bin/rsync -aq --delete "${grubThemeSource}/" /boot/grub/themes/grub-theme/
-    fi
-  '';
 }
