@@ -40,6 +40,7 @@
     dbeaver-bin
     jetbrains.datagrip
     pgadmin4-desktopmode
+    sqlit-tui
     
     # API tools
     yaak
