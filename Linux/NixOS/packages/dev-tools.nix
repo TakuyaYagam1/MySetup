@@ -27,6 +27,7 @@
     go-swagger
     go-swag
     go-mockery
+    go-migrate
     delve
     protobuf
     protoc-gen-go
