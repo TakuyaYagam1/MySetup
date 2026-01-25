@@ -33,6 +33,7 @@
     
     # Terminal & Shell
     tmux
+    zellij
     foot
     starship
     
