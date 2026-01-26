@@ -37,7 +37,7 @@ in
 
         transparency = {
           enabled = true;
-          base = 0.85;
+          base = 0.75;
           layers = 0.4;
         };
       };
@@ -53,25 +53,9 @@ in
 
         battery = {
           warnLevels = [
-            {
-              level = 20;
-              title = "Low battery";
-              message = "You might want to plug in a charger";
-              icon = "battery_android_frame_2";
-            }
-            {
-              level = 10;
-              title = "Did you see the previous message?";
-              message = "You should probably plug in a charger <b>now</b>";
-              icon = "battery_android_frame_1";
-            }
-            {
-              level = 5;
-              title = "Critical battery level";
-              message = "PLUG THE CHARGER RIGHT NOW!!";
-              icon = "battery_android_alert";
-              critical = true;
-            }
+            { level = 20; title = "Low battery"; message = "Plug in charger"; icon = "battery_android_frame_2"; }
+            { level = 10; title = "Urgent"; message = "Plug in NOW"; icon = "battery_android_frame_1"; }
+            { level = 5;  title = "Critical"; message = "DYING"; icon = "battery_android_alert"; critical = true; }
           ];
           criticalLevel = 3;
         };
@@ -90,10 +74,17 @@ in
       # --- Background ---
       background = {
         enabled = true;
-        desktopClock.enabled = false;
+        desktopClock = {
+          enabled = true;
+          scale = 1.0;
+          position = "top-left";
+          shadow = { enabled = true; opacity = 0.7; blur = 0.4; };
+          background = { enabled = false; opacity = 0.7; blur = true; };
+          invertColors = false;
+        };
         visualiser = {
           blur = false;
-          enabled = false;
+          enabled = true;
           autoHide = true;
           rounding = 1;
           spacing = 1;
@@ -102,6 +93,7 @@ in
 
       # --- Bar ---
       bar = {
+        persistent = false;
         clock.showIcon = true;
         dragThreshold = 20;
         
@@ -116,8 +108,6 @@ in
           { id = "statusIcons";  enabled = true; }
           { id = "power";        enabled = true; }
         ];
-
-        persistent = true;
         
         popouts = {
           activeWindow = true;
@@ -134,12 +124,13 @@ in
         showOnHover = true;
 
         status = {
-          showAudio = false;
+          showAudio = true;
           showBattery = true;
           showBluetooth = true;
-          showKbLayout = false;
-          showMicrophone = false;
+          showKbLayout = true;
+          showMicrophone = true;
           showNetwork = true;
+          showWifi = true;
           showLockStatus = true;
         };
 
@@ -151,21 +142,20 @@ in
         };
 
         workspaces = {
-          activeIndicator = true;
-          activeLabel = "󰮯";
-          activeTrail = false;
-          label = "  ";
-          occupiedBg = false;
-          occupiedLabel = "󰮯";
-          perMonitorWorkspaces = true;
-          showWindows = true;
-          shown = 5;
-          specialWorkspaceIcons = [
-            { name = "steam"; icon = "sports_esports"; }
-          ];
+            activeIndicator = true;
+            activeLabel = "󰮯";
+            activeTrail = false;
+            label = "";
+            occupiedBg = false;
+            occupiedLabel = "󰮯";
+            perMonitorWorkspaces = true;
+            showWindows = true;
+            shown = 5;
+            specialWorkspaceIcons = [
+                { name = "steam"; icon = "sports_esports"; }
+            ];
         };
-
-        excludedScreens = [ "" ];
+        excludedScreens = [""];
         activeWindow.inverted = false;
       };
 
@@ -186,130 +176,29 @@ in
       # --- Launcher ---
       launcher = {
         actionPrefix = ">";
-        
         actions = [
-          {
-            name = "Calculator";
-            icon = "calculate";
-            description = "Do simple math equations (powered by Qalc)";
-            command = [ "autocomplete" "calc" ];
-            enabled = true;
-            dangerous = false;
-          }
-          {
-            name = "Scheme";
-            icon = "palette";
-            description = "Change the current colour scheme";
-            command = [ "autocomplete" "scheme" ];
-            enabled = true;
-            dangerous = false;
-          }
-          {
-            name = "Wallpaper";
-            icon = "image";
-            description = "Change the current wallpaper";
-            command = [ "autocomplete" "wallpaper" ];
-            enabled = true;
-            dangerous = false;
-          }
-          {
-            name = "Variant";
-            icon = "colors";
-            description = "Change the current scheme variant";
-            command = [ "autocomplete" "variant" ];
-            enabled = true;
-            dangerous = false;
-          }
-          {
-            name = "Transparency";
-            icon = "opacity";
-            description = "Change shell transparency";
-            command = [ "autocomplete" "transparency" ];
-            enabled = false;
-            dangerous = false;
-          }
-          {
-            name = "Random";
-            icon = "casino";
-            description = "Switch to a random wallpaper";
-            command = [ "caelestia" "wallpaper" "-r" ];
-            enabled = true;
-            dangerous = false;
-          }
-          {
-            name = "Light";
-            icon = "light_mode";
-            description = "Change the scheme to light mode";
-            command = [ "setMode" "light" ];
-            enabled = true;
-            dangerous = false;
-          }
-          {
-            name = "Dark";
-            icon = "dark_mode";
-            description = "Change the scheme to dark mode";
-            command = [ "setMode" "dark" ];
-            enabled = true;
-            dangerous = false;
-          }
-          {
-            name = "Shutdown";
-            icon = "power_settings_new";
-            description = "Shutdown the system";
-            command = [ "systemctl" "poweroff" ];
-            enabled = true;
-            dangerous = true;
-          }
-          {
-            name = "Reboot";
-            icon = "cached";
-            description = "Reboot the system";
-            command = [ "systemctl" "reboot" ];
-            enabled = true;
-            dangerous = true;
-          }
-          {
-            name = "Logout";
-            icon = "exit_to_app";
-            description = "Log out of the current session";
-            command = [ "loginctl" "terminate-user" "" ];
-            enabled = true;
-            dangerous = true;
-          }
-          {
-            name = "Lock";
-            icon = "lock";
-            description = "Lock the current session";
-            command = [ "loginctl" "lock-session" ];
-            enabled = true;
-            dangerous = false;
-          }
-          {
-            name = "Sleep";
-            icon = "bedtime";
-            description = "Suspend then hibernate";
-            command = [ "systemctl" "suspend-then-hibernate" ];
-            enabled = true;
-            dangerous = false;
-          }
+          { name = "Calculator"; icon = "calculate"; description = "Calc"; command = [ "autocomplete" "calc" ]; enabled = true; dangerous = false; }
+          { name = "Scheme"; icon = "palette"; description = "Scheme"; command = [ "autocomplete" "scheme" ]; enabled = true; dangerous = false; }
+          { name = "Wallpaper"; icon = "image"; description = "Wallpaper"; command = [ "autocomplete" "wallpaper" ]; enabled = true; dangerous = false; }
+          { name = "Variant"; icon = "colors"; description = "Variant"; command = [ "autocomplete" "variant" ]; enabled = true; dangerous = false; }
+          { name = "Transparency"; icon = "opacity"; description = "Transparency"; command = [ "autocomplete" "transparency" ]; enabled = false; dangerous = false; }
+          { name = "Random"; icon = "casino"; description = "Random wall"; command = [ "caelestia" "wallpaper" "-r" ]; enabled = true; dangerous = false; }
+          { name = "Light"; icon = "light_mode"; description = "Light mode"; command = [ "setMode" "light" ]; enabled = true; dangerous = false; }
+          { name = "Dark"; icon = "dark_mode"; description = "Dark mode"; command = [ "setMode" "dark" ]; enabled = true; dangerous = false; }
+          { name = "Shutdown"; icon = "power_settings_new"; description = "Off"; command = [ "systemctl" "poweroff" ]; enabled = true; dangerous = true; }
+          { name = "Reboot"; icon = "cached"; description = "Reboot"; command = [ "systemctl" "reboot" ]; enabled = true; dangerous = true; }
+          { name = "Logout"; icon = "exit_to_app"; description = "Logout"; command = [ "loginctl" "terminate-user" "" ]; enabled = true; dangerous = true; }
+          { name = "Lock"; icon = "lock"; description = "Lock"; command = [ "loginctl" "lock-session" ]; enabled = true; dangerous = false; }
+          { name = "Sleep"; icon = "bedtime"; description = "Sleep"; command = [ "systemctl" "suspend-then-hibernate" ]; enabled = true; dangerous = false; }
         ];
-
         dragThreshold = 50;
         vimKeybinds = false;
         enableDangerousActions = false;
         maxShown = 7;
         maxWallpapers = 9;
         specialPrefix = "@";
-        
-        useFuzzy = {
-          apps = false;
-          actions = false;
-          schemes = false;
-          variants = false;
-          wallpapers = false;
-        };
-
-        showOnHover = false;
+        useFuzzy = { apps = false; actions = false; schemes = false; variants = false; wallpapers = false; };
+        showOnHover = true;
         hiddenApps = [];
       };
 
@@ -320,15 +209,16 @@ in
       notifs = {
         actionOnClick = false;
         clearThreshold = 0.3;
-        defaultExpireTimeout = 5000;
-        expandThreshold = 20;
+        expire = true; 
+        defaultExpireTimeout = 1; 
+        
+        expandThreshold = 9999;
         openExpanded = false;
-        expire = false;
       };
 
       # --- OSD ---
       osd = {
-        enabled = true;
+        enabled = false;
         enableBrightness = true;
         enableMicrophone = false;
         hideDelay = 2000;
@@ -348,9 +238,7 @@ in
         maxVolume = 1.0;
         defaultPlayer = "Spotify";
         gpuType = "";
-        playerAliases = [ 
-          { from = "com.github.th_ch.youtube_music"; to = "YT Music"; }
-        ];
+        playerAliases = [ { from = "com.github.th_ch.youtube_music"; to = "YT Music"; } ];
         weatherLocation = "Moscow";
         useFahrenheit = false;
         useTwelveHourClock = false;
@@ -362,8 +250,7 @@ in
       session = {
         dragThreshold = 30;
         enabled = true;
-        vimKeybinds = false;
-        
+        vimKeybinds = true;
         commands = {
           logout    = [ "pkill" "-KILL" "-u" "takuya" ];
           shutdown  = [ "systemctl" "poweroff" ];
@@ -380,33 +267,22 @@ in
 
       # --- Utilities ---
       utilities = {
-        enabled = true;
+        enabled = false;
         maxToasts = 4;
-        
         toasts = {
-          audioInputChanged = true;
-          audioOutputChanged = true;
-          capsLockChanged = true;
-          chargingChanged = true;
-          configLoaded = true;
-          dndChanged = true;
-          gameModeChanged = true;
-          kbLayoutChanged = true;
-          numLockChanged = true;
-          vpnChanged = true;
+          audioInputChanged = false;
+          audioOutputChanged = false;
+          capsLockChanged = false;
+          chargingChanged = false;
+          configLoaded = false;
+          dndChanged = false;
+          gameModeChanged = false;
+          kbLayoutChanged = false;
+          numLockChanged = false;
+          vpnChanged = false;
           nowPlaying = false;
         };
-
-        vpn = {
-          enabled = false;
-          provider = [
-            {
-              name = "wireguard";
-              interface = "your-connection-name";
-              displayName = "Wireguard (Your VPN)";
-            }
-          ];
-        };
+        vpn = { enabled = true; provider = []; };
       };
     };
   };
