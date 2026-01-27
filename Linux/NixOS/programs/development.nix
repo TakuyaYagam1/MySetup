@@ -5,6 +5,7 @@
     enable = true;
     libraries = with pkgs; [
       stdenv.cc.cc.lib
+      glibc
       zlib
       libpng
       nss
