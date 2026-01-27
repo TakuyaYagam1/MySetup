@@ -9,7 +9,6 @@
     gpu-screen-recorder
     
     # Desktop utilities
-    material-symbols
     swappy
     libqalculate
     amnezia-vpn
@@ -69,7 +68,6 @@
     
     # Containers
     podman-desktop
-    docker-compose
     
     # System utilities
     wtype

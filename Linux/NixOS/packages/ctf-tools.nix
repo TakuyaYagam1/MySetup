@@ -36,7 +36,6 @@ in
     wtfis                   # Domain/IP lookup
     
     # === NETWORK SCANNING ===
-    nmap                    # Network mapper
     masscan                 # Fast port scanner
     rustscan                # Modern port scanner
     naabu                   # Port scanning tool
@@ -95,9 +94,6 @@ in
     dontgo403               # 403 bypass tool
     arjun                   # HTTP parameter discovery
     httpx                   # HTTP toolkit
-    httpie                  # HTTP client
-    curl                    # Transfer tool
-    wget                    # Network downloader
     katana                  # Web crawler
     gospider                # Web spider
     hakrawler               # Web crawler
@@ -160,8 +156,6 @@ in
     truecrack               # TrueCrypt cracker
     
     # === PASSWORD CRACKING ===
-    hashcat                 # GPU cracker
-    john                    # CPU cracker
     hydra                   # Network login cracker
     thc-hydra               # THC Hydra
     medusa                  # Parallel login bracker
@@ -188,7 +182,6 @@ in
     volatility3             # Memory forensics
     autopsy                 # Digital forensics
     sleuthkit               # Forensics toolkit
-    foremost                # File recovery
     testdisk                # Data recovery
     extundelete             # ext3/4 recovery
     ext4magic               # ext4 recovery
@@ -301,35 +294,16 @@ in
     
     # === WEB APIS ===
     kiterunner              # API path discovery
-    swagger-codegen         # Swagger generator
-    go-swagger              # Swagger toolkit
     postman                 # API testing
-    yaak                    # API client
-    insomnia                # REST client
-    grpcurl                 # gRPC client
     
     # === CONTAINER SECURITY ===
-    trivy                   # Container scanner
-    grype                   # Vulnerability scanner
     clair                   # Container scanner
     dockle                  # Container linter
     dive                    # Docker image explorer
-    lazydocker              # Docker TUI
-    docker-compose          # Container orchestration
-    podman-compose          # Podman compose
     cdk-go                  # Container penetration
     
     # === KUBERNETES ===
-    kubectl                 # K8s CLI
-    k9s                     # K8s TUI
     kubectx                 # Context switcher
-    helm                    # K8s package manager
-    kustomize               # K8s customization
-    kubeaudit               # K8s auditor
-    kube-hunter             # K8s pentester
-    kube-score              # K8s checker
-    kubescape               # K8s security
-    popeye                  # K8s sanitizer
     kubestroyer             # K8s tool
     kdigger                 # K8s discovery
     
@@ -338,8 +312,6 @@ in
     apkeep                  # APK downloader
     jadx                    # Android decompiler
     dex2jar                 # DEX to JAR
-    android-tools           # ADB and fastboot
-    scrcpy                  # Android screen mirror
     genymotion              # Android emulator
     
     # === HARDWARE ===
@@ -374,20 +346,7 @@ in
     eyewitness              # Screenshot tool
     gowitness               # Screenshot tool
     
-    # === UTILITIES ===
-    cyberchef               # Data manipulation
-    jq                      # JSON processor
-    yq-go                   # YAML processor
-    bat                     # Cat alternative
-    ripgrep                 # Fast grep
-    fd                      # Fast find
-    fzf                     # Fuzzy finder
-    eza                     # Modern ls
-    tmux                    # Terminal multiplexer
-    zellij                  # Modern tmux
-    
     # === MISC SECURITY ===
-    lynis                   # Security auditing
     aide                    # File integrity
     py.aiosseclient         # HIDS (Python 3.12)
     fail2ban                # Intrusion prevention
@@ -409,7 +368,6 @@ in
     
     # === DNS TOOLS ===
     dig                     # DNS lookup
-    bind                    # DNS utilities
     dnsutils                # DNS tools
     massdns                 # Mass DNS resolver
     
@@ -455,7 +413,6 @@ in
     lnav                    # Log viewer
     
     # === DOCUMENTATION ===
-    tldr                    # Simplified man pages
     cheat                   # Cheatsheets
   ];
 }

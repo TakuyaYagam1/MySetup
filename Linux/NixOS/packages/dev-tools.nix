@@ -9,48 +9,61 @@
     pkg-config
     tree-sitter
     just
-    
+
     # Compilers & debuggers
     gcc
     libgcc
     gdb
     lldb
-    
-    # Python
+
+    # Python Ecosystem
     python3
     pipx
-    
+    uv
+    ruff
+    mypy
+
     # Go ecosystem
     go
+    gopls
+    gotools
+    go-tools
+    go-outline
+    gopkgs
+    delve
+    air
+    gomodifytags
+    impl
+    gotests
+    golangci-lint
+    govulncheck
     grpcurl
     mockgen
     go-swagger
     go-swag
     go-mockery
     go-migrate
-    delve
     protobuf
     protoc-gen-go
     protoc-gen-go-grpc
     buf
-    golangci-lint
     sqlc
     swagger-codegen
-    
+
     # Node.js ecosystem
     nodejs
     yarn
     typescript
-    
+
     # Java
     jdk
-    
+
     # Infrastructure as Code
     terraform
     tflint
     terraform-docs
     ansible
-    
+
     # Container & K8s tools
     lazydocker
     k9s
@@ -59,14 +72,17 @@
     helm
     kustomize
     tilt
-    
+
     # API tools
     httpie
     yq-go
-    
+
     # Version control
     lazygit
-    
+
+    # Modern Terminal Utilities
+    tldr
+
     # Other
     opencv
   ];
