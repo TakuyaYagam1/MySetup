@@ -54,6 +54,7 @@
     unzip
     zip
     rar
+    p7zip
     trash-cli
     cloc
     sbctl
