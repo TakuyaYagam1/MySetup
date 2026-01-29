@@ -4,6 +4,7 @@
   home.packages = with pkgs; [
     # Audio & Video
     cava
+    libcava
     app2unit
     aubio
     gpu-screen-recorder
