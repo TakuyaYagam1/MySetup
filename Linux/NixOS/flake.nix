@@ -21,6 +21,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    zed-editor = {
+      url = "github:zed-industries/zed";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     quickshell = {
       url = "github:outfoxxed/quickshell";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -58,7 +63,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-stable, home-manager, nix-snapd, zapret-discord-youtube, lanzaboote, templ, ... }@inputs:
+  outputs = { self, nixpkgs, nixpkgs-stable, home-manager, nix-snapd, zapret-discord-youtube, lanzaboote, templ, zed-editor, ... }@inputs:
   let
     system = "x86_64-linux";
     
@@ -81,11 +86,13 @@
             
             (final: prev: {
               vmware-workstation = pkgs-stable.vmware-workstation;
+              zed-editor = inputs.zed-editor.packages.${prev.system}.default;
             })
           ];
 
           environment.systemPackages = with pkgs; [
             inputs.templ.packages.${system}.templ
+            zed-editor
           ];
         })
 

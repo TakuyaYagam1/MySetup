@@ -52,10 +52,6 @@
     # Development
     vscode
     code-cursor
-    (pkgs.zed-editor.overrideAttrs (old: {
-      doCheck = false;
-      checkPhase = "";
-    }))
     flutter
     android-studio-full
     android-tools
