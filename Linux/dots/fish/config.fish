@@ -10,7 +10,7 @@ if status is-interactive
     alias ls='eza --icons --group-directories-first -1'
     alias install='sudo nixos-rebuild switch --flake /etc/nixos#NixOS'
     alias update='cd /etc/nixos; and sudo nix flake update; and sudo nixos-rebuild switch --flake /etc/nixos#NixOS; and cd -'
-    alias cleanup='sudo nix-collect-garbage -d; and nix-collect-garbage -d'
+    alias cleanup="sudo nix-collect-garbage -d && nix-collect-garbage && nix store optimise && sudo nix-store --gc --print-dead && sudo nix-store --gc"
     alias logout='systemctl restart display-manager.servic'
     alias suspend='systemctl suspend'
     alias hibernate='systemctl hibernate'
