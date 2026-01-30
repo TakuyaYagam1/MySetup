@@ -86,12 +86,12 @@
             
             (final: prev: {
               vmware-workstation = pkgs-stable.vmware-workstation;
-              zed-editor = inputs.zed-editor.packages.${prev.system}.default;
+              zed-editor = inputs.zed-editor.packages.${prev.stdenv.hostPlatform.system}.default;
             })
           ];
 
           environment.systemPackages = with pkgs; [
-            inputs.templ.packages.${system}.templ
+            inputs.templ.packages.${pkgs.stdenv.hostPlatform.system}.templ
             zed-editor
           ];
         })
@@ -108,7 +108,7 @@
             useGlobalPkgs = true;
             useUserPackages = true;
             users.takuya = import ./home/home.nix;
-            extraSpecialArgs = { inherit inputs system pkgs-stable; };
+            extraSpecialArgs = { inherit inputs pkgs-stable; };
           };
         }
 

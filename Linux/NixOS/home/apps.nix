@@ -52,6 +52,7 @@
     # Development
     vscode
     code-cursor
+    zed-editor
     flutter
     android-studio-full
     android-tools

@@ -1,7 +1,7 @@
-{ config, pkgs, inputs, system, ... }:
+{ config, pkgs, inputs, ... }:
 
 let
-  quickshellPkg = inputs.quickshell.packages.${system}.default;
+  quickshellPkg = inputs.quickshell.packages.${pkgs.stdenv.hostPlatform.system}.default;
 in
 {
   programs.caelestia = {
