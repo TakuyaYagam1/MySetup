@@ -36,6 +36,7 @@
     impl
     gotests
     golangci-lint
+    gofumpt
     govulncheck
     grpcurl
     mockgen
