@@ -41,6 +41,7 @@
     mockgen
     go-swagger
     go-swag
+    oapi-codegen
     go-mockery
     go-migrate
     protobuf
