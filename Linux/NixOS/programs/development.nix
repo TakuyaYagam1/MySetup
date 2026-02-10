@@ -29,14 +29,14 @@
       libxcb-cursor
       pcre
       libepoxy
-      xorg.libX11
-      xorg.libXext
-      xorg.libXrender
-      xorg.libXrandr
-      xorg.libXcursor
-      xorg.libxcb
-      xorg.libXfixes
-      xorg.libXcomposite
+      libx11
+      libxext
+      libxrender
+      libxrandr
+      libxcursor
+      libxcb
+      libxfixes
+      libxcomposite
       pulseaudio
       qt6.qtbase
       qt6.qtwayland
