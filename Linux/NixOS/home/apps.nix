@@ -22,7 +22,6 @@
     
     # Office & Communication
     libreoffice-qt6-fresh
-    wpsoffice
     onlyoffice-desktopeditors
     spotify
     telegram-desktop

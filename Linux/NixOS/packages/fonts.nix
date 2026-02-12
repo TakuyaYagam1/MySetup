@@ -24,8 +24,8 @@
 
     fontconfig = {
       defaultFonts = {
-        serif = [ "Liberation Serif" "Times New Roman" ];
-        sansSerif = [ "Liberation Sans" ];
+        serif = [ "Noto Serif" "Liberation Serif" "Times New Roman" ];
+        sansSerif = [ "Noto Sans" "Liberation Sans" ];
         monospace = [
           "JetBrains Mono"
           "JetBrainsMono Nerd Font"

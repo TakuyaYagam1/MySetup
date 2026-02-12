@@ -86,21 +86,56 @@ if confirm-overwrite $cfg/btop
     cp -r $src/btop $cfg/btop
 end
 
-echo "Configuring Flatpak..."
-if command -q flatpak
-    echo "Adding Flathub repository..."
-    sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+echo "Configuring Office apps on NixOS..."
 
+if command -q flatpak
+    echo "Adding Flathub..."
+    flatpak remote-add --if-not-exists --user flathub https://flathub.org/repo/flathub.flatpakrepo
+
+    # WPS Office
+    echo "Checking WPS Office..."
+    if not flatpak list --app | grep -q cn.wps.wps_365
+        echo "Installing WPS Office..."
+        flatpak install -y --user flathub cn.wps.wps_365
+    else
+        echo "WPS Office is already installed."
+    end
+
+    # Bottles
     echo "Checking Bottles..."
     if not flatpak list --app | grep -q com.usebottles.bottles
         echo "Installing Bottles..."
-        sudo flatpak install -y flathub com.usebottles.bottles
+        flatpak install -y --user flathub com.usebottles.bottles
     else
         echo "Bottles is already installed."
     end
+
+    echo "Flatpak apps ready."
 else
-    echo "Flatpak is not installed! Enable 'services.flatpak.enable = true' in your NixOS config first."
+    echo "Flatpak not found. It should be enabled in your flake."
 end
+
+# Snap setup
+if command -q snap
+    echo "Connecting Wayland interfaces for snap..."
+    snap connect ms-365-electron:wayland
+    snap connect ms-365-electron:opengl 2>/dev/null || true
+
+    echo "Checking MS 365 Electron..."
+    if not snap list | grep -q ms-365-electron
+        echo "Installing MS 365 snap..."
+        sudo snap install ms-365-electron
+    else
+        echo "MS 365 snap already installed."
+    end
+
+    echo "Snap ready! Run: snap run ms-365-electron --ozone-platform-hint=auto"
+else
+    echo "Snap not found. Already enabled in flake."
+end
+
+echo "Done! Relogin and try:"
+echo "  snap run ms-365-electron --ozone-platform-hint=auto"
 
 if confirm-overwrite $cfg/nvim
     echo "Cleaning all Neovim data..."

@@ -38,5 +38,10 @@
     ./users/takuya.nix
   ];
 
+  environment.sessionVariables = {
+    NIXOS_OZONE_WL = "1";
+    ELECTRON_OZONE_PLATFORM_HINT = "wayland";
+  };
+
   system.stateVersion = "25.11";
 }
