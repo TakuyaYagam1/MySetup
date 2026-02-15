@@ -35,8 +35,10 @@
     ./packages/dev-tools.nix
     ./packages/fonts.nix
     # ./packages/ctf-tools.nix
-    ./users/takuya.nix
+    ./users/user.nix
   ];
+
+  boot.kernelPackages = lib.mkForce pkgs.linuxPackages_6_18;
 
   environment.sessionVariables = {
     NIXOS_OZONE_WL = "1";

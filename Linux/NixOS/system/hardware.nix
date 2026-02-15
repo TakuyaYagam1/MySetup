@@ -9,11 +9,8 @@
     extraPackages = with pkgs; [
       intel-media-driver
       intel-vaapi-driver
-      vaapiIntel
-      amdvlk
-      vaapiVdpau
       libvdpau-va-gl
-      mesa.drivers
+      mesa
     ];
   };
 

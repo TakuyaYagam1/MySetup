@@ -20,6 +20,8 @@ in
     settings = {
       # --- Appearance ---
       appearance = {
+        mediaGifSpeedAdjustment = 300;
+        sessionGifSpeed = 0.7;
         anim.durations.scale = 1;
         padding.scale = 1;
         rounding.scale = 1;
@@ -65,8 +67,8 @@ in
           inhibitWhenAudio = true;
           timeouts = [
             { timeout = 600; idleAction = "lock"; }
-            { timeout = 1800; idleAction = "dpms off"; returnAction = "dpms on"; }
-            { timeout = 3600; idleAction = [ "systemctl" "suspend-then-hibernate" ]; }
+            { timeout = 1200; idleAction = "dpms off"; returnAction = "dpms on"; }
+            { timeout = 1800; idleAction = [ "systemctl" "suspend-then-hibernate" ]; }
           ];
         };
       };
@@ -142,20 +144,20 @@ in
         };
 
         workspaces = {
-            activeIndicator = true;
-            activeLabel = "󰮯";
-            activeTrail = false;
-            label = "";
-            occupiedBg = false;
-            occupiedLabel = "󰮯";
-            perMonitorWorkspaces = true;
-            showWindows = true;
-            shown = 5;
-            specialWorkspaceIcons = [
-                { name = "steam"; icon = "sports_esports"; }
-            ];
+          activeIndicator = true;
+          activeLabel = "󰮯";
+          activeTrail = false;
+          label = "  ";
+          occupiedBg = false;
+          occupiedLabel = "󰮯";
+          perMonitorWorkspaces = true;
+          showWindows = true;
+          shown = 5;
+          specialWorkspaceIcons = [
+            { name = "steam"; icon = "sports_esports"; }
+          ];
         };
-        excludedScreens = [""];
+        excludedScreens = [ "" ];
         activeWindow.inverted = false;
       };
 
@@ -177,23 +179,24 @@ in
       launcher = {
         actionPrefix = ">";
         actions = [
-          { name = "Calculator"; icon = "calculate"; description = "Calc"; command = [ "autocomplete" "calc" ]; enabled = true; dangerous = false; }
-          { name = "Scheme"; icon = "palette"; description = "Scheme"; command = [ "autocomplete" "scheme" ]; enabled = true; dangerous = false; }
-          { name = "Wallpaper"; icon = "image"; description = "Wallpaper"; command = [ "autocomplete" "wallpaper" ]; enabled = true; dangerous = false; }
-          { name = "Variant"; icon = "colors"; description = "Variant"; command = [ "autocomplete" "variant" ]; enabled = true; dangerous = false; }
-          { name = "Transparency"; icon = "opacity"; description = "Transparency"; command = [ "autocomplete" "transparency" ]; enabled = false; dangerous = false; }
-          { name = "Random"; icon = "casino"; description = "Random wall"; command = [ "caelestia" "wallpaper" "-r" ]; enabled = true; dangerous = false; }
-          { name = "Light"; icon = "light_mode"; description = "Light mode"; command = [ "setMode" "light" ]; enabled = true; dangerous = false; }
-          { name = "Dark"; icon = "dark_mode"; description = "Dark mode"; command = [ "setMode" "dark" ]; enabled = true; dangerous = false; }
-          { name = "Shutdown"; icon = "power_settings_new"; description = "Off"; command = [ "systemctl" "poweroff" ]; enabled = true; dangerous = true; }
-          { name = "Reboot"; icon = "cached"; description = "Reboot"; command = [ "systemctl" "reboot" ]; enabled = true; dangerous = true; }
-          { name = "Logout"; icon = "exit_to_app"; description = "Logout"; command = [ "loginctl" "terminate-user" "" ]; enabled = true; dangerous = true; }
-          { name = "Lock"; icon = "lock"; description = "Lock"; command = [ "loginctl" "lock-session" ]; enabled = true; dangerous = false; }
-          { name = "Sleep"; icon = "bedtime"; description = "Sleep"; command = [ "systemctl" "suspend-then-hibernate" ]; enabled = true; dangerous = false; }
+          { name = "Calculator"; icon = "calculate"; description = "Do simple math equations (powered by Qalc)"; command = [ "autocomplete" "calc" ]; enabled = true; dangerous = false; }
+          { name = "Scheme"; icon = "palette"; description = "Change the current colour scheme"; command = [ "autocomplete" "scheme" ]; enabled = true; dangerous = false; }
+          { name = "Wallpaper"; icon = "image"; description = "Change the current wallpaper"; command = [ "autocomplete" "wallpaper" ]; enabled = true; dangerous = false; }
+          { name = "Variant"; icon = "colors"; description = "Change the current scheme variant"; command = [ "autocomplete" "variant" ]; enabled = true; dangerous = false; }
+          { name = "Transparency"; icon = "opacity"; description = "Change shell transparency"; command = [ "autocomplete" "transparency" ]; enabled = true; dangerous = false; }
+          { name = "Random"; icon = "casino"; description = "Switch to a random wallpaper"; command = [ "caelestia" "wallpaper" "-r" ]; enabled = true; dangerous = false; }
+          { name = "Light"; icon = "light_mode"; description = "Change the scheme to light mode"; command = [ "setMode" "light" ]; enabled = true; dangerous = false; }
+          { name = "Dark"; icon = "dark_mode"; description = "Change the scheme to dark mode"; command = [ "setMode" "dark" ]; enabled = true; dangerous = false; }
+          { name = "Shutdown"; icon = "power_settings_new"; description = "Shutdown the system"; command = [ "systemctl" "poweroff" ]; enabled = true; dangerous = true; }
+          { name = "Reboot"; icon = "cached"; description = "Reboot the system"; command = [ "systemctl" "reboot" ]; enabled = true; dangerous = true; }
+          { name = "Logout"; icon = "exit_to_app"; description = "Log out of the current session"; command = [ "loginctl" "terminate-user" "" ]; enabled = true; dangerous = true; }
+          { name = "Lock"; icon = "lock"; description = "Lock the current session"; command = [ "loginctl" "lock-session" ]; enabled = true; dangerous = false; }
+          { name = "Sleep"; icon = "bedtime"; description = "Suspend then hibernate"; command = [ "systemctl" "suspend-then-hibernate" ]; enabled = true; dangerous = false; }
+          { name = "Settings"; icon = "settings"; description = "Configure the shell"; command = [ "caelestia" "shell" "controlCenter" "open" ]; enabled = true; dangerous = false; }
         ];
         dragThreshold = 50;
         vimKeybinds = false;
-        enableDangerousActions = false;
+        enableDangerousActions = true;
         maxShown = 7;
         maxWallpapers = 9;
         specialPrefix = "@";
@@ -207,20 +210,19 @@ in
 
       # --- Notifications ---
       notifs = {
-        actionOnClick = false;
+        actionOnClick = true;
         clearThreshold = 0.3;
-        expire = true; 
-        defaultExpireTimeout = 1; 
-        
-        expandThreshold = 9999;
-        openExpanded = false;
+        defaultExpireTimeout = 1000;
+        expandThreshold = 20;
+        openExpanded = true;
+        expire = true;
       };
 
       # --- OSD ---
       osd = {
-        enabled = false;
+        enabled = true;
         enableBrightness = true;
-        enableMicrophone = false;
+        enableMicrophone = true;
         hideDelay = 2000;
       };
 
@@ -250,7 +252,7 @@ in
       session = {
         dragThreshold = 30;
         enabled = true;
-        vimKeybinds = true;
+        vimKeybinds = false;
         commands = {
           logout    = [ "pkill" "-KILL" "-u" "takuya" ];
           shutdown  = [ "systemctl" "poweroff" ];
@@ -267,22 +269,33 @@ in
 
       # --- Utilities ---
       utilities = {
-        enabled = false;
+        enabled = true;
         maxToasts = 4;
         toasts = {
-          audioInputChanged = false;
-          audioOutputChanged = false;
-          capsLockChanged = false;
-          chargingChanged = false;
-          configLoaded = false;
-          dndChanged = false;
-          gameModeChanged = false;
-          kbLayoutChanged = false;
-          numLockChanged = false;
-          vpnChanged = false;
-          nowPlaying = false;
+          audioInputChanged = true;
+          audioOutputChanged = true;
+          capsLockChanged = true;
+          chargingChanged = true;
+          configLoaded = true;
+          dndChanged = true;
+          gameModeChanged = true;
+          kbLayoutChanged = true;
+          kbLimit = true;
+          numLockChanged = true;
+          vpnChanged = true;
+          nowPlaying = true;
         };
-        vpn = { enabled = true; provider = []; };
+        vpn = {
+          enabled = true;
+          provider = [
+            {
+              name = "wireguard";
+              interface = "your-connection-name";
+              displayName = "Wireguard (Your VPN)";
+              enabled = false;
+            }
+          ];
+        };
       };
     };
   };

@@ -34,7 +34,7 @@
       libxrender
       libxrandr
       libxcursor
-      libxcb
+      xcbutil
       libxfixes
       libxcomposite
       pulseaudio

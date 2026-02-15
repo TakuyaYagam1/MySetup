@@ -1,4 +1,4 @@
-{ ... }:
+{ pkgs-stable, ... }:
 
 {
   virtualisation = {
@@ -8,6 +8,7 @@
     virtualbox.host = {
       enable = true;
       enableExtensionPack = true;
+      package = pkgs-stable.virtualbox;
     };
     
     docker = {
