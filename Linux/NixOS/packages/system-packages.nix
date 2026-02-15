@@ -78,7 +78,7 @@
     qbittorrent
 
     # wine
-    (pkgs.wineWowPackages.staging.override {
+    (pkgs.wineWow64Packages.staging.override {
       waylandSupport = true;
     })
     winetricks
