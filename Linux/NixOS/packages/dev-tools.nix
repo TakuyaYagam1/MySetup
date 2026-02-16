@@ -56,6 +56,7 @@
     nodejs
     yarn
     typescript
+    bun
 
     # Java
     jdk
