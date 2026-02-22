@@ -90,6 +90,7 @@
     hypridle
     hyprpaper
     uwsm
+    xneur
 
     # games
     lutris
