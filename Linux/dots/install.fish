@@ -86,6 +86,19 @@ if confirm-overwrite $cfg/btop
     cp -r $src/btop $cfg/btop
 end
 
+# Cava
+if confirm-overwrite $cfg/cava
+    mkdir -p $cfg/cava
+    cp $src/cava/config $cfg/cava/config
+end
+
+# Vesktop (Vencord QuickCSS - Catppuccin Macchiato)
+set vesktop_css $cfg/vesktop/settings/quickCss.css
+if confirm-overwrite $vesktop_css
+    mkdir -p $cfg/vesktop/settings
+    cp $src/vesktop/quickCss.css $vesktop_css
+end
+
 echo "Configuring Office apps on NixOS..."
 
 if command -q flatpak
