@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ ... }:
 
 {
   nix.settings = {
@@ -15,8 +15,6 @@
       "olm-3.2.16"
     ];
   };
-
-  nixpkgs.overlays = [ inputs.antigravity.overlays.default ];
 
   nix.gc = {
     automatic = true;

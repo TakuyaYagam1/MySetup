@@ -401,6 +401,7 @@ in
         ];
         weatherLocation = "Moscow";
         useFahrenheit = false;
+        useFahrenheitPerformance = false;
         useTwelveHourClock = false;
         smartScheme = true;
         visualiserBars = 45;

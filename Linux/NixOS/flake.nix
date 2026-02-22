@@ -26,10 +26,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    antigravity = {
-      url = "github:jacopone/antigravity-nix";
-    };
-
     templ.url = "github:a-h/templ";
 
     nix-snapd = {
@@ -77,8 +73,6 @@
 
         ({ pkgs, ... }: {
           nixpkgs.overlays = [ 
-            inputs.antigravity.overlays.default
-            
             (final: prev: {
               vmware-workstation = pkgs-stable.vmware-workstation;
             })
