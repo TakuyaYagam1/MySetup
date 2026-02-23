@@ -172,7 +172,7 @@ in
             enabled = true;
           }
         ];
-        persistent = false;
+        persistent = true;
         popouts = {
           activeWindow = true;
           statusIcons = true;
@@ -195,17 +195,17 @@ in
           showLockStatus = true;
         };
         tray = {
-          background = false;
-          compact = false;
+          background = true;
+          compact = true;
           iconSubs = [];
-          recolour = false;
+          recolour = true;
         };
         workspaces = {
           activeIndicator = true;
           activeLabel = "󰮯";
-          activeTrail = false;
+          activeTrail = true;
           label = "  ";
-          occupiedBg = false;
+          occupiedBg = true;
           occupiedLabel = "󰮯";
           perMonitorWorkspaces = true;
           showWindows = true;
