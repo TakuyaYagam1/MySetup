@@ -1,4 +1,4 @@
-{ config, lib, pkgs, inputs, ... }:
+{ config, pkgs, lib, inputs, ... }:
 
 {
   imports = [
@@ -6,11 +6,12 @@
     
     # System
     ./system/boot/grub.nix
-    # ./system/boot/secure.nix
+    ./system/boot/plymouth.nix
+    ./system/boot/secure.nix
     ./system/locale.nix
     ./system/networking.nix
     ./system/security.nix
-    # ./system/nvidia-drivers.nix
+    ./system/nvidia-drivers.nix
     ./system/power.nix
     ./system/hardware.nix
     ./system/nix.nix
@@ -21,7 +22,7 @@
     ./services/observability.nix
     ./services/virtualization.nix
     ./services/system-services.nix
-    # ./services/zapret.nix
+    ./services/zapret.nix
     
     # Programs
     ./programs/desktop.nix
@@ -34,7 +35,7 @@
     ./packages/system-packages.nix
     ./packages/dev-tools.nix
     ./packages/fonts.nix
-    # ./packages/ctf-tools.nix
+    ./packages/ctf-tools.nix
     ./users/user.nix
   ];
 

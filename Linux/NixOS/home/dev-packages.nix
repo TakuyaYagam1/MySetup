@@ -46,7 +46,6 @@
       scipy
       matplotlib
       seaborn
-      plotly
       scikit-learn
       
       # Jupyter

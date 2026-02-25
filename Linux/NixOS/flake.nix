@@ -52,6 +52,7 @@
       url = "github:nix-community/lanzaboote";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
   };
 
   outputs = { self, nixpkgs, nixpkgs-stable, home-manager, nix-snapd, zapret-discord-youtube, lanzaboote, templ, ... }@inputs:
@@ -72,7 +73,7 @@
         ./configuration.nix
 
         ({ pkgs, ... }: {
-          nixpkgs.overlays = [ 
+          nixpkgs.overlays = [
             (final: prev: {
               vmware-workstation = pkgs-stable.vmware-workstation;
             })

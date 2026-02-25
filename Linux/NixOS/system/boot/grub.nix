@@ -15,7 +15,6 @@ let
 in
 {
   boot = {
-    kernelPackages = pkgs.linuxPackages_latest;
     kernelParams = [ 
       "acpi_osi=Linux" 
       "acpi_backlight=native" 

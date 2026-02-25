@@ -12,8 +12,8 @@ The installation script requires administrator privileges. Run PowerShell as Adm
 
 Install the following fonts before using the configuration:
 
-- **JetBrains Mono**: https://www.jetbrains.com/lp/mono/
-- **JetBrains Mono Nerd Font**: https://www.nerdfonts.com/font-downloads
+- **JetBrains Mono**: [jetbrains.com/lp/mono](https://www.jetbrains.com/lp/mono/)
+- **JetBrains Mono Nerd Font**: [nerdfonts.com/font-downloads](https://www.nerdfonts.com/font-downloads)
 
 ### Long Paths
 
@@ -46,11 +46,13 @@ All path modifications must be made in `yasb/config.yaml` before copying configu
 1. Open PowerShell as Administrator
 
 2. Navigate to the repository directory:
+
    ```powershell
    cd MyLinuxSetup\Windows
    ```
 
 3. Run the installation script:
+
    ```powershell
    .\install.ps1
    ```
@@ -58,6 +60,7 @@ All path modifications must be made in `yasb/config.yaml` before copying configu
 4. After installation completes, install the required fonts (see Important Notes)
 
 5. Restart PowerShell and run the following commands:
+
    ```powershell
    komorebic quickstart
    Copy-Item -Path '.\Windows\komorebi\*' -Destination $env:USERPROFILE -Recurse -Force
@@ -69,32 +72,38 @@ All path modifications must be made in `yasb/config.yaml` before copying configu
 ### Manual Installation
 
 1. Install Komorebi:
+
    ```powershell
    winget install --id LGUG2Z.komorebi --accept-package-agreements --accept-source-agreements
    ```
 
 2. Install whkd:
+
    ```powershell
    winget install --id LGUG2Z.whkd --accept-package-agreements --accept-source-agreements
    ```
 
 3. Install YASB:
+
    ```powershell
    winget install --id AmN.yasb --accept-package-agreements --accept-source-agreements
    ```
 
 4. Enable long paths support:
+
    ```powershell
    Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1
    ```
 
 5. Copy configuration files:
+
    ```powershell
    Copy-Item -Path '.\Windows\komorebi\*' -Destination $env:USERPROFILE -Recurse -Force
    Copy-Item -Path '.\Windows\yasb\*' -Destination "$env:USERPROFILE\.config\yasb" -Recurse -Force
    ```
 
 6. Initialize Komorebi:
+
    ```powershell
    komorebic quickstart
    komorebic enable-autostart --whkd
@@ -103,7 +112,7 @@ All path modifications must be made in `yasb/config.yaml` before copying configu
 
 ## Structure
 
-```
+```text
 Windows/
 ├── install.ps1          # Automated installation script
 ├── komorebi/            # Komorebi configuration
@@ -133,4 +142,3 @@ Windows/
 ## License
 
 GPL-3.0
-

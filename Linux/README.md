@@ -32,6 +32,9 @@ imports = [ ./system/boot/grub.nix ]; # Comment secure.nix
 
 **Requirement**: Active Secure Boot in BIOS with cleared keys.
 
+> **Important**: `system/boot/plymouth.nix` must be **commented out** when using Secure Boot.
+> Plymouth hooks into the early boot stage and interferes with Lanzaboote's signed initrd, causing a black screen or signature verification failure.
+
 1. **BIOS Configuration**:
    - Enter BIOS -> Secure Boot.
    - Select "Clear Secure Boot Keys" (Setup Mode).
@@ -39,10 +42,14 @@ imports = [ ./system/boot/grub.nix ]; # Comment secure.nix
    - Save & Exit.
 
 2. **NixOS Configuration**:
-   - Edit `configuration.nix`: Enable `secure.nix`, disable `grub.nix`.
+   - Edit `configuration.nix`: comment `plymouth.nix` and `grub.nix`, uncomment `secure.nix`.
 
    ```nix
-   imports = [ ./system/boot/secure.nix ]; # Comment grub.nix
+   imports = [
+     ./system/boot/grub.nix         # keep for EFI params — or comment if fully migrating
+     # ./system/boot/plymouth.nix   # must be commented with Secure Boot
+     ./system/boot/secure.nix
+   ];
    ```
 
    - Rebuild system:
@@ -64,14 +71,14 @@ imports = [ ./system/boot/grub.nix ]; # Comment secure.nix
 
 1. Remove old GRUB entry from NVRAM:
 
-   ```
+   ```bash
    sudo efibootmgr              # Find BootXXXX for GRUB/NixOS
    sudo efibootmgr -b XXXX -B   # Delete it
    ```
 
 2. Reinstall bootloader:
 
-   ```
+   ```bash
    sudo nixos-rebuild boot --install-bootloader --flake .#NixOS
    ```
 
@@ -81,7 +88,9 @@ imports = [ ./system/boot/grub.nix ]; # Comment secure.nix
 
 **Location**: `home/apps.nix`, line ~37
 
+```nix
 # jetbrains.datagrip # Comment this line if installing from Russia
+```
 
 This package requires VPN/VPS connection for installation within the Russian Federation.
 
@@ -113,9 +122,9 @@ imports = [
 
 **CRITICAL**: Change the default user password before system installation.
 
-**Location**: `users/takuya.nix`
+**Location**: `users/user.nix`
 
-```
+```nix
 initialPassword = "your_password_here";  # Replace with your secure password
 ```
 
@@ -123,11 +132,11 @@ initialPassword = "your_password_here";  # Replace with your secure password
 
 After system installation, immediately change the PostgreSQL superuser password:
 
-```
+```bash
 sudo -u postgres psql -p 5442
 ```
 
-```
+```sql
 ALTER USER postgres WITH PASSWORD 'your_secure_password';
 \q
 ```
@@ -140,7 +149,7 @@ ALTER USER postgres WITH PASSWORD 'your_secure_password';
 
 To enable CTF tools, uncomment the import in `configuration.nix`:
 
-```
+```nix
 ./packages/ctf-tools.nix
 ```
 
@@ -155,7 +164,7 @@ To enable CTF tools, uncomment the import in `configuration.nix`:
 
 2. **Partition and Mount Disk**
 
-   ```
+   ```bash
    # Example partition scheme (adjust to your needs)
    # /dev/sda1: 512M EFI partition
    # /dev/sda2: Remaining space for root
@@ -170,20 +179,20 @@ To enable CTF tools, uncomment the import in `configuration.nix`:
 
 3. **Clone Repository**
 
-   ```
+   ```bash
    git clone https://github.com/skr1ms/MySetup.git
    cd MySetup
    ```
 
 4. **Generate Hardware Configuration**
 
-   ```
+   ```bash
    sudo nixos-generate-config --root /mnt
    ```
 
 5. **Deploy Configuration Files**
 
-   ```
+   ```bash
    sudo cp -r Linux/NixOS/* /mnt/etc/nixos/
 
    # Remove documentation files
@@ -193,26 +202,27 @@ To enable CTF tools, uncomment the import in `configuration.nix`:
 
 6. **Configure User Credentials**
 
-   ```
-   sudo nano /mnt/etc/nixos/users/takuya.nix
+   ```bash
+   sudo nano /mnt/etc/nixos/users/user.nix
    # Change initialPassword value
    ```
 
 7. **Verify Configuration**
 
-   ```
+   ```bash
    cd /mnt/etc/nixos
    sudo nix --extra-experimental-features 'nix-command flakes' flake check
    ```
 
 8. **Install System**
 
-   ```
+   ```bash
    sudo nixos-install --flake .#NixOS
    ```
 
 9. **Post-Installation Setup**
-   ```
+
+   ```bash
    # After reboot and login
    fish /etc/nixos/dots/install.fish
    ```
@@ -221,26 +231,26 @@ To enable CTF tools, uncomment the import in `configuration.nix`:
 
 1. **Backup Current Configuration**
 
-   ```
+   ```bash
    sudo cp -r /etc/nixos /etc/nixos.backup
    ```
 
 2. **Clone Repository**
 
-   ```
+   ```bash
    cd /tmp
    git clone https://github.com/skr1ms/MySetup.git
    ```
 
 3. **Preserve Hardware Configuration**
 
-   ```
+   ```bash
    sudo cp /etc/nixos/hardware-configuration.nix /tmp/hw-backup.nix
    ```
 
 4. **Deploy New Configuration**
 
-   ```
+   ```bash
    sudo rm -rf /etc/nixos/*
    sudo cp -r MySetup/Linux/NixOS/* /etc/nixos/
    sudo cp /tmp/hw-backup.nix /etc/nixos/hardware-configuration.nix
@@ -252,48 +262,50 @@ To enable CTF tools, uncomment the import in `configuration.nix`:
 
 5. **Configure User Password**
 
-   ```
-   sudo nano /etc/nixos/users/takuya.nix
+   ```bash
+   sudo nano /etc/nixos/users/user.nix
    # Update initialPassword
    ```
 
 6. **Validate and Apply**
 
-   ```
+   ```bash
    sudo nix --extra-experimental-features 'nix-command flakes' flake check
    sudo nixos-rebuild switch --flake .#NixOS
    ```
 
 7. **Apply Desktop Configuration**
 
-   ```
+   ```bash
    fish /etc/nixos/dots/install.fish
    ```
 
 8. **Reboot System**
-   ```
+
+   ```bash
    sudo reboot
    ```
 
 ## Configuration Structure
 
-```
+```text
 Linux/NixOS/
 ├── configuration.nix             # Main entry point, imports all modules
 ├── flake.nix                     # Nix flake configuration with inputs
 ├── hardware-configuration.nix    # Auto-generated, machine-specific (do not version control)
 │
 ├── system/                       # Core system configuration
-    ├── boot/                     # 
-│   │   ├── grub.nix              # Kernel, bootloader, GRUB theme
-│   │   └── secure.nix            # Secure Boot (lanzaboote)
+│   ├── boot/
+│   │   ├── grub.nix              # Bootloader, EFI, GRUB theme, swap, kernel params
+│   │   ├── plymouth.nix          # Boot splash screen (meowrch theme) — comment when using Secure Boot
+│   │   └── secure.nix            # Secure Boot via Lanzaboote (disabled by default)
 │   ├── locale.nix                # Timezone, i18n, keyboard layout
 │   ├── networking.nix            # Network, firewall, DNS
 │   ├── security.nix              # Polkit, SSH daemon, user permissions
 │   ├── power.nix                 # Power management settings
 │   ├── hardware.nix              # Hardware-specific configurations
-│   ├── nvidia-drivers.nix        # NVIDIA specific configuration (Optional)
-│   └── nix.nix                   # Nix settings, garbage collection
+│   ├── nvidia-drivers.nix        # NVIDIA specific configuration (disabled by default)
+│   └── nix.nix                   # Nix daemon settings, garbage collection
 │
 ├── services/                     # System services
 │   ├── display.nix               # SDDM, Hyprland configuration
@@ -313,7 +325,7 @@ Linux/NixOS/
 │   └── fonts.nix                 # System fonts
 │
 ├── users/                        # User management
-│   └── takuya.nix                # User definitions
+│   └── user.nix                  # User definitions
 │
 ├── home/                         # Home Manager configuration
 │   ├── home.nix                  # Main Home Manager file
@@ -382,7 +394,7 @@ Each module is self-contained and can be edited independently:
 
 After modifications, rebuild the system:
 
-```
+```bash
 sudo nixos-rebuild switch --flake /etc/nixos#NixOS
 ```
 
@@ -390,7 +402,7 @@ sudo nixos-rebuild switch --flake /etc/nixos#NixOS
 
 Create new `.nix` files in appropriate directories and add imports to `configuration.nix`:
 
-```
+```nix
 imports = [
   # ...
   ./your-category/your-module.nix
@@ -403,21 +415,21 @@ imports = [
 
 **DataGrip licensing error in Russia**:
 
-```
+```bash
 nano /etc/nixos/home/apps.nix
 # Comment out jetbrains.datagrip line
 ```
 
 **Flake evaluation errors**:
 
-```
+```bash
 sudo nix flake update /etc/nixos
 sudo nixos-rebuild switch --flake /etc/nixos#NixOS
 ```
 
 **Hardware detection issues**:
 
-```
+```bash
 sudo nixos-generate-config --root /mnt --force
 ```
 
@@ -425,14 +437,14 @@ sudo nixos-generate-config --root /mnt --force
 
 **PostgreSQL connection refused**:
 
-```
+```bash
 sudo systemctl status postgresql
 sudo journalctl -u postgresql
 ```
 
 **Hyprland crashes**:
 
-```
+```bash
 # Check logs
 journalctl --user -u hyprland
 ```
@@ -441,19 +453,24 @@ journalctl --user -u hyprland
 
 ### System Updates
 
-```
-# Update flake inputs
-sudo nix flake update /etc/nixos
+```fish
+# Using the update alias (defined in dots/fish/config.fish):
+update
+# expands to: cd /etc/nixos && nix flake update && nixos-rebuild switch --flake /etc/nixos#NixOS
 
-# Rebuild system
+# Or manually:
+cd /etc/nixos
+sudo nix flake update
 sudo nixos-rebuild switch --flake /etc/nixos#NixOS
 ```
+
+`nix flake update` bumps all inputs including `nixos-cachyos-kernel`, so the kernel updates alongside the rest of the system.
 
 ### Garbage Collection
 
 Automatic garbage collection runs daily at 03:15. Manual cleanup:
 
-```
+```bash
 sudo nix-collect-garbage -d
 sudo nixos-rebuild boot --flake /etc/nixos#NixOS
 ```

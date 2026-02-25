@@ -24,6 +24,8 @@
     LIBVA_DRIVER_NAME = "nvidia";
   };
 
+  boot.initrd.kernelModules = [ "nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm" ];
+
   boot.blacklistedKernelModules = [ "nouveau" ];
   
   boot.extraModprobeConfig = ''

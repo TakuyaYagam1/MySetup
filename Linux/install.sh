@@ -15,10 +15,18 @@ warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
+# Resolve absolute script path before any exec
+SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+
+# Verify script is run from Linux/ directory
+cd "$SCRIPT_DIR"
+[ -d "NixOS" ] || error "Run this script from the Linux/ directory of the repository"
+
 # Verify whiptail is available
 if ! command -v whiptail >/dev/null 2>&1; then
-    info "Installing whiptail for interactive dialogs..."
-    nix-shell -p whiptail --run "whiptail --version" >/dev/null 2>&1 || error "Failed to install whiptail"
+    info "whiptail not found, launching nix-shell..."
+    exec nix-shell -p newt --run "bash '$SCRIPT_PATH'"
 fi
 
 # Interactive configuration
@@ -32,17 +40,18 @@ if [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
     error "Passwords do not match"
 fi
 
-if whiptail --yesno "Enable Secure Boot (Lanzaboote)?" 10 50 3>&1 1>&2 2>&3; then
+if whiptail --yesno "Enable Secure Boot (Lanzaboote)?\n\nNOTE: You must enable Setup Mode in BIOS BEFORE continuing." 12 60 3>&1 1>&2 2>&3; then
     SECURE_BOOT=1
 else
     SECURE_BOOT=0
 fi
 
-if whiptail --yesno "Enable NVIDIA drivers?" 10 50 3>&1 1>&2 2>&3; then
-    NVIDIA=1
-else
-    NVIDIA=0
-fi
+GPU=$(whiptail --menu "Select GPU type:" 15 60 4 \
+    "amd"    "AMD GPU (amdgpu driver)" \
+    "intel"  "Intel integrated GPU (i915 driver)" \
+    "nvidia" "NVIDIA proprietary drivers" \
+    "other"  "Other / VM (no GPU module for Plymouth)" \
+    3>&1 1>&2 2>&3) || error "Configuration cancelled"
 
 if whiptail --yesno "Install CTF tools?" 10 50 3>&1 1>&2 2>&3; then
     CTF_TOOLS=1
@@ -50,12 +59,40 @@ else
     CTF_TOOLS=0
 fi
 
+ZAPRET=0
+ZAPRET_CONFIG=""
+if whiptail --yesno "Enable Zapret (DPI bypass for Russia)?\n\nNeeded for YouTube, Discord, etc." 12 60 3>&1 1>&2 2>&3; then
+    ZAPRET=1
+    ZAPRET_CONFIG=$(whiptail --menu "Select Zapret config:" 30 70 20 \
+        "general"                   "General (default)" \
+        "general (FAKE_TLS_AUTO)"   "General - FAKE TLS AUTO" \
+        "general (FAKE_TLS_AUTO_ALT)"  "General - FAKE TLS AUTO ALT" \
+        "general (FAKE_TLS_AUTO_ALT2)" "General - FAKE TLS AUTO ALT2" \
+        "general (FAKE_TLS_AUTO_ALT3)" "General - FAKE TLS AUTO ALT3" \
+        "general (SIMPLE FAKE ALT)" "General - SIMPLE FAKE ALT" \
+        "general (SIMPLE FAKE)"     "General - SIMPLE FAKE" \
+        "general (SIMPLE_FAKE_ALT2)" "General - SIMPLE FAKE ALT2" \
+        "general(ALT)"   "General ALT" \
+        "general(ALT2)"  "General ALT2" \
+        "general(ALT3)"  "General ALT3" \
+        "general(ALT4)"  "General ALT4" \
+        "general(ALT5)"  "General ALT5" \
+        "general(ALT6)"  "General ALT6" \
+        "general(ALT7)"  "General ALT7" \
+        "general(ALT8)"  "General ALT8" \
+        "general(ALT9)"  "General ALT9" \
+        "general(ALT10)" "General ALT10" \
+        "general(ALT11)" "General ALT11" \
+        3>&1 1>&2 2>&3) || error "Configuration cancelled"
+fi
+
 # Generate configuration summary
 SUMMARY="Configuration Summary:\n\n"
-SUMMARY+="Username: $USERNAME\n"
-SUMMARY+="Secure Boot: $([ $SECURE_BOOT -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
-SUMMARY+="NVIDIA Drivers: $([ $NVIDIA -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
-SUMMARY+="CTF Tools: $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n\n"
+SUMMARY+="Username:     $USERNAME\n"
+SUMMARY+="Secure Boot:  $([ $SECURE_BOOT -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
+SUMMARY+="GPU Driver:   $GPU\n"
+SUMMARY+="CTF Tools:    $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
+SUMMARY+="Zapret:       $([ $ZAPRET -eq 1 ] && echo "Enabled ($ZAPRET_CONFIG)" || echo 'Disabled')\n\n"
 SUMMARY+="Proceed with installation?"
 
 if ! whiptail --yesno "$SUMMARY" 20 60 3>&1 1>&2 2>&3; then
@@ -108,26 +145,44 @@ EOF
 
 step "Modifying configuration.nix"
 
-# Copy and modify configuration.nix
 cp NixOS/configuration.nix "$TEMP_DIR/configuration.nix"
 
 # Apply Secure Boot configuration
 if [ $SECURE_BOOT -eq 1 ]; then
     info "Enabling Secure Boot configuration"
-    sed -i 's|./system/boot/grub.nix|# ./system/boot/grub.nix|' "$TEMP_DIR/configuration.nix"
+    # grub.nix stays imported — secure.nix overrides grub via mkForce, but EFI settings are still needed
     sed -i 's|# ./system/boot/secure.nix|./system/boot/secure.nix|' "$TEMP_DIR/configuration.nix"
+    # Plymouth conflicts with Lanzaboote signed initrd
+    sed -i 's|./system/boot/plymouth.nix|# ./system/boot/plymouth.nix|' "$TEMP_DIR/configuration.nix"
 else
     sed -i 's|./system/boot/secure.nix|# ./system/boot/secure.nix|' "$TEMP_DIR/configuration.nix"
-    sed -i 's|# ./system/boot/grub.nix|./system/boot/grub.nix|' "$TEMP_DIR/configuration.nix"
 fi
 
-# Apply NVIDIA configuration
-if [ $NVIDIA -eq 1 ]; then
+# Apply GPU configuration
+if [ "$GPU" = "nvidia" ]; then
     info "Enabling NVIDIA drivers"
     sed -i 's|# ./system/nvidia-drivers.nix|./system/nvidia-drivers.nix|' "$TEMP_DIR/configuration.nix"
 else
     sed -i 's|./system/nvidia-drivers.nix|# ./system/nvidia-drivers.nix|' "$TEMP_DIR/configuration.nix"
 fi
+
+# Patch Plymouth initrd kernel module based on GPU
+cp NixOS/system/boot/plymouth.nix "$TEMP_DIR/plymouth.nix"
+case "$GPU" in
+    amd)
+        sed -i 's|# GPU_MODULE_PLACEHOLDER||' "$TEMP_DIR/plymouth.nix"
+        ;;
+    intel)
+        sed -i 's|"amdgpu" ]; # GPU_MODULE_PLACEHOLDER|"i915" ];|' "$TEMP_DIR/plymouth.nix"
+        ;;
+    nvidia)
+        # initrd modules are already set in nvidia-drivers.nix
+        sed -i 's|boot.initrd.kernelModules = \[ "amdgpu" \]; # GPU_MODULE_PLACEHOLDER||' "$TEMP_DIR/plymouth.nix"
+        ;;
+    other)
+        sed -i 's|boot.initrd.kernelModules = \[ "amdgpu" \]; # GPU_MODULE_PLACEHOLDER||' "$TEMP_DIR/plymouth.nix"
+        ;;
+esac
 
 # Apply CTF tools configuration
 if [ $CTF_TOOLS -eq 1 ]; then
@@ -137,16 +192,29 @@ else
     sed -i 's|./packages/ctf-tools.nix|# ./packages/ctf-tools.nix|' "$TEMP_DIR/configuration.nix"
 fi
 
+# Apply Zapret configuration
+cp NixOS/services/zapret.nix "$TEMP_DIR/zapret.nix"
+if [ $ZAPRET -eq 1 ]; then
+    info "Enabling Zapret with config: $ZAPRET_CONFIG"
+    sed -i "s|config = \".*\";|config = \"${ZAPRET_CONFIG}\";|" "$TEMP_DIR/zapret.nix"
+    sed -i 's|# ./services/zapret.nix|./services/zapret.nix|' "$TEMP_DIR/configuration.nix"
+else
+    sed -i 's|./services/zapret.nix|# ./services/zapret.nix|' "$TEMP_DIR/configuration.nix"
+fi
+
+step "Patching flake.nix for username: $USERNAME"
+
+cp NixOS/flake.nix "$TEMP_DIR/flake.nix"
+sed -i "s|users\.takuya = import ./home/home\.nix|users.${USERNAME} = import ./home/home.nix|g" "$TEMP_DIR/flake.nix"
+
 step "Copying configuration to /etc/nixos/"
 
-# Copy all NixOS configuration files
 sudo cp -rf NixOS/* /etc/nixos/
-
-# Copy modified files
 sudo cp "$TEMP_DIR/user.nix" /etc/nixos/users/user.nix
 sudo cp "$TEMP_DIR/configuration.nix" /etc/nixos/configuration.nix
-
-# Set correct ownership
+sudo cp "$TEMP_DIR/flake.nix" /etc/nixos/flake.nix
+sudo cp "$TEMP_DIR/plymouth.nix" /etc/nixos/system/boot/plymouth.nix
+sudo cp "$TEMP_DIR/zapret.nix" /etc/nixos/services/zapret.nix
 sudo chown -R root:root /etc/nixos/
 
 step "Building NixOS configuration"
@@ -158,11 +226,11 @@ fi
 
 step "Installing dotfiles"
 
-# Install dotfiles if fish is available
-if command -v fish >/dev/null 2>&1; then
-    fish ~/MySetup/Linux/dots/install.fish || warn "Dotfiles installation failed or incomplete"
+DOTFILES_SCRIPT="$SCRIPT_DIR/dots/install.fish"
+if command -v fish >/dev/null 2>&1 && [ -f "$DOTFILES_SCRIPT" ]; then
+    fish "$DOTFILES_SCRIPT" || warn "Dotfiles installation failed or incomplete"
 else
-    warn "Fish shell not available yet. Run 'fish ~/MySetup/Linux/dots/install.fish' after reboot."
+    warn "Run dotfiles installer manually after reboot: fish $DOTFILES_SCRIPT"
 fi
 
 # Print installation summary
@@ -170,24 +238,24 @@ echo ""
 info "Installation completed successfully"
 echo ""
 echo "Configuration Summary:"
-echo "  Username: $USERNAME"
+echo "  Username:    $USERNAME"
 echo "  Secure Boot: $([ $SECURE_BOOT -eq 1 ] && echo 'Enabled' || echo 'Disabled')"
-echo "  NVIDIA Drivers: $([ $NVIDIA -eq 1 ] && echo 'Enabled' || echo 'Disabled')"
-echo "  CTF Tools: $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')"
+echo "  GPU Driver:  $GPU"
+echo "  CTF Tools:   $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')"
+echo "  Zapret:      $([ $ZAPRET -eq 1 ] && echo "Enabled ($ZAPRET_CONFIG)" || echo 'Disabled')"
 echo ""
 
-# Secure Boot warning
+# Secure Boot post-install instructions
 if [ $SECURE_BOOT -eq 1 ]; then
-    warn "Secure Boot is enabled. After reboot:"
-    warn "  1. Enter BIOS/UEFI settings"
-    warn "  2. Enable Secure Boot Setup Mode"
-    warn "  3. Boot into NixOS"
-    warn "  4. Run: sudo sbctl enroll-keys"
+    warn "Secure Boot next steps (after reboot):"
+    warn "  1. sudo sbctl create-keys"
+    warn "  2. sudo sbctl enroll-keys --microsoft"
+    warn "  3. Reboot and verify Secure Boot is active"
     echo ""
 fi
 
 # Prompt for reboot
-read -p "Reboot now? (y/N): " REBOOT
+read -rp "Reboot now? (y/N): " REBOOT
 if [[ $REBOOT =~ ^[Yy]$ ]]; then
     info "Rebooting system..."
     sudo reboot

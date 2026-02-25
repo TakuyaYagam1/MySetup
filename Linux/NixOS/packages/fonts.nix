@@ -1,10 +1,10 @@
-{ pkgs, ... }:
+{ pkgs, pkgs-stable, ... }:
 
 {
   fonts = {
     enableDefaultPackages = true;
 
-    packages = with pkgs; [
+    packages = with pkgs-stable; [
       jetbrains-mono
       nerd-fonts.jetbrains-mono
       nerd-fonts.caskaydia-cove
