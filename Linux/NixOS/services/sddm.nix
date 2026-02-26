@@ -4,8 +4,8 @@ let
   meowrchSddmTheme = pkgs.stdenv.mkDerivation {
     pname = "meowrch-sddm-theme";
     version = "1.0";
-    src = ../sddm-theme;
-    
+    src = ../themes/sddm-theme;
+
     dontBuild = true;
     installPhase = ''
       mkdir -p $out/share/sddm/themes/meowrch-sddm-theme
@@ -31,12 +31,7 @@ EOF
   };
 in
 {
-  environment.etc."sddm/faces/takuya.face.icon".source = ../sddm-theme/icons/logo.png;
-
-  programs.hyprland = {
-    enable = true;
-    xwayland.enable = true;
-  };
+  environment.etc."sddm/faces/takuya.face.icon".source = ../themes/sddm-theme/icons/logo.png;
 
   services.displayManager = {
     defaultSession = "hyprland";

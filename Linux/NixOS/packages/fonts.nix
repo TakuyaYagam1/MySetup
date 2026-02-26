@@ -1,4 +1,4 @@
-{ pkgs, pkgs-stable, ... }:
+{ pkgs-stable, ... }:
 
 {
   fonts = {

@@ -3,8 +3,8 @@
 {
   imports = [
     inputs.caelestia-shell.homeManagerModules.default
-    ./shell.nix
-    ./desktop.nix
+    ./caelestia.nix
+    ./theming.nix
     ./apps.nix
     ./dev-packages.nix
   ];

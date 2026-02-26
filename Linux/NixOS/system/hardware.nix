@@ -16,6 +16,8 @@
 
   services.xserver.videoDrivers = lib.mkDefault [ "amdgpu" "modesetting" ];
 
+  boot.initrd.kernelModules = [ "amdgpu" ]; # GPU_MODULE_PLACEHOLDER
+
   hardware.cpu.intel.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
   hardware.cpu.amd.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
 
@@ -25,4 +27,9 @@
   };
 
   services.blueman.enable = true;
+
+  swapDevices = [{
+    device = "/var/lib/swapfile";
+    size = 32 * 1024;
+  }];
 }

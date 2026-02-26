@@ -71,10 +71,8 @@
       python-multipart
       
       # Code quality
-      ruff
       black
       isort
-      mypy
       pylint
       autopep8
       flake8

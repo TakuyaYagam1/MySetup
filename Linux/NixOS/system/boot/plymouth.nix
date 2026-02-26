@@ -5,7 +5,7 @@ let
     pname = "meowrch-plymouth-theme";
     version = "1.0";
 
-    src = lib.cleanSource ../../plymouth-theme;
+    src = lib.cleanSource ../../themes/plymouth-theme;
 
     dontBuild = true;
 
@@ -17,7 +17,7 @@ let
       cp meowrch.plymouth $dest/
       cp meowrch.script $dest/
 
-      cp ${../../plymouth-theme/assets/logo.png} $dest/assets/logo.png
+      cp ${../../themes/plymouth-theme/assets/logo.png} $dest/assets/logo.png
 
       substituteInPlace $dest/meowrch.plymouth \
         --replace "/usr/share/plymouth/themes/meowrch/assets" "$dest/assets" \
@@ -33,7 +33,6 @@ in
   };
 
   boot.initrd.systemd.enable = true;
-  boot.initrd.kernelModules = [ "amdgpu" ]; # GPU_MODULE_PLACEHOLDER
 
   boot.kernelParams = [ "quiet" "splash" "udev.log_level=3" ];
 }

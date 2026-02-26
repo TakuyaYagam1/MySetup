@@ -40,6 +40,10 @@ if [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
     error "Passwords do not match"
 fi
 
+DETECTED_TZ=$(curl -s --connect-timeout 5 https://ipapi.co/timezone 2>/dev/null || echo "UTC")
+[ -z "$DETECTED_TZ" ] && DETECTED_TZ="UTC"
+TIMEZONE=$(whiptail --inputbox "Enter timezone:\n(auto-detected from IP)" 10 60 "$DETECTED_TZ" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+
 if whiptail --yesno "Enable Secure Boot (Lanzaboote)?\n\nNOTE: You must enable Setup Mode in BIOS BEFORE continuing." 12 60 3>&1 1>&2 2>&3; then
     SECURE_BOOT=1
 else
@@ -53,6 +57,12 @@ GPU=$(whiptail --menu "Select GPU type:" 15 60 4 \
     "other"  "Other / VM (no GPU module for Plymouth)" \
     3>&1 1>&2 2>&3) || error "Configuration cancelled"
 
+if whiptail --yesno "Are you installing from Russia?\n\nThis will comment out jetbrains.datagrip (regional licensing restriction) and suggest enabling Zapret." 12 65 3>&1 1>&2 2>&3; then
+    RUSSIA=1
+else
+    RUSSIA=0
+fi
+
 if whiptail --yesno "Install CTF tools?" 10 50 3>&1 1>&2 2>&3; then
     CTF_TOOLS=1
 else
@@ -61,7 +71,9 @@ fi
 
 ZAPRET=0
 ZAPRET_CONFIG=""
-if whiptail --yesno "Enable Zapret (DPI bypass for Russia)?\n\nNeeded for YouTube, Discord, etc." 12 60 3>&1 1>&2 2>&3; then
+ZAPRET_ARGS=""
+[ $RUSSIA -eq 0 ] && ZAPRET_ARGS="--defaultno"
+if whiptail $ZAPRET_ARGS --yesno "Enable Zapret (DPI bypass for Russia)?\n\nNeeded for YouTube, Discord, etc." 12 60 3>&1 1>&2 2>&3; then
     ZAPRET=1
     ZAPRET_CONFIG=$(whiptail --menu "Select Zapret config:" 30 70 20 \
         "general"                   "General (default)" \
@@ -89,6 +101,8 @@ fi
 # Generate configuration summary
 SUMMARY="Configuration Summary:\n\n"
 SUMMARY+="Username:     $USERNAME\n"
+SUMMARY+="Timezone:     $TIMEZONE\n"
+SUMMARY+="Region:       $([ $RUSSIA -eq 1 ] && echo 'Russia (DataGrip disabled)' || echo 'Other')\n"
 SUMMARY+="Secure Boot:  $([ $SECURE_BOOT -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
 SUMMARY+="GPU Driver:   $GPU\n"
 SUMMARY+="CTF Tools:    $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
@@ -151,45 +165,53 @@ cp NixOS/configuration.nix "$TEMP_DIR/configuration.nix"
 if [ $SECURE_BOOT -eq 1 ]; then
     info "Enabling Secure Boot configuration"
     # grub.nix stays imported — secure.nix overrides grub via mkForce, but EFI settings are still needed
-    sed -i 's|# ./system/boot/secure.nix|./system/boot/secure.nix|' "$TEMP_DIR/configuration.nix"
+    sed -i 's|    # \./system/boot/secure\.nix|    ./system/boot/secure.nix|' "$TEMP_DIR/configuration.nix"
     # Plymouth conflicts with Lanzaboote signed initrd
-    sed -i 's|./system/boot/plymouth.nix|# ./system/boot/plymouth.nix|' "$TEMP_DIR/configuration.nix"
+    sed -i 's|    \./system/boot/plymouth\.nix|    # ./system/boot/plymouth.nix|' "$TEMP_DIR/configuration.nix"
 else
-    sed -i 's|./system/boot/secure.nix|# ./system/boot/secure.nix|' "$TEMP_DIR/configuration.nix"
+    sed -i 's|    \./system/boot/secure\.nix|    # ./system/boot/secure.nix|' "$TEMP_DIR/configuration.nix"
 fi
 
 # Apply GPU configuration
 if [ "$GPU" = "nvidia" ]; then
     info "Enabling NVIDIA drivers"
-    sed -i 's|# ./system/nvidia-drivers.nix|./system/nvidia-drivers.nix|' "$TEMP_DIR/configuration.nix"
+    sed -i 's|    # \./system/nvidia-drivers\.nix|    ./system/nvidia-drivers.nix|' "$TEMP_DIR/configuration.nix"
 else
-    sed -i 's|./system/nvidia-drivers.nix|# ./system/nvidia-drivers.nix|' "$TEMP_DIR/configuration.nix"
+    sed -i 's|    \./system/nvidia-drivers\.nix|    # ./system/nvidia-drivers.nix|' "$TEMP_DIR/configuration.nix"
 fi
 
-# Patch Plymouth initrd kernel module based on GPU
-cp NixOS/system/boot/plymouth.nix "$TEMP_DIR/plymouth.nix"
+# Patch initrd kernel module in hardware.nix based on GPU
+cp NixOS/system/hardware.nix "$TEMP_DIR/hardware.nix"
 case "$GPU" in
     amd)
-        sed -i 's|# GPU_MODULE_PLACEHOLDER||' "$TEMP_DIR/plymouth.nix"
+        # amdgpu is already the default placeholder value — no change needed
+        sed -i 's| # GPU_MODULE_PLACEHOLDER||' "$TEMP_DIR/hardware.nix"
         ;;
     intel)
-        sed -i 's|"amdgpu" ]; # GPU_MODULE_PLACEHOLDER|"i915" ];|' "$TEMP_DIR/plymouth.nix"
+        sed -i 's|"amdgpu" ]; # GPU_MODULE_PLACEHOLDER|"i915" ];|' "$TEMP_DIR/hardware.nix"
         ;;
     nvidia)
-        # initrd modules are already set in nvidia-drivers.nix
-        sed -i 's|boot.initrd.kernelModules = \[ "amdgpu" \]; # GPU_MODULE_PLACEHOLDER||' "$TEMP_DIR/plymouth.nix"
+        # initrd modules are handled by nvidia-drivers.nix
+        sed -i 's|boot.initrd.kernelModules = \[ "amdgpu" \]; # GPU_MODULE_PLACEHOLDER||' "$TEMP_DIR/hardware.nix"
         ;;
     other)
-        sed -i 's|boot.initrd.kernelModules = \[ "amdgpu" \]; # GPU_MODULE_PLACEHOLDER||' "$TEMP_DIR/plymouth.nix"
+        sed -i 's|boot.initrd.kernelModules = \[ "amdgpu" \]; # GPU_MODULE_PLACEHOLDER||' "$TEMP_DIR/hardware.nix"
         ;;
 esac
 
 # Apply CTF tools configuration
 if [ $CTF_TOOLS -eq 1 ]; then
     info "Enabling CTF tools"
-    sed -i 's|# ./packages/ctf-tools.nix|./packages/ctf-tools.nix|' "$TEMP_DIR/configuration.nix"
+    sed -i 's|    # \./packages/ctf-tools\.nix|    ./packages/ctf-tools.nix|' "$TEMP_DIR/configuration.nix"
 else
-    sed -i 's|./packages/ctf-tools.nix|# ./packages/ctf-tools.nix|' "$TEMP_DIR/configuration.nix"
+    sed -i 's|    \./packages/ctf-tools\.nix|    # ./packages/ctf-tools.nix|' "$TEMP_DIR/configuration.nix"
+fi
+
+# Comment out DataGrip for Russian users (regional licensing)
+if [ $RUSSIA -eq 1 ]; then
+    info "Commenting out jetbrains.datagrip (Russia regional restriction)"
+    cp NixOS/home/apps.nix "$TEMP_DIR/apps.nix"
+    sed -i 's|jetbrains\.datagrip|# jetbrains.datagrip|' "$TEMP_DIR/apps.nix"
 fi
 
 # Apply Zapret configuration
@@ -197,24 +219,40 @@ cp NixOS/services/zapret.nix "$TEMP_DIR/zapret.nix"
 if [ $ZAPRET -eq 1 ]; then
     info "Enabling Zapret with config: $ZAPRET_CONFIG"
     sed -i "s|config = \".*\";|config = \"${ZAPRET_CONFIG}\";|" "$TEMP_DIR/zapret.nix"
-    sed -i 's|# ./services/zapret.nix|./services/zapret.nix|' "$TEMP_DIR/configuration.nix"
+    sed -i 's|    # \./services/zapret\.nix|    ./services/zapret.nix|' "$TEMP_DIR/configuration.nix"
 else
-    sed -i 's|./services/zapret.nix|# ./services/zapret.nix|' "$TEMP_DIR/configuration.nix"
+    sed -i 's|    \./services/zapret\.nix|    # ./services/zapret.nix|' "$TEMP_DIR/configuration.nix"
 fi
 
-step "Patching flake.nix for username: $USERNAME"
+step "Patching flake.nix, home.nix and caelestia.nix for username: $USERNAME"
 
 cp NixOS/flake.nix "$TEMP_DIR/flake.nix"
 sed -i "s|users\.takuya = import ./home/home\.nix|users.${USERNAME} = import ./home/home.nix|g" "$TEMP_DIR/flake.nix"
 
+cp NixOS/home/home.nix "$TEMP_DIR/home.nix"
+sed -i "s|home\.username = \"takuya\"|home.username = \"${USERNAME}\"|g" "$TEMP_DIR/home.nix"
+sed -i "s|home\.homeDirectory = \"/home/takuya\"|home.homeDirectory = \"/home/${USERNAME}\"|g" "$TEMP_DIR/home.nix"
+
+cp NixOS/home/caelestia.nix "$TEMP_DIR/caelestia.nix"
+sed -i "s|\"-u\" \"takuya\"|\"-u\" \"${USERNAME}\"|g" "$TEMP_DIR/caelestia.nix"
+
+step "Patching locale.nix with timezone: $TIMEZONE"
+
+cp NixOS/system/locale.nix "$TEMP_DIR/locale.nix"
+sed -i "s|time\.timeZone = \".*\"|time.timeZone = \"${TIMEZONE}\"|" "$TEMP_DIR/locale.nix"
+
 step "Copying configuration to /etc/nixos/"
 
 sudo cp -rf NixOS/* /etc/nixos/
-sudo cp "$TEMP_DIR/user.nix" /etc/nixos/users/user.nix
+sudo cp "$TEMP_DIR/user.nix"          /etc/nixos/users/user.nix
 sudo cp "$TEMP_DIR/configuration.nix" /etc/nixos/configuration.nix
-sudo cp "$TEMP_DIR/flake.nix" /etc/nixos/flake.nix
-sudo cp "$TEMP_DIR/plymouth.nix" /etc/nixos/system/boot/plymouth.nix
-sudo cp "$TEMP_DIR/zapret.nix" /etc/nixos/services/zapret.nix
+sudo cp "$TEMP_DIR/flake.nix"         /etc/nixos/flake.nix
+sudo cp "$TEMP_DIR/hardware.nix"      /etc/nixos/system/hardware.nix
+sudo cp "$TEMP_DIR/zapret.nix"        /etc/nixos/services/zapret.nix
+sudo cp "$TEMP_DIR/locale.nix"        /etc/nixos/system/locale.nix
+sudo cp "$TEMP_DIR/home.nix"          /etc/nixos/home/home.nix
+sudo cp "$TEMP_DIR/caelestia.nix"     /etc/nixos/home/caelestia.nix
+[ $RUSSIA -eq 1 ] && sudo cp "$TEMP_DIR/apps.nix" /etc/nixos/home/apps.nix
 sudo chown -R root:root /etc/nixos/
 
 step "Building NixOS configuration"
@@ -239,6 +277,7 @@ info "Installation completed successfully"
 echo ""
 echo "Configuration Summary:"
 echo "  Username:    $USERNAME"
+echo "  Timezone:    $TIMEZONE"
 echo "  Secure Boot: $([ $SECURE_BOOT -eq 1 ] && echo 'Enabled' || echo 'Disabled')"
 echo "  GPU Driver:  $GPU"
 echo "  CTF Tools:   $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')"

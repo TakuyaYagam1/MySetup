@@ -13,7 +13,6 @@
     # Compilers & debuggers
     gcc
     libgcc
-    gdb
     lldb
 
     # Python Ecosystem

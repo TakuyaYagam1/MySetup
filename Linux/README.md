@@ -291,52 +291,60 @@ To enable CTF tools, uncomment the import in `configuration.nix`:
 ```text
 Linux/NixOS/
 ├── configuration.nix             # Main entry point, imports all modules
-├── flake.nix                     # Nix flake configuration with inputs
+├── flake.nix                     # Flake inputs: nixpkgs-unstable, nixpkgs-stable, home-manager, etc.
 ├── hardware-configuration.nix    # Auto-generated, machine-specific (do not version control)
 │
-├── system/                       # Core system configuration
+├── system/                       # Core NixOS system configuration
 │   ├── boot/
 │   │   ├── grub.nix              # Bootloader, EFI, GRUB theme, swap, kernel params
-│   │   ├── plymouth.nix          # Boot splash screen (meowrch theme) — comment when using Secure Boot
+│   │   ├── plymouth.nix          # Boot splash screen (meowrch theme) — comment with Secure Boot
 │   │   └── secure.nix            # Secure Boot via Lanzaboote (disabled by default)
+│   ├── settings.nix              # Global system settings
 │   ├── locale.nix                # Timezone, i18n, keyboard layout
 │   ├── networking.nix            # Network, firewall, DNS
 │   ├── security.nix              # Polkit, SSH daemon, user permissions
-│   ├── power.nix                 # Power management settings
-│   ├── hardware.nix              # Hardware-specific configurations
-│   ├── nvidia-drivers.nix        # NVIDIA specific configuration (disabled by default)
+│   ├── power.nix                 # Power management
+│   ├── hardware.nix              # Hardware-specific configuration
+│   ├── nvidia-drivers.nix        # NVIDIA drivers (disabled by default)
 │   └── nix.nix                   # Nix daemon settings, garbage collection
 │
 ├── services/                     # System services
-│   ├── display.nix               # SDDM, Hyprland configuration
-│   ├── databases.nix             # PostgreSQL, MySQL, Redis
+│   ├── display.nix               # SDDM display manager + Hyprland
+│   ├── databases.nix             # PostgreSQL, MySQL, Redis, ClickHouse
+│   ├── observability.nix         # Grafana, Prometheus, Loki (disabled by default)
+│   ├── virtualization.nix        # libvirtd, VirtualBox, Docker, Podman
 │   ├── system-services.nix       # Essential system services
-│   └── zapret.nix                # DPI Bypass configuration
+│   └── zapret.nix                # DPI bypass for Russian ISPs
 │
-├── programs/                     # Program configurations
-│   ├── desktop.nix               # GUI applications configuration
-│   ├── gaming.nix                # Gaming platform (Steam, etc.)
-│   ├── shell.nix                 # Shell environment (Fish)
-│   └── development.nix           # Development tools
+├── programs/                     # NixOS-level program configuration
+│   ├── fish.nix                  # Fish shell — enables + sets as default
+│   ├── thunar.nix                # Thunar file manager + plugins
+│   ├── gaming.nix                # Steam, Gamescope, etc.
+│   ├── development.nix           # Dev-related program flags
+│   └── system-tools.nix          # System utility programs
 │
-├── packages/                     # Package lists
-│   ├── system-packages.nix       # Base system packages
-│   ├── dev-tools.nix             # Development related packages
-│   └── fonts.nix                 # System fonts
+├── packages/                     # environment.systemPackages — available to all users
+│   ├── system-packages.nix       # Core system utilities, icons, wine (stable)
+│   ├── dev-tools.nix             # Compilers, language toolchains (Go, Node, Python, Java)
+│   ├── ctf-tools.nix             # CTF & security tools — all from nixpkgs-stable
+│   └── fonts.nix                 # System fonts + fontconfig defaults
 │
-├── users/                        # User management
-│   └── user.nix                  # User definitions
+├── users/                        # User accounts
+│   └── user.nix                  # User definition, groups, initial password
 │
-├── home/                         # Home Manager configuration
-│   ├── home.nix                  # Main Home Manager file
-│   └── ...                       # Other HM modules
+├── home/                         # Home Manager — per-user configuration (user: takuya)
+│   ├── home.nix                  # Entry point, imports all HM modules
+│   ├── caelestia.nix             # Caelestia shell + Quickshell desktop config
+│   ├── theming.nix               # GTK/QT theme, cursor, dconf
+│   ├── apps.nix                  # User GUI apps (browsers, IDEs, messengers, AI tools)
+│   └── dev-packages.nix          # Python environment (python3.withPackages)
 │
-├── dots/                         # Dotfiles installation scripts
-│   └── install.fish              # Main installation script
+├── themes/                       # Visual themes (referenced from system configs)
+│   ├── grub-theme/               # GRUB bootloader theme (Meowrch)
+│   ├── plymouth-theme/           # Boot splash theme (Meowrch)
+│   └── sddm-theme/               # SDDM login screen theme (Meowrch)
 │
-├── grub-theme/                   # GRUB bootloader theme (Meowrch)
-├── sddm-theme/                   # Custom SDDM theme (Meowrch)
-└── Wallpapers/                   # Wallpaper collection
+└── Wallpapers/                   # Wallpaper collection (copied to ~/Pictures/Wallpapers)
 ```
 
 ## Key Features

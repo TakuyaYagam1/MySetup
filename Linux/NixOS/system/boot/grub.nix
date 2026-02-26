@@ -4,7 +4,7 @@ let
   meowrchGrubTheme = pkgs.stdenv.mkDerivation {
     pname = "meowrch-grub-theme";
     version = "1.0";
-    src = ../../grub-theme;
+    src = ../../themes/grub-theme;
     
     dontBuild = true;
     installPhase = ''
@@ -39,10 +39,5 @@ in
       };
     };
   };
-
-  swapDevices = [{
-    device = "/var/lib/swapfile";
-    size = 32 * 1024;
-  }];
 
 }
