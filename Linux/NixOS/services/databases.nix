@@ -20,6 +20,13 @@
     };
   };
 
+  services.pgadmin = {
+    enable = true;
+    port = 5050;
+    initialEmail = "admin@admin.com";
+    initialPasswordFile = pkgs.writeText "pgadmin-pass" "postgres";
+  };
+
   # Uncomment if needed:
   
   # services.redis.servers."default" = {
