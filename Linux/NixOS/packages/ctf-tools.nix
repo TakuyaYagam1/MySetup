@@ -87,7 +87,6 @@
     # === FORENSICS ===
     volatility3
     sleuthkit
-    autopsy
     testdisk
     ddrescue
     exiftool
