@@ -40,6 +40,7 @@
     dbeaver-bin
     jetbrains.datagrip
     sqlit-tui
+    pkgs-stable.pgbadger
     
     # API tools
     yaak
