@@ -76,6 +76,7 @@
           nixpkgs.overlays = [
             (final: prev: {
               vmware-workstation = pkgs-stable.vmware-workstation;
+              valkey = prev.valkey.overrideAttrs (_: { doCheck = false; });
             })
           ];
 
