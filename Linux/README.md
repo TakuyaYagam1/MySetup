@@ -84,15 +84,16 @@ imports = [ ./system/boot/grub.nix ]; # Comment secure.nix
 
 ### Regional Restrictions
 
-**Users in the Russian Federation** must comment out `jetbrains.datagrip` before installation due to regional licensing restrictions.
+**Users in the Russian Federation** must comment out `jetbrains.datagrip` and `jetbrains.goland` before installation due to regional licensing restrictions.
 
-**Location**: `home/apps.nix`, line ~37
+**Location**: `home/apps.nix`
 
 ```nix
 # jetbrains.datagrip # Comment this line if installing from Russia
+# jetbrains.goland   # Comment this line if installing from Russia
 ```
 
-This package requires VPN/VPS connection for installation within the Russian Federation.
+These packages require VPN/VPS connection for installation within the Russian Federation.
 
 ### Internet Censorship Circumvention (DPI Bypass)
 
@@ -421,11 +422,11 @@ imports = [
 
 ### Build Failures
 
-**DataGrip licensing error in Russia**:
+**JetBrains licensing errors in Russia** (DataGrip / GoLand):
 
 ```bash
 nano /etc/nixos/home/apps.nix
-# Comment out jetbrains.datagrip line
+# Comment out jetbrains.datagrip and jetbrains.goland lines
 ```
 
 **Flake evaluation errors**:

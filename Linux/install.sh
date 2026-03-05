@@ -102,7 +102,7 @@ fi
 SUMMARY="Configuration Summary:\n\n"
 SUMMARY+="Username:     $USERNAME\n"
 SUMMARY+="Timezone:     $TIMEZONE\n"
-SUMMARY+="Region:       $([ $RUSSIA -eq 1 ] && echo 'Russia (DataGrip disabled)' || echo 'Other')\n"
+SUMMARY+="Region:       $([ $RUSSIA -eq 1 ] && echo 'Russia (DataGrip & GoLand disabled)' || echo 'Other')\n"
 SUMMARY+="Secure Boot:  $([ $SECURE_BOOT -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
 SUMMARY+="GPU Driver:   $GPU\n"
 SUMMARY+="CTF Tools:    $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
@@ -207,11 +207,12 @@ else
     sed -i 's|    \./packages/ctf-tools\.nix|    # ./packages/ctf-tools.nix|' "$TEMP_DIR/configuration.nix"
 fi
 
-# Comment out DataGrip for Russian users (regional licensing)
+# Comment out JetBrains tools unavailable in Russia (regional licensing)
 if [ $RUSSIA -eq 1 ]; then
-    info "Commenting out jetbrains.datagrip (Russia regional restriction)"
+    info "Commenting out jetbrains.datagrip and jetbrains.goland (Russia regional restriction)"
     cp NixOS/home/apps.nix "$TEMP_DIR/apps.nix"
     sed -i 's|jetbrains\.datagrip|# jetbrains.datagrip|' "$TEMP_DIR/apps.nix"
+    sed -i 's|jetbrains\.goland|# jetbrains.goland|' "$TEMP_DIR/apps.nix"
 fi
 
 # Apply Zapret configuration

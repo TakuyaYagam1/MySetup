@@ -51,6 +51,7 @@
     # Development
     antigravity
     vscode
+    jetbrains.goland
     code-cursor
     pkgs-stable.zed-editor # in unstable probably u will build zed, is it error or what idk, so use the stable package
     flutter
