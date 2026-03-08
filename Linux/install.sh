@@ -44,6 +44,11 @@ DETECTED_TZ=$(curl -s --connect-timeout 5 https://ipapi.co/timezone 2>/dev/null 
 [ -z "$DETECTED_TZ" ] && DETECTED_TZ="UTC"
 TIMEZONE=$(whiptail --inputbox "Enter timezone:\n(auto-detected from IP)" 10 60 "$DETECTED_TZ" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
 
+LOCALE=$(whiptail --menu "Select system locale:" 12 60 2 \
+    "en_US.UTF-8" "English (US) — default" \
+    "ru_RU.UTF-8" "Russian (Русский)" \
+    3>&1 1>&2 2>&3) || error "Configuration cancelled"
+
 if whiptail --yesno "Enable Secure Boot (Lanzaboote)?\n\nNOTE: You must enable Setup Mode in BIOS BEFORE continuing." 12 60 3>&1 1>&2 2>&3; then
     SECURE_BOOT=1
 else
@@ -102,6 +107,7 @@ fi
 SUMMARY="Configuration Summary:\n\n"
 SUMMARY+="Username:     $USERNAME\n"
 SUMMARY+="Timezone:     $TIMEZONE\n"
+SUMMARY+="Locale:       $LOCALE\n"
 SUMMARY+="Region:       $([ $RUSSIA -eq 1 ] && echo 'Russia (DataGrip & GoLand disabled)' || echo 'Other')\n"
 SUMMARY+="Secure Boot:  $([ $SECURE_BOOT -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
 SUMMARY+="GPU Driver:   $GPU\n"
@@ -237,10 +243,11 @@ sed -i "s|home\.homeDirectory = \"/home/takuya\"|home.homeDirectory = \"/home/${
 cp NixOS/home/caelestia.nix "$TEMP_DIR/caelestia.nix"
 sed -i "s|\"-u\" \"takuya\"|\"-u\" \"${USERNAME}\"|g" "$TEMP_DIR/caelestia.nix"
 
-step "Patching locale.nix with timezone: $TIMEZONE"
+step "Patching locale.nix with timezone: $TIMEZONE and locale: $LOCALE"
 
 cp NixOS/system/locale.nix "$TEMP_DIR/locale.nix"
 sed -i "s|time\.timeZone = \".*\"|time.timeZone = \"${TIMEZONE}\"|" "$TEMP_DIR/locale.nix"
+sed -i "s|i18n\.defaultLocale = \".*\"|i18n.defaultLocale = \"${LOCALE}\"|" "$TEMP_DIR/locale.nix"
 
 step "Copying configuration to /etc/nixos/"
 
@@ -279,6 +286,7 @@ echo ""
 echo "Configuration Summary:"
 echo "  Username:    $USERNAME"
 echo "  Timezone:    $TIMEZONE"
+echo "  Locale:      $LOCALE"
 echo "  Secure Boot: $([ $SECURE_BOOT -eq 1 ] && echo 'Enabled' || echo 'Disabled')"
 echo "  GPU Driver:  $GPU"
 echo "  CTF Tools:   $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')"
