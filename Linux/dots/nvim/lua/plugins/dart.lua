@@ -6,7 +6,7 @@ return {
     opts = {
       servers = {
         dartls = {
-          -- cmd = { "/etc/profiles/per-user/takuya/bin/dart", "language-server", "--protocol=lsp" },
+          -- cmd = { "/etc/profiles/per-user/your-username/bin/dart", "language-server", "--protocol=lsp" },
         },
       },
     },

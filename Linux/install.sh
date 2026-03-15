@@ -234,14 +234,17 @@ fi
 step "Patching flake.nix, home.nix and caelestia.nix for username: $USERNAME"
 
 cp NixOS/flake.nix "$TEMP_DIR/flake.nix"
-sed -i "s|users\.takuya = import ./home/home\.nix|users.${USERNAME} = import ./home/home.nix|g" "$TEMP_DIR/flake.nix"
+sed -E -i "s|users\.[A-Za-z0-9._-]+ = import \./home/home\.nix|users.${USERNAME} = import ./home/home.nix|g" "$TEMP_DIR/flake.nix"
 
 cp NixOS/home/home.nix "$TEMP_DIR/home.nix"
-sed -i "s|home\.username = \"takuya\"|home.username = \"${USERNAME}\"|g" "$TEMP_DIR/home.nix"
-sed -i "s|home\.homeDirectory = \"/home/takuya\"|home.homeDirectory = \"/home/${USERNAME}\"|g" "$TEMP_DIR/home.nix"
+sed -E -i "s|home\.username = \"[^\"]+\"|home.username = \"${USERNAME}\"|g" "$TEMP_DIR/home.nix"
+sed -E -i "s|home\.homeDirectory = \"/home/[^\"]+\"|home.homeDirectory = \"/home/${USERNAME}\"|g" "$TEMP_DIR/home.nix"
 
 cp NixOS/home/caelestia.nix "$TEMP_DIR/caelestia.nix"
-sed -i "s|\"-u\" \"takuya\"|\"-u\" \"${USERNAME}\"|g" "$TEMP_DIR/caelestia.nix"
+sed -E -i "s|\"pkill\" \"-KILL\" \"-u\" \"[^\"]+\"|\"pkill\" \"-KILL\" \"-u\" \"${USERNAME}\"|g" "$TEMP_DIR/caelestia.nix"
+
+cp NixOS/services/sddm.nix "$TEMP_DIR/sddm.nix"
+sed -E -i "s|sddm/faces/[^\"]+\.face\.icon|sddm/faces/${USERNAME}.face.icon|g" "$TEMP_DIR/sddm.nix"
 
 step "Patching locale.nix with timezone: $TIMEZONE and locale: $LOCALE"
 
@@ -257,6 +260,7 @@ sudo cp "$TEMP_DIR/configuration.nix" /etc/nixos/configuration.nix
 sudo cp "$TEMP_DIR/flake.nix"         /etc/nixos/flake.nix
 sudo cp "$TEMP_DIR/hardware.nix"      /etc/nixos/system/hardware.nix
 sudo cp "$TEMP_DIR/zapret.nix"        /etc/nixos/services/zapret.nix
+sudo cp "$TEMP_DIR/sddm.nix"          /etc/nixos/services/sddm.nix
 sudo cp "$TEMP_DIR/locale.nix"        /etc/nixos/system/locale.nix
 sudo cp "$TEMP_DIR/home.nix"          /etc/nixos/home/home.nix
 sudo cp "$TEMP_DIR/caelestia.nix"     /etc/nixos/home/caelestia.nix

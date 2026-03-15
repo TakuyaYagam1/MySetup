@@ -333,7 +333,7 @@ Linux/NixOS/
 ├── users/                        # User accounts
 │   └── user.nix                  # User definition, groups, initial password
 │
-├── home/                         # Home Manager — per-user configuration (user: takuya)
+├── home/                         # Home Manager — per-user configuration (user: <username>)
 │   ├── home.nix                  # Entry point, imports all HM modules
 │   ├── caelestia.nix             # Caelestia shell + Quickshell desktop config
 │   ├── theming.nix               # GTK/QT theme, cursor, dconf

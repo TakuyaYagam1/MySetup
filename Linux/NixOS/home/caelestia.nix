@@ -10,6 +10,7 @@ in
     systemd = {
       enable = false;
       target = "graphical-session.target";
+      environment = [];
     };
 
     cli = {
@@ -53,6 +54,7 @@ in
         };
       };
       general = {
+        logo = "caelestia";
         apps = {
           terminal = [ "foot" ];
           audio = [ "pavucontrol" ];
@@ -216,9 +218,16 @@ in
               icon = "sports_esports";
             }
           ];
+          windowIcons = [
+            {
+              regex = "steam(_app_(default|[0-9]+))?";
+              icon = "sports_esports";
+            }
+          ];
         };
         excludedScreens = [ "" ];
         activeWindow = {
+          compact = true;
           inverted = false;
         };
       };
@@ -367,6 +376,7 @@ in
       };
       lock = {
         recolourLogo = false;
+        hideNotifs = true;
       };
       notifs = {
         actionOnClick = true;
@@ -380,7 +390,7 @@ in
         enabled = true;
         enableBrightness = true;
         enableMicrophone = true;
-        hideDelay = 2000;
+        hideDelay = 1000;
       };
       paths = {
         mediaGif = "root:/assets/bongocat.gif";
@@ -444,6 +454,36 @@ in
           vpnChanged = true;
           nowPlaying = true;
         };
+        quickToggles = [
+          {
+            id = "wifi";
+            enabled = true;
+          }
+          {
+            id = "bluetooth";
+            enabled = true;
+          }
+          {
+            id = "mic";
+            enabled = true;
+          }
+          {
+            id = "settings";
+            enabled = true;
+          }
+          {
+            id = "gameMode";
+            enabled = true;
+          }
+          {
+            id = "dnd";
+            enabled = true;
+          }
+          {
+            id = "vpn";
+            enabled = true;
+          }
+        ];
         vpn = {
           enabled = true;
           provider = [
