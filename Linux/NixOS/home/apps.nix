@@ -71,7 +71,7 @@
     slurp
     
     # Containers
-    podman-desktop
+    pkgs-stable.podman-desktop
     
     # System utilities
     wtype
@@ -94,7 +94,7 @@
     xneur
 
     # games
-    lutris
-    heroic
+    pkgs-stable.lutris
+    pkgs-stable.heroic
   ];
 }
