@@ -133,6 +133,8 @@ in
       };
       bar = {
         clock = {
+          background = true;
+          showDate = true;
           showIcon = true;
         };
         dragThreshold = 20;
