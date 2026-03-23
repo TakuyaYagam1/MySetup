@@ -33,6 +33,10 @@ in
 {
   environment.etc."sddm/faces/takuya.face.icon".source = ../themes/sddm-theme/icons/logo.png;
 
+  services.gnome.gnome-keyring.enable = true;
+  security.pam.services.sddm.enableGnomeKeyring = true;
+  environment.systemPackages = [ pkgs.libsecret ];
+
   services.displayManager = {
     defaultSession = "hyprland";
 
