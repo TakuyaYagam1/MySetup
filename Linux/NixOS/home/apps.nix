@@ -12,7 +12,6 @@
     # Desktop utilities
     swappy
     libqalculate
-    amnezia-vpn
     
     # Wayland tools
     xdg-desktop-portal-hyprland
