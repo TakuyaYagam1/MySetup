@@ -79,6 +79,9 @@
       # Proxy
       hysteria
       v2rayn
+      clash-meta
+      clash-nyanpasu
+      mihomo
       sing-box
       sing-geoip
     ])

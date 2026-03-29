@@ -28,6 +28,11 @@ in
   boot.extraModulePackages = [ config.boot.kernelPackages.amneziawg ];
   boot.kernelModules = [ "amneziawg" ];
   programs.dconf.enable = true;
+  
+  programs.appimage = {
+    enable = true;
+    binfmt = true;
+  };
 
   networking.firewall.checkReversePath = lib.mkForce "loose";
 }

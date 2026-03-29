@@ -4,6 +4,7 @@
   services.dbus.enable = true;
   services.gvfs.enable = true; 
   services.tumbler.enable = true;
+  services.sing-box.enable = true;
   
   systemd.services.nix-daemon.serviceConfig = {
     LimitNOFILE = lib.mkForce "infinity";
