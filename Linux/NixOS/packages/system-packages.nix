@@ -75,6 +75,12 @@
 
       # Torrent
       qbittorrent
+
+      # Proxy
+      hysteria
+      v2rayn
+      sing-box
+      sing-geoip
     ])
     ++ (with pkgs-stable; [
       # Wine
