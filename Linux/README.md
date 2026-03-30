@@ -382,6 +382,10 @@ Linux/NixOS/
   - Memcached
   - ClickHouse (ports 8133, 9010)
 
+### AI & Language Models
+
+- **OmniRouter**: Local LLM router service running on `localhost:20128`. Enabled by default via `services/system-services.nix`.
+
 ### Observability Stack (Optional)
 
 Disabled by default, uncomment in `services/observability.nix`:

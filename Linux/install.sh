@@ -74,6 +74,12 @@ else
     CTF_TOOLS=0
 fi
 
+if whiptail --yesno "Enable OmniRouter (Local LLM router)?\n\nRuns on localhost:20128" 10 60 3>&1 1>&2 2>&3; then
+    OMNIROUTER=1
+else
+    OMNIROUTER=0
+fi
+
 ZAPRET=0
 ZAPRET_CONFIG=""
 ZAPRET_ARGS=""
@@ -112,6 +118,7 @@ SUMMARY+="Region:       $([ $RUSSIA -eq 1 ] && echo 'Russia (DataGrip & GoLand d
 SUMMARY+="Secure Boot:  $([ $SECURE_BOOT -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
 SUMMARY+="GPU Driver:   $GPU\n"
 SUMMARY+="CTF Tools:    $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
+SUMMARY+="OmniRouter:   $([ $OMNIROUTER -eq 1 ] && echo 'Enabled (port 20128)' || echo 'Disabled')\n"
 SUMMARY+="Zapret:       $([ $ZAPRET -eq 1 ] && echo "Enabled ($ZAPRET_CONFIG)" || echo 'Disabled')\n\n"
 SUMMARY+="Proceed with installation?"
 
@@ -213,6 +220,14 @@ else
     sed -i 's|    \./packages/ctf-tools\.nix|    # ./packages/ctf-tools.nix|' "$TEMP_DIR/configuration.nix"
 fi
 
+# Apply OmniRouter configuration
+if [ $OMNIROUTER -eq 1 ]; then
+    info "Enabling OmniRouter"
+    sed -i 's|    # \./modules/omnirouter\.nix|    ./modules/omnirouter.nix|' "$TEMP_DIR/configuration.nix"
+else
+    sed -i 's|    \./modules/omnirouter\.nix|    # ./modules/omnirouter.nix|' "$TEMP_DIR/configuration.nix"
+fi
+
 # Comment out JetBrains tools unavailable in Russia (regional licensing)
 if [ $RUSSIA -eq 1 ]; then
     info "Commenting out jetbrains.datagrip and jetbrains.goland (Russia regional restriction)"
@@ -293,8 +308,7 @@ echo "  Timezone:    $TIMEZONE"
 echo "  Locale:      $LOCALE"
 echo "  Secure Boot: $([ $SECURE_BOOT -eq 1 ] && echo 'Enabled' || echo 'Disabled')"
 echo "  GPU Driver:  $GPU"
-echo "  CTF Tools:   $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')"
-echo "  Zapret:      $([ $ZAPRET -eq 1 ] && echo "Enabled ($ZAPRET_CONFIG)" || echo 'Disabled')"
+echo "  CTF Tools:   $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')"echo "  OmniRouter:  $([ $OMNIROUTER -eq 1 ] && echo 'Enabled' || echo 'Disabled')"echo "  Zapret:      $([ $ZAPRET -eq 1 ] && echo "Enabled ($ZAPRET_CONFIG)" || echo 'Disabled')"
 echo ""
 
 # Secure Boot post-install instructions

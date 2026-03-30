@@ -38,6 +38,9 @@
     ./packages/fonts.nix
     # ./packages/ctf-tools.nix
     ./users/user.nix
+    
+    # Custom Modules
+    # ./modules/omnirouter.nix # Running on 20128 port
   ];
 
   boot.kernelPackages = lib.mkForce pkgs.linuxPackages_6_18;

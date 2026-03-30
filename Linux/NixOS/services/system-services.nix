@@ -5,6 +5,7 @@
   services.gvfs.enable = true; 
   services.tumbler.enable = true;
   services.sing-box.enable = true;
+  services.omnirouter.enable = true;
   
   systemd.services.nix-daemon.serviceConfig = {
     LimitNOFILE = lib.mkForce "infinity";
