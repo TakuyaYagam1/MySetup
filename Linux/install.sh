@@ -221,11 +221,14 @@ else
 fi
 
 # Apply OmniRouter configuration
+cp NixOS/services/system-services.nix "$TEMP_DIR/system-services.nix"
 if [ $OMNIROUTER -eq 1 ]; then
     info "Enabling OmniRouter"
-    sed -i 's|    # \./modules/omnirouter\.nix|    ./modules/omnirouter.nix|' "$TEMP_DIR/configuration.nix"
+    sed -i 's|^[[:space:]]*#\?[[:space:]]*\./modules/omnirouter\.nix|    ./modules/omnirouter.nix|' "$TEMP_DIR/configuration.nix"
+    sed -i 's|^[[:space:]]*#\?[[:space:]]*services\.omnirouter\.enable = true;|  services.omnirouter.enable = true;|' "$TEMP_DIR/system-services.nix"
 else
-    sed -i 's|    \./modules/omnirouter\.nix|    # ./modules/omnirouter.nix|' "$TEMP_DIR/configuration.nix"
+    sed -i 's|^[[:space:]]*#\?[[:space:]]*\./modules/omnirouter\.nix|    # ./modules/omnirouter.nix|' "$TEMP_DIR/configuration.nix"
+    sed -i 's|^[[:space:]]*#\?[[:space:]]*services\.omnirouter\.enable = true;|  # services.omnirouter.enable = true;|' "$TEMP_DIR/system-services.nix"
 fi
 
 # Comment out JetBrains tools unavailable in Russia (regional licensing)
@@ -274,6 +277,7 @@ sudo cp "$TEMP_DIR/user.nix"          /etc/nixos/users/user.nix
 sudo cp "$TEMP_DIR/configuration.nix" /etc/nixos/configuration.nix
 sudo cp "$TEMP_DIR/flake.nix"         /etc/nixos/flake.nix
 sudo cp "$TEMP_DIR/hardware.nix"      /etc/nixos/system/hardware.nix
+sudo cp "$TEMP_DIR/system-services.nix" /etc/nixos/services/system-services.nix
 sudo cp "$TEMP_DIR/zapret.nix"        /etc/nixos/services/zapret.nix
 sudo cp "$TEMP_DIR/sddm.nix"          /etc/nixos/services/sddm.nix
 sudo cp "$TEMP_DIR/locale.nix"        /etc/nixos/system/locale.nix

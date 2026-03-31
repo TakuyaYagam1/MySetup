@@ -64,6 +64,9 @@
     gemini-cli
     claude-code
     codex
+    opencode
+    opencode-claude-auth
+    opencode-desktop
     
     # Screenshot & Screen capture
     grim
