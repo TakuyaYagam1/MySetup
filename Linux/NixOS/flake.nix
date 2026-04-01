@@ -62,6 +62,9 @@
     pkgs-stable = import nixpkgs-stable {
       localSystem = system;
       config.allowUnfree = true;
+      config.permittedInsecurePackages = [
+        "python3.12-pypdf2-3.0.1"
+      ];
     };
   in {
     nixosConfigurations.NixOS = nixpkgs.lib.nixosSystem {

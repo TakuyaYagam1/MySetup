@@ -28,17 +28,14 @@ function confirm-overwrite
 end
 
 
-# Wallpapers avatar -> ~/.face
-set avatar_src $nixos_root/Wallpapers/avatar.jpg
-set avatar_dst ~/.face
-
-
-if test -f $avatar_src
-    echo "Using avatar image: $avatar_src"
-    magick $avatar_src $avatar_dst
-    chmod 644 $avatar_dst
+# Avatar -> ~/.face
+set avatar_src (ls $src/avatar.gif $src/avatar.* 2>/dev/null | head -1)
+if test -n "$avatar_src"
+    echo "Using avatar: $avatar_src"
+    cp $avatar_src ~/.face
+    chmod 644 ~/.face
 else
-    echo "Avatar image not found at $avatar_src, skipping ~/.face"
+    echo "No avatar.* found in $src, skipping ~/.face"
 end
 
 

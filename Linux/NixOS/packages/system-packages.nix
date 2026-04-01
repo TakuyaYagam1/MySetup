@@ -5,7 +5,8 @@
 
   environment.systemPackages =
     (with pkgs; [
-      # Icons
+      # Icons & Qt theming
+      kdePackages.qt6ct
       kdePackages.breeze-icons
       adwaita-icon-theme
       hicolor-icon-theme

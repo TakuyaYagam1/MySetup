@@ -33,7 +33,7 @@
 
   qt = {
     enable = true;
-    platformTheme.name = "gtk";
+    platformTheme.name = "qt6ct";
     style.name = "breeze";
   };
 
@@ -52,4 +52,8 @@
   };
 
   wayland.windowManager.hyprland.enable = false;
+
+  home.sessionVariables = {
+    XDG_DATA_DIRS = "$HOME/.nix-profile/share:/run/current-system/sw/share:$XDG_DATA_DIRS";
+  };
 }
