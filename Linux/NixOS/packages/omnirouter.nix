@@ -2,16 +2,16 @@
 
 buildNpmPackage rec {
   pname = "omnirouter";
-  version = "main";
+  version = "3.4.0";
 
   src = fetchFromGitHub {
     owner = "diegosouzapw";
     repo = "OmniRoute";
-    rev = "main"; 
-    hash = "sha256-vRaSLrtfM80Fh8bVqoBQify4dK9ZVmJOFLcCJNIqmy0=";
+    rev = "v3.4.0"; 
+    hash = "sha256-urgUKcr9pgK+nR5qLom8OFu2WM+BaOgguFy6J0wI3yQ=";
   };
 
-  npmDepsHash = "sha256-8NWOjucobYgeOQ0g3CQEGNO007gbjJp/s3YI5ipWZIQ=";
+  npmDepsHash = "sha256-e1yNVD+/5l6Vc0KqE5/LjInVid//PdkO51RUrh4EdXI=";
 
   # Need node-gyp and python to build native module like sharp
   nativeBuildInputs = [

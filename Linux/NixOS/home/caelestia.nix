@@ -231,6 +231,7 @@ in
         activeWindow = {
           compact = true;
           inverted = false;
+          showOnHover = true;
         };
       };
       border = {
@@ -397,7 +398,10 @@ in
       paths = {
         mediaGif = "root:/assets/bongocat.gif";
         sessionGif = "root:/assets/kurukuru.gif";
+        noNotifsPic = "root:/assets/dino.png";
+        lockNoNotifsPic = "root:/assets/dino.png";
         wallpaperDir = "~/Pictures/Wallpapers";
+        lyricsDir = "~/Music/lyrics";
       };
       services = {
         audioIncrement = 0.1;

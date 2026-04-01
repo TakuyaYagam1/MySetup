@@ -35,7 +35,8 @@ set avatar_dst ~/.face
 
 if test -f $avatar_src
     echo "Using avatar image: $avatar_src"
-    cp -f $avatar_src $avatar_dst 2>/dev/null || sudo cp $avatar_src $avatar_dst
+    magick $avatar_src $avatar_dst
+    chmod 644 $avatar_dst
 else
     echo "Avatar image not found at $avatar_src, skipping ~/.face"
 end
