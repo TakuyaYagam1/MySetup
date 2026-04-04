@@ -115,63 +115,6 @@ if confirm-overwrite $vesktop_css
     cp $src/vesktop/quickCss.css $vesktop_css
 end
 
-
-echo "Configuring Office apps on NixOS..."
-
-
-if command -q flatpak
-    echo "Adding Flathub..."
-    flatpak remote-add --if-not-exists --user flathub https://flathub.org/repo/flathub.flatpakrepo
-
-
-    # WPS Office
-    echo "Checking WPS Office..."
-    if not flatpak list --app | grep -q cn.wps.wps_365
-        echo "Installing WPS Office..."
-        flatpak install -y --user flathub cn.wps.wps_365
-    else
-        echo "WPS Office is already installed."
-    end
-
-
-    # Bottles
-    echo "Checking Bottles..."
-    if not flatpak list --app | grep -q com.usebottles.bottles
-        echo "Installing Bottles..."
-        flatpak install -y --user flathub com.usebottles.bottles
-    else
-        echo "Bottles is already installed."
-    end
-
-
-    echo "Flatpak apps ready."
-else
-    echo "Flatpak not found. It should be enabled in your flake."
-end
-
-
-# Snap setup
-if command -q snap
-    echo "Connecting Wayland interfaces for snap..."
-    sudo snap connect ms-365-electron:wayland
-    sudo snap connect ms-365-electron:opengl 2>/dev/null || true
-
-
-    echo "Checking MS 365 Electron..."
-    if not snap list | grep -q ms-365-electron
-        echo "Installing MS 365 snap..."
-        sudo snap install ms-365-electron
-    else
-        echo "MS 365 snap already installed."
-    end
-
-
-    echo "Snap ready! Run: snap run ms-365-electron --ozone-platform-hint=auto"
-else
-    echo "Snap not found. Already enabled in flake."
-end
-
-
 # sing-box binary for v2rayN
 echo "Setting up sing-box for v2rayN..."
 set singbox_dst ~/.local/share/v2rayN/bin/sing_box/sing-box
