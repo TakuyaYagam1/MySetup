@@ -20,6 +20,12 @@
       cascadia-code
       material-symbols
       nerd-fonts.symbols-only
+      vista-fonts
+      vista-fonts-chs
+      vista-fonts-cht
+      wqy_zenhei
+      wqy_microhei
+      symbola
     ];
 
     fontconfig = {
