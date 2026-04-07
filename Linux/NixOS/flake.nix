@@ -73,10 +73,10 @@
     };
   in {
     nixosConfigurations.NixOS = nixpkgs.lib.nixosSystem {
+      inherit system;
       specialArgs = { inherit inputs pkgs-stable; };
 
       modules = [
-        { nixpkgs.hostPlatform = system; }
 
         ./configuration.nix
 

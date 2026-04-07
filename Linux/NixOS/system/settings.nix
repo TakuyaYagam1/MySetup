@@ -4,10 +4,29 @@
   nix = {
     settings = {
       experimental-features = [ "nix-command" "flakes" ];
+      # GitHub token to avoid API rate limits when updating flake inputs.
+      # Create /etc/nix/netrc manually (outside git), then rebuild:
+      #
+      #   sudo bash -c 'cat > /etc/nix/netrc << EOF
+      #   machine api.github.com
+      #     login token
+      #     password YOUR_GITHUB_TOKEN
+      #
+      #   machine github.com
+      #     login token
+      #     password YOUR_GITHUB_TOKEN
+      #   EOF
+      #   chmod 600 /etc/nix/netrc'
+      netrc-file = "/etc/nix/netrc";
       download-buffer-size = 268435456;
 
       substituters = [
         "https://cache.nixos.org"
+        "https://nix-community.cachix.org"
+        "https://hyprland.cachix.org"
+        "https://quickshell.cachix.org"
+      ];
+      trusted-substituters = [
         "https://nix-community.cachix.org"
         "https://hyprland.cachix.org"
         "https://quickshell.cachix.org"
