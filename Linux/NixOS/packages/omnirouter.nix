@@ -1,17 +1,21 @@
-{ lib, buildNpmPackage, fetchFromGitHub, python3, pkg-config, libsecret, libx11, stdenv, nodejs, python311, vips, gnumake, gcc }:
+{ lib, buildNpmPackage, fetchFromGitHub, python3, pkg-config, libsecret, libx11, stdenv, nodejs_22, python311, vips, gnumake, gcc, perl }:
 
-buildNpmPackage rec {
+let
+  nodejs = nodejs_22;
+  buildNpmPackage' = buildNpmPackage.override { inherit nodejs; };
+in
+buildNpmPackage' rec {
   pname = "omnirouter";
-  version = "3.4.0";
+  version = "3.5.3";
 
   src = fetchFromGitHub {
     owner = "diegosouzapw";
     repo = "OmniRoute";
-    rev = "v3.4.0"; 
-    hash = "sha256-urgUKcr9pgK+nR5qLom8OFu2WM+BaOgguFy6J0wI3yQ=";
+    rev = "v3.5.3";
+    hash = "sha256-I34fgrjYhm+pmIXd/efG/YMsZLN2lHupATc05Vq/8Q8=";
   };
 
-  npmDepsHash = "sha256-e1yNVD+/5l6Vc0KqE5/LjInVid//PdkO51RUrh4EdXI=";
+  npmDepsHash = "sha256-4B1hHblMXI5gp9RUE4FrvQe0XUOV85UiAUd+uLHXDUQ=";
 
   # Need node-gyp and python to build native module like sharp
   nativeBuildInputs = [
@@ -21,6 +25,7 @@ buildNpmPackage rec {
     nodejs
     gnumake
     gcc
+    perl
   ];
 
   buildInputs = [
@@ -39,15 +44,17 @@ buildNpmPackage rec {
   # Skip tests because they might fail in sandbox
   doCheck = false;
 
-  preBuild = ''
-    export CYPRESS_INSTALL_BINARY=0
-    export HUSKY_SKIP_INSTALL=1
-    npm install --legacy-peer-deps
-    npm install node-gyp --save-dev
+  # next/font/google tries to fetch Inter from Google Fonts at build time,
+  # which fails in the Nix sandbox (no network). Replace with a CSS variable fallback.
+  postPatch = ''
+    sed -i 's|import { Inter } from "next/font/google";||' src/app/layout.tsx
+    perl -i -0pe 's|const inter = Inter\(\{[^}]+\}\);|const inter = { variable: "--font-inter" };|s' src/app/layout.tsx
   '';
 
   buildPhase = ''
     export NODE_ENV=production
+    export CYPRESS_INSTALL_BINARY=0
+    export HUSKY_SKIP_INSTALL=1
     npm run build
   '';
 

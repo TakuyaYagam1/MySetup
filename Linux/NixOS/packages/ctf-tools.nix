@@ -63,6 +63,7 @@
     metasploit
     netcat-gnu
     socat
+    binutils
 
     # === CRYPTOGRAPHY ===
     hashcat
