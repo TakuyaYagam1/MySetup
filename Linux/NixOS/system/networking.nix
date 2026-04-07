@@ -22,43 +22,40 @@
     firewall = {
       enable = true;
       
-      # Allow ports
-      # MySQL(3316), PG(5442), Redis(6389), ClickHouse(8133,9010), 
+      # MySQL(3316), PG(5442), Redis(6389), ClickHouse(8133,9010),
       # Grafana(3010), Prometheus(9100), Loki(3110)
-      allowedTCPPorts = [ 
+      allowedTCPPorts = [
         3316 5442 6389 8133 9010 3010 9100 3110
       ];
-      
+
       allowedUDPPorts = [ ];
-      
       logRefusedConnections = true;
       logRefusedPackets = false;
-      
-      extraCommands = ''
-        iptables -P INPUT DROP
-        iptables -P FORWARD DROP
-        iptables -P OUTPUT ACCEPT
-        iptables -A INPUT -i lo -j ACCEPT
-        iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-        iptables -A INPUT -m state --state INVALID -j DROP
-        iptables -A INPUT -p tcp --syn -m limit --limit 1/s --limit-burst 3 -j ACCEPT
-        iptables -A INPUT -p tcp --syn -j DROP
-        iptables -A INPUT -p tcp --tcp-flags ALL NONE -j DROP
-        iptables -A INPUT -p tcp --tcp-flags ALL ALL -j DROP
-      '';
-      
-      extraStopCommands = ''
-        iptables -P INPUT ACCEPT
-        iptables -P FORWARD ACCEPT
-        iptables -P OUTPUT ACCEPT
-      '';
+      checkReversePath = "strict";
     };
-    
-    firewall.checkReversePath = "strict";
   };
 
   boot.kernel.sysctl = {
+    # Network performance
     "net.core.rmem_max" = 7500000;
     "net.core.wmem_max" = 7500000;
+
+    # SYN flood protection
+    "net.ipv4.tcp_syncookies" = 1;
+
+    # Ignore ICMP redirects (prevents MITM via routing manipulation)
+    "net.ipv4.conf.all.accept_redirects" = 0;
+    "net.ipv4.conf.default.accept_redirects" = 0;
+    "net.ipv6.conf.all.accept_redirects" = 0;
+
+    # Reverse-path filtering (already set via firewall.checkReversePath, belt-and-suspenders)
+    "net.ipv4.conf.all.rp_filter" = 1;
+    "net.ipv4.conf.default.rp_filter" = 1;
+
+    # Restrict dmesg to root (prevents info leakage about kernel/hardware)
+    "kernel.dmesg_restrict" = 1;
+
+    # Required for rootless podman / user namespaces
+    "kernel.unprivileged_userns_clone" = 1;
   };
 }

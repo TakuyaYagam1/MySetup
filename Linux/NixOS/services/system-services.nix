@@ -33,11 +33,9 @@
   };
   
   nix.settings = {
-    sandbox = false;
-    max-jobs = 1;
-    cores = 1;
+    sandbox = true;
+    max-jobs = "auto";
     auto-optimise-store = true;
-    experimental-features = [ "nix-command" "flakes" ];
   };
   
   systemd.user.services.nm-applet = {

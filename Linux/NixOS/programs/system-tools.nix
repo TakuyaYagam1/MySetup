@@ -28,10 +28,17 @@ in
   boot.extraModulePackages = [ config.boot.kernelPackages.amneziawg ];
   boot.kernelModules = [ "amneziawg" ];
   programs.dconf.enable = true;
-  
+
   programs.appimage = {
     enable = true;
     binfmt = true;
+  };
+
+  programs.nh = {
+    enable = true;
+    clean.enable = true;
+    clean.extraArgs = "--keep-since 4d --keep 3";
+    flake = "/home/takuya/MySetup/Linux/NixOS";
   };
 
   networking.firewall.checkReversePath = lib.mkForce "loose";

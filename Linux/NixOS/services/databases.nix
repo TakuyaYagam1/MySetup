@@ -5,7 +5,7 @@
     enable = true;
     package = pkgs.postgresql_17;
     settings = {
-      listen_addresses = lib.mkForce "*";
+      listen_addresses = lib.mkForce "127.0.0.1";
       port = 5442;
     };
   };
@@ -16,6 +16,7 @@
     settings = {
       mysqld = {
         port = 3316;
+        bind-address = "127.0.0.1";
       };
     };
   };
@@ -23,8 +24,8 @@
   services.pgadmin = {
     enable = true;
     port = 5050;
-    initialEmail = "admin@admin.com";
-    initialPasswordFile = pkgs.writeText "pgadmin-pass" "postgres";
+    initialEmail = "admin@localhost.local";
+    initialPasswordFile = "/etc/nixos/secrets/pgadmin-password";
   };
 
   # Uncomment if needed:

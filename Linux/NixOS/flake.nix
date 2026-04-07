@@ -53,9 +53,14 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    zen-browser = {
+      url = "github:youwen5/zen-browser-flake";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
   };
 
-  outputs = { self, nixpkgs, nixpkgs-stable, home-manager, nix-snapd, zapret-discord-youtube, lanzaboote, templ, ... }@inputs:
+  outputs = { self, nixpkgs, nixpkgs-stable, home-manager, nix-snapd, zapret-discord-youtube, lanzaboote, templ, zen-browser, ... }@inputs:
   let
     system = "x86_64-linux";
     
@@ -78,7 +83,6 @@
         ({ pkgs, ... }: {
           nixpkgs.overlays = [
             (final: prev: {
-              vmware-workstation = pkgs-stable.vmware-workstation;
               valkey = prev.valkey.overrideAttrs (_: { doCheck = false; });
             })
           ];

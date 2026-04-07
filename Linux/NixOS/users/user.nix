@@ -13,9 +13,8 @@
       "kvm"
       "libvirtd"
       "adbusers"
-      "vboxuser"
     ];
-    initialPassword = "your_password_here"; # dont forget change password
+    initialHashedPassword = "";
   };
 
   system.userActivationScripts = {

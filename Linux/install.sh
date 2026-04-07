@@ -32,13 +32,16 @@ fi
 # Interactive configuration
 step "Starting interactive configuration"
 
-USERNAME=$(whiptail --inputbox "Enter username:" 10 50 "user" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
-PASSWORD=$(whiptail --passwordbox "Enter password for $USERNAME:" 10 50 3>&1 1>&2 2>&3) || error "Configuration cancelled"
-PASSWORD_CONFIRM=$(whiptail --passwordbox "Confirm password:" 10 50 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+while true; do
 
-if [ "$PASSWORD" != "$PASSWORD_CONFIRM" ]; then
-    error "Passwords do not match"
-fi
+USERNAME=$(whiptail --inputbox "Enter username:" 10 50 "user" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+
+while true; do
+    PASSWORD=$(whiptail --passwordbox "Enter password for $USERNAME:" 10 50 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+    PASSWORD_CONFIRM=$(whiptail --passwordbox "Confirm password:" 10 50 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+    [ "$PASSWORD" = "$PASSWORD_CONFIRM" ] && break
+    whiptail --msgbox "Passwords do not match. Please try again." 8 50
+done
 
 DETECTED_TZ=$(curl -s --connect-timeout 5 https://ipapi.co/timezone 2>/dev/null || echo "UTC")
 [ -z "$DETECTED_TZ" ] && DETECTED_TZ="UTC"
@@ -67,6 +70,15 @@ if whiptail --yesno "Are you installing from Russia?\n\nThis will comment out je
 else
     RUSSIA=0
 fi
+
+PGADMIN_EMAIL=$(whiptail --inputbox "Enter pgAdmin admin email:" 10 60 "admin@localhost.local" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+
+while true; do
+    PGADMIN_PASSWORD=$(whiptail --passwordbox "Enter pgAdmin admin password:" 10 50 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+    PGADMIN_PASSWORD_CONFIRM=$(whiptail --passwordbox "Confirm pgAdmin password:" 10 50 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+    [ "$PGADMIN_PASSWORD" = "$PGADMIN_PASSWORD_CONFIRM" ] && break
+    whiptail --msgbox "Passwords do not match. Please try again." 8 50
+done
 
 if whiptail --yesno "Install CTF tools?" 10 50 3>&1 1>&2 2>&3; then
     CTF_TOOLS=1
@@ -111,21 +123,25 @@ fi
 
 # Generate configuration summary
 SUMMARY="Configuration Summary:\n\n"
-SUMMARY+="Username:     $USERNAME\n"
-SUMMARY+="Timezone:     $TIMEZONE\n"
-SUMMARY+="Locale:       $LOCALE\n"
-SUMMARY+="Region:       $([ $RUSSIA -eq 1 ] && echo 'Russia (DataGrip & GoLand disabled)' || echo 'Other')\n"
-SUMMARY+="Secure Boot:  $([ $SECURE_BOOT -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
-SUMMARY+="GPU Driver:   $GPU\n"
-SUMMARY+="CTF Tools:    $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
-SUMMARY+="OmniRouter:   $([ $OMNIROUTER -eq 1 ] && echo 'Enabled (port 20128)' || echo 'Disabled')\n"
-SUMMARY+="Zapret:       $([ $ZAPRET -eq 1 ] && echo "Enabled ($ZAPRET_CONFIG)" || echo 'Disabled')\n\n"
+SUMMARY+="Username:      $USERNAME\n"
+SUMMARY+="Timezone:      $TIMEZONE\n"
+SUMMARY+="Locale:        $LOCALE\n"
+SUMMARY+="Region:        $([ $RUSSIA -eq 1 ] && echo 'Russia (DataGrip & GoLand disabled)' || echo 'Other')\n"
+SUMMARY+="Secure Boot:   $([ $SECURE_BOOT -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
+SUMMARY+="GPU Driver:    $GPU\n"
+SUMMARY+="pgAdmin Email: $PGADMIN_EMAIL\n"
+SUMMARY+="CTF Tools:     $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')\n"
+SUMMARY+="OmniRouter:    $([ $OMNIROUTER -eq 1 ] && echo 'Enabled (port 20128)' || echo 'Disabled')\n"
+SUMMARY+="Zapret:        $([ $ZAPRET -eq 1 ] && echo "Enabled ($ZAPRET_CONFIG)" || echo 'Disabled')\n\n"
 SUMMARY+="Proceed with installation?"
 
-if ! whiptail --yesno "$SUMMARY" 20 60 3>&1 1>&2 2>&3; then
-    warn "Installation cancelled by user"
-    exit 0
+if whiptail --yesno "$SUMMARY" 20 60 3>&1 1>&2 2>&3; then
+    break
+else
+    warn "Restarting configuration..."
 fi
+
+done
 
 # Create temporary directory for modified files
 TEMP_DIR=$(mktemp -d)
@@ -134,7 +150,7 @@ trap "rm -rf $TEMP_DIR" EXIT
 step "Generating user configuration"
 
 # Generate hashed password
-HASHED_PASSWORD=$(nix-shell -p mkpasswd --run "mkpasswd -sm sha-512 '$PASSWORD'")
+HASHED_PASSWORD=$(printf '%s' "$PASSWORD" | nix-shell -p mkpasswd --run "mkpasswd -sm sha-512")
 
 # Create user configuration file
 cat > "$TEMP_DIR/user.nix" << EOF
@@ -153,7 +169,6 @@ cat > "$TEMP_DIR/user.nix" << EOF
       "kvm"
       "libvirtd"
       "adbusers"
-      "vboxusers"
     ];
     initialHashedPassword = "${HASHED_PASSWORD}";
   };
@@ -249,6 +264,11 @@ else
     sed -i 's|    \./services/zapret\.nix|    # ./services/zapret.nix|' "$TEMP_DIR/configuration.nix"
 fi
 
+step "Patching databases.nix for pgAdmin email: $PGADMIN_EMAIL"
+
+cp NixOS/services/databases.nix "$TEMP_DIR/databases.nix"
+sed -E -i "s|initialEmail = \"[^\"]+\"|initialEmail = \"${PGADMIN_EMAIL}\"|" "$TEMP_DIR/databases.nix"
+
 step "Patching flake.nix, home.nix and caelestia.nix for username: $USERNAME"
 
 cp NixOS/flake.nix "$TEMP_DIR/flake.nix"
@@ -273,18 +293,30 @@ sed -i "s|i18n\.defaultLocale = \".*\"|i18n.defaultLocale = \"${LOCALE}\"|" "$TE
 step "Copying configuration to /etc/nixos/"
 
 sudo cp -rf NixOS/* /etc/nixos/
-sudo cp "$TEMP_DIR/user.nix"          /etc/nixos/users/user.nix
-sudo cp "$TEMP_DIR/configuration.nix" /etc/nixos/configuration.nix
-sudo cp "$TEMP_DIR/flake.nix"         /etc/nixos/flake.nix
-sudo cp "$TEMP_DIR/hardware.nix"      /etc/nixos/system/hardware.nix
+sudo cp "$TEMP_DIR/user.nix"            /etc/nixos/users/user.nix
+sudo cp "$TEMP_DIR/configuration.nix"  /etc/nixos/configuration.nix
+sudo cp "$TEMP_DIR/flake.nix"          /etc/nixos/flake.nix
+sudo cp "$TEMP_DIR/hardware.nix"       /etc/nixos/system/hardware.nix
 sudo cp "$TEMP_DIR/system-services.nix" /etc/nixos/services/system-services.nix
-sudo cp "$TEMP_DIR/zapret.nix"        /etc/nixos/services/zapret.nix
-sudo cp "$TEMP_DIR/sddm.nix"          /etc/nixos/services/sddm.nix
-sudo cp "$TEMP_DIR/locale.nix"        /etc/nixos/system/locale.nix
-sudo cp "$TEMP_DIR/home.nix"          /etc/nixos/home/home.nix
-sudo cp "$TEMP_DIR/caelestia.nix"     /etc/nixos/home/caelestia.nix
+sudo cp "$TEMP_DIR/databases.nix"      /etc/nixos/services/databases.nix
+sudo cp "$TEMP_DIR/zapret.nix"         /etc/nixos/services/zapret.nix
+sudo cp "$TEMP_DIR/sddm.nix"           /etc/nixos/services/sddm.nix
+sudo cp "$TEMP_DIR/locale.nix"         /etc/nixos/system/locale.nix
+sudo cp "$TEMP_DIR/home.nix"           /etc/nixos/home/home.nix
+sudo cp "$TEMP_DIR/caelestia.nix"      /etc/nixos/home/caelestia.nix
 [ $RUSSIA -eq 1 ] && sudo cp "$TEMP_DIR/apps.nix" /etc/nixos/home/apps.nix
 sudo chown -R root:root /etc/nixos/
+
+step "Creating secrets files"
+
+sudo mkdir -p /etc/nixos/secrets
+sudo chmod 700 /etc/nixos/secrets
+
+# pgAdmin password — written to file referenced by databases.nix
+printf '%s' "$PGADMIN_PASSWORD" | sudo tee /etc/nixos/secrets/pgadmin-password > /dev/null
+sudo chmod 600 /etc/nixos/secrets/pgadmin-password
+
+sudo chown -R root:root /etc/nixos/secrets/
 
 step "Building NixOS configuration"
 
@@ -312,7 +344,10 @@ echo "  Timezone:    $TIMEZONE"
 echo "  Locale:      $LOCALE"
 echo "  Secure Boot: $([ $SECURE_BOOT -eq 1 ] && echo 'Enabled' || echo 'Disabled')"
 echo "  GPU Driver:  $GPU"
-echo "  CTF Tools:   $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')"echo "  OmniRouter:  $([ $OMNIROUTER -eq 1 ] && echo 'Enabled' || echo 'Disabled')"echo "  Zapret:      $([ $ZAPRET -eq 1 ] && echo "Enabled ($ZAPRET_CONFIG)" || echo 'Disabled')"
+echo "  pgAdmin:     $PGADMIN_EMAIL"
+echo "  CTF Tools:   $([ $CTF_TOOLS -eq 1 ] && echo 'Enabled' || echo 'Disabled')"
+echo "  OmniRouter:  $([ $OMNIROUTER -eq 1 ] && echo 'Enabled' || echo 'Disabled')"
+echo "  Zapret:      $([ $ZAPRET -eq 1 ] && echo "Enabled ($ZAPRET_CONFIG)" || echo 'Disabled')"
 echo ""
 
 # Secure Boot post-install instructions

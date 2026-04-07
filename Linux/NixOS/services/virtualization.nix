@@ -1,16 +1,24 @@
-{ pkgs-stable, ... }:
+{ pkgs, ... }:
 
 {
+  environment.systemPackages = with pkgs; [
+    virt-manager
+    virt-viewer
+    spice-vdagent
+  ];
+
   virtualisation = {
-    libvirtd.enable = true;
-    vmware.host.enable = true;
-    
-    virtualbox.host = {
+    libvirtd = {
       enable = true;
-      enableExtensionPack = true;
-      package = pkgs-stable.virtualbox;
+      qemu = {
+        package = pkgs.qemu_kvm;
+        runAsRoot = false;
+        swtpm.enable = true;
+      };
     };
-    
+
+    spiceUSBRedirection.enable = true;
+
     docker = {
       enable = true;
       daemon.settings = {

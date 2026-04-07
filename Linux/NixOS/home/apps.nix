@@ -63,7 +63,7 @@
 
     # AI
     gemini-cli
-    claude-code
+    pkgs-stable.claude-code
     codex
     opencode
     opencode-claude-auth

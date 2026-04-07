@@ -78,6 +78,60 @@ Includes a pre-configured service based on [Kartavkun Zapret](https://github.com
     ```
   - Optional Redis (`6389`) and ClickHouse (`8133`, `9010`) are defined but commented out in `services/databases.nix`.
 
+### Zen Browser + Sine Mod Manager
+
+**Configuration Location**: `packages/zen-browser.nix`
+
+Zen Browser is installed with [Sine](https://github.com/CosmoCreeper/Sine) — a community-driven mod and theme manager — pre-patched via a NixOS-native overlay.
+
+#### How it works
+
+Installation is split into two parts:
+
+| Part | What | How |
+|------|------|-----|
+| **Bootloader** | `config.js` + `defaults/pref/config-prefs.js` | Baked into the browser via `packages/zen-browser.nix` at `nixos-rebuild` time |
+| **Profile** | `profile.zip` + `engine.zip` + `locales.zip` | Downloaded and extracted into `~/.zen/*/chrome/` by `install.fish` |
+
+#### Steps
+
+1. **Rebuild the system** to apply the bootloader patch:
+   ```bash
+   sudo nixos-rebuild switch --flake /etc/nixos#NixOS
+   ```
+
+2. **Run the dotfiles installer** to set up the profile part and the Catppuccin Macchiato theme:
+   ```bash
+   fish /etc/nixos/dots/install.fish
+   ```
+
+3. **Open Zen Browser** and go to `about:config`, enable:
+   ```
+   toolkit.legacyUserProfileCustomizations.stylesheets = true
+   ```
+
+4. **Restart Zen Browser** — Sine will appear inside the browser's Settings page.
+
+> After Sine is running, you can install additional mods directly from its built-in marketplace.
+
+### Power Management (Battery Optimization)
+
+**Configuration Location**: `system/power.nix`
+
+Uses `auto-cpufreq` for dynamic CPU frequency scaling based on load and power source:
+
+- **On battery**: `powersave` governor, turbo boost disabled, max freq capped at 1.8GHz
+- **On charger**: `performance` governor, turbo boost auto
+
+`power-profiles-daemon` is explicitly disabled — it conflicts with `auto-cpufreq` over CPU governor control.
+
+`powertop --auto-tune` runs on boot to enable runtime power management for all PCI/USB devices.
+
+To check current status:
+```bash
+auto-cpufreq --stats
+```
+
 ### Regional Restrictions (Russian Federation)
 
 **Configuration Location**: `home/apps.nix`

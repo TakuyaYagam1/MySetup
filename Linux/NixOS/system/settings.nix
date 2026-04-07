@@ -1,25 +1,44 @@
 { ... }:
 
 {
-  nix.settings = {
-    experimental-features = [ "nix-command" "flakes" ];
-    download-buffer-size = 268435456;
+  nix = {
+    settings = {
+      experimental-features = [ "nix-command" "flakes" ];
+      download-buffer-size = 268435456;
+
+      substituters = [
+        "https://cache.nixos.org"
+        "https://nix-community.cachix.org"
+        "https://hyprland.cachix.org"
+        "https://quickshell.cachix.org"
+      ];
+      trusted-public-keys = [
+        "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+        "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCUSeBs="
+        "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc="
+        "quickshell.cachix.org-1:tjWMR3PQd01gN6YtjSRUdHHHUgrSLFIgwqrCQjFXVOU="
+      ];
+    };
+
+    daemonCPUSchedPolicy = "idle";
+    daemonIOSchedClass = "idle";
+
+    optimise = {
+      automatic = true;
+      dates = [ "weekly" ];
+    };
+
+    # GC is handled by programs.nh.clean in programs/system-tools.nix
   };
 
   nixpkgs.config = {
     allowUnfree = true;
-    allowBroken = true;
     android_sdk.accept_license = true;
     permittedInsecurePackages = [
-      "electron-25.9.0" 
+      "electron-25.9.0"
       "olm-3.2.16"
       "python3.12-pypdf2-3.0.1"
     ];
   };
 
-  nix.gc = {
-    automatic = true;
-    dates = "03:15";
-    options = "-d";
-  };
 }
