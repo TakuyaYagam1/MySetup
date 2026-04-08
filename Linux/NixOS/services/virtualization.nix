@@ -7,6 +7,8 @@
     spice-vdagent
   ];
 
+  programs.virt-manager.enable = true;
+
   virtualisation = {
     libvirtd = {
       enable = true;
@@ -14,6 +16,7 @@
         package = pkgs.qemu_kvm;
         runAsRoot = false;
         swtpm.enable = true;
+        vhostUserPackages = [ pkgs.virtiofsd ];
       };
     };
 

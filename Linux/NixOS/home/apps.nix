@@ -1,6 +1,24 @@
 { pkgs, pkgs-stable, ... }:
 
 {
+  # for drag and drop in vm
+  xdg.desktopEntries.virt-manager = {
+    name = "Virtual Machine Manager";
+    exec = "env GDK_BACKEND=x11 virt-manager";
+    icon = "virt-manager";
+    terminal = false;
+    categories = [ "System" ];
+  };
+
+  xdg.desktopEntries.thunar = {
+    name = "Thunar";
+    exec = "env GDK_BACKEND=x11 thunar %F";
+    icon = "Thunar";
+    terminal = false;
+    categories = [ "System" "FileManager" ];
+    mimeType = [ "inode/directory" ];
+  };
+
   home.packages = with pkgs; [
     # Audio & Video
     cava

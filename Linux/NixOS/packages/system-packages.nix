@@ -14,6 +14,8 @@
       material-design-icons
 
       # System utilities
+      wl-clipboard
+      xclip
       steam-run
       acpi
       powertop

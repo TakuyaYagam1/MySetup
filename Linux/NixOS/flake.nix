@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    
+
     nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.11";
 
     home-manager = {
@@ -39,7 +39,7 @@
     };
 
     # Zapret for russian users
-    # Based on 
+    # Based on
     # https://github.com/kartavkun/zapret-discord-youtube
     # https://github.com/bol-van/zapret
     zapret-discord-youtube = {
@@ -57,13 +57,12 @@
       url = "github:youwen5/zen-browser-flake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
   };
 
   outputs = { self, nixpkgs, nixpkgs-stable, home-manager, nix-snapd, zapret-discord-youtube, lanzaboote, templ, zen-browser, ... }@inputs:
   let
     system = "x86_64-linux";
-    
+
     pkgs-stable = import nixpkgs-stable {
       localSystem = system;
       config.allowUnfree = true;
@@ -109,7 +108,7 @@
         }
 
         ({ pkgs, ... }: {
-          services.flatpak.enable = true;   
+          services.flatpak.enable = true;
           services.snap.enable = true;
 
           xdg.portal = {

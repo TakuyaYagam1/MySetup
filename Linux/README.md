@@ -88,24 +88,27 @@ Zen Browser is installed with [Sine](https://github.com/CosmoCreeper/Sine) — a
 
 Installation is split into two parts:
 
-| Part | What | How |
-|------|------|-----|
+| Part           | What                                          | How                                                                           |
+| -------------- | --------------------------------------------- | ----------------------------------------------------------------------------- |
 | **Bootloader** | `config.js` + `defaults/pref/config-prefs.js` | Baked into the browser via `packages/zen-browser.nix` at `nixos-rebuild` time |
-| **Profile** | `profile.zip` + `engine.zip` + `locales.zip` | Downloaded and extracted into `~/.zen/*/chrome/` by `install.fish` |
+| **Profile**    | `profile.zip` + `engine.zip` + `locales.zip`  | Downloaded and extracted into `~/.zen/*/chrome/` by `install.fish`            |
 
 #### Steps
 
 1. **Rebuild the system** to apply the bootloader patch:
+
    ```bash
    sudo nixos-rebuild switch --flake /etc/nixos#NixOS
    ```
 
 2. **Run the dotfiles installer** to set up the profile part and the Catppuccin Macchiato theme:
+
    ```bash
    fish /etc/nixos/dots/install.fish
    ```
 
 3. **Open Zen Browser** and go to `about:config`, enable:
+
    ```
    toolkit.legacyUserProfileCustomizations.stylesheets = true
    ```
@@ -128,6 +131,7 @@ Uses `auto-cpufreq` for dynamic CPU frequency scaling based on load and power so
 `powertop --auto-tune` runs on boot to enable runtime power management for all PCI/USB devices.
 
 To check current status:
+
 ```bash
 auto-cpufreq --stats
 ```

@@ -269,7 +269,7 @@ step "Patching databases.nix for pgAdmin email: $PGADMIN_EMAIL"
 cp NixOS/services/databases.nix "$TEMP_DIR/databases.nix"
 sed -E -i "s|initialEmail = \"[^\"]+\"|initialEmail = \"${PGADMIN_EMAIL}\"|" "$TEMP_DIR/databases.nix"
 
-step "Patching flake.nix, home.nix and caelestia.nix for username: $USERNAME"
+step "Patching nix files for username: $USERNAME"
 
 cp NixOS/flake.nix "$TEMP_DIR/flake.nix"
 sed -E -i "s|users\.[A-Za-z0-9._-]+ = import \./home/home\.nix|users.${USERNAME} = import ./home/home.nix|g" "$TEMP_DIR/flake.nix"
@@ -283,6 +283,12 @@ sed -E -i "s|\"pkill\" \"-KILL\" \"-u\" \"[^\"]+\"|\"pkill\" \"-KILL\" \"-u\" \"
 
 cp NixOS/services/sddm.nix "$TEMP_DIR/sddm.nix"
 sed -E -i "s|sddm/faces/[^\"]+\.face\.icon|sddm/faces/${USERNAME}.face.icon|g" "$TEMP_DIR/sddm.nix"
+
+cp NixOS/system/settings.nix "$TEMP_DIR/settings.nix"
+sed -E -i "s|trusted-users = \[ \"root\" \"@wheel\" \"[^\"]+\" \];|trusted-users = [ \"root\" \"@wheel\" \"${USERNAME}\" ];|" "$TEMP_DIR/settings.nix"
+
+cp NixOS/programs/system-tools.nix "$TEMP_DIR/system-tools.nix"
+sed -E -i "s|flake = \"/home/[^\"]+\"|flake = \"/home/${USERNAME}/MySetup/Linux/NixOS\"|" "$TEMP_DIR/system-tools.nix"
 
 step "Patching locale.nix with timezone: $TIMEZONE and locale: $LOCALE"
 
@@ -304,6 +310,8 @@ sudo cp "$TEMP_DIR/sddm.nix"           /etc/nixos/services/sddm.nix
 sudo cp "$TEMP_DIR/locale.nix"         /etc/nixos/system/locale.nix
 sudo cp "$TEMP_DIR/home.nix"           /etc/nixos/home/home.nix
 sudo cp "$TEMP_DIR/caelestia.nix"      /etc/nixos/home/caelestia.nix
+sudo cp "$TEMP_DIR/settings.nix"       /etc/nixos/system/settings.nix
+sudo cp "$TEMP_DIR/system-tools.nix"   /etc/nixos/programs/system-tools.nix
 [ $RUSSIA -eq 1 ] && sudo cp "$TEMP_DIR/apps.nix" /etc/nixos/home/apps.nix
 sudo chown -R root:root /etc/nixos/
 
@@ -323,15 +331,6 @@ step "Building NixOS configuration"
 cd /etc/nixos
 if ! sudo nixos-rebuild switch --flake .#NixOS; then
     error "NixOS rebuild failed. Check the error messages above."
-fi
-
-step "Installing dotfiles"
-
-DOTFILES_SCRIPT="$SCRIPT_DIR/dots/install.fish"
-if command -v fish >/dev/null 2>&1 && [ -f "$DOTFILES_SCRIPT" ]; then
-    fish "$DOTFILES_SCRIPT" || warn "Dotfiles installation failed or incomplete"
-else
-    warn "Run dotfiles installer manually after reboot: fish $DOTFILES_SCRIPT"
 fi
 
 # Print installation summary
@@ -358,6 +357,10 @@ if [ $SECURE_BOOT -eq 1 ]; then
     warn "  3. Reboot and verify Secure Boot is active"
     echo ""
 fi
+
+warn "After reboot, install dotfiles:"
+warn "  fish /etc/nixos/dots/install.fish"
+echo ""
 
 # Prompt for reboot
 read -rp "Reboot now? (y/N): " REBOOT
