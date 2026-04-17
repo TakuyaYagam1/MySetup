@@ -6,6 +6,12 @@
 
     nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.11";
 
+    # Qt escape-hatch: tracks nixos-unstable-small (Hydra-tested, days ahead of
+    # nixos-unstable). When upstream requires a newer Qt than unstable provides,
+    # flip qtOverride.enable = true and run: nix flake update nixpkgs-bleeding
+    # Flip back to false once nixos-unstable catches up.
+    nixpkgs-bleeding.url = "github:NixOS/nixpkgs/nixos-unstable-small";
+
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -14,6 +20,7 @@
     caelestia-shell = {
       url = "github:caelestia-dots/shell";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.quickshell.follows = "quickshell";
     };
 
     caelestia-cli = {
@@ -59,9 +66,14 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-stable, home-manager, nix-snapd, zapret-discord-youtube, lanzaboote, templ, zen-browser, ... }@inputs:
+  outputs = { self, nixpkgs, nixpkgs-stable, nixpkgs-bleeding, home-manager, nix-snapd, zapret-discord-youtube, lanzaboote, templ, zen-browser, ... }@inputs:
   let
     system = "x86_64-linux";
+
+    # Set to true ONLY when upstream projects require a newer Qt than
+    # nixos-unstable currently provides. Flip back to false once unstable
+    # catches up - no other changes needed.
+    qtOverride.enable = false;
 
     pkgs-stable = import nixpkgs-stable {
       localSystem = system;
@@ -70,10 +82,25 @@
         "python3.12-pypdf2-3.0.1"
       ];
     };
+
+    pkgs-bleeding = import nixpkgs-bleeding {
+      localSystem = system;
+      config.allowUnfree = true;
+    };
+
+    # Atomically swaps the entire Qt scope when the hatch is active.
+    # Always replace full scopes, never individual packages - partial
+    # overrides cause ABI mismatches in QML plugins and kdePackages.
+    qtBleedingOverlay = final: prev:
+      if !qtOverride.enable then { } else {
+        qt6         = pkgs-bleeding.qt6;
+        qt6Packages = pkgs-bleeding.qt6Packages;
+        kdePackages = pkgs-bleeding.kdePackages;
+      };
   in {
     nixosConfigurations.NixOS = nixpkgs.lib.nixosSystem {
       inherit system;
-      specialArgs = { inherit inputs pkgs-stable; };
+      specialArgs = { inherit inputs pkgs-stable pkgs-bleeding; };
 
       modules = [
 
@@ -84,6 +111,7 @@
             (final: prev: {
               valkey = prev.valkey.overrideAttrs (_: { doCheck = false; });
             })
+            qtBleedingOverlay
           ];
 
           environment.systemPackages = with pkgs; [
@@ -103,7 +131,7 @@
             useGlobalPkgs = true;
             useUserPackages = true;
             users.takuya = import ./home/home.nix;
-            extraSpecialArgs = { inherit inputs pkgs-stable; };
+            extraSpecialArgs = { inherit inputs pkgs-stable pkgs-bleeding; };
           };
         }
 
