@@ -69,6 +69,10 @@
       fd
       fzf
       eza
+      zoxide
+      atuin
+      yazi
+      delta
 
       # System monitoring
       btop

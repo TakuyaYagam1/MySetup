@@ -78,6 +78,7 @@
     scrcpy
     qtcreator
     obsidian
+    anytype
 
     # AI
     gemini-cli
