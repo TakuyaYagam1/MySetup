@@ -236,6 +236,7 @@ in
       };
       border = {
         rounding = 25;
+        smoothing = 32;
         thickness = 10;
       };
       dashboard = {

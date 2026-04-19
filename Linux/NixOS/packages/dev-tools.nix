@@ -56,6 +56,7 @@
     yarn
     typescript
     bun
+    playwright
 
     # Java
     jdk
@@ -88,4 +89,9 @@
     # Other
     opencv
   ];
+
+  environment.variables = {
+    PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
+    PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
+  };
 }
