@@ -32,8 +32,6 @@
     libqalculate
     
     # Wayland tools
-    xdg-desktop-portal-hyprland
-    xdg-desktop-portal-gtk
     hyprpicker
     wl-clipboard
     

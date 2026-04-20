@@ -130,6 +130,7 @@
           home-manager = {
             useGlobalPkgs = true;
             useUserPackages = true;
+            backupFileExtension = "hm-backup";
             users.takuya = import ./home/home.nix;
             extraSpecialArgs = { inherit inputs pkgs-stable pkgs-bleeding; };
           };
@@ -138,13 +139,9 @@
         ({ pkgs, ... }: {
           services.flatpak.enable = true;
           services.snap.enable = true;
-
-          xdg.portal = {
-            enable = true;
-            extraPortals = with pkgs; [ xdg-desktop-portal-gtk ];
-            config.common.default = "*";
-          };
         })
+
+        ./programs/xdg-portal.nix
       ];
     };
   };

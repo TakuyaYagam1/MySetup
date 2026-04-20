@@ -1,25 +1,11 @@
-{ config, pkgs, inputs, ... }:
+{ config, pkgs, lib, inputs, ... }:
 
 let
   quickshellPkg = inputs.quickshell.packages.${pkgs.stdenv.hostPlatform.system}.default;
-in
-{
-  programs.caelestia = {
-    enable = true;
 
-    systemd = {
-      enable = false;
-      target = "graphical-session.target";
-      environment = [];
-    };
-
-    cli = {
-      enable = true;
-      settings.theme.enableGtk = false;
-    };
-
-    settings = {
-      appearance = {
+  shellSettings = {
+    appearance = {
+        deformScale = 1;
         mediaGifSpeedAdjustment = 300;
         sessionGifSpeed = 0.7;
         anim = {
@@ -504,7 +490,41 @@ in
         };
       };
     };
+
+  shellJson = pkgs.writeText "caelestia-shell.json"
+    (builtins.toJSON shellSettings);
+in
+{
+  programs.caelestia = {
+    enable = true;
+
+    systemd = {
+      enable = false;
+      target = "graphical-session.target";
+      environment = [];
+    };
+
+    cli = {
+      enable = true;
+      settings.theme.enableGtk = false;
+    };
   };
+
+  home.activation.caelestiaSeedShellJson =
+    lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      target="$HOME/.config/caelestia/shell.json"
+      hashFile="$HOME/.config/caelestia/.shell.json.nix-hash"
+      src="${shellJson}"
+      newHash="$(${pkgs.coreutils}/bin/sha256sum "$src" | ${pkgs.coreutils}/bin/cut -d' ' -f1)"
+
+      $DRY_RUN_CMD ${pkgs.coreutils}/bin/mkdir -p "$HOME/.config/caelestia"
+
+      if [ ! -f "$target" ] || [ ! -f "$hashFile" ] || \
+         [ "$(${pkgs.coreutils}/bin/cat "$hashFile" 2>/dev/null)" != "$newHash" ]; then
+        $DRY_RUN_CMD ${pkgs.coreutils}/bin/install -m 644 "$src" "$target"
+        $DRY_RUN_CMD ${pkgs.bash}/bin/sh -c "printf '%s\n' '$newHash' > '$hashFile'"
+      fi
+    '';
 
   home.packages = [ quickshellPkg ];
 }
