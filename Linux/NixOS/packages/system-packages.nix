@@ -64,6 +64,7 @@
 
       # CLI utilities
       tree
+      shellcheck
       jq
       ripgrep
       fd
