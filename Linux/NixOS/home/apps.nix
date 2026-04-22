@@ -1,4 +1,4 @@
-{ pkgs, pkgs-stable, ... }:
+{ pkgs, pkgs-stable, inputs, ... }:
 
 {
   # for drag and drop in vm
@@ -80,7 +80,7 @@
 
     # AI
     gemini-cli
-    pkgs-stable.claude-code
+    inputs.claude-code.packages.${pkgs.stdenv.hostPlatform.system}.default
     codex
     opencode
     opencode-claude-auth

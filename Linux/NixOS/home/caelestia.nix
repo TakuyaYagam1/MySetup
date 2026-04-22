@@ -348,7 +348,7 @@ let
           }
         ];
         dragThreshold = 50;
-        vimKeybinds = false;
+        vimKeybinds = true;
         enableDangerousActions = true;
         maxShown = 7;
         maxWallpapers = 9;

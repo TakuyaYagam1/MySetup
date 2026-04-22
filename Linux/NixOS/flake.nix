@@ -64,6 +64,11 @@
       url = "github:youwen5/zen-browser-flake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    claude-code = {
+      url = "github:sadjow/claude-code-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = { self, nixpkgs, nixpkgs-stable, nixpkgs-bleeding, home-manager, nix-snapd, zapret-discord-youtube, lanzaboote, templ, zen-browser, ... }@inputs:
