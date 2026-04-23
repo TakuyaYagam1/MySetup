@@ -1,23 +1,36 @@
-{ lib, buildNpmPackage, fetchFromGitHub, python3, pkg-config, libsecret, libx11, stdenv, nodejs_22, python311, vips, gnumake, gcc, perl }:
+{ lib, buildNpmPackage, fetchFromGitHub, python3, pkg-config, libsecret, libx11, stdenv, nodejs_22, python311, vips, gnumake, gcc, perl, writeText }:
 
 let
   nodejs = nodejs_22;
   buildNpmPackage' = buildNpmPackage.override { inherit nodejs; };
+
+  patchLayout = writeText "patch-layout.py" ''
+    import re, pathlib
+    p = pathlib.Path("src/app/layout.tsx")
+    t = p.read_text()
+    t = t.replace("import { Inter } from \"next/font/google\";", "")
+    t = re.sub(
+      r"const inter = Inter\(\{[^}]+\}\);",
+      "const inter = { variable: \"--font-inter\", className: \"\" };",
+      t,
+      flags=re.DOTALL,
+    )
+    p.write_text(t)
+  '';
 in
 buildNpmPackage' rec {
   pname = "omnirouter";
-  version = "3.5.3";
+  version = "3.6.9";
 
   src = fetchFromGitHub {
     owner = "diegosouzapw";
     repo = "OmniRoute";
-    rev = "v3.5.3";
-    hash = "sha256-I34fgrjYhm+pmIXd/efG/YMsZLN2lHupATc05Vq/8Q8=";
+    rev = "v3.6.9";
+    hash = "sha256-3Pqg9RP1u2RyL2rmbmnecwWDAUTJcOn2JooC6C9n0GU=";
   };
 
-  npmDepsHash = "sha256-4B1hHblMXI5gp9RUE4FrvQe0XUOV85UiAUd+uLHXDUQ=";
+  npmDepsHash = "sha256-yzu/blkCoQ6bEkJPzNb8BNI2TG79KHs5jIOf7HmdKos=";
 
-  # Need node-gyp and python to build native module like sharp
   nativeBuildInputs = [
     python311
     python3
@@ -30,7 +43,7 @@ buildNpmPackage' rec {
 
   buildInputs = [
     libsecret
-    vips # Sharp depends on libvips
+    vips
   ] ++ lib.optionals stdenv.isLinux [
     libx11
   ];
@@ -38,17 +51,15 @@ buildNpmPackage' rec {
   env = {
     NEXT_TELEMETRY_DISABLED = "1";
     npm_config_arch = stdenv.hostPlatform.parsed.cpu.name;
-    SHARP_IGNORE_GLOBAL_LIBVIPS = "0"; 
+    SHARP_IGNORE_GLOBAL_LIBVIPS = "0";
   };
 
-  # Skip tests because they might fail in sandbox
   doCheck = false;
 
-  # next/font/google tries to fetch Inter from Google Fonts at build time,
-  # which fails in the Nix sandbox (no network). Replace with a CSS variable fallback.
+  # next/font/google fetches Inter from Google Fonts at build time,
+  # which fails in the Nix sandbox (no network). Replace with a plain object.
   postPatch = ''
-    sed -i 's|import { Inter } from "next/font/google";||' src/app/layout.tsx
-    perl -i -0pe 's|const inter = Inter\(\{[^}]+\}\);|const inter = { variable: "--font-inter" };|s' src/app/layout.tsx
+    python3 ${patchLayout}
   '';
 
   buildPhase = ''
@@ -60,10 +71,10 @@ buildNpmPackage' rec {
 
   installPhase = ''
     runHook preInstall
-    
+
     mkdir -p $out/share/omnirouter
     cp -a . $out/share/omnirouter/
-    
+
     mkdir -p $out/bin
     cat > $out/bin/omnirouter <<EOF
     #!/bin/sh
@@ -71,9 +82,9 @@ buildNpmPackage' rec {
     export NODE_ENV=production
     exec ${lib.getExe nodejs} scripts/run-next.mjs start "\$@"
     EOF
-    
+
     chmod +x $out/bin/omnirouter
-    
+
     runHook postInstall
   '';
 
