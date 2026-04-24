@@ -5,6 +5,8 @@
 
 {
   environment.systemPackages = with pkgs-stable; [
+    goresym
+    delve              
     above
     aesfix
     aeskeyfind
