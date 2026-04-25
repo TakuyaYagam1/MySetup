@@ -72,9 +72,14 @@
     k9s
     kubectl
     kind
-    helm
+    kubernetes-helm
     kustomize
     tilt
+    cilium-cli
+    cosign
+    cri-tools
+    eksctl
+    spire
 
     # API tools
     httpie
@@ -82,6 +87,8 @@
 
     # Version control
     lazygit
+    mercurial
+    subversion
 
     # Modern Terminal Utilities
     tldr

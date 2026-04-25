@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 
 let
   meowrchSddmTheme = pkgs.stdenv.mkDerivation {
@@ -31,7 +31,7 @@ EOF
   };
 in
 {
-  environment.etc."sddm/faces/takuya.face.icon".source = ../themes/sddm-theme/icons/logo.png;
+  environment.etc."sddm/faces/${config.var.username}.face.icon".source = ../themes/sddm-theme/icons/logo.png;
 
   services.gnome.gnome-keyring.enable = true;
   security.pam.services.sddm.enableGnomeKeyring = true;

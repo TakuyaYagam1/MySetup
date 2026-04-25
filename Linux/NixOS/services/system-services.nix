@@ -2,17 +2,18 @@
 
 {
   services.dbus.enable = true;
-  services.gvfs.enable = true; 
+  services.gvfs.enable = true;
   services.tumbler.enable = true;
   services.sing-box.enable = true;
+  # install.sh toggles the line below.
   # services.omnirouter.enable = true;
-  
+
   systemd.services.nix-daemon.serviceConfig = {
     LimitNOFILE = lib.mkForce "infinity";
     LimitNPROC = lib.mkForce "infinity";
     LimitMEMLOCK = lib.mkForce "infinity";
   };
-  
+
   security.pam.loginLimits = [
     {
       domain = "*";
@@ -27,17 +28,17 @@
       value = "1048576";
     }
   ];
-  
+
   systemd.settings.Manager = {
     DefaultLimitNOFILE = "65536:1048576";
   };
-  
+
   nix.settings = {
     sandbox = true;
     max-jobs = "auto";
     auto-optimise-store = true;
   };
-  
+
   systemd.user.services.nm-applet = {
     description = "NetworkManager Applet";
     wantedBy = [ "graphical-session.target" ];

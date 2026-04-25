@@ -1,6 +1,7 @@
 { config, pkgs, lib, ... }:
 
 let
+  cfgDir = config.var.configDirectory;
   amnezia-vpn-x11 = pkgs.symlinkJoin {
     name = "amnezia-vpn-xwayland";
     paths = [ pkgs.amnezia-vpn ];
@@ -38,8 +39,10 @@ in
     enable = true;
     clean.enable = true;
     clean.extraArgs = "--keep-since 4d --keep 3";
-    flake = "/home/takuya/MySetup/Linux/NixOS";
+    flake = cfgDir;
   };
 
+  # AmneziaWG sends packets whose reverse path doesn't match the routing table;
+  # strict rp_filter (set in system/networking.nix) drops them. Override to "loose".
   networking.firewall.checkReversePath = lib.mkForce "loose";
 }

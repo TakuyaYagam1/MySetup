@@ -1,17 +1,13 @@
 { config, pkgs, ... }:
 
-# Zapret for russian users
-# Based on 
-# [https://github.com/kartavkun/zapret-discord-youtube](https://github.com/kartavkun/zapret-discord-youtube)
-# [https://github.com/bol-van/zapret](https://github.com/bol-van/zapret)
-
 {
-  services.zapret.enable = false; 
+  # bol-van's upstream module collides on the same nftables hooks; keep one active.
+  services.zapret.enable = false;
 
   services.zapret-discord-youtube = {
     enable = true;
-    
-    config = "general (FAKE_TLS_AUTO_ALT3)"; 
+    # install.sh patches this line - keep the `config = "..."` shape stable.
+    config = "general (FAKE_TLS_AUTO_ALT3)";
   };
 }
 

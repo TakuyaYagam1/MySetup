@@ -8,14 +8,14 @@ Personal system configuration for Linux (NixOS + Hyprland) and Windows (Komorebi
 
 ## Structure
 
-- **Linux/** — NixOS configuration with Hyprland, custom themes, dev environment
-- **Windows/** — Windows configuration with Komorebi tiling WM and YASB status bar
+- **Linux/** - NixOS configuration with Hyprland, custom themes, dev environment
+- **Windows/** - Windows configuration with Komorebi tiling WM and YASB status bar
 
 ## Quick Start
 
 ### Linux (NixOS)
 
-> **Read [Linux/README.md](Linux/README.md) first** — contains pre-installation requirements,
+> **Read [Linux/README.md](Linux/README.md) first** - contains pre-installation requirements,
 > path configuration, regional notes, and troubleshooting.
 
 ```bash
@@ -28,13 +28,13 @@ The installer will ask you about:
 - Username and password
 - Secure Boot (Lanzaboote)
 - GPU type (AMD / Intel / NVIDIA)
-- Region (Russia — disables DataGrip, enables Zapret by default)
+- Region (Russia - disables DataGrip, enables Zapret by default)
 - Zapret DPI bypass config
 - CTF tools
 
 ### Windows
 
-> **Read [Windows/README.md](Windows/README.md) first** — you must update paths in
+> **Read [Windows/README.md](Windows/README.md) first** - you must update paths in
 > `yasb/config.yaml` before running the installer.
 
 1. Open PowerShell as Administrator

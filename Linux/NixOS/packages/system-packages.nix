@@ -21,6 +21,15 @@
       powertop
       networkmanagerapplet
       libnotify
+      cifs-utils
+      nfs-utils
+      dos2unix
+      ethtool
+      expect
+      mc
+      plocate
+      screen
+      vim
 
       # Core tools
       git
@@ -57,6 +66,7 @@
       zip
       rar
       p7zip
+      libarchive
       trash-cli
       cloc
       sbctl

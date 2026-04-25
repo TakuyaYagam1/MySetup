@@ -1,0 +1,61 @@
+{ pkgs-stable, ... }:
+
+# Web app testing: HTTP fuzzing, content discovery, SQLi/XSS, CMS scanners, proxies, web recon.
+
+{
+  environment.systemPackages = with pkgs-stable; [
+    arjun
+    burpsuite
+    cadaver
+    commix
+    crlfuzz
+    dalfox
+    davtest
+    dirb
+    dirbuster
+    doona
+    eyewitness
+    feroxbuster
+    ffuf
+    gau
+    gobuster
+    gophish
+    gospider
+    goshs
+    gowitness
+    hakrawler
+    httprobe
+    httpx
+    httrack
+    hurl
+    joomscan
+    katana
+    laudanum
+    lbd
+    mitmproxy
+    nikto
+    nuclei
+    photon
+    proxify
+    python3Packages.dirsearch
+    siege
+    slowhttptest
+    sqlmap
+    sqlmc
+    ssldump
+    sslh
+    sslscan
+    sslsplit
+    sslstrip
+    unfurl
+    wafw00f
+    wapiti
+    waybackurls
+    weevely
+    websploit
+    wfuzz
+    whatweb
+    wpprobe
+    wpscan
+  ];
+}

@@ -1,8 +1,13 @@
-{ ... }:
+{ config, ... }:
 
 {
-  time.timeZone = "Europe/Moscow";
-  i18n.defaultLocale = "en_US.UTF-8";
-  i18n.supportedLocales = [ "en_US.UTF-8/UTF-8" "ru_RU.UTF-8/UTF-8" ];
-  console.keyMap = "ruwin_alt_sh-UTF-8";
+  time.timeZone = config.var.timeZone;
+  i18n.defaultLocale = config.var.defaultLocale;
+
+  # defaultLocale already includes ".UTF-8"; result "<name>.UTF-8/UTF-8" is canonical glibc form.
+  i18n.supportedLocales = [
+    "${config.var.defaultLocale}/UTF-8"
+    "${config.var.extraLocale}/UTF-8"
+  ];
+  console.keyMap = config.var.consoleKeyMap;
 }

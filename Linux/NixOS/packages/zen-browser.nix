@@ -1,7 +1,7 @@
-{ pkgs, inputs, ... }:
+{ pkgs, ... }:
 
 let
-  zen-pkg = inputs.zen-browser.packages."${pkgs.stdenv.hostPlatform.system}".default;
+  zen-pkg = pkgs.zen-browser;
 
   sineCfgJs = pkgs.writeText "sine-config.js" ''
     unlockPref("xpinstall.signatures.required");

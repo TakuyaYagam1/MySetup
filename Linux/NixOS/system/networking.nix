@@ -1,8 +1,8 @@
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 
 {
   networking = {
-    hostName = "NixOS";
+    hostName = config.var.hostname;
     
     networkmanager = {
       enable = true;
@@ -47,10 +47,6 @@
     "net.ipv4.conf.all.accept_redirects" = 0;
     "net.ipv4.conf.default.accept_redirects" = 0;
     "net.ipv6.conf.all.accept_redirects" = 0;
-
-    # Reverse-path filtering (already set via firewall.checkReversePath, belt-and-suspenders)
-    "net.ipv4.conf.all.rp_filter" = 1;
-    "net.ipv4.conf.default.rp_filter" = 1;
 
     # Restrict dmesg to root (prevents info leakage about kernel/hardware)
     "kernel.dmesg_restrict" = 1;

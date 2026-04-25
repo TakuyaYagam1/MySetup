@@ -69,11 +69,44 @@
       url = "github:sadjow/claude-code-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    
+    codex = {
+      url = "github:openai/codex";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    zed-editor = {
+      url = "github:zed-industries/zed";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    stylix = {
+      url = "github:danth/stylix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    nixos-hardware.url = "github:NixOS/nixos-hardware/master";
+
+    sops-nix = {
+      url = "github:Mic92/sops-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-stable, nixpkgs-bleeding, home-manager, nix-snapd, zapret-discord-youtube, lanzaboote, templ, zen-browser, ... }@inputs:
+  outputs = { self, nixpkgs, nixpkgs-stable, nixpkgs-bleeding, home-manager, nix-snapd, zapret-discord-youtube, lanzaboote, templ, zen-browser, stylix, sops-nix, ... }@inputs:
   let
     system = "x86_64-linux";
+
+    # Single source of truth: `hostname` flake attr name == config.var.hostname.
+    # Read the literal string out of variables.nix so `nixos-rebuild switch`
+    # (which derives the attr from `networking.hostName` by default) finds it.
+    hostname =
+      let
+        vars = import ./hosts/NixOS/variables.nix {
+          config = { }; lib = nixpkgs.lib;
+        };
+      in
+        vars.config.var.hostname;
 
     # Set to true ONLY when upstream projects require a newer Qt than
     # nixos-unstable currently provides. Flip back to false once unstable
@@ -96,31 +129,49 @@
     # Atomically swaps the entire Qt scope when the hatch is active.
     # Always replace full scopes, never individual packages - partial
     # overrides cause ABI mismatches in QML plugins and kdePackages.
-    qtBleedingOverlay = final: prev:
-      if !qtOverride.enable then { } else {
-        qt6         = pkgs-bleeding.qt6;
-        qt6Packages = pkgs-bleeding.qt6Packages;
-        kdePackages = pkgs-bleeding.kdePackages;
-      };
+    qtBleedingOverlay = final: prev: {
+      qt6         = pkgs-bleeding.qt6;
+      qt6Packages = pkgs-bleeding.qt6Packages;
+      kdePackages = pkgs-bleeding.kdePackages;
+    };
+
+    # Surface flake-input packages as `pkgs.<name>` so consumers can use
+    # `with pkgs; [ ... ]` instead of `inputs.foo.packages.${system}.default`.
+    flakePackagesOverlay = final: prev: {
+      claude-code-flake = inputs.claude-code.packages.${system}.default;
+      codex-flake       = inputs.codex.packages.${system}.default;
+      zed-editor-flake  = inputs.zed-editor.packages.${system}.default;
+      zen-browser       = inputs.zen-browser.packages.${system}.default;
+      quickshell        = inputs.quickshell.packages.${system}.default;
+      templ             = inputs.templ.packages.${system}.templ;
+      neovim-nightly    = inputs.neovim-nightly-overlay.packages.${system}.default;
+    };
   in {
-    nixosConfigurations.NixOS = nixpkgs.lib.nixosSystem {
+    nixosConfigurations.${hostname} = nixpkgs.lib.nixosSystem {
       inherit system;
       specialArgs = { inherit inputs pkgs-stable pkgs-bleeding; };
 
       modules = [
 
-        ./configuration.nix
+        ./hosts/NixOS
 
-        ({ pkgs, ... }: {
+        # nixos-hardware: enable the module matching your machine.
+        # Browse available modules: https://github.com/NixOS/nixos-hardware
+        # Example (uncomment + replace with your model):
+        # inputs.nixos-hardware.nixosModules.common-cpu-amd
+        # inputs.nixos-hardware.nixosModules.common-gpu-nvidia-nonprime
+        # inputs.nixos-hardware.nixosModules.common-pc-ssd
+
+        ({ pkgs, lib, ... }: {
           nixpkgs.overlays = [
+            flakePackagesOverlay
             (final: prev: {
               valkey = prev.valkey.overrideAttrs (_: { doCheck = false; });
             })
-            qtBleedingOverlay
-          ];
+          ] ++ lib.optional qtOverride.enable qtBleedingOverlay;
 
           environment.systemPackages = with pkgs; [
-            inputs.templ.packages.${pkgs.stdenv.hostPlatform.system}.templ
+            templ
           ];
         })
 
@@ -130,16 +181,22 @@
 
         inputs.nix-snapd.nixosModules.default
 
+        inputs.stylix.nixosModules.stylix
+        inputs.sops-nix.nixosModules.sops
+
         home-manager.nixosModules.home-manager
-        {
+        ({ config, ... }: {
           home-manager = {
             useGlobalPkgs = true;
             useUserPackages = true;
             backupFileExtension = "hm-backup";
-            users.takuya = import ./home/home.nix;
-            extraSpecialArgs = { inherit inputs pkgs-stable pkgs-bleeding; };
+            users.${config.var.username} = import ./home/home.nix;
+            extraSpecialArgs = {
+              inherit inputs pkgs-stable pkgs-bleeding;
+              var = config.var;
+            };
           };
-        }
+        })
 
         ({ pkgs, ... }: {
           services.flatpak.enable = true;
