@@ -4,7 +4,7 @@
 
 {
   imports = [
-    /etc/nixos/hardware-configuration.nix
+    ./hardware-configuration.nix
 
     # Host-specific
     ./variables.nix

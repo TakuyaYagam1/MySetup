@@ -75,7 +75,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    zed-editor = {
+    zed = {
       url = "github:zed-industries/zed";
       inputs.nixpkgs.follows = "nixpkgs";
     };
@@ -140,7 +140,6 @@
     flakePackagesOverlay = final: prev: {
       claude-code-flake = inputs.claude-code.packages.${system}.default;
       codex-flake       = inputs.codex.packages.${system}.default;
-      zed-editor-flake  = inputs.zed-editor.packages.${system}.default;
       zen-browser       = inputs.zen-browser.packages.${system}.default;
       quickshell        = inputs.quickshell.packages.${system}.default;
       templ             = inputs.templ.packages.${system}.templ;
@@ -165,6 +164,7 @@
         ({ pkgs, lib, ... }: {
           nixpkgs.overlays = [
             flakePackagesOverlay
+            inputs.zed.overlays.default
             (final: prev: {
               valkey = prev.valkey.overrideAttrs (_: { doCheck = false; });
             })

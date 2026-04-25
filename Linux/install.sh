@@ -35,7 +35,7 @@ step "Starting interactive configuration"
 while true; do
 
 while true; do
-    USERNAME=$(whiptail --inputbox "Enter username:" 10 50 "user" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+    USERNAME=$(whiptail --inputbox "Enter username:" 10 50 "" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
     # POSIX-portable username: lowercase letter/underscore start, alnum/dash/underscore body, max 32 chars.
     if [[ "$USERNAME" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
         break
@@ -43,10 +43,14 @@ while true; do
     whiptail --msgbox "Invalid username. Must match ^[a-z_][a-z0-9_-]{0,31}\$ (POSIX)." 10 60
 done
 
-FULL_NAME=$(whiptail --inputbox "Enter full name (used in users.users.<name>.description):" 10 60 "$USERNAME" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+while true; do
+    FULL_NAME=$(whiptail --inputbox "Enter full name (used in users.users.<name>.description):" 10 60 "" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+    [ -n "$FULL_NAME" ] && break
+    whiptail --msgbox "Full name cannot be empty." 8 50
+done
 
 while true; do
-    HOSTNAME=$(whiptail --inputbox "Enter hostname:" 10 50 "NixOS" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+    HOSTNAME=$(whiptail --inputbox "Enter hostname:" 10 50 "" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
     # RFC 1123 single label: alnum at edges, dashes inside, max 63 chars.
     if [[ "$HOSTNAME" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; then
         break
@@ -93,8 +97,19 @@ CONSOLE_KEYMAP=$(whiptail --menu "Select console keymap:" 14 60 4 \
     "de"                  "German" \
     3>&1 1>&2 2>&3) || error "Configuration cancelled"
 
-GIT_USERNAME=$(whiptail --inputbox "Enter Git user.name:" 10 50 "$USERNAME" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
-GIT_EMAIL=$(whiptail --inputbox "Enter Git user.email:" 10 50 "${USERNAME}@example.com" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+while true; do
+    GIT_USERNAME=$(whiptail --inputbox "Enter Git user.name:" 10 50 "" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+    [ -n "$GIT_USERNAME" ] && break
+    whiptail --msgbox "Git user.name cannot be empty." 8 50
+done
+
+while true; do
+    GIT_EMAIL=$(whiptail --inputbox "Enter Git user.email:" 10 50 "" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+    if [[ "$GIT_EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+        break
+    fi
+    whiptail --msgbox "Invalid email address." 8 50
+done
 
 if whiptail --yesno "Enable Secure Boot (Lanzaboote)?\n\nNOTE: You must enable Setup Mode in BIOS BEFORE continuing." 12 60 3>&1 1>&2 2>&3; then
     SECURE_BOOT=1
@@ -115,7 +130,13 @@ else
     RUSSIA=0
 fi
 
-PGADMIN_EMAIL=$(whiptail --inputbox "Enter pgAdmin admin email:" 10 60 "admin@localhost.local" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+while true; do
+    PGADMIN_EMAIL=$(whiptail --inputbox "Enter pgAdmin admin email:" 10 60 "" 3>&1 1>&2 2>&3) || error "Configuration cancelled"
+    if [[ "$PGADMIN_EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+        break
+    fi
+    whiptail --msgbox "Invalid email address." 8 50
+done
 
 while true; do
     PGADMIN_PASSWORD=$(whiptail --passwordbox "Enter pgAdmin admin password:" 10 50 3>&1 1>&2 2>&3) || error "Configuration cancelled"
@@ -228,7 +249,7 @@ cp NixOS/hosts/NixOS/variables.nix "$TEMP_DIR/variables.nix"
 sed -E -i "s|hostname = \"[^\"]+\";|hostname = \"${HOSTNAME}\";|"         "$TEMP_DIR/variables.nix"
 sed -E -i "s|username = \"[^\"]+\";|username = \"${USERNAME}\";|"          "$TEMP_DIR/variables.nix"
 sed -E -i "s|fullName = \"[^\"]+\";|fullName = \"${FULL_NAME}\";|"         "$TEMP_DIR/variables.nix"
-sed -E -i "s|configDirectory = \"[^\"]+\";|configDirectory = \"/home/${USERNAME}/MySetup/Linux/NixOS\";|" "$TEMP_DIR/variables.nix"
+sed -E -i "s|configDirectory = \"[^\"]+\";|configDirectory = \"${SCRIPT_DIR}/NixOS\";|" "$TEMP_DIR/variables.nix"
 sed -E -i "s|homeDirectory = \"[^\"]+\";|homeDirectory = \"/home/${USERNAME}\";|" "$TEMP_DIR/variables.nix"
 sed -E -i "s|timeZone = \"[^\"]+\";|timeZone = \"${TIMEZONE}\";|"          "$TEMP_DIR/variables.nix"
 sed -E -i "s|defaultLocale = \"[^\"]+\";|defaultLocale = \"${LOCALE}\";|"  "$TEMP_DIR/variables.nix"
@@ -388,6 +409,15 @@ sudo chown -R root:root /etc/nixos/
 
 # Enable the ./hashed-password.nix import (placeholder is commented out in repo).
 sudo sed -i 's|    # \./hashed-password\.nix|    ./hashed-password.nix|' /etc/nixos/hosts/NixOS/default.nix
+
+# Place hardware-configuration.nix next to default.nix so the flake can import it
+# via a relative path. Absolute paths like /etc/nixos/hardware-configuration.nix
+# are forbidden in pure flake evaluation.
+if [ -f /etc/nixos/hardware-configuration.nix ]; then
+    sudo install -D -m 644 /etc/nixos/hardware-configuration.nix /etc/nixos/hosts/NixOS/hardware-configuration.nix
+elif [ ! -f /etc/nixos/hosts/NixOS/hardware-configuration.nix ]; then
+    error "hardware-configuration.nix not found. Run 'sudo nixos-generate-config --root /' first."
+fi
 
 step "Writing secrets"
 

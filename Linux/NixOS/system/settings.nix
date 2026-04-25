@@ -28,12 +28,16 @@
         "https://hyprland.cachix.org"
         "https://quickshell.cachix.org"
         "https://numtide.cachix.org"
+        "https://zed.cachix.org"
+        "https://cache.garnix.io"
       ];
       trusted-substituters = [
         "https://nix-community.cachix.org"
         "https://hyprland.cachix.org"
         "https://quickshell.cachix.org"
         "https://numtide.cachix.org"
+        "https://zed.cachix.org"
+        "https://cache.garnix.io"
       ];
       trusted-public-keys = [
         "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
@@ -41,6 +45,8 @@
         "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc="
         "quickshell.cachix.org-1:tjWMR3PQd01gN6YtjSRUdHHHUgrSLFIgwqrCQjFXVOU="
         "numtide.cachix.org-1:2ps1kLBUWjxIneOy1Ik6cQjb41X0iXVXeHigGmycPPE="
+        "zed.cachix.org-1:/VEyzVMSuU3yKnrRySbkPKSPHmoVwsR/B5vWIDmnXLQ="
+        "cache.garnix.io:CTFPyKSLcx5RMAX6qNngSesNKw0PUV7DwHmqgWdEJ9E="
       ];
 
       auto-optimise-store = true;

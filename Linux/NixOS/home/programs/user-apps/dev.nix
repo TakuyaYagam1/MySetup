@@ -7,7 +7,7 @@
     code-cursor
     jetbrains.goland
     qtcreator
-    zed-editor-flake
+    zed-editor
 
     # AI assistants
     antigravity

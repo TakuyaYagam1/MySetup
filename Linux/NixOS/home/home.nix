@@ -45,8 +45,11 @@
   # Caelestia ships its own bar - block any upstream waybar enable.
   programs.waybar.enable = lib.mkForce false;
 
+  # Silence HM 26.05 warning: keep legacy behaviour (gtk4 inherits gtk theme).
+  gtk.gtk4.theme = config.gtk.theme;
+
   # AccountsService consumers (GNOME/KDE) read this; SDDM uses /etc/sddm/faces/ instead.
-  home.file.".face".source = ../../dots/avatar.gif;
+  home.file.".face".source = ./avatar.gif;
 
   home.activation.copyWallpapers = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     WALLS_SRC="${./../Wallpapers}"

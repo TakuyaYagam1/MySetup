@@ -17,7 +17,7 @@
     fullName = "user";
 
     # Paths
-    configDirectory = "/home/user/MySetup/Linux/NixOS";
+    configDirectory = "/etc/nixos";
     homeDirectory = "/home/user";
 
     # Locale / region

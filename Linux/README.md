@@ -111,7 +111,7 @@ Installation is split into two parts:
 2. **Run the dotfiles installer** (from the repo, not from `/etc/nixos/`) to set up the profile part and the Catppuccin Macchiato theme:
 
    ```bash
-   fish ~/MySetup/Linux/dots/install.fish
+   fish <repo>/Linux/dots/install.fish
    ```
 
 3. **Open Zen Browser** and go to `about:config`, enable:
@@ -169,7 +169,7 @@ If you completely skip `./install.sh`:
    ```
 4. Post-Install user dotfiles (Hyprland scripts, Zen Browser theme, Sine, Neovim):
    ```bash
-   fish ~/MySetup/Linux/dots/install.fish
+   fish <repo>/Linux/dots/install.fish
    ```
 
 ## Maintenance
