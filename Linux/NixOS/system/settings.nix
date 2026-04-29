@@ -60,7 +60,7 @@
     # GC settings (managed by programs.nh.clean in programs/system-tools.nix,
     # but keep legacy gc as persistent fallback when nh is disabled).
     gc = {
-      automatic = config.var.autoGarbageCollector;
+      automatic = config.var.autoGarbageCollector && !config.programs.nh.clean.enable;
       persistent = true;
       dates = "weekly";
       options = "--delete-older-than 14d";

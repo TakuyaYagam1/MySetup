@@ -1,4 +1,4 @@
-{ ... }:
+{ lib, ... }:
 
 {
   programs.starship = {
@@ -10,7 +10,7 @@
         [╰─](fg:arrow)$character'';
 
       add_newline = true;
-      palette = "normal";
+      palette = lib.mkForce "normal";
 
       palettes.normal = {
         arrow = "#B3BCFD";

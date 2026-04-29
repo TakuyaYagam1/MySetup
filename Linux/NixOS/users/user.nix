@@ -15,7 +15,6 @@
       "libvirtd"
       "adbusers"
     ];
-    initialHashedPassword = "";
   };
 
   # Symlink adb into Android Studio's expected path; idempotent.

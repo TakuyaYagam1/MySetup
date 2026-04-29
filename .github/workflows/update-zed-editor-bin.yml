@@ -1,0 +1,72 @@
+name: Update Zed Editor Bin
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Specific stable version to update to (optional)"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 9 * * 1"
+
+jobs:
+  update-zed-editor-bin:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Resolve latest stable release
+        id: release
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="$(curl -fsSL https://api.github.com/repos/zed-industries/zed/releases | jq -r '
+              map(select(.tag_name | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))) | .[0].tag_name | sub("^v"; "")
+            ')"
+          fi
+
+          if [ -z "$version" ] || [ "$version" = "null" ]; then
+            echo "::error::Failed to resolve latest Zed stable version"
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Compute x86_64-linux hash
+        id: hash
+        run: |
+          url="https://github.com/zed-industries/zed/releases/download/v${{ steps.release.outputs.version }}/zed-linux-x86_64.tar.gz"
+          hash="$(nix-prefetch-url "$url")"
+          sri="$(nix hash convert --hash-algo sha256 --to sri "$hash")"
+          echo "hash=$sri" >> "$GITHUB_OUTPUT"
+
+      - name: Patch package
+        run: |
+          sed -i 's/version = "[^"]*"/version = "${{ steps.release.outputs.version }}"/' Linux/NixOS/packages/zed-editor-bin.nix
+          sed -i 's|hash = "sha256-[^"]*"|hash = "${{ steps.hash.outputs.hash }}"|' Linux/NixOS/packages/zed-editor-bin.nix
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: update zed-editor-bin"
+          branch: "update-zed-editor-bin"
+          delete-branch: true
+          title: "Update zed-editor-bin to v${{ steps.release.outputs.version }}"
+          body: |
+            Updates local `zed-editor-bin` package to Zed `v${{ steps.release.outputs.version }}`.
+
+            Updated x86_64-linux hash:
+            - `${{ steps.hash.outputs.hash }}`

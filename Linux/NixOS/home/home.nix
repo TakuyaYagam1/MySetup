@@ -39,7 +39,9 @@
 
   programs.neovim = {
     enable = true;
-    package = pkgs.neovim-nightly;
+    package = pkgs.neovim;
+    withRuby = true;
+    withPython3 = true;
   };
 
   # Caelestia ships its own bar - block any upstream waybar enable.
@@ -47,6 +49,10 @@
 
   # Silence HM 26.05 warning: keep legacy behaviour (gtk4 inherits gtk theme).
   gtk.gtk4.theme = config.gtk.theme;
+
+  # When HM uses the system package set, Stylix must not install package overlays
+  # inside the HM evaluation as well.
+  stylix.overlays.enable = false;
 
   # AccountsService consumers (GNOME/KDE) read this; SDDM uses /etc/sddm/faces/ instead.
   home.file.".face".source = ./avatar.gif;

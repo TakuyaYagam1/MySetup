@@ -1,7 +1,7 @@
 { pkgs, ... }:
 
 {
-  home.packages = with pkgs; [
+  home.packages = (with pkgs; [
     # Editors / IDEs
     vscode
     code-cursor
@@ -12,8 +12,8 @@
     # AI assistants
     antigravity
     gemini-cli
-    claude-code-flake
-    codex-flake
+    claude-code
+    codex
     opencode
     opencode-claude-auth
     opencode-desktop
@@ -23,5 +23,5 @@
     android-studio-full
     android-tools
     scrcpy
-  ];
+  ]);
 }

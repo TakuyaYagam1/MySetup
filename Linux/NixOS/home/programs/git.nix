@@ -5,10 +5,9 @@
     enable = true;
     package = pkgs.gitFull;
 
-    userName = var.git.username;
-    userEmail = var.git.email;
-
-    extraConfig = {
+    settings = {
+      user.name = var.git.username;
+      user.email = var.git.email;
       init.defaultBranch = "main";
       pull.rebase = true;
       push.autoSetupRemote = true;
@@ -27,20 +26,19 @@
       color.ui = "auto";
       commit.verbose = true;
       tag.sort = "version:refname";
-    };
-
-    aliases = {
-      st = "status -sb";
-      co = "checkout";
-      br = "branch";
-      ci = "commit";
-      cim = "commit -m";
-      cia = "commit --amend --no-edit";
-      lg = "log --oneline --graph --decorate --all";
-      last = "log -1 HEAD --stat";
-      unstage = "reset HEAD --";
-      undo = "reset --soft HEAD~1";
-      wip = "commit -am 'wip'";
+      alias = {
+        st = "status -sb";
+        co = "checkout";
+        br = "branch";
+        ci = "commit";
+        cim = "commit -m";
+        cia = "commit --amend --no-edit";
+        lg = "log --oneline --graph --decorate --all";
+        last = "log -1 HEAD --stat";
+        unstage = "reset HEAD --";
+        undo = "reset --soft HEAD~1";
+        wip = "commit -am 'wip'";
+      };
     };
 
     ignores = [
@@ -59,17 +57,18 @@
       "node_modules/"
     ];
 
-    delta = {
-      enable = true;
-      options = {
-        navigate = true;
-        line-numbers = true;
-        side-by-side = false;
-        syntax-theme = "base16";
-      };
-    };
-
     lfs.enable = true;
+  };
+
+  programs.delta = {
+    enable = true;
+    enableGitIntegration = true;
+    options = {
+      navigate = true;
+      line-numbers = true;
+      side-by-side = false;
+      syntax-theme = "base16";
+    };
   };
 
   programs.lazygit = {

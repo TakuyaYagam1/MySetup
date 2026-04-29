@@ -1,0 +1,113 @@
+name: Update OmniRouter
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Specific OmniRouter version without leading v (optional)"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 10 * * 1"
+
+jobs:
+  update-omnirouter:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Read current version
+        id: current
+        run: |
+          current="$(grep -oP 'version = "\K[^"]+' Linux/NixOS/packages/omnirouter.nix | head -1)"
+          echo "version=$current" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve latest release
+        id: release
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="$(curl -fsSL https://api.github.com/repos/diegosouzapw/OmniRoute/releases/latest | jq -r '.tag_name | sub("^v"; "")')"
+          fi
+
+          if [ -z "$version" ] || [ "$version" = "null" ]; then
+            echo "::error::Failed to resolve latest OmniRouter release"
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Stop if already current
+        if: steps.release.outputs.version == steps.current.outputs.version
+        run: |
+          echo "OmniRouter is already on v${{ steps.current.outputs.version }}"
+          exit 0
+
+      - name: Compute source hash
+        id: src
+        if: steps.release.outputs.version != steps.current.outputs.version
+        run: |
+          url="https://github.com/diegosouzapw/OmniRoute/archive/refs/tags/v${{ steps.release.outputs.version }}.tar.gz"
+          hash="$(nix-prefetch-url --unpack "$url")"
+          sri="$(nix hash convert --hash-algo sha256 --to sri "$hash")"
+          echo "hash=$sri" >> "$GITHUB_OUTPUT"
+
+      - name: Patch version and source hash
+        if: steps.release.outputs.version != steps.current.outputs.version
+        run: |
+          sed -i 's/version = "[^"]*"/version = "${{ steps.release.outputs.version }}"/' Linux/NixOS/packages/omnirouter.nix
+          sed -i 's/rev = "v[^"]*"/rev = "v${{ steps.release.outputs.version }}"/' Linux/NixOS/packages/omnirouter.nix
+          sed -i 's|hash = "sha256-[^"]*"|hash = "${{ steps.src.outputs.hash }}"|' Linux/NixOS/packages/omnirouter.nix
+          sed -i 's|npmDepsHash = "sha256-[^"]*"|npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="|' Linux/NixOS/packages/omnirouter.nix
+
+      - name: Compute npmDepsHash
+        id: npm
+        if: steps.release.outputs.version != steps.current.outputs.version
+        run: |
+          set +e
+          output="$(nix build .#omnirouter 2>&1)"
+          status=$?
+          set -e
+
+          got="$(printf '%s\n' "$output" | grep 'got:' | tail -1 | awk '{print $2}')"
+
+          if [ -z "$got" ]; then
+            printf '%s\n' "$output"
+            echo "::error::Failed to extract npmDepsHash from build output"
+            exit 1
+          fi
+
+          echo "hash=$got" >> "$GITHUB_OUTPUT"
+          sed -i 's|npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="|npmDepsHash = "'"$got"'"|' Linux/NixOS/packages/omnirouter.nix
+
+      - name: Verify build
+        if: steps.release.outputs.version != steps.current.outputs.version
+        run: |
+          nix build .#omnirouter
+
+      - name: Create pull request
+        if: steps.release.outputs.version != steps.current.outputs.version
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: update omnirouter"
+          branch: "update-omnirouter"
+          delete-branch: true
+          title: "Update OmniRouter to v${{ steps.release.outputs.version }}"
+          body: |
+            Updates local `omnirouter` package to `v${{ steps.release.outputs.version }}`.
+
+            Updated hashes:
+            - source: `${{ steps.src.outputs.hash }}`
+            - npmDepsHash: `${{ steps.npm.outputs.hash }}`

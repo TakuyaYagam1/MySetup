@@ -24,3 +24,4 @@ Linux/misc.rar
 Linux/NixOS/packages/ida-pro.nix
 Linux/NixOS/packages/ida-mcp.nix
 Linux/NixOS/packages/ida-plugins.nix
+.codex

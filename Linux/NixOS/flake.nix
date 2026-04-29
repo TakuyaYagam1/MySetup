@@ -69,14 +69,9 @@
       url = "github:sadjow/claude-code-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    
-    codex = {
-      url = "github:openai/codex";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
 
-    zed = {
-      url = "github:zed-industries/zed";
+    codex = {
+      url = "github:sadjow/codex-cli-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -135,17 +130,34 @@
       kdePackages = pkgs-bleeding.kdePackages;
     };
 
-    # Surface flake-input packages as `pkgs.<name>` so consumers can use
-    # `with pkgs; [ ... ]` instead of `inputs.foo.packages.${system}.default`.
-    flakePackagesOverlay = final: prev: {
-      claude-code-flake = inputs.claude-code.packages.${system}.default;
-      codex-flake       = inputs.codex.packages.${system}.default;
-      zen-browser       = inputs.zen-browser.packages.${system}.default;
-      quickshell        = inputs.quickshell.packages.${system}.default;
-      templ             = inputs.templ.packages.${system}.templ;
-      neovim-nightly    = inputs.neovim-nightly-overlay.packages.${system}.default;
+    # Surface flake-input packages as canonical `pkgs.<name>` attributes so the
+    # rest of the config always consumes the flake-backed package instead of the
+    # nixpkgs variant.
+    flakePackagesOverlay =
+      final: prev: {
+      caelestia-cli   = inputs.caelestia-cli.packages.${system}.default;
+      caelestia-shell = inputs.caelestia-shell.packages.${system}.default;
+      claude-code     = inputs.claude-code.packages.${system}.default;
+      codex           = inputs.codex.packages.${system}.default;
+      zed-editor      = final.callPackage ./packages/zed-editor-bin.nix { };
+      zen-browser     = inputs.zen-browser.packages.${system}.default;
+      quickshell      = inputs.quickshell.packages.${system}.default;
+      templ           = inputs.templ.packages.${system}.templ;
+      neovim          = inputs.neovim-nightly-overlay.packages.${system}.default;
     };
   in {
+    packages.${system} =
+      let
+        flakePkgs = import nixpkgs {
+          localSystem = system;
+          config.allowUnfree = true;
+        };
+      in
+      {
+        zed-editor = flakePkgs.callPackage ./packages/zed-editor-bin.nix { };
+        omnirouter = flakePkgs.callPackage ./packages/omnirouter.nix { };
+      };
+
     nixosConfigurations.${hostname} = nixpkgs.lib.nixosSystem {
       inherit system;
       specialArgs = { inherit inputs pkgs-stable pkgs-bleeding; };
@@ -164,7 +176,6 @@
         ({ pkgs, lib, ... }: {
           nixpkgs.overlays = [
             flakePackagesOverlay
-            inputs.zed.overlays.default
             (final: prev: {
               valkey = prev.valkey.overrideAttrs (_: { doCheck = false; });
             })
