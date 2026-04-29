@@ -134,17 +134,17 @@
     # rest of the config always consumes the flake-backed package instead of the
     # nixpkgs variant.
     flakePackagesOverlay =
-      final: prev: {
-      caelestia-cli   = inputs.caelestia-cli.packages.${system}.default;
-      caelestia-shell = inputs.caelestia-shell.packages.${system}.default;
-      claude-code     = inputs.claude-code.packages.${system}.default;
-      codex           = inputs.codex.packages.${system}.default;
-      zed-editor      = final.callPackage ./packages/zed-editor-bin.nix { };
-      zen-browser     = inputs.zen-browser.packages.${system}.default;
-      quickshell      = inputs.quickshell.packages.${system}.default;
-      templ           = inputs.templ.packages.${system}.templ;
-      neovim          = inputs.neovim-nightly-overlay.packages.${system}.default;
-    };
+      final: prev:
+      {
+        caelestia-cli   = inputs.caelestia-cli.packages.${system}.default;
+        caelestia-shell = inputs.caelestia-shell.packages.${system}.default;
+        claude-code     = inputs.claude-code.packages.${system}.default;
+        codex           = inputs.codex.packages.${system}.default;
+        zen-browser     = inputs.zen-browser.packages.${system}.default;
+        quickshell      = inputs.quickshell.packages.${system}.default;
+        templ           = inputs.templ.packages.${system}.templ;
+        neovim          = inputs.neovim-nightly-overlay.packages.${system}.default;
+      };
   in {
     packages.${system} =
       let
@@ -154,7 +154,6 @@
         };
       in
       {
-        zed-editor = flakePkgs.callPackage ./packages/zed-editor-bin.nix { };
         omnirouter = flakePkgs.callPackage ./packages/omnirouter.nix { };
       };
 

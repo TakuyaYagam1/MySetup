@@ -12,8 +12,8 @@
       lt = "eza --tree --level=2 --icons";
 
       # system
-      nixos-install = "sudo nixos-rebuild switch --flake ${var.configDirectory}#${var.hostname}";
-      nixos-update = "pushd ${var.configDirectory}; and sudo nix flake update; and sudo nixos-rebuild switch --flake .#${var.hostname}; and popd";
+      nixos-install = "sudo nixos-rebuild switch --flake /etc/nixos#NixOS";
+      nixos-update = "pushd /etc/nixos; and sudo nix flake update; and sudo nixos-rebuild switch --flake .#NixOS; and popd";
       cleanup = "sudo nix-collect-garbage -d && nix-collect-garbage && nix store optimise && sudo nix-store --gc --print-dead && sudo nix-store --gc";
       optimize = "sudo nix-store --optimise";
       logout = "systemctl restart display-manager.service";
@@ -78,6 +78,29 @@
       if test -f ~/.local/state/caelestia/sequences.txt
           cat ~/.local/state/caelestia/sequences.txt
       end
+
+      # Fish syntax colours — pinned in hex so Caelestia's muted ANSI palette
+      # doesn't make paths/commands blend with the background.
+      set -g fish_color_command       B3BCFD --bold
+      set -g fish_color_keyword        A178FF --bold
+      set -g fish_color_param          E8D3DE
+      set -g fish_color_option         FFDCF2
+      set -g fish_color_quote          FFDCF2
+      set -g fish_color_redirection    ADA0ED --bold
+      set -g fish_color_end            A178FF
+      set -g fish_color_operator       FFDCF2
+      set -g fish_color_escape         44DEF5
+      set -g fish_color_autosuggestion 6C6F85
+      set -g fish_color_comment        7F7596 --italics
+      set -g fish_color_error          FF6B6B --bold
+      set -g fish_color_match          --background=4B3F6B
+      set -g fish_color_search_match   --background=4B3F6B
+      set -g fish_color_selection      --background=35223E
+      set -g fish_color_history_current --bold
+      set -g fish_pager_color_progress 6C6F85
+      set -g fish_pager_color_prefix   B3BCFD --bold
+      set -g fish_pager_color_completion E8D3DE
+      set -g fish_pager_color_description 7F7596
 
       # Smart aliases (only if tool exists - avoid breaking `cat` in recovery)
       command -v bat >/dev/null 2>&1 && alias cat='bat'

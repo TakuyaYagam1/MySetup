@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ lib, ... }:
 
 {
   programs.foot = {
@@ -7,6 +7,7 @@
       main = {
         shell = "fish";
         title = "foot";
+        font = lib.mkForce "JetBrainsMono Nerd Font:size=12";
         letter-spacing = 0;
         dpi-aware = "no";
         pad = "25x25";
@@ -23,8 +24,8 @@
         beam-thickness = 1.5;
       };
 
-      colors = {
-        alpha = 0.78;
+      "colors-dark" = {
+        alpha = lib.mkForce 0.78;
       };
 
       key-bindings = {

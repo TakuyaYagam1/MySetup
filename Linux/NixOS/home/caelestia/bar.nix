@@ -51,7 +51,7 @@
       activeIndicator = true;
       activeLabel = "󰮯";
       activeTrail = true;
-      label = "  ";
+      label = "  ";
       occupiedBg = true;
       occupiedLabel = "󰮯";
       perMonitorWorkspaces = true;

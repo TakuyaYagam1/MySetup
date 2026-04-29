@@ -1,5 +1,8 @@
 { ... }:
 
+let
+  ansi = code: builtins.fromJSON ''"\u001b[${code}m"'';
+in
 {
   programs.fastfetch = {
     enable = true;
@@ -10,10 +13,10 @@
         separator = "  ";
         color = "white";
         constants = [
-          "\u001b[37m"
-          "\u001b[38;5;16m"
-          "\u001b[38;5;17m"
-          "\u001b[38;5;18m"
+          (ansi "37")
+          (ansi "38;5;16")
+          (ansi "38;5;17")
+          (ansi "38;5;18")
         ];
       };
       modules = [
@@ -24,40 +27,40 @@
         }
         {
           type = "kernel";
-          key = "│ {$2}{$1}  kernel";
+          key = "│ {$2}{$1}  kernel";
           format = "{$2}{release>22}{$1} │";
         }
         {
           type = "command";
-          key = "│   uptime";
+          key = "│   uptime";
           text = "uptime -p | cut -d ' ' -f 2-";
           format = "{>22} │";
         }
         {
           type = "shell";
-          key = "│ {$2}{$1}  shell ";
+          key = "│ {$2}{$1}  shell ";
           format = "{$2}{pretty-name>22}{$1} │";
         }
         {
           type = "command";
-          key = "│ {$3}{$1}  mem   ";
+          key = "│ {$3}{$1}  mem   ";
           text = ''free -m | awk 'NR==2{printf "%.2f GiB / %.2f GiB",$3/1024,$2/1024}' '';
           format = "{$3}{>22}{$1} │";
         }
         {
           type = "packages";
-          key = "│   pkgs  ";
+          key = "│   pkgs  ";
           format = "{all>22} │";
         }
         {
           type = "command";
-          key = "│ {$2}{$1}  user  ";
+          key = "│ {$2}{$1}  user  ";
           text = "echo $USER";
           format = "{$2}{>22}{$1} │";
         }
         {
           type = "command";
-          key = "│   hname ";
+          key = "│   hname ";
           text = "hostnamectl hostname";
           format = "{>22} │";
         }

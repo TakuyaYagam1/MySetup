@@ -54,6 +54,12 @@
   # inside the HM evaluation as well.
   stylix.overlays.enable = false;
 
+  # These files are fully generated from Nix options. Force them into place so
+  # stale manual copies or old *.hm-backup files do not block HM activation.
+  xdg.configFile."cava/config".force = true;
+  xdg.configFile."qt5ct/qt5ct.conf".force = true;
+  xdg.configFile."qt6ct/qt6ct.conf".force = true;
+
   # AccountsService consumers (GNOME/KDE) read this; SDDM uses /etc/sddm/faces/ instead.
   home.file.".face".source = ./avatar.gif;
 

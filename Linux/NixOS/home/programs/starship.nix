@@ -5,9 +5,7 @@
     enable = true;
     enableFishIntegration = true;
     settings = {
-      format = ''
-        [╭╴](fg:arrow)$username$os$git_branch(at $directory)$fill $cmd_duration $time(via $python$conda$nodejs$c$rust$java)
-        [╰─](fg:arrow)$character'';
+      format = "[╭╴](fg:arrow)$username$os$git_branch(at $directory)$fill $cmd_duration $time ( via $python$conda$nodejs$c$rust$java)\n[╰─](fg:arrow)$character";
 
       add_newline = true;
       palette = lib.mkForce "normal";
@@ -34,7 +32,7 @@
       username = {
         style_user = "bold os";
         style_root = "bold os_admin";
-        format = "[  $user](fg:$style) ";
+        format = "[  $user](fg:$style) ";
         disabled = false;
         show_always = true;
       };
@@ -44,21 +42,21 @@
         style = "bold blue";
         disabled = true;
         symbols = {
-          Alpine = " ";
-          Arch = " ";
-          Debian = " ";
-          EndeavourOS = " ";
-          Fedora = " ";
-          Linux = " ";
-          Macos = " ";
-          Manjaro = " ";
-          Mint = " ";
-          NixOS = " ";
-          openSUSE = " ";
-          Pop = " ";
-          SUSE = " ";
-          Ubuntu = " ";
-          Windows = " ";
+          Alpine = " ";
+          Arch = " ";
+          Debian = " ";
+          EndeavourOS = " ";
+          Fedora = " ";
+          Linux = " ";
+          Macos = " ";
+          Manjaro = " ";
+          Mint = " ";
+          NixOS = " ";
+          openSUSE = " ";
+          Pop = " ";
+          SUSE = " ";
+          Ubuntu = " ";
+          Windows = " ";
         };
       };
 
@@ -75,7 +73,7 @@
         before_repo_root_style = "fg:directory";
         truncation_symbol = "…/";
         truncate_to_repo = true;
-        read_only = "  ";
+        read_only = "  ";
       };
 
       time = {
@@ -87,7 +85,7 @@
 
       cmd_duration = {
         disabled = false;
-        format = "took [ $duration]($style) ";
+        format = "took [ $duration]($style) ";
         style = "bold fg:duration";
         min_time = 500;
       };
@@ -95,7 +93,7 @@
       git_branch = {
         format = "via [$symbol$branch]($style) ";
         style = "bold fg:git";
-        symbol = " ";
+        symbol = " ";
       };
 
       git_status = {
@@ -106,7 +104,7 @@
 
       docker_context = {
         disabled = false;
-        symbol = " ";
+        symbol = " ";
       };
 
       package.disabled = false;
@@ -115,7 +113,7 @@
       nodejs = {
         format = "[ $symbol$version ]($style)";
         style = "bg:node fg:text_light";
-        symbol = " ";
+        symbol = " ";
         version_format = "\${raw}";
         disabled = false;
       };
@@ -123,7 +121,7 @@
       python = {
         disabled = false;
         format = "[ \${symbol}\${pyenv_prefix}(\${version})( \\(\${virtualenv}\\)) ]($style)";
-        symbol = " ";
+        symbol = " ";
         version_format = "\${raw}";
         style = "bg:python fg:text_light";
       };
@@ -133,21 +131,21 @@
         style = "bg:conda fg:text_light";
         ignore_base = false;
         disabled = false;
-        symbol = " ";
+        symbol = " ";
       };
 
       java = {
         format = "[ $symbol$version ]($style)";
         style = "bg:java fg:text_light";
         version_format = "\${raw}";
-        symbol = " ";
+        symbol = " ";
         disabled = false;
       };
 
       c = {
         format = "[ $symbol($version(-$name)) ]($style)";
         style = "bg:clang fg:text_light";
-        symbol = " ";
+        symbol = " ";
         version_format = "\${raw}";
         disabled = false;
       };
@@ -155,7 +153,7 @@
       rust = {
         format = "[ $symbol$version ]($style)";
         style = "bg:rust fg:text_light";
-        symbol = " ";
+        symbol = " ";
         version_format = "\${raw}";
         disabled = false;
       };
