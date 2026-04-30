@@ -9,6 +9,11 @@ let
     lib.any (pkg: lib.getName pkg == name) osConfig.environment.systemPackages;
 in
 {
+  xdg.dataFile."applications/anytype.desktop" = {
+    force = true;
+    source = "${pkgs.anytype}/share/applications/anytype.desktop";
+  };
+
   xdg.desktopEntries =
     {
       virt-manager = {

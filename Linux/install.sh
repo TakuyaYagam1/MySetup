@@ -390,10 +390,27 @@ if [ -d /etc/nixos ] && [ -n "$(sudo ls -A /etc/nixos 2>/dev/null)" ]; then
 fi
 
 if command -v rsync >/dev/null 2>&1; then
-    sudo rsync -a --delete "${RSYNC_EXCLUDES[@]}" NixOS/ /etc/nixos/
+    sudo rsync -a --delete --itemize-changes "${RSYNC_EXCLUDES[@]}" NixOS/ /etc/nixos/
 else
     info "rsync not found, falling back to nix-shell"
-    sudo nix-shell -p rsync --run "rsync -a --delete ${RSYNC_EXCLUDES[*]} NixOS/ /etc/nixos/"
+    sudo nix-shell -p rsync --run "rsync -a --delete --itemize-changes ${RSYNC_EXCLUDES[*]} NixOS/ /etc/nixos/"
+fi
+
+step "Verifying /etc/nixos mirror"
+
+if command -v rsync >/dev/null 2>&1; then
+    if ! SYNC_DRIFT=$(sudo rsync -a --delete --dry-run --itemize-changes "${RSYNC_EXCLUDES[@]}" NixOS/ /etc/nixos/); then
+        error "Failed to verify /etc/nixos sync"
+    fi
+else
+    if ! SYNC_DRIFT=$(sudo nix-shell -p rsync --run "rsync -a --delete --dry-run --itemize-changes ${RSYNC_EXCLUDES[*]} NixOS/ /etc/nixos/"); then
+        error "Failed to verify /etc/nixos sync"
+    fi
+fi
+
+if [ -n "$SYNC_DRIFT" ]; then
+    printf '%s\n' "$SYNC_DRIFT"
+    error "/etc/nixos did not converge to the repository copy; see rsync drift above"
 fi
 
 sudo install -D -m 644 "$TEMP_DIR/variables.nix"       /etc/nixos/hosts/NixOS/variables.nix
@@ -406,6 +423,15 @@ sudo install -D -m 644 "$TEMP_DIR/databases.nix"       /etc/nixos/services/datab
 sudo install -D -m 644 "$TEMP_DIR/api-tools.nix" /etc/nixos/home/programs/user-apps/api-tools.nix
 sudo install -D -m 644 "$TEMP_DIR/dev.nix"       /etc/nixos/home/programs/user-apps/dev.nix
 sudo chown -R root:root /etc/nixos/
+
+step "Verifying generated files"
+
+sudo cmp -s NixOS/flake.nix /etc/nixos/flake.nix \
+    || error "/etc/nixos/flake.nix differs from ${SCRIPT_DIR}/NixOS/flake.nix after install"
+sudo cmp -s "$TEMP_DIR/dev.nix" /etc/nixos/home/programs/user-apps/dev.nix \
+    || error "/etc/nixos/home/programs/user-apps/dev.nix differs from generated dev.nix after install"
+sudo cmp -s "$TEMP_DIR/api-tools.nix" /etc/nixos/home/programs/user-apps/api-tools.nix \
+    || error "/etc/nixos/home/programs/user-apps/api-tools.nix differs from generated api-tools.nix after install"
 
 # Enable the ./hashed-password.nix import (placeholder is commented out in repo).
 sudo sed -i 's|    # \./hashed-password\.nix|    ./hashed-password.nix|' /etc/nixos/hosts/NixOS/default.nix
