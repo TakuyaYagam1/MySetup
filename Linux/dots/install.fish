@@ -21,22 +21,61 @@ function confirm-overwrite
     return 0
 end
 
-# NOTE: avatar (~/.face), thunar, uwsm, vesktop are managed declaratively
-# by home-manager (see NixOS/home/home.nix and NixOS/home/programs/*.nix).
-# Do NOT copy them here - home-manager renders them on activation.
-#
-# fish, foot, btop, cava, fastfetch, starship - same: HM-managed.
+function reload-hyprland
+    if not command -q hyprctl
+        return 0
+    end
 
+    if not hyprctl monitors >/dev/null 2>&1
+        return 0
+    end
+
+    echo "Reloading Hyprland..."
+    if hyprctl reload >/dev/null 2>&1
+        echo "Hyprland config reloaded"
+    else
+        echo "Hyprland reload failed, run 'hyprctl reload' manually"
+    end
+end
 
 # Hypr
-if confirm-overwrite $cfg/hypr
+set hypr_dst $cfg/hypr
+if test -e $hypr_dst
+    read -P "Path '$hypr_dst' exists. Update from repo? [y/N] " ans
+    if test "$ans" != y
+        echo "Skipping $hypr_dst"
+    else
+        if command -q rsync
+            mkdir -p $hypr_dst
+            rsync -a --delete "$src/hypr/" "$hypr_dst/"
+        else
+            echo "rsync not found, falling back to replace-copy for $hypr_dst"
+            set hypr_tmp (mktemp -d)
+            cp -r "$src/hypr" "$hypr_tmp/hypr"
+            rm -rf $hypr_dst
+            mv "$hypr_tmp/hypr" $hypr_dst
+            rm -rf -- $hypr_tmp
+        end
+
+        if test -f $hypr_dst/scripts/wsaction.fish
+            chmod +x $hypr_dst/scripts/wsaction.fish
+        end
+
+        reload-hyprland
+    end
+else
     mkdir -p $cfg
-    cp -r $src/hypr $cfg/hypr
+    cp -r "$src/hypr" $hypr_dst
+
+    if test -f $hypr_dst/scripts/wsaction.fish
+        chmod +x $hypr_dst/scripts/wsaction.fish
+    end
+
+    reload-hyprland
 end
 
 
 # Zen Browser
-# Profile can live in ~/.zen/ (upstream) or ~/.config/zen/ (NixOS flake)
 set zen_profile_dir ""
 for base_dir in ~/.zen ~/.config/zen
     for d in $base_dir/*/
@@ -50,7 +89,7 @@ for base_dir in ~/.zen ~/.config/zen
     end
 end
 
-# Fallback: if no *.default* profile found, take the first existing profile dir
+# Fallback
 if test -z "$zen_profile_dir"
     for base_dir in ~/.zen ~/.config/zen
         for d in $base_dir/*/
@@ -92,8 +131,8 @@ else
         #
         # Versions are pinned to avoid drift between bootloader (Nix-pinned)
         # and the profile chrome/ files. Bump together when updating.
-        set sine_bootloader_tag "v1.0.4"
-        set sine_engine_tag     "v1.0.0"
+        set sine_bootloader_tag "v0.1.4"
+        set sine_engine_tag     "v2.3"
 
         echo "Installing Sine profile part (bootloader=$sine_bootloader_tag engine=$sine_engine_tag)..."
         set sine_tmp (mktemp -d)
@@ -102,20 +141,26 @@ else
         set sine_url       "https://github.com/CosmoCreeper/Sine/releases/download/$sine_engine_tag"
 
         if curl -fsSL "$bootloader_url/profile.zip" -o "$sine_tmp/profile.zip" \
-        && curl -fsSL "$sine_url/engine.zip"        -o "$sine_tmp/engine.zip" \
-        && curl -fsSL "$sine_url/locales.zip"       -o "$sine_tmp/locales.zip"
+        && curl -fsSL "$sine_url/engine.zip"        -o "$sine_tmp/engine.zip"
+            set sine_has_locales 0
+            if curl -fsSL "$sine_url/locales.zip" -o "$sine_tmp/locales.zip" 2>/dev/null
+                set sine_has_locales 1
+            end
+
             mkdir -p $zen_chrome
-            # H8: bsdtar refuses absolute paths and `..` traversal by default,
-            # protecting against zip-slip from compromised release assets.
             if command -q bsdtar
                 bsdtar -xf "$sine_tmp/profile.zip"  -C $zen_chrome
                 bsdtar -xf "$sine_tmp/engine.zip"   -C $zen_chrome
-                bsdtar -xf "$sine_tmp/locales.zip"  -C $zen_chrome
+                if test $sine_has_locales -eq 1
+                    bsdtar -xf "$sine_tmp/locales.zip"  -C $zen_chrome
+                end
             else
                 echo "bsdtar not found, falling back to unzip (less safe). Install libarchive."
                 unzip -qo "$sine_tmp/profile.zip"  -d $zen_chrome
                 unzip -qo "$sine_tmp/engine.zip"   -d $zen_chrome
-                unzip -qo "$sine_tmp/locales.zip"  -d $zen_chrome
+                if test $sine_has_locales -eq 1
+                    unzip -qo "$sine_tmp/locales.zip"  -d $zen_chrome
+                end
             end
             echo "Sine profile part installed to $zen_chrome"
             echo "Go to about:support and click 'Clear Startup Cache', then restart Zen Browser"
@@ -144,9 +189,6 @@ else
 end
 
 if confirm-overwrite $cfg/nvim
-    # H9: data dirs (plugins, swap, undo, sessions) are *separate* from config.
-    # Wiping them is destructive (LazyVim plugin cache, project sessions) and
-    # must be opt-in.
     read -P "Also wipe ~/.local/share/nvim, ~/.local/state/nvim, ~/.cache/nvim? [y/N] " ans
     if test "$ans" = y
         echo "Cleaning all Neovim data..."
@@ -159,13 +201,5 @@ if confirm-overwrite $cfg/nvim
     cp -r $src/nvim $cfg/nvim
     echo "Neovim config installed. Run 'nvim' to download plugins."
 end
-
-# Make Hypr scripts executable
-if test -f $cfg/hypr/scripts/wsaction.fish
-    chmod +x $cfg/hypr/scripts/wsaction.fish
-end
-
-# Reload Hyprland once at the end (no-op if Hyprland is not running)
-hyprctl reload >/dev/null 2>&1
 
 echo "✅ Installation complete!"
