@@ -33,6 +33,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    noctalia-shell = {
+      url = "github:noctalia-dev/noctalia-shell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     templ.url = "github:a-h/templ";
 
     nix-snapd = {
@@ -152,10 +157,51 @@
           localSystem = system;
           config.allowUnfree = true;
         };
+        mysetup = flakePkgs.buildGoModule {
+          pname = "mysetup";
+          version = "0.1.0";
+          src = ../installer;
+          subPackages = [ "cmd/mysetup" ];
+          vendorHash = "sha256-3BLXjtDy2dsq7A12BmAkoOQbu/hYkhVm4GKCtqYglTo=";
+          nativeBuildInputs = [ flakePkgs.makeWrapper ];
+          ldflags = [
+            "-s"
+            "-w"
+          ];
+          postInstall = ''
+            wrapProgram $out/bin/mysetup \
+              --prefix PATH : ${flakePkgs.lib.makeBinPath (with flakePkgs; [
+                coreutils
+                findutils
+                gnused
+                rsync
+                mkpasswd
+                nix
+                nixos-rebuild
+                git
+                curl
+                jq
+                hyprland
+                libarchive
+                unzip
+                sing-box
+              ])}
+          '';
+        };
       in
       {
         omnirouter = flakePkgs.callPackage ./packages/omnirouter.nix { };
+        inherit mysetup;
+        default = mysetup;
       };
+
+    apps.${system} = {
+      mysetup = {
+        type = "app";
+        program = "${self.packages.${system}.mysetup}/bin/mysetup";
+      };
+      default = self.apps.${system}.mysetup;
+    };
 
     nixosConfigurations.${hostname} = nixpkgs.lib.nixosSystem {
       inherit system;

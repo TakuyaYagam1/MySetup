@@ -1,9 +1,10 @@
-{ pkgs-stable, ... }:
+{ config, lib, pkgs-stable, ... }:
 
 # CTF-specific extras that don't fit a narrower bucket: download/archive,
 # headless browser, notes, shells.
 
 {
+  config = lib.mkIf (config.var.features.ctfTools or false) {
   environment.systemPackages = with pkgs-stable; [
     above
     aria2
@@ -28,4 +29,5 @@
     zsh-autosuggestions
     zsh-syntax-highlighting
   ];
+  };
 }

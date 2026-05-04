@@ -34,6 +34,31 @@
     };
 
     # Behaviour flags
+    shellProfile = "caelestia"; # caelestia | noctalia
+    packagePreset = "personal"; # minimal | desktop | developer | personal
+    hardware = {
+      gpu = "amd"; # amd | intel | nvidia | other
+    };
+    features = {
+      secureBoot = false;
+      ctfTools = false;
+      omnirouter = false;
+      russiaMode = false;
+    };
+    zapret = {
+      enable = false;
+      config = "general (FAKE_TLS_AUTO_ALT3)";
+    };
+    services = {
+      pgadminEmail = "admin@localhost.local";
+    };
+    hypr = {
+      keyboardLayouts = "us,ru";
+      keyboardToggle = "grp:alt_shift_toggle";
+    };
+    wallpapers = {
+      enable = true;
+    };
     autoGarbageCollector = true;
     autoOptimiseStore = true;
   };

@@ -1,8 +1,9 @@
-{ pkgs-stable, ... }:
+{ config, lib, pkgs-stable, ... }:
 
 # Reverse engineering: disassembly, decompilation, deobfuscation, malware analysis.
 
 {
+  config = lib.mkIf (config.var.features.ctfTools or false) {
   environment.systemPackages = with pkgs-stable; [
     binutils
     binwalk
@@ -27,4 +28,5 @@
     upx
     yara
   ];
+  };
 }

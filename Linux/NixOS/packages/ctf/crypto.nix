@@ -1,8 +1,9 @@
-{ pkgs-stable, ... }:
+{ config, lib, pkgs-stable, ... }:
 
 # Password attacks, hash cracking, wordlists, classical crypto attacks.
 
 {
+  config = lib.mkIf (config.var.features.ctfTools or false) {
   environment.systemPackages = with pkgs-stable; [
     aesfix
     aeskeyfind
@@ -35,4 +36,5 @@
     wordlists
     xortool
   ];
+  };
 }

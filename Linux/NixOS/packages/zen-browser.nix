@@ -1,6 +1,9 @@
-{ pkgs, ... }:
+{ config, lib, pkgs, ... }:
 
 let
+  preset = config.var.packagePreset or "personal";
+  enabled = lib.elem preset [ "desktop" "developer" "personal" ];
+
   zen-pkg = pkgs.zen-browser;
 
   sineCfgJs = pkgs.writeText "sine-config.js" ''
@@ -45,5 +48,7 @@ let
     '';
 in
 {
-  environment.systemPackages = [ zen-with-sine ];
+  config = lib.mkIf enabled {
+    environment.systemPackages = [ zen-with-sine ];
+  };
 }

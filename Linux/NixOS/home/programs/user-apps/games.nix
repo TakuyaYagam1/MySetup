@@ -1,8 +1,14 @@
-{ pkgs-stable, ... }:
+{ lib, pkgs-stable, var, ... }:
 
+let
+  preset = var.packagePreset or "personal";
+  enabled = preset == "personal";
+in
 {
-  home.packages = with pkgs-stable; [
-    lutris
-    heroic
-  ];
+  config = lib.mkIf enabled {
+    home.packages = with pkgs-stable; [
+      lutris
+      heroic
+    ];
+  };
 }

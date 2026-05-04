@@ -1,7 +1,12 @@
-{ pkgs, ... }:
+{ lib, pkgs, var, ... }:
 
+let
+  preset = var.packagePreset or "personal";
+  enabled = lib.elem preset [ "developer" "personal" ];
+in
 {
-  home.packages = with pkgs; [
+  config = lib.mkIf enabled {
+    home.packages = with pkgs; [
     (python3.withPackages (ps: with ps; [
       # Package management
       pip
@@ -122,5 +127,6 @@
       grpcio
       grpcio-tools
     ]))
-  ];
+    ];
+  };
 }

@@ -1,12 +1,16 @@
-{ pkgs, lib, ... }:
+{ config, pkgs, lib, ... }:
 
+let
+  preset = config.var.packagePreset or "personal";
+  desktopOrMore = lib.elem preset [ "desktop" "developer" "personal" ];
+  personal = preset == "personal";
+in
 {
   services.dbus.enable = true;
   services.gvfs.enable = true;
   services.tumbler.enable = true;
-  services.sing-box.enable = true;
-  # install.sh toggles the line below.
-  # services.omnirouter.enable = true;
+  services.sing-box.enable = personal;
+  services.omnirouter.enable = config.var.features.omnirouter or false;
 
   systemd.services.nix-daemon.serviceConfig = {
     LimitNOFILE = lib.mkForce "infinity";
@@ -39,7 +43,7 @@
     auto-optimise-store = true;
   };
 
-  systemd.user.services.nm-applet = {
+  systemd.user.services.nm-applet = lib.mkIf desktopOrMore {
     description = "NetworkManager Applet";
     wantedBy = [ "graphical-session.target" ];
     partOf = [ "graphical-session.target" ];

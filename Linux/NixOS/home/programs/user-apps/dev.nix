@@ -1,11 +1,15 @@
-{ pkgs, ... }:
+{ lib, pkgs, var, ... }:
 
+let
+  preset = var.packagePreset or "personal";
+  enabled = lib.elem preset [ "developer" "personal" ];
+in
 {
-  home.packages = (with pkgs; [
+  config = lib.mkIf enabled {
+    home.packages = (with pkgs; [
     # Editors / IDEs
     vscode
     code-cursor
-    jetbrains.goland
     qtcreator
 
     # AI assistants
@@ -22,5 +26,8 @@
     android-studio-full
     android-tools
     scrcpy
-  ]);
+    ]) ++ lib.optionals (!(var.features.russiaMode or false)) [
+      pkgs.jetbrains.goland
+    ];
+  };
 }

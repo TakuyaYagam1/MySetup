@@ -1,4 +1,4 @@
-{ ... }:
+{ config, ... }:
 
 # GTK/Qt/cursor/fonts are now managed by stylix (see themes/caelestia-dark.nix).
 # Only the bits stylix does not touch are kept here.
@@ -14,6 +14,7 @@
 
   home.sessionVariables = {
     XDG_DATA_DIRS = "$HOME/.nix-profile/share:/run/current-system/sw/share:$XDG_DATA_DIRS";
+    CAELESTIA_SCREENSHOTS_DIR = "${config.home.homeDirectory}/Pictures/Screenshots";
   };
 
   xdg.configFile."swappy/config".text = ''

@@ -1,9 +1,10 @@
-{ pkgs-stable, ... }:
+{ config, lib, pkgs-stable, ... }:
 
 # Network ops: scanning/enumeration, MITM/sniffing, tunnels/pivots, AD/Windows
 # red team, VPN/proxy clients.
 
 {
+  config = lib.mkIf (config.var.features.ctfTools or false) {
   environment.systemPackages = with pkgs-stable; [
     altdns
     amass
@@ -118,4 +119,5 @@
     wstunnel
     yersinia
   ];
+  };
 }

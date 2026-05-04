@@ -1,5 +1,11 @@
-{ pkgs, pkgs-stable, ... }:
+{ config, lib, pkgs, pkgs-stable, ... }:
 
+let
+  preset = config.var.packagePreset or "personal";
+  desktopOrMore = lib.elem preset [ "desktop" "developer" "personal" ];
+  developerOrMore = lib.elem preset [ "developer" "personal" ];
+  personal = preset == "personal";
+in
 {
   environment.pathsToLink = [ "/share/icons" ];
 
@@ -16,11 +22,8 @@
       # System utilities
       wl-clipboard
       xclip
-      steam-run
       acpi
       powertop
-      networkmanagerapplet
-      libnotify
       cifs-utils
       nfs-utils
       dos2unix
@@ -55,10 +58,6 @@
       # Database clients
       sqlite
 
-      # Container tools
-      docker-compose
-      podman-compose
-
       # File operations
       imagemagick
       file
@@ -82,19 +81,33 @@
       eza
       zoxide
       atuin
-      yazi
-      delta
 
       # System monitoring
       btop
       htop
       neohtop
       glances
+    ])
+    ++ lib.optionals desktopOrMore (with pkgs; [
+      # Desktop integration
+      steam-run
+      networkmanagerapplet
+      libnotify
 
       # Torrent
       qbittorrent
+    ])
+    ++ lib.optionals developerOrMore (with pkgs; [
+      # Container tools
+      docker-compose
+      podman-compose
 
-      # Proxy
+      # Developer terminal utilities
+      yazi
+      delta
+    ])
+    ++ lib.optionals personal (with pkgs; [
+      # Proxy / VPN
       hysteria
       v2rayn
       clash-meta
@@ -103,7 +116,7 @@
       sing-box
       sing-geoip
     ])
-    ++ (with pkgs-stable; [
+    ++ lib.optionals personal (with pkgs-stable; [
       # Wine
       (wineWow64Packages.staging.override {
         waylandSupport = true;

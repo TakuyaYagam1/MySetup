@@ -1,4 +1,4 @@
-{ lib, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 
 {
   services.postgresql = {
@@ -24,7 +24,7 @@
   services.pgadmin = {
     enable = true;
     port = 5050;
-    initialEmail = "admin@localhost.local";
+    initialEmail = config.var.services.pgadminEmail or "admin@localhost.local";
     initialPasswordFile = "/etc/nixos/secrets/pgadmin-password";
   };
 

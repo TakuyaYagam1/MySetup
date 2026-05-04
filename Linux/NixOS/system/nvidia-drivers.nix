@@ -1,6 +1,7 @@
 { config, pkgs, lib, ... }:
 
 {
+  config = lib.mkIf ((config.var.hardware.gpu or "amd") == "nvidia") {
   services.xserver.videoDrivers = [ "nvidia" ];
 
   hardware.nvidia = {
@@ -32,4 +33,5 @@
     options nvidia_drm modeset=1
     options nvidia_drm fbdev=1
   '';
+  };
 }

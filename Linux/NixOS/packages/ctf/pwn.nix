@@ -1,8 +1,9 @@
-{ pkgs-stable, ... }:
+{ config, lib, pkgs-stable, ... }:
 
 # Binary exploitation: debugging, fuzzing, exploit development, exploitation frameworks.
 
 {
+  config = lib.mkIf (config.var.features.ctfTools or false) {
   environment.systemPackages = with pkgs-stable; [
     aflplusplus
     armitage
@@ -33,4 +34,5 @@
     unix-privesc-check
     vulnix
   ];
+  };
 }

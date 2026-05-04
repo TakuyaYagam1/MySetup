@@ -1,9 +1,10 @@
-{ pkgs-stable, ... }:
+{ config, lib, pkgs-stable, ... }:
 
 # Forensics: disk imaging, file carving, memory analysis, recovery, timeline,
 # network packet analysis (passive).
 
 {
+  config = lib.mkIf (config.var.features.ctfTools or false) {
   environment.systemPackages = with pkgs-stable; [
     afflib
     autopsy
@@ -63,4 +64,5 @@
     wireshark
     zerofree
   ];
+  };
 }

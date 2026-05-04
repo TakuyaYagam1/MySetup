@@ -1,40 +1,46 @@
-{ pkgs, ... }:
+{ config, lib, pkgs, ... }:
 
+let
+  preset = config.var.packagePreset or "personal";
+  enabled = lib.elem preset [ "developer" "personal" ];
+in
 {
-  environment.systemPackages = with pkgs; [
-    virt-manager
-    virt-viewer
-    spice-vdagent
-  ];
+  config = lib.mkIf enabled {
+    environment.systemPackages = with pkgs; [
+      virt-manager
+      virt-viewer
+      spice-vdagent
+    ];
 
-  programs.virt-manager.enable = true;
+    programs.virt-manager.enable = true;
 
-  virtualisation = {
-    libvirtd = {
-      enable = true;
-      qemu = {
-        package = pkgs.qemu_kvm;
-        runAsRoot = false;
-        swtpm.enable = true;
-        vhostUserPackages = [ pkgs.virtiofsd ];
+    virtualisation = {
+      libvirtd = {
+        enable = true;
+        qemu = {
+          package = pkgs.qemu_kvm;
+          runAsRoot = false;
+          swtpm.enable = true;
+          vhostUserPackages = [ pkgs.virtiofsd ];
+        };
       };
-    };
 
-    spiceUSBRedirection.enable = true;
+      spiceUSBRedirection.enable = true;
 
-    docker = {
-      enable = true;
-      daemon.settings = {
-        dns = [ "8.8.8.8" "1.1.1.1" "77.88.8.8" ];
-        log-driver = "journald";
+      docker = {
+        enable = true;
+        daemon.settings = {
+          dns = [ "8.8.8.8" "1.1.1.1" "77.88.8.8" ];
+          log-driver = "journald";
+        };
       };
-    };
 
-    podman = {
-      enable = true;
-      dockerCompat = false;
-      dockerSocket.enable = false;
-      defaultNetwork.settings.dns_enabled = true;
+      podman = {
+        enable = true;
+        dockerCompat = false;
+        dockerSocket.enable = false;
+        defaultNetwork.settings.dns_enabled = true;
+      };
     };
   };
 }

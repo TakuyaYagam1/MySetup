@@ -1,6 +1,7 @@
 # My Setup
 
 > **! READ THE README FOR YOUR PLATFORM BEFORE DOING ANYTHING !**
+>
 > - Linux (NixOS): [Linux/README.md](Linux/README.md)
 > - Windows: [Windows/README.md](Windows/README.md)
 
@@ -20,17 +21,22 @@ Personal system configuration for Linux (NixOS + Hyprland) and Windows (Komorebi
 
 ```bash
 git clone https://github.com/skr1ms/MySetup.git
-cd MySetup/Linux
-sudo bash install.sh
+cd MySetup
+nix run ./Linux/NixOS#mysetup
 ```
 
 The installer will ask you about:
+
 - Username and password
+- Shell profile (Caelestia / Noctalia)
+- Package preset (personal / developer / desktop / minimal)
+- Display and keyboard layout
 - Secure Boot (Lanzaboote)
 - GPU type (AMD / Intel / NVIDIA)
 - Region (Russia - disables DataGrip, enables Zapret by default)
 - Zapret DPI bypass config
 - CTF tools
+- User dotfiles (Hypr, Zen Browser theme, Neovim, wallpapers)
 
 ### Windows
 

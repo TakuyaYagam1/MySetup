@@ -1,6 +1,9 @@
-{ pkgs, pkgs-stable, lib, ... }:
+{ pkgs, pkgs-stable, lib, var, ... }:
 
 let
+  preset = var.packagePreset or "personal";
+  enabled = lib.elem preset [ "desktop" "developer" "personal" ];
+
   wpsoffice-fixed = pkgs.wpsoffice.overrideAttrs (_: {
     src = pkgs.runCommandLocal "wps-office_11.1.0.11723.XA_amd64.deb"
       {
@@ -25,7 +28,8 @@ let
   });
 in
 {
-  home.packages = with pkgs; [
+  config = lib.mkIf enabled {
+    home.packages = with pkgs; [
     # Browsers
     firefox
     google-chrome
@@ -43,5 +47,6 @@ in
     # Notes / PKM
     obsidian
     anytype
-  ];
+    ];
+  };
 }

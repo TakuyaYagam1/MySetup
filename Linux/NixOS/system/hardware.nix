@@ -1,5 +1,9 @@
 { config, pkgs, lib, ... }:
 
+let
+  gpu = config.var.hardware.gpu or "amd";
+in
+
 {
   nixpkgs.config.allowUnfree = true;
 
@@ -16,7 +20,10 @@
 
   services.xserver.videoDrivers = lib.mkDefault [ "amdgpu" "modesetting" ];
 
-  boot.initrd.kernelModules = [ "amdgpu" ]; # GPU_MODULE_PLACEHOLDER
+  boot.initrd.kernelModules =
+    if gpu == "amd" then [ "amdgpu" ]
+    else if gpu == "intel" then [ "i915" ]
+    else [ ];
 
   hardware.cpu.intel.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
   hardware.cpu.amd.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;

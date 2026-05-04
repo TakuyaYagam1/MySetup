@@ -1,8 +1,9 @@
-{ pkgs-stable, ... }:
+{ config, lib, pkgs-stable, ... }:
 
 # Hardware/RF/wireless: 802.11, Bluetooth, SDR, RFID, embedded/JTAG, serial.
 
 {
+  config = lib.mkIf (config.var.features.ctfTools or false) {
   environment.systemPackages = with pkgs-stable; [
     aircrack-ng
     airgeddon
@@ -42,4 +43,5 @@
     ubertooth
     uhd
   ];
+  };
 }

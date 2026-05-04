@@ -1,18 +1,24 @@
-{ pkgs, ... }:
+{ lib, pkgs, var, ... }:
 
+let
+  preset = var.packagePreset or "personal";
+  enabled = lib.elem preset [ "desktop" "developer" "personal" ];
+in
 {
-  home.packages = with pkgs; [
-    # Calculators
-    libqalculate
-    qalculate-gtk
+  config = lib.mkIf enabled {
+    home.packages = with pkgs; [
+      # Calculators
+      libqalculate
+      qalculate-gtk
 
-    # System info / utilities
-    bulky
-    xneur
-    app2unit
+      # System info / utilities
+      bulky
+      xneur
+      app2unit
 
-    # Terminal tools
-    tmux
-    zellij
-  ];
+      # Terminal tools
+      tmux
+      zellij
+    ];
+  };
 }

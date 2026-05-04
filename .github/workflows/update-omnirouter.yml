@@ -16,13 +16,16 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    env:
+      FLAKE: ./Linux/NixOS
+      GITHUB_TOKEN: ${{ github.token }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@v31.10.5
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
@@ -39,8 +42,15 @@ jobs:
           if [ -n "${{ github.event.inputs.version }}" ]; then
             version="${{ github.event.inputs.version }}"
           else
-            version="$(curl -fsSL https://api.github.com/repos/diegosouzapw/OmniRoute/releases/latest | jq -r '.tag_name | sub("^v"; "")')"
+            version="$(
+              curl -fsSL \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: Bearer $GITHUB_TOKEN" \
+                https://api.github.com/repos/diegosouzapw/OmniRoute/releases/latest \
+                | jq -r '.tag_name | sub("^v"; "")'
+            )"
           fi
+          version="${version#v}"
 
           if [ -z "$version" ] || [ "$version" = "null" ]; then
             echo "::error::Failed to resolve latest OmniRouter release"
@@ -49,15 +59,38 @@ jobs:
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Stop if already current
-        if: steps.release.outputs.version == steps.current.outputs.version
+      - name: Compare versions
+        id: compare
         run: |
-          echo "OmniRouter is already on v${{ steps.current.outputs.version }}"
-          exit 0
+          current="${{ steps.current.outputs.version }}"
+          target="${{ steps.release.outputs.version }}"
+          manual="${{ github.event.inputs.version }}"
+
+          if [ "$current" = "$target" ]; then
+            echo "should_update=false" >> "$GITHUB_OUTPUT"
+            echo "OmniRouter is already on v$current"
+            exit 0
+          fi
+
+          if [ -n "$manual" ]; then
+            echo "should_update=true" >> "$GITHUB_OUTPUT"
+            echo "Manual update requested: v$current -> v$target"
+            exit 0
+          fi
+
+          newest="$(printf '%s\n%s\n' "$current" "$target" | sort -V | tail -1)"
+          if [ "$newest" != "$target" ]; then
+            echo "should_update=false" >> "$GITHUB_OUTPUT"
+            echo "Latest GitHub release v$target is not newer than packaged v$current; skipping downgrade."
+            exit 0
+          fi
+
+          echo "should_update=true" >> "$GITHUB_OUTPUT"
+          echo "Updating OmniRouter: v$current -> v$target"
 
       - name: Compute source hash
         id: src
-        if: steps.release.outputs.version != steps.current.outputs.version
+        if: steps.compare.outputs.should_update == 'true'
         run: |
           url="https://github.com/diegosouzapw/OmniRoute/archive/refs/tags/v${{ steps.release.outputs.version }}.tar.gz"
           hash="$(nix-prefetch-url --unpack "$url")"
@@ -65,7 +98,7 @@ jobs:
           echo "hash=$sri" >> "$GITHUB_OUTPUT"
 
       - name: Patch version and source hash
-        if: steps.release.outputs.version != steps.current.outputs.version
+        if: steps.compare.outputs.should_update == 'true'
         run: |
           sed -i 's/version = "[^"]*"/version = "${{ steps.release.outputs.version }}"/' Linux/NixOS/packages/omnirouter.nix
           sed -i 's/rev = "v[^"]*"/rev = "v${{ steps.release.outputs.version }}"/' Linux/NixOS/packages/omnirouter.nix
@@ -74,14 +107,13 @@ jobs:
 
       - name: Compute npmDepsHash
         id: npm
-        if: steps.release.outputs.version != steps.current.outputs.version
+        if: steps.compare.outputs.should_update == 'true'
         run: |
           set +e
-          output="$(nix build .#omnirouter 2>&1)"
-          status=$?
+          output="$(nix build --no-write-lock-file "$FLAKE#omnirouter" 2>&1)"
           set -e
 
-          got="$(printf '%s\n' "$output" | grep 'got:' | tail -1 | awk '{print $2}')"
+          got="$(printf '%s\n' "$output" | sed -nE 's/.*got:[[:space:]]*(sha256-[A-Za-z0-9+\\/=]+).*/\1/p' | tail -1)"
 
           if [ -z "$got" ]; then
             printf '%s\n' "$output"
@@ -93,12 +125,12 @@ jobs:
           sed -i 's|npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="|npmDepsHash = "'"$got"'"|' Linux/NixOS/packages/omnirouter.nix
 
       - name: Verify build
-        if: steps.release.outputs.version != steps.current.outputs.version
+        if: steps.compare.outputs.should_update == 'true'
         run: |
-          nix build .#omnirouter
+          nix build --no-write-lock-file "$FLAKE#omnirouter"
 
       - name: Create pull request
-        if: steps.release.outputs.version != steps.current.outputs.version
+        if: steps.compare.outputs.should_update == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore: update omnirouter"

@@ -8,9 +8,8 @@
 # single freeform `caelestiaShellSettings` option, which we materialise
 # into JSON and seed via home.activation.
 #
-# The activation step is hash-gated: it only rewrites ~/.config/caelestia/shell.json
-# when the source JSON actually changes. This keeps manual tweaks across rebuilds
-# until the next config edit lands.
+# The activation step only seeds ~/.config/caelestia/shell.json when it is
+# missing. After that the shell UI or manual JSON edits own the live state.
 
 let
   shellJson = pkgs.writeText "caelestia-shell.json"
@@ -58,16 +57,21 @@ in
     home.activation.caelestiaSeedShellJson =
       lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         target="$HOME/.config/caelestia/shell.json"
-        hashFile="$HOME/.config/caelestia/.shell.json.nix-hash"
         src="${shellJson}"
-        newHash="$(${pkgs.coreutils}/bin/sha256sum "$src" | ${pkgs.coreutils}/bin/cut -d' ' -f1)"
 
         $DRY_RUN_CMD ${pkgs.coreutils}/bin/mkdir -p "$HOME/.config/caelestia"
 
-        if [ ! -f "$target" ] || [ ! -f "$hashFile" ] || \
-           [ "$(${pkgs.coreutils}/bin/cat "$hashFile" 2>/dev/null)" != "$newHash" ]; then
+        if [ -L "$target" ]; then
+          resolved="$(${pkgs.coreutils}/bin/readlink -f "$target" 2>/dev/null || true)"
+          case "$resolved" in
+            /nix/store/*)
+              $DRY_RUN_CMD ${pkgs.coreutils}/bin/rm -f "$target"
+              ;;
+          esac
+        fi
+
+        if [ ! -e "$target" ]; then
           $DRY_RUN_CMD ${pkgs.coreutils}/bin/install -m 644 "$src" "$target"
-          $DRY_RUN_CMD ${pkgs.bash}/bin/sh -c "printf '%s\n' '$newHash' > '$hashFile'"
         fi
       '';
 

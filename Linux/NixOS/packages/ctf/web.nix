@@ -1,8 +1,9 @@
-{ pkgs-stable, ... }:
+{ config, lib, pkgs-stable, ... }:
 
 # Web app testing: HTTP fuzzing, content discovery, SQLi/XSS, CMS scanners, proxies, web recon.
 
 {
+  config = lib.mkIf (config.var.features.ctfTools or false) {
   environment.systemPackages = with pkgs-stable; [
     arjun
     burpsuite
@@ -58,4 +59,5 @@
     wpprobe
     wpscan
   ];
+  };
 }

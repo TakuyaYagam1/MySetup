@@ -1,7 +1,12 @@
-{ pkgs, ... }:
+{ lib, pkgs, var, ... }:
 
+let
+  preset = var.packagePreset or "personal";
+  enabled = lib.elem preset [ "minimal" "desktop" "developer" "personal" ];
+in
 {
-  home.packages = with pkgs; [
+  config = lib.mkIf enabled {
+    home.packages = (with pkgs; [
     # Wayland tools
     hyprpicker
     wl-clipboard
@@ -15,5 +20,7 @@
     hypridle
     hyprpaper
     uwsm
-  ];
+    ])
+    ++ lib.optional (var.shellProfile != "caelestia") pkgs.caelestia-cli;
+  };
 }

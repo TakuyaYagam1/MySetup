@@ -1,0 +1,86 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - contextcheck
+    - errorlint
+    - gocritic
+    - gocyclo
+    - gosec
+    - misspell
+    - nakedret
+    - nilerr
+    - nolintlint
+    - prealloc
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+    - unparam
+    - whitespace
+
+  settings:
+    gocyclo:
+      min-complexity: 15
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: var-declaration
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: redefines-builtin-id
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    gosec:
+      excludes:
+        - G104 # errcheck overlap
+        - G204 # installer command runner intentionally executes selected tools
+        - G301 # generated config directories are intentionally user-readable
+        - G304 # installer reads user-selected local config paths
+        - G306 # generated config files are intentionally user-readable
+        - G703 # source probing intentionally stats candidate local paths
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - gosec
+          - errcheck
+          - dupl
+      - path: \.gen\.go
+        linters:
+          - revive
+          - gocritic
+          - unused
+          - unparam
+          - gocyclo
+          - prealloc
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

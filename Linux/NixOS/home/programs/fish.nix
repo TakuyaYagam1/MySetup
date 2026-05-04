@@ -14,6 +14,7 @@
       # system
       nixos-install = "sudo nixos-rebuild switch --flake /etc/nixos#NixOS";
       nixos-update = "pushd /etc/nixos; and sudo nix flake update; and sudo nixos-rebuild switch --flake .#NixOS; and popd";
+      nixos-ida = "nix-store --add-fixed sha256 ~/MySetup/Linux/ida-pro_93_x64linux.run";
       cleanup = "sudo nix-collect-garbage -d && nix-collect-garbage && nix store optimise && sudo nix-store --gc --print-dead && sudo nix-store --gc";
       optimize = "sudo nix-store --optimise";
       logout = "systemctl restart display-manager.service";
