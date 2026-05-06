@@ -409,10 +409,9 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 	}
 	for _, want := range []string{
 		"bindi = Super, Super_L, global, caelestia:launcher",
-		"bindr = Super, Super_L, global, caelestia:launcher",
-		"bindin = $kbGoToWs, 1, global, caelestia:launcherInterrupt",
-		"bindin = $kbGoToWs, 0, global, caelestia:launcherInterrupt",
-		"bindin = $kbTerminal, global, caelestia:launcherInterrupt",
+		"bindin = Super, catchall, global, caelestia:launcherInterrupt",
+		"bindin = Super, mouse:272, global, caelestia:launcherInterrupt",
+		"bindin = Super, mouse_down, global, caelestia:launcherInterrupt",
 		"start-shell.sh caelestia",
 		"caelestia clipboard",
 	} {

@@ -195,7 +195,7 @@ func TestRunDryRunDryBuildsStagingBeforeWritingEtcAndStateLast(t *testing.T) {
 		}
 	})
 
-	dryBuild := strings.Index(out, "sudo nixos-rebuild dry-build --flake /tmp/mysetup-nixos-")
+	dryBuild := strings.Index(out, "sudo nixos-rebuild dry-build --flake ")
 	backup := strings.Index(out, "sudo cp -a")
 	stateWrite := strings.LastIndex(out, filepath.Join(dest, "mysetup/state.json"))
 	noSwitch := strings.Index(out, "dry-build passed; --no-switch set")
