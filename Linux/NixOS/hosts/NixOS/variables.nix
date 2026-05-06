@@ -24,7 +24,7 @@
     timeZone = "Europe/Moscow";
     defaultLocale = "en_US.UTF-8";
     extraLocale = "ru_RU.UTF-8";
-    consoleKeyMap = "ruwin_alt_sh-UTF-8";
+    consoleKeyMap = "us";
     weatherLocation = "Moscow";
 
     # Git identity (used by home-manager programs.git)

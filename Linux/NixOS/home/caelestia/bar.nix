@@ -64,7 +64,7 @@
         { regex = "steam(_app_(default|[0-9]+))?"; icon = "sports_esports"; }
       ];
     };
-    excludedScreens = [ "" ];
+    excludedScreens = [ ];
     activeWindow = {
       compact = true;
       inverted = false;

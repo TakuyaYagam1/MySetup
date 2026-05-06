@@ -14,9 +14,10 @@ type Options struct {
 }
 
 type Sources struct {
-	RepoRoot string
-	NixOS    string
-	Dots     string
+	RepoRoot  string
+	NixOS     string
+	Dots      string
+	Installer string
 }
 
 func DefaultOptions() Options {
@@ -54,11 +55,12 @@ func ResolveSources(repoRoot string) (Sources, error) {
 			continue
 		}
 		repoSrc := Sources{
-			RepoRoot: candidate,
-			NixOS:    filepath.Join(candidate, "Linux", "NixOS"),
-			Dots:     filepath.Join(candidate, "Linux", "dots"),
+			RepoRoot:  candidate,
+			NixOS:     filepath.Join(candidate, "Linux", "NixOS"),
+			Dots:      filepath.Join(candidate, "Linux", "dots"),
+			Installer: filepath.Join(candidate, "Linux", "installer"),
 		}
-		if exists(filepath.Join(repoSrc.NixOS, "flake.nix")) && exists(repoSrc.Dots) {
+		if exists(filepath.Join(repoSrc.NixOS, "flake.nix")) && exists(repoSrc.Dots) && exists(repoSrc.Installer) {
 			return repoSrc, nil
 		}
 		if exists(filepath.Join(candidate, "flake.nix")) {
@@ -66,9 +68,13 @@ func ResolveSources(repoRoot string) (Sources, error) {
 			if !exists(dots) {
 				dots = filepath.Join(filepath.Dir(candidate), "dots")
 			}
+			installer := filepath.Join(candidate, "installer")
+			if !exists(installer) {
+				installer = filepath.Join(filepath.Dir(candidate), "installer")
+			}
 			// Supports both repository layout (Linux/NixOS + ../dots) and the
 			// installed mirror layout (/etc/nixos + /etc/nixos/dots).
-			return Sources{RepoRoot: candidate, NixOS: candidate, Dots: dots}, nil
+			return Sources{RepoRoot: candidate, NixOS: candidate, Dots: dots, Installer: installer}, nil
 		}
 	}
 	return Sources{}, fmt.Errorf("could not locate repository root; run from MySetup root or pass --repo")

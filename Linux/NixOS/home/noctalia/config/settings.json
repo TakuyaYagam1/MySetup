@@ -123,14 +123,14 @@
                     "useDistroLogo": false
                 },
                 {
-                    "compactMode": true,
+                    "compactMode": false,
                     "diskPath": "/",
                     "iconColor": "none",
                     "id": "SystemMonitor",
                     "showCpuCores": false,
                     "showCpuFreq": true,
                     "showCpuTemp": true,
-                    "showCpuUsage": false,
+                    "showCpuUsage": true,
                     "showDiskAvailable": true,
                     "showDiskUsage": true,
                     "showDiskUsageAsPercent": true,
@@ -770,7 +770,7 @@
         "panelBackgroundOpacity": 0.8,
         "panelsAttachedToBar": true,
         "scrollbarAlwaysVisible": true,
-        "settingsPanelMode": "attached",
+        "settingsPanelMode": "window",
         "settingsPanelSideBarCardStyle": false,
         "tooltipsEnabled": true,
         "translucentWidgets": true

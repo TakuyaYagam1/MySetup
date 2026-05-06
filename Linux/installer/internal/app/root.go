@@ -2,8 +2,12 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -20,7 +24,7 @@ func NewRootCommand() *cobra.Command {
 
 	root := &cobra.Command{
 		Use:   "mysetup",
-		Short: "Catppuccin TUI installer for MySetup",
+		Short: "Catppuccin Macchiato TUI installer for MySetup",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return tui.Run(cmd.Context(), tui.Options{
 				Paths:  opts.Options,
@@ -60,8 +64,8 @@ func tuiCommand(opts *Options) *cobra.Command {
 
 func applyCommand(opts *Options) *cobra.Command {
 	var noSwitch bool
-	var userPassword string
-	var pgAdminPassword string
+	var userPasswordFile string
+	var pgAdminPasswordFile string
 
 	cmd := &cobra.Command{
 		Use:   "apply",
@@ -71,10 +75,14 @@ func applyCommand(opts *Options) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			secrets, err := loadSecretsFromFiles(userPasswordFile, pgAdminPasswordFile)
+			if err != nil {
+				return err
+			}
 			return apply.Run(cmd.Context(), apply.Options{
 				Paths:      opts.Options,
 				State:      state,
-				Secrets:    config.Secrets{UserPassword: userPassword, PgAdminPassword: pgAdminPassword},
+				Secrets:    secrets,
 				DryRun:     opts.DryRun,
 				AssumeYes:  opts.Yes,
 				SkipSwitch: noSwitch,
@@ -82,9 +90,76 @@ func applyCommand(opts *Options) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&noSwitch, "no-switch", false, "stop after dry-build and do not run nixos-rebuild switch")
-	cmd.Flags().StringVar(&userPassword, "user-password", "", "initial user password for hashed-password.nix")
-	cmd.Flags().StringVar(&pgAdminPassword, "pgadmin-password", "", "pgAdmin password written to /etc/nixos/secrets")
+	cmd.Flags().StringVar(&userPasswordFile, "user-password-file", "", "read initial user password from file for hashed-password.nix")
+	cmd.Flags().StringVar(&pgAdminPasswordFile, "pgadmin-password-file", "", "read pgAdmin password from file for /etc/nixos/secrets")
 	return cmd
+}
+
+func loadSecretsFromFiles(userPasswordFile, pgAdminPasswordFile string) (config.Secrets, error) {
+	userPassword, err := readSecretFile(userPasswordFile)
+	if err != nil {
+		return config.Secrets{}, fmt.Errorf("read user password file: %w", err)
+	}
+	pgAdminPassword, err := readSecretFile(pgAdminPasswordFile)
+	if err != nil {
+		return config.Secrets{}, fmt.Errorf("read pgAdmin password file: %w", err)
+	}
+	return config.Secrets{UserPassword: userPassword, PgAdminPassword: pgAdminPassword}, nil
+}
+
+const maxSecretFileBytes = 64 * 1024
+
+func readSecretFile(path string) (string, error) {
+	if path == "" {
+		return "", nil
+	}
+	file, err := openSecretFileNoFollow(path)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+	info, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("secret file must not be a symlink: %s", path)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("secret file must be a regular file: %s", path)
+	}
+	if info.Size() > maxSecretFileBytes {
+		return "", fmt.Errorf("secret file is too large: %s", path)
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return "", fmt.Errorf("secret file permissions are too open: %s", path)
+	}
+	data, err := io.ReadAll(io.LimitReader(file, maxSecretFileBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if len(data) > maxSecretFileBytes {
+		return "", fmt.Errorf("secret file is too large: %s", path)
+	}
+	secret := strings.TrimRight(string(data), "\r\n")
+	if secret == "" {
+		return "", fmt.Errorf("secret file is empty: %s", path)
+	}
+	return secret, nil
+}
+
+func openSecretFileNoFollow(path string) (*os.File, error) {
+	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	if err != nil {
+		if errors.Is(err, syscall.ELOOP) {
+			return nil, fmt.Errorf("secret file must not be a symlink: %s", path)
+		}
+		return nil, err
+	}
+	//nolint:gosec // syscall.Open returns a valid non-negative file descriptor here; os.NewFile requires uintptr.
+	return os.NewFile(uintptr(fd), path), nil
 }
 
 func doctorCommand(opts *Options) *cobra.Command {

@@ -27,7 +27,16 @@ Fresh install through `/mnt` is not supported in v1. Run this on an already boot
 - Services: pgAdmin email and optional password reset.
 - Dots: Hypr config, scripts chmod, wallpapers, Zen Browser Catppuccin chrome, optional Sine profile, Neovim, v2rayN `sing-box`.
 
-The apply flow creates a backup of `/etc/nixos`, writes a staged copy, applies dots, runs `nixos-rebuild dry-build`, then asks before `switch`.
+The apply flow builds a temporary staging copy first, preserves host-local files
+such as `hardware-configuration.nix` and `flake.lock`, runs
+`nixos-rebuild dry-build` against that staging flake, and only after a
+successful dry-build backs up/syncs `/etc/nixos`, applies dots, optionally runs
+`switch`, and writes `/etc/nixos/mysetup/state.json`.
+
+`/etc/nixos` is the canonical activation target. Building a full system
+toplevel directly from the cloned checkout can fail until host-local hardware
+files are present; use the installer or build from `/etc/nixos` for real system
+activation checks.
 
 Package presets are intentionally coarse:
 
@@ -50,6 +59,15 @@ Use `--dry-run` to preview filesystem actions where supported:
 
 ```bash
 nix run ./Linux/NixOS#mysetup -- apply --dry-run --no-switch
+```
+
+Passwords are accepted only through files when using the non-interactive CLI,
+so secrets do not leak through shell history:
+
+```bash
+nix run ./Linux/NixOS#mysetup -- apply \
+  --user-password-file /path/to/user-password \
+  --pgadmin-password-file /path/to/pgadmin-password
 ```
 
 ## Installer Development

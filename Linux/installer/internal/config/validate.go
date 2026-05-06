@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -40,8 +41,8 @@ func validateUser(state State) []string {
 	if state.User.FullName == "" {
 		errs = append(errs, "full name cannot be empty")
 	}
-	if state.User.HomeDirectory == "" || !strings.HasPrefix(state.User.HomeDirectory, "/home/") {
-		errs = append(errs, "home directory must be an absolute /home path")
+	if err := validateHomeDirectory(state.User.HomeDirectory, state.User.Username); err != nil {
+		errs = append(errs, err.Error())
 	}
 	if !emailRe.MatchString(state.Git.Email) {
 		errs = append(errs, "git email is invalid")
@@ -50,6 +51,20 @@ func validateUser(state State) []string {
 		errs = append(errs, "pgAdmin email is invalid")
 	}
 	return errs
+}
+
+func validateHomeDirectory(homeDirectory, username string) error {
+	clean := filepath.Clean(homeDirectory)
+	if homeDirectory == "" || !filepath.IsAbs(homeDirectory) || clean != homeDirectory {
+		return fmt.Errorf("home directory must be a clean absolute /home/<username> path")
+	}
+	if !strings.HasPrefix(clean, "/home/") || clean == "/home" {
+		return fmt.Errorf("home directory must be a clean absolute /home/<username> path")
+	}
+	if usernameRe.MatchString(username) && clean != filepath.Join("/home", username) {
+		return fmt.Errorf("home directory must match /home/%s", username)
+	}
+	return nil
 }
 
 func validateLocale(state State) []string {

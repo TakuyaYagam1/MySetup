@@ -5,6 +5,7 @@ SHELL := /usr/bin/env bash
 GOLANGCI_LINT_VERSION ?= v2.11.4
 
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+NIXOS_DIR := $(abspath ../NixOS)
 
 ##@ Build & run
 
@@ -62,6 +63,20 @@ cover: ## Unit-test coverage report (HTML)
 nix-build: ## Build the mysetup flake package
 	nix build --no-link --no-write-lock-file ../NixOS#mysetup
 
+.PHONY: nix-hm-eval
+nix-hm-eval: ## Eval Home Manager shell keybind sources for both shell profiles
+	nix eval --no-write-lock-file --impure --raw --expr 'let flake = builtins.getFlake "path:$(NIXOS_DIR)"; system = "x86_64-linux"; pkgs = import flake.inputs.nixpkgs { inherit system; config.allowUnfree = true; }; mod = profile: import $(NIXOS_DIR)/home/shells/default.nix { config = { xdg.configHome = "/tmp/mysetup"; }; lib = pkgs.lib; inherit pkgs; var = { shellProfile = profile; }; }; in builtins.toString ((mod "caelestia").xdg.configFile."hypr/shell-keybinds.conf".source)' >/dev/null
+	nix eval --no-write-lock-file --impure --raw --expr 'let flake = builtins.getFlake "path:$(NIXOS_DIR)"; system = "x86_64-linux"; pkgs = import flake.inputs.nixpkgs { inherit system; config.allowUnfree = true; }; mod = profile: import $(NIXOS_DIR)/home/shells/default.nix { config = { xdg.configHome = "/tmp/mysetup"; }; lib = pkgs.lib; inherit pkgs; var = { shellProfile = profile; }; }; in builtins.toString ((mod "noctalia").xdg.configFile."hypr/shell-keybinds.conf".source)' >/dev/null
+
+.PHONY: nix-installed-mirror-build
+nix-installed-mirror-build: ## Build mysetup from an /etc/nixos-style temporary mirror
+	@tmp="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	rsync -a ../NixOS/ "$$tmp"/; \
+	rsync -a ../dots/ "$$tmp"/dots/; \
+	rsync -a --exclude=/bin/ --exclude=/tmp/ --exclude=/coverage.out --exclude=/coverage.html ./ "$$tmp"/installer/; \
+	nix build --no-link --no-write-lock-file "path:$$tmp#mysetup"
+
 .PHONY: check
 check: ## Run the full local verification suite and remove build artefacts
 	@status=0; \
@@ -71,6 +86,8 @@ check: ## Run the full local verification suite and remove build artefacts
 	if [ $$status -eq 0 ]; then $(MAKE) test || status=$$?; fi; \
 	if [ $$status -eq 0 ]; then $(MAKE) build || status=$$?; fi; \
 	if [ $$status -eq 0 ]; then $(MAKE) nix-build || status=$$?; fi; \
+	if [ $$status -eq 0 ]; then $(MAKE) nix-hm-eval || status=$$?; fi; \
+	if [ $$status -eq 0 ]; then $(MAKE) nix-installed-mirror-build || status=$$?; fi; \
 	$(MAKE) clean || status=$$?; \
 	exit $$status
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env fish
 
-if test "$argv[1]" = '-g'
-    set group
-    set -e $argv[1]
+set -l group_mode 0
+if test (count $argv) -gt 0; and test "$argv[1]" = '-g'
+    set group_mode 1
+    set -e argv[1]
 end
 
 if test (count $argv) -ne 2
@@ -12,9 +13,10 @@ end
 
 set -l active_ws (hyprctl activeworkspace -j | jq -r '.id')
 
-if set -q group
+if test "$group_mode" -eq 1
     # Move to group
-    hyprctl dispatch $argv[1] (math "($argv[2] - 1) * 10 + $active_ws % 10")
+    set -l active_slot (math "(($active_ws - 1) % 10) + 1")
+    hyprctl dispatch $argv[1] (math "($argv[2] - 1) * 10 + $active_slot")
 else
     # Move to ws in group
     hyprctl dispatch $argv[1] (math "floor(($active_ws - 1) / 10) * 10 + $argv[2]")

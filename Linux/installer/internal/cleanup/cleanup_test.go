@@ -30,10 +30,24 @@ func TestRunDryRunPrintsCleanupCommands(t *testing.T) {
 	}
 }
 
+func TestReportForHomeListsCleanupCandidates(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "home")
+	report := ReportForHome(home)
+	for _, want := range []string{
+		"== Safe cleanup candidates ==",
+		filepath.Join(home, "Pictures/Wallpapers/preview-*"),
+		filepath.Join(home, ".cache/noctalia/wallpapers.json"),
+	} {
+		if !strings.Contains(report, want) {
+			t.Fatalf("expected cleanup report to contain %q, got:\n%s", want, report)
+		}
+	}
+}
+
 func TestRunSkipsMissingWallpaperDir(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "sh"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(bin, "rm"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(bin, "find"), []byte("#!/bin/sh\nexit 23\n"), 0o755); err != nil {
@@ -53,7 +67,7 @@ func TestRunReturnsCleanupCommandError(t *testing.T) {
 		t.Fatal(err)
 	}
 	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "sh"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(bin, "rm"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(bin, "find"), []byte("#!/bin/sh\nexit 23\n"), 0o755); err != nil {
@@ -67,6 +81,28 @@ func TestRunReturnsCleanupCommandError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "find failed") {
 		t.Fatalf("expected find failure, got %v", err)
+	}
+}
+
+func TestRunUsesDirectRmInsteadOfShell(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "rm"), []byte("#!/bin/sh\nprintf '%s\\n' \"$0 $@\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	out := captureStdout(t, func() {
+		if err := Run(context.Background(), Options{Yes: true}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if strings.Contains(out, "sh -c") {
+		t.Fatalf("cleanup must not use shell interpolation\n%s", out)
+	}
+	if !strings.Contains(out, "rm -f") {
+		t.Fatalf("cleanup should log direct rm command\n%s", out)
 	}
 }
 

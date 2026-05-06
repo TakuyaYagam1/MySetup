@@ -19,6 +19,11 @@ in
       # Terminal tools
       tmux
       zellij
+
+      # drawing
+      drawing
+      ksnip
+      pinta
     ];
   };
 }

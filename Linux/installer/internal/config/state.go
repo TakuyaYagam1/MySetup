@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 3
 
 type State struct {
 	SchemaVersion int      `json:"schemaVersion"`
@@ -117,7 +117,7 @@ func Default() State {
 			TimeZone:        "Europe/Moscow",
 			DefaultLocale:   "en_US.UTF-8",
 			ExtraLocale:     "ru_RU.UTF-8",
-			ConsoleKeyMap:   "ruwin_alt_sh-UTF-8",
+			ConsoleKeyMap:   "us",
 			WeatherLocation: "Moscow",
 			KeyboardLayouts: "us,ru",
 			KeyboardToggle:  "grp:alt_shift_toggle",
@@ -151,8 +151,8 @@ func Default() State {
 		Dots: Dots{
 			Hypr:       true,
 			ZenTheme:   true,
-			Sine:       false,
-			Neovim:     false,
+			Sine:       true,
+			Neovim:     true,
 			V2rayN:     true,
 			Wallpapers: true,
 		},
@@ -218,13 +218,14 @@ func Save(path string, state State) error {
 
 func Migrate(state State) State {
 	def := Default()
+	oldVersion := state.SchemaVersion
 	legacy := state.SchemaVersion == 0
 	state = migrateHost(state, def)
 	state = migrateUser(state, def)
-	state = migrateLocale(state, def)
+	state = migrateLocale(state, def, oldVersion)
 	state = migrateIdentity(state, def)
 	state = migrateDisplay(state, def)
-	return migrateFeatures(state, def, legacy)
+	return migrateFeatures(state, def, legacy, oldVersion)
 }
 
 func migrateHost(state State, def State) State {
@@ -253,7 +254,7 @@ func migrateUser(state State, def State) State {
 	return state
 }
 
-func migrateLocale(state State, def State) State {
+func migrateLocale(state State, def State, oldVersion int) State {
 	if state.Locale.TimeZone == "" {
 		state.Locale.TimeZone = def.Locale.TimeZone
 	}
@@ -264,6 +265,9 @@ func migrateLocale(state State, def State) State {
 		state.Locale.ExtraLocale = def.Locale.ExtraLocale
 	}
 	if state.Locale.ConsoleKeyMap == "" {
+		state.Locale.ConsoleKeyMap = def.Locale.ConsoleKeyMap
+	}
+	if oldVersion < 2 && state.Locale.ConsoleKeyMap == "ruwin_alt_sh-UTF-8" {
 		state.Locale.ConsoleKeyMap = def.Locale.ConsoleKeyMap
 	}
 	if state.Locale.WeatherLocation == "" {
@@ -310,7 +314,7 @@ func migrateDisplay(state State, def State) State {
 	return state
 }
 
-func migrateFeatures(state State, def State, legacy bool) State {
+func migrateFeatures(state State, def State, legacy bool, oldVersion int) State {
 	if state.Hardware.GPU == "" {
 		state.Hardware.GPU = def.Hardware.GPU
 	}
@@ -322,6 +326,10 @@ func migrateFeatures(state State, def State, legacy bool) State {
 	}
 	if legacy {
 		state.Dots = def.Dots
+	}
+	if oldVersion < 3 {
+		state.Dots.Sine = true
+		state.Dots.Neovim = true
 	}
 	return state
 }

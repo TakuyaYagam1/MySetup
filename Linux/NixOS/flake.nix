@@ -160,7 +160,7 @@
         mysetup = flakePkgs.buildGoModule {
           pname = "mysetup";
           version = "0.1.0";
-          src = ../installer;
+          src = if builtins.pathExists ./installer then ./installer else ../installer;
           subPackages = [ "cmd/mysetup" ];
           vendorHash = "sha256-3BLXjtDy2dsq7A12BmAkoOQbu/hYkhVm4GKCtqYglTo=";
           nativeBuildInputs = [ flakePkgs.makeWrapper ];

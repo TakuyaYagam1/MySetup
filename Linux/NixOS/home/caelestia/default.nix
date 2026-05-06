@@ -73,6 +73,15 @@ in
         if [ ! -e "$target" ]; then
           $DRY_RUN_CMD ${pkgs.coreutils}/bin/install -m 644 "$src" "$target"
         fi
+
+        if [ -z "''${DRY_RUN_CMD:-}" ] && [ -e "$target" ]; then
+          tmp="$target.tmp.$$"
+          if ${pkgs.jq}/bin/jq 'if .bar.excludedScreens? then .bar.excludedScreens |= map(select(. != "")) else . end' "$target" > "$tmp"; then
+            ${pkgs.coreutils}/bin/mv "$tmp" "$target"
+          else
+            ${pkgs.coreutils}/bin/rm -f "$tmp"
+          fi
+        fi
       '';
 
     home.packages = [ pkgs.quickshell ];

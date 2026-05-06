@@ -139,6 +139,9 @@ func HostDefaultNix() string {
     ../../packages/fonts.nix
     ../../packages/zen-browser.nix
     ../../packages/ctf
+    # ../../packages/ida-mcp.nix
+    # ../../packages/ida-plugins.nix
+    # ../../packages/ida-pro.nix
     ../../users/user.nix
 
     ../../modules/omnirouter.nix

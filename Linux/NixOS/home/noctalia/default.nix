@@ -1,6 +1,15 @@
-{ config, lib, pkgs, ... }:
+{ config, inputs, lib, pkgs, ... }:
 
 let
+  system = pkgs.stdenv.hostPlatform.system;
+  noctaliaShellPackage = inputs.noctalia-shell.packages.${system}.default.overrideAttrs (oldAttrs: {
+    postPatch = (oldAttrs.postPatch or "") + ''
+      grep -q '^  property int maxWidth: 340$' Modules/Tooltip/Tooltip.qml
+      sed -i '/^  property int maxWidth: 340$/a\  readonly property int effectiveMaxWidth: isGridMode ? Math.max(1, screenWidth - (margin * 2)) : maxWidth' Modules/Tooltip/Tooltip.qml
+      substituteInPlace Modules/Tooltip/Tooltip.qml \
+        --replace-fail 'Math.ceil(Math.min(contentWidth + ((padding + extraPad) * 2), maxWidth))' 'Math.ceil(Math.min(contentWidth + ((padding + extraPad) * 2), effectiveMaxWidth))'
+    '';
+  });
   settingsJson = ./config/settings.json;
   colorsJson = ./config/colors.json;
   pluginsJson = ./config/plugins.json;
@@ -40,6 +49,7 @@ in
 {
   programs.noctalia-shell = {
     enable = true;
+    package = noctaliaShellPackage;
     systemd.enable = false;
     settings = lib.mkForce { };
     colors = lib.mkForce { };
