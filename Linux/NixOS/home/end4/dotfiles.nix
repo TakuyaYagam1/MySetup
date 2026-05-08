@@ -36,6 +36,12 @@ let
     patchShebangs $out
   '';
 
+  end4KvantumThemes = pkgs.runCommand "end4-kvantum-themes" { } ''
+    mkdir -p "$out/share/Kvantum"
+    cp -r ${dotfilesSource}/dots/.config/Kvantum/Colloid "$out/share/Kvantum/"
+    cp -r ${dotfilesSource}/dots/.config/Kvantum/MaterialAdw "$out/share/Kvantum/"
+  '';
+
   patchedHypr = pkgs.runCommand "end4-hypr-patched" {
     buildInputs = [
       pkgs.bash
@@ -104,6 +110,10 @@ EOF
   '';
 in
 {
+  # Stylix/Home Manager owns ~/.config/Kvantum globally. Add end4's bundled
+  # themes through qt.kvantum.themes instead of replacing that whole directory.
+  qt.kvantum.themes = lib.mkAfter [ end4KvantumThemes ];
+
   home.file = {
     ".local/state/quickshell/.venv/bin/activate" = {
       force = true;
@@ -146,7 +156,6 @@ in
     "hypr/end4" = forcedSource patchedHypr;
     "kde-material-you-colors" = forcedSource "${dotfilesSource}/dots/.config/kde-material-you-colors";
     "kitty" = forcedSource "${dotfilesSource}/dots/.config/kitty";
-    "Kvantum" = forcedSource "${dotfilesSource}/dots/.config/Kvantum";
     "matugen" = forcedSource "${dotfilesSource}/dots/.config/matugen";
     "mpv" = forcedSource "${dotfilesSource}/dots/.config/mpv";
     "quickshell/ii" = forcedSource "${patchedQuickshell}/ii";

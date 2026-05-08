@@ -38,7 +38,7 @@ in
       ripgrep
       rsync
       slurp
-      swww
+      awww
       swappy
       translate-shell
       upower

@@ -156,8 +156,10 @@
         claude-code     = inputs.claude-code.packages.${system}.default;
         codex           = inputs.codex.packages.${system}.default;
         zen-browser     = inputs.zen-browser.packages.${system}.default;
-        quickshell      = inputs.quickshell.packages.${system}.default;
-    templ           = inputs.templ.packages.${system}.templ;
+        quickshell      = inputs.quickshell.packages.${system}.default.override {
+          libxcb = prev.libxcb;
+        };
+        templ           = inputs.templ.packages.${system}.templ;
         neovim          = inputs.neovim-nightly-overlay.packages.${system}.default;
       };
   in {

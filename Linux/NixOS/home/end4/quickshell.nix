@@ -2,7 +2,9 @@
 
 let
   system = pkgs.stdenv.hostPlatform.system;
-  qsPackage = inputs.quickshell-end4.packages.${system}.default;
+  qsPackage = inputs.quickshell-end4.packages.${system}.default.override {
+    xorg = pkgs.xorg // { libxcb = pkgs.libxcb; };
+  };
   qtRuntime = with pkgs; [
     qt6.qtbase
     qt6.qtdeclarative
