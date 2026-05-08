@@ -25,7 +25,7 @@
         "showIconBackground": false,
         "sortByMostUsed": true,
         "terminalCommand": "alacritty -e",
-        "viewMode": "list"
+        "viewMode": "grid"
     },
     "audio": {
         "mprisBlacklist": [
@@ -98,21 +98,6 @@
                     "showBadge": true,
                     "showLabelsOnlyWhenOccupied": true,
                     "unfocusedIconsOpacity": 1
-                },
-                {
-                    "colorizeIcons": false,
-                    "hideMode": "hidden",
-                    "id": "ActiveWindow",
-                    "maxWidth": 145,
-                    "scrollingMode": "hover",
-                    "showIcon": true,
-                    "showText": true,
-                    "textColor": "none",
-                    "useFixedWidth": false
-                },
-                {
-                    "iconColor": "none",
-                    "id": "WallpaperSelector"
                 }
             ],
             "left": [
@@ -407,7 +392,7 @@
         "lockScreenMonitors": [
         ],
         "lockScreenTint": 0,
-        "passwordChars": false,
+        "passwordChars": true,
         "radiusRatio": 2,
         "reverseScroll": false,
         "scaleRatio": 1.2,
@@ -436,15 +421,15 @@
     },
     "idle": {
         "customCommands": "[]",
-        "enabled": false,
+        "enabled": true,
         "fadeDuration": 5,
         "lockCommand": "",
-        "lockTimeout": 660,
+        "lockTimeout": 600,
         "resumeLockCommand": "",
         "resumeScreenOffCommand": "",
         "resumeSuspendCommand": "",
         "screenOffCommand": "",
-        "screenOffTimeout": 600,
+        "screenOffTimeout": 1800,
         "suspendCommand": "",
         "suspendTimeout": 1800
     },
@@ -539,7 +524,7 @@
     },
     "sessionMenu": {
         "countdownDuration": 10000,
-        "enableCountdown": true,
+        "enableCountdown": false,
         "largeButtonsLayout": "single-row",
         "largeButtonsStyle": true,
         "position": "center",

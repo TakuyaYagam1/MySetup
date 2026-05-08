@@ -70,13 +70,34 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 	state := config.Default()
 	state.User.HomeDirectory = t.TempDir()
 	hyprDir := filepath.Join(state.User.HomeDirectory, ".config/hypr")
+	if err := os.MkdirAll(filepath.Join(filepath.Dir(paths.ActiveShellStatePath(state.User.HomeDirectory))), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.MkdirAll(filepath.Join(hyprDir, "scripts"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "shell-profile.conf"), []byte("exec-once = /home/user/.config/hypr/scripts/start-shell.sh caelestia\n"), 0o644); err != nil {
+	if err := os.MkdirAll(filepath.Join(hyprDir, "mysetup"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.ActiveShellStatePath(state.User.HomeDirectory), []byte("caelestia\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hyprDir, "shell-profile.conf"), []byte("exec-once = /home/user/.config/hypr/scripts/start-shell.sh\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hyprDir, "hyprland.conf"), []byte("source = /home/user/.config/hypr/mysetup/hyprland.conf\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hyprDir, "mysetup", "hyprland.conf"), []byte("monitor = eDP-1, 2560x1600@120, 0x0, 1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(hyprDir, "shell-keybinds.conf"), []byte("source = /home/user/.config/hypr/caelestia/keybinds.conf\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(state.User.HomeDirectory, ".config/quickshell", "mysetup-shell-selector"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(state.User.HomeDirectory, ".config/quickshell", "mysetup-shell-selector", "shell.qml"), []byte("ShellRoot {}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, script := range requiredHyprScripts() {
@@ -107,13 +128,113 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 	for _, want := range []string{
 		"== MySetup doctor ==",
 		"OK   flake:",
+		"OK   shell state:",
+		"OK   shell entrypoint:",
 		"OK   shell keybinds:",
+		"OK   shell selector config:",
 		"OK   hypr script executable:",
 		"Last-resort rollback:",
 	} {
 		if !strings.Contains(report, want) {
 			t.Fatalf("expected report to contain %q, got:\n%s", want, report)
 		}
+	}
+}
+
+func TestReportUsesEnd4ProfileChecks(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "hosts/NixOS"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		"flake.nix",
+		"hosts/NixOS/variables.nix",
+		"hosts/NixOS/hardware-configuration.nix",
+	} {
+		fullPath := filepath.Join(dir, filepath.FromSlash(path))
+		if err := os.WriteFile(fullPath, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	state := config.Default()
+	state.User.HomeDirectory = t.TempDir()
+	if err := os.MkdirAll(filepath.Join(filepath.Dir(paths.ActiveShellStatePath(state.User.HomeDirectory))), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.ActiveShellStatePath(state.User.HomeDirectory), []byte("end4\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for path, content := range map[string]string{
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/shell-profile.conf"):                               "exec-once = /home/user/.config/hypr/scripts/start-shell.sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/hyprland.conf"):                                    "source=~/.config/hypr/end4/hyprland.conf\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/hyprlock.conf"):                                    "source=~/.config/hypr/end4/hyprlock.conf\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/hypridle.conf"):                                    "source=~/.config/hypr/end4/hypridle.conf\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/hyprland.conf"):                               "source=~/.config/hypr/end4/hyprland/env.conf\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/mysetup/keybinds.conf"):                       "bind = Super, R, exec, ~/.config/hypr/end4/mysetup/scripts/record-toggle.sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/quickshell/ii/shell.qml"):                               "ShellRoot {}\n",
+		filepath.Join(state.User.HomeDirectory, ".config/quickshell/mysetup-shell-selector/shell.qml"):           "ShellRoot {}\n",
+		filepath.Join(state.User.HomeDirectory, ".config/illogical-impulse/config.json"):                         "{}\n",
+		filepath.Join(state.User.HomeDirectory, ".config/kdeglobals"):                                            "[General]\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/hyprland/scripts/launch_first_available.sh"):  "#!/bin/sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/hyprland/scripts/start_geoclue_agent.sh"):     "#!/bin/sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/custom/scripts/__restore_video_wallpaper.sh"): "#!/bin/sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/mysetup/scripts/record-toggle.sh"):            "#!/bin/sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/mysetup/scripts/screenshot.sh"):               "#!/bin/sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/mysetup/scripts/spotify-toggle.sh"):           "#!/bin/sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/start-shell.sh"):                           "#!/bin/sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/close-active.sh"):                          "#!/bin/sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/noctalia-launcher.sh"):                     "#!/bin/sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/record-toggle.sh"):                         "#!/bin/sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/shell-selector.sh"):                        "#!/bin/sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/screenshot.sh"):                            "#!/bin/sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/spotify-toggle.sh"):                        "#!/bin/sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/wsaction.fish"):                            "#!/bin/sh\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		mode := os.FileMode(0o644)
+		if strings.HasSuffix(path, ".sh") {
+			mode = 0o755
+		}
+		if err := os.WriteFile(path, []byte(content), mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	report, err := Report(context.Background(), Options{
+		Paths: paths.Options{
+			NixOSDest: dir,
+			StatePath: filepath.Join(dir, "mysetup/state.json"),
+		},
+		State: state,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{
+		"OK   shell state:",
+		"OK   shell launcher:",
+		"OK   shell entrypoint:",
+		"OK   end4 hyprlock entrypoint:",
+		"OK   end4 hypridle entrypoint:",
+		"OK   end4 hypr config:",
+		"OK   end4 mysetup keybinds:",
+		"OK   end4 quickshell shell:",
+		"OK   end4 runtime config dir:",
+		"OK   end4 runtime config:",
+		"OK   end4 kdeglobals writable:",
+		"OK   end4 script executable:",
+	} {
+		if !strings.Contains(report, want) {
+			t.Fatalf("expected end4 report to contain %q, got:\n%s", want, report)
+		}
+	}
+	if strings.Contains(report, "shell keybinds") {
+		t.Fatalf("end4 doctor path must not run shell-keybind checks, got:\n%s", report)
 	}
 }
 

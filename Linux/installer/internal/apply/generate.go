@@ -38,7 +38,6 @@ func VariablesNix(s config.State) string {
       email = %s;
     };
 
-    shellProfile = %s;
     packagePreset = %s; # minimal | desktop | developer | personal
 
     hardware = {
@@ -87,7 +86,6 @@ func VariablesNix(s config.State) string {
 		nixString(s.Locale.WeatherLocation),
 		nixString(s.Git.Username),
 		nixString(s.Git.Email),
-		nixString(s.Shell.Profile),
 		nixString(s.Packages.Preset),
 		nixString(s.Hardware.GPU),
 		nixBool(s.Features.SecureBoot),

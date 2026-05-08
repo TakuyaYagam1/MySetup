@@ -1,24 +1,19 @@
-{ config, lib, pkgs, var, ... }:
+{ config, lib, pkgs, ... }:
 
 let
-  profile = var.shellProfile or "caelestia";
-
   dotsRoot =
     let
       installedDots = ../../dots;
       repoDots = ../../../dots;
     in
       if builtins.pathExists installedDots then installedDots else repoDots;
-
-  shellKeybindsPath =
-    if profile == "caelestia" then dotsRoot + "/hypr/caelestia/keybinds.conf"
-    else if profile == "noctalia" then dotsRoot + "/hypr/noctalia/keybinds.conf"
-    else dotsRoot + "/hypr/caelestia/keybinds.conf";
+  shellSelectorRoot = ./quickshell/mysetup-shell-selector;
 
   hyprScripts = [
     "close-active.sh"
     "noctalia-launcher.sh"
     "record-toggle.sh"
+    "shell-selector.sh"
     "screenshot.sh"
     "spotify-toggle.sh"
     "start-shell.sh"
@@ -36,22 +31,44 @@ in
     "hypr/shell-profile.conf" = {
       force = true;
       text = ''
-        # Active shell profile: ${profile}
-        exec-once = ${config.xdg.configHome}/hypr/scripts/start-shell.sh ${profile}
+        # Runtime shell launcher. The selected shell is stored in
+        # ${config.home.homeDirectory}/.local/state/mysetup/active-shell.
+        exec-once = ${config.xdg.configHome}/hypr/scripts/start-shell.sh
       '';
     };
 
     "hypr/shell-keybinds.conf" = {
       force = true;
-      source = shellKeybindsPath;
+      source = dotsRoot + "/hypr/caelestia/keybinds.conf";
+    };
+
+    "quickshell/mysetup-shell-selector" = {
+      force = true;
+      source = shellSelectorRoot;
     };
   };
 
-  home.activation.startHyprShell =
+  home.activation.seedMySetupHyprConfig =
     lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      target="${config.xdg.configHome}/hypr/mysetup/hyprland.conf"
+      src="${dotsRoot}/hypr/hyprland.conf"
+
+      $DRY_RUN_CMD mkdir -p "$(dirname "$target")"
+
+      if [ -L "$target" ]; then
+        $DRY_RUN_CMD rm -f "$target"
+      fi
+
+      if [ ! -e "$target" ]; then
+        $DRY_RUN_CMD install -m 644 "$src" "$target"
+      fi
+    '';
+
+  home.activation.startHyprShell =
+    lib.hm.dag.entryAfter [ "seedMySetupHyprConfig" ] ''
       if command -v hyprctl >/dev/null 2>&1 && hyprctl instances >/dev/null 2>&1; then
         $DRY_RUN_CMD hyprctl reload >/dev/null 2>&1 || true
-        $DRY_RUN_CMD ${config.xdg.configHome}/hypr/scripts/start-shell.sh ${profile} >/dev/null 2>&1 || true
+        $DRY_RUN_CMD ${config.xdg.configHome}/hypr/scripts/start-shell.sh >/dev/null 2>&1 || true
       fi
     '';
 }

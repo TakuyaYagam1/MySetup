@@ -219,6 +219,24 @@
         "type": "github"
       }
     },
+    "end4-dotfiles": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1777936322,
+        "narHash": "sha256-4WkJKqauqyOoWsEpO15pe4hWCBaXMZimEOzlt7qmJnA=",
+        "ref": "refs/heads/main",
+        "rev": "5c69271c1067ef7fe2b946c0c00b7c82f3a0d581",
+        "revCount": 6174,
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/end-4/dots-hyprland"
+      },
+      "original": {
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/end-4/dots-hyprland"
+      }
+    },
     "firefox-gnome-theme": {
       "flake": false,
       "locked": {
@@ -783,6 +801,27 @@
         "url": "https://git.outfoxxed.me/outfoxxed/quickshell"
       }
     },
+    "quickshell-end4": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1761821581,
+        "narHash": "sha256-nLuc6jA7z+H/6bHPEBSOYPbz7RtvNCZiTKmYItJuBmM=",
+        "owner": "quickshell-mirror",
+        "repo": "quickshell",
+        "rev": "db1777c20b936a86528c1095cbcb1ebd92801402",
+        "type": "github"
+      },
+      "original": {
+        "owner": "quickshell-mirror",
+        "repo": "quickshell",
+        "rev": "db1777c20b936a86528c1095cbcb1ebd92801402",
+        "type": "github"
+      }
+    },
     "quickshell_2": {
       "inputs": {
         "nixpkgs": [
@@ -809,6 +848,7 @@
         "caelestia-shell": "caelestia-shell_2",
         "claude-code": "claude-code",
         "codex": "codex",
+        "end4-dotfiles": "end4-dotfiles",
         "home-manager": "home-manager",
         "lanzaboote": "lanzaboote",
         "neovim-nightly-overlay": "neovim-nightly-overlay",
@@ -819,6 +859,7 @@
         "nixpkgs-stable": "nixpkgs-stable",
         "noctalia-shell": "noctalia-shell",
         "quickshell": "quickshell_2",
+        "quickshell-end4": "quickshell-end4",
         "sops-nix": "sops-nix",
         "stylix": "stylix",
         "templ": "templ",

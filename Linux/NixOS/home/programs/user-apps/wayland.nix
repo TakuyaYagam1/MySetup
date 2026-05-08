@@ -20,7 +20,8 @@ in
     hypridle
     hyprpaper
     uwsm
+    caelestia-cli
     ])
-    ++ lib.optional (var.shellProfile != "caelestia") pkgs.caelestia-cli;
+    ;
   };
 }

@@ -37,6 +37,14 @@ func TestValidateRejectsBadShell(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsEnd4Shell(t *testing.T) {
+	state := Default()
+	state.Shell.Profile = "end4"
+	if err := Validate(state); err != nil {
+		t.Fatalf("expected end4 shell to validate: %v", err)
+	}
+}
+
 func TestValidateRejectsBadPackagePreset(t *testing.T) {
 	state := Default()
 	state.Packages.Preset = "everything"

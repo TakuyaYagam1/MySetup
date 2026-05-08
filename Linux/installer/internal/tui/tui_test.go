@@ -238,7 +238,7 @@ func TestRenderPreviewLineStylesHeadingsDescriptionsAndValues(t *testing.T) {
 		{name: "heading", line: "## Timezone"},
 		{name: "description", line: "Nix time.timeZone value."},
 		{name: "value", line: "current: Europe/Moscow"},
-		{name: "options", line: "options: caelestia, noctalia"},
+		{name: "options", line: "options: caelestia, noctalia, end4"},
 	}
 
 	for _, tc := range cases {
@@ -256,12 +256,12 @@ func TestShellPreviewUsesOptionsForAvailableProfiles(t *testing.T) {
 	preview := strings.Join(sectionPreview(model), "\n")
 
 	if !strings.Contains(preview, "current: caelestia") {
-		t.Fatalf("expected current shell profile, got:\n%s", preview)
+		t.Fatalf("expected current shell, got:\n%s", preview)
 	}
-	if !strings.Contains(preview, "options: caelestia, noctalia") {
+	if !strings.Contains(preview, "options: caelestia, noctalia, end4") {
 		t.Fatalf("expected available profiles to use options label, got:\n%s", preview)
 	}
-	if strings.Contains(preview, "current: caelestia, noctalia") {
+	if strings.Contains(preview, "current: caelestia, noctalia, end4") {
 		t.Fatalf("available profiles must not render as current value, got:\n%s", preview)
 	}
 }

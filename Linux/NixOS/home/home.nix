@@ -6,7 +6,6 @@
     inputs.noctalia-shell.homeModules.default
     inputs.stylix.homeModules.stylix
     ../themes/active.nix
-    ./shells
     # ./secrets       # HM-level sops; bootstrap: see home/secrets/default.nix
     ./theming.nix
     ./apps.nix
@@ -32,19 +31,17 @@
     ./programs/user-apps/games.nix
     ./programs/user-apps/containers.nix
     ./programs/user-apps/misc.nix
-  ]
-  ++ lib.optional (var.shellProfile == "caelestia") ./caelestia
-  ++ lib.optional (var.shellProfile == "noctalia") ./noctalia;
+    ./shells
+    ./caelestia
+    ./noctalia
+    ./end4
+  ];
 
   home.username = var.username;
   home.homeDirectory = var.homeDirectory;
   home.stateVersion = var.stateVersion;
 
   assertions = [
-    {
-      assertion = lib.elem var.shellProfile [ "caelestia" "noctalia" ];
-      message = "var.shellProfile must be one of: caelestia, noctalia";
-    }
     {
       assertion = lib.elem (var.packagePreset or "personal") [ "minimal" "desktop" "developer" "personal" ];
       message = "var.packagePreset must be one of: minimal, desktop, developer, personal";

@@ -21,11 +21,17 @@ Fresh install through `/mnt` is not supported in v1. Run this on an already boot
 - Host/user settings: hostname, username, full name, home directory.
 - Region: timezone, locale, console keymap, optional weather location.
 - Display: monitor name and mode, for example `eDP-1` + `2560x1600@120`.
-- Shell profile: `caelestia` or `noctalia`.
+- Shell profile: `caelestia`, `noctalia`, or `end4`.
 - Package preset: `personal` (Takuya's full config, default), `developer`, `desktop`, or `minimal`.
 - Feature flags: GPU type, Secure Boot, CTF tools, OmniRouter, Russia mode, Zapret.
 - Services: pgAdmin email and optional password reset.
 - Dots: Hypr config, scripts chmod, wallpapers, Zen Browser Catppuccin chrome, optional Sine profile, Neovim, v2rayN `sing-box`.
+
+Shell profile behavior is intentionally split:
+
+- `caelestia` and `noctalia` keep the existing installer-managed `Linux/dots/hypr` flow and `start-shell.sh` switching.
+- `end4` uses a dedicated Home Manager profile based on `end-4/dots-hyprland`, with Hyprland and Quickshell config owned by Home Manager.
+- `end4` keeps runtime state mutable under `~/.config/illogical-impulse`, so shell-side JSON changes can persist without a rebuild.
 
 The apply flow builds a temporary staging copy first, preserves host-local files
 such as `hardware-configuration.nix` and `flake.lock`, runs

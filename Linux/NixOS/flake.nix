@@ -38,6 +38,16 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    end4-dotfiles = {
+      url = "git+https://github.com/end-4/dots-hyprland?submodules=1";
+      flake = false;
+    };
+
+    quickshell-end4 = {
+      url = "github:quickshell-mirror/quickshell/db1777c20b936a86528c1095cbcb1ebd92801402";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     templ.url = "github:a-h/templ";
 
     nix-snapd = {
@@ -147,7 +157,7 @@
         codex           = inputs.codex.packages.${system}.default;
         zen-browser     = inputs.zen-browser.packages.${system}.default;
         quickshell      = inputs.quickshell.packages.${system}.default;
-        templ           = inputs.templ.packages.${system}.templ;
+    templ           = inputs.templ.packages.${system}.templ;
         neovim          = inputs.neovim-nightly-overlay.packages.${system}.default;
       };
   in {

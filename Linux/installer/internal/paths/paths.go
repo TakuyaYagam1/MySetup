@@ -22,15 +22,26 @@ type Sources struct {
 
 func DefaultOptions() Options {
 	home, _ := os.UserHomeDir()
-	stateHome := os.Getenv("XDG_STATE_HOME")
-	if stateHome == "" && home != "" {
-		stateHome = filepath.Join(home, ".local", "state")
-	}
+	stateHome := XDGStateHome(home)
 	return Options{
 		NixOSDest: "/etc/nixos",
 		StatePath: "/etc/nixos/mysetup/state.json",
 		DraftPath: filepath.Join(stateHome, "mysetup", "draft.json"),
 	}
+}
+
+func XDGStateHome(home string) string {
+	if stateHome := os.Getenv("XDG_STATE_HOME"); stateHome != "" {
+		return stateHome
+	}
+	if home != "" {
+		return filepath.Join(home, ".local", "state")
+	}
+	return ""
+}
+
+func ActiveShellStatePath(home string) string {
+	return filepath.Join(XDGStateHome(home), "mysetup", "active-shell")
 }
 
 func ResolveSources(repoRoot string) (Sources, error) {

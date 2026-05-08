@@ -202,10 +202,13 @@ func TestMakeCheckRunsHomeManagerShellEval(t *testing.T) {
 	}
 	text := string(data)
 	if !strings.Contains(text, "nix-hm-eval") {
-		t.Fatalf("make check should include HM shell profile eval target\n%s", text)
+		t.Fatalf("make check should include HM shell eval target\n%s", text)
 	}
-	if !strings.Contains(text, `mod "caelestia"`) || !strings.Contains(text, `mod "noctalia"`) {
-		t.Fatalf("nix-hm-eval should cover both shell profiles\n%s", text)
+	if !strings.Contains(text, "seedMySetupHyprConfig") || !strings.Contains(text, `"hypr/shell-profile.conf"`) {
+		t.Fatalf("nix-hm-eval should cover the runtime shell module\n%s", text)
+	}
+	if !strings.Contains(text, `"hypr/end4"`) {
+		t.Fatalf("nix-hm-eval should also validate the end4 Home Manager profile\n%s", text)
 	}
 }
 

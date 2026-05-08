@@ -104,8 +104,11 @@ func syncHypr(ctx context.Context, runner run.Runner, dotsSrc, configDir string,
 		if err := writeHyprLocalConfig(state, dst); err != nil {
 			return err
 		}
+		if err := writeHyprRuntimeShellState(homeDirFromConfigDir(configDir), state, dst); err != nil {
+			return err
+		}
 	} else {
-		fmt.Printf("write hypr local config for profile %s\n", state.Shell.Profile)
+		fmt.Printf("write hypr local config and active shell runtime state for shell %s\n", normalizedActiveShell(state.Shell.Profile))
 	}
 	if err := runner.Command(ctx, "chmod", "-R", "u+rwX", filepath.Join(dst, "scripts")); err != nil {
 		return err
@@ -121,12 +124,21 @@ func syncHypr(ctx context.Context, runner run.Runner, dotsSrc, configDir string,
 
 func writeHyprLocalConfig(state config.State, hyprDir string) error {
 	hyprland := filepath.Join(hyprDir, "hyprland.conf")
+	mysetupHyprland := filepath.Join(hyprDir, "mysetup", "hyprland.conf")
 	input := filepath.Join(hyprDir, "hyprland", "input.conf")
-	shellProfile := filepath.Join(hyprDir, "shell-profile.conf")
-	shellKeybinds := filepath.Join(hyprDir, "shell-keybinds.conf")
+
+	if err := os.MkdirAll(filepath.Dir(mysetupHyprland), 0o755); err != nil {
+		return err
+	}
+	if err := prepareWritableConfigFile(mysetupHyprland); err != nil {
+		return err
+	}
+	if err := copyRegularFile(hyprland, mysetupHyprland); err != nil {
+		return err
+	}
 
 	monitorLine := fmt.Sprintf("monitor = %s, %s, %s, %s", state.Display.MonitorName, state.Display.MonitorMode, state.Display.MonitorPosition, state.Display.MonitorScale)
-	if err := replaceFirstLine(hyprland, "monitor =", monitorLine); err != nil {
+	if err := replaceFirstLine(mysetupHyprland, "monitor =", monitorLine); err != nil {
 		return err
 	}
 	if err := replaceFirstLine(input, "    kb_layout =", "    kb_layout = "+state.Locale.KeyboardLayouts); err != nil {
@@ -135,30 +147,89 @@ func writeHyprLocalConfig(state config.State, hyprDir string) error {
 	if err := replaceFirstLine(input, "    kb_options =", "    kb_options = "+state.Locale.KeyboardToggle); err != nil {
 		return err
 	}
-	if err := writeShellProfileConfig(shellProfile, state); err != nil {
-		return err
-	}
-	return writeShellKeybindsConfig(shellKeybinds, state)
+	return nil
 }
 
-func writeShellProfileConfig(path string, state config.State) error {
-	profile := state.Shell.Profile
-	if profile == "" {
-		profile = "caelestia"
+func writeHyprRuntimeShellState(home string, state config.State, hyprDir string) error {
+	profile := normalizedActiveShell(state.Shell.Profile)
+	statePath := paths.ActiveShellStatePath(home)
+	shellLauncher := filepath.Join(hyprDir, "shell-profile.conf")
+	shellKeybinds := filepath.Join(hyprDir, "shell-keybinds.conf")
+	hyprland := filepath.Join(hyprDir, "hyprland.conf")
+	hyprlock := filepath.Join(hyprDir, "hyprlock.conf")
+	hypridle := filepath.Join(hyprDir, "hypridle.conf")
+
+	if err := writeRuntimeShellStateFile(statePath, profile); err != nil {
+		return err
+	}
+	if err := writeShellLauncherConfig(shellLauncher); err != nil {
+		return err
+	}
+	if profile != "end4" {
+		if err := writeShellKeybindsConfig(shellKeybinds, profile); err != nil {
+			return err
+		}
+		if err := writeHyprEntrypointConfig(hyprland, filepath.Join(hyprDir, "mysetup", "hyprland.conf"), fmt.Sprintf("mysetup (%s)", profile)); err != nil {
+			return err
+		}
+		if err := writeShellManagedRuntimePlaceholder(hyprlock, "Hyprlock", profile, "Caelestia and Noctalia use shell-native lock flows."); err != nil {
+			return err
+		}
+		return writeShellManagedRuntimePlaceholder(hypridle, "Hypridle", profile, "Caelestia and Noctalia use shell-native idle flows.")
+	}
+
+	end4Hyprland := filepath.Join(hyprDir, "end4", "hyprland.conf")
+	if _, err := os.Stat(end4Hyprland); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if err := writeHyprEntrypointConfig(hyprland, end4Hyprland, "end4"); err != nil {
+		return err
+	}
+
+	end4Hyprlock := filepath.Join(hyprDir, "end4", "hyprlock.conf")
+	if _, err := os.Stat(end4Hyprlock); err == nil {
+		if err := writeRuntimeSourceConfig(hyprlock, end4Hyprlock, "Active Hyprlock profile: end4"); err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	end4Hypridle := filepath.Join(hyprDir, "end4", "hypridle.conf")
+	if _, err := os.Stat(end4Hypridle); err == nil {
+		if err := writeRuntimeSourceConfig(hypridle, end4Hypridle, "Active Hypridle profile: end4"); err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	return nil
+}
+
+func writeRuntimeShellStateFile(path, profile string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
 	}
 	if err := prepareWritableConfigFile(path); err != nil {
 		return err
 	}
+	return os.WriteFile(path, []byte(profile+"\n"), 0o644)
+}
+
+func writeShellLauncherConfig(path string) error {
+	if err := prepareWritableConfigFile(path); err != nil {
+		return err
+	}
 	script := filepath.Join(filepath.Dir(path), "scripts", "start-shell.sh")
-	content := fmt.Sprintf("# Active shell profile: %s\nexec-once = %s %s\n", profile, script, profile)
+	content := fmt.Sprintf("# Runtime shell launcher\nexec-once = %s\n", script)
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
-func writeShellKeybindsConfig(path string, state config.State) error {
-	profile := state.Shell.Profile
-	if profile == "" {
-		profile = "caelestia"
-	}
+func writeShellKeybindsConfig(path, profile string) error {
 	profilePath := filepath.Join(filepath.Dir(path), profile, "keybinds.conf")
 	if _, err := os.Stat(profilePath); err != nil {
 		if os.IsNotExist(err) {
@@ -171,6 +242,50 @@ func writeShellKeybindsConfig(path string, state config.State) error {
 	}
 	content := fmt.Sprintf("# Active shell keybind profile: %s\nsource = %s\n", profile, profilePath)
 	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+func writeHyprEntrypointConfig(path, target, label string) error {
+	return writeRuntimeSourceConfig(path, target, "Active Hyprland profile: "+label)
+}
+
+func writeRuntimeSourceConfig(path, target, label string) error {
+	if err := prepareWritableConfigFile(path); err != nil {
+		return err
+	}
+	content := fmt.Sprintf("# %s\nsource = %s\n", label, target)
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+func writeShellManagedRuntimePlaceholder(path, component, profile, detail string) error {
+	if err := prepareWritableConfigFile(path); err != nil {
+		return err
+	}
+	content := fmt.Sprintf("# Active %s profile: shell-managed (%s)\n# %s\n", component, profile, detail)
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+func normalizedActiveShell(profile string) string {
+	switch profile {
+	case "noctalia", "end4":
+		return profile
+	default:
+		return "caelestia"
+	}
+}
+
+func copyRegularFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	return os.WriteFile(dst, data, 0o644)
+}
+
+func homeDirFromConfigDir(configDir string) string {
+	return filepath.Dir(configDir)
 }
 
 func prepareWritableConfigFile(path string) error {

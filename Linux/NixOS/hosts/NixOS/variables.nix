@@ -34,7 +34,6 @@
     };
 
     # Behaviour flags
-    shellProfile = "caelestia"; # caelestia | noctalia
     packagePreset = "personal"; # minimal | desktop | developer | personal
     hardware = {
       gpu = "amd"; # amd | intel | nvidia | other

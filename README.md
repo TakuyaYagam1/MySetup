@@ -28,7 +28,7 @@ nix run ./Linux/NixOS#mysetup
 The installer will ask you about:
 
 - Username and password
-- Shell profile (Caelestia / Noctalia)
+- Shell profile (Caelestia / Noctalia / end-4 Illogical Impulse)
 - Package preset (personal / developer / desktop / minimal)
 - Display and keyboard layout
 - Secure Boot (Lanzaboote)

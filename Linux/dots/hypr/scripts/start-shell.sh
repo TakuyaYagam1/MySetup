@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-profile="${1:-caelestia}"
+requested_profile="${1:-}"
+config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
 runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
-state_file="$runtime_dir/mysetup-hypr-shell-profile"
+state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+persistent_state_file="$state_home/mysetup/active-shell"
 log_file="$runtime_dir/mysetup-shell.log"
 lock_dir="$runtime_dir/mysetup-shell.lock"
 lock_owner_file="$lock_dir/owner"
 user_name="${USER:-}"
+selector_pattern='qs([[:space:]].*)?-c[[:space:]]mysetup-shell-selector([[:space:]]|$)|quickshell/mysetup-shell-selector/shell\.qml'
+end4_pattern='qs([[:space:]].*)?-c[[:space:]]ii([[:space:]]|$)|quickshell/ii/shell\.qml'
 
 if [ -z "$user_name" ]; then
   user_name="$(id -un 2>/dev/null || printf '%s' user)"
@@ -17,10 +21,35 @@ log() {
   printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$log_file"
 }
 
+resolve_profile() {
+  local requested="$1"
+  local stored=""
+
+  if [ -n "$requested" ]; then
+    printf '%s' "$requested"
+    return 0
+  fi
+
+  if [ -f "$persistent_state_file" ]; then
+    stored="$(tr -d '[:space:]' <"$persistent_state_file" 2>/dev/null || true)"
+  fi
+
+  case "$stored" in
+    caelestia|noctalia|end4)
+      printf '%s' "$stored"
+      ;;
+    *)
+      printf '%s' caelestia
+      ;;
+  esac
+}
+
+profile="$(resolve_profile "$requested_profile")"
+
 case "$profile" in
-  caelestia|noctalia) ;;
+  caelestia|noctalia|end4) ;;
   *)
-    log "unknown shell profile before lock: $profile"
+    log "unknown shell before lock: $profile"
     exit 1
     ;;
 esac
@@ -34,10 +63,7 @@ pid_matches() {
 }
 
 hypr_dir() {
-  local script_dir
-
-  script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
-  cd -- "$script_dir/.." >/dev/null 2>&1 && pwd -P
+  printf '%s' "$config_home/hypr"
 }
 
 write_regular_file() {
@@ -55,8 +81,43 @@ write_regular_file() {
   printf '%s\n' "$content" >"$path"
 }
 
-sync_hypr_profile() {
+ensure_mysetup_entrypoint() {
+  local dir target source_path
+
+  dir="$(hypr_dir)"
+  target="$dir/mysetup/hyprland.conf"
+  source_path="$dir/hyprland.conf"
+
+  if [ -f "$target" ]; then
+    return 0
+  fi
+
+  mkdir -p -- "$(dirname "$target")"
+  if [ -f "$source_path" ] && ! grep -qE 'source *= .*/(mysetup|end4)/hyprland\.conf' "$source_path"; then
+    cp -- "$source_path" "$target"
+    return 0
+  fi
+
+  log "mysetup hypr entrypoint missing: $target"
+  return 1
+}
+
+sync_shell_launcher() {
+  local dir
+
+  dir="$(hypr_dir)"
+  write_regular_file "$dir/shell-profile.conf" "# Runtime shell launcher
+exec-once = $dir/scripts/start-shell.sh"
+}
+
+sync_shell_keybinds() {
   local dir profile_keybinds
+
+  case "$profile" in
+    end4)
+      return 0
+      ;;
+  esac
 
   dir="$(hypr_dir)"
   profile_keybinds="$dir/$profile/keybinds.conf"
@@ -66,11 +127,78 @@ sync_hypr_profile() {
     return 1
   fi
 
-  write_regular_file "$dir/shell-profile.conf" "# Active shell profile: $profile
-exec-once = $dir/scripts/start-shell.sh $profile" || return 1
   write_regular_file "$dir/shell-keybinds.conf" "# Active shell keybind profile: $profile
-source = $profile_keybinds" || return 1
+source = $profile_keybinds"
+}
 
+sync_hypr_entrypoint() {
+  local dir target label
+
+  dir="$(hypr_dir)"
+
+  if [ "$profile" = "end4" ]; then
+    target="$dir/end4/hyprland.conf"
+    label="end4"
+  else
+    ensure_mysetup_entrypoint || return 1
+    target="$dir/mysetup/hyprland.conf"
+    label="mysetup ($profile)"
+  fi
+
+  if [ ! -f "$target" ]; then
+    log "hypr entrypoint missing for profile=$profile path=$target"
+    return 1
+  fi
+
+  write_regular_file "$dir/hyprland.conf" "# Active Hyprland profile: $label
+source = $target"
+}
+
+sync_hypr_lock_stack() {
+  local dir hyprlock_target hypridle_target
+
+  dir="$(hypr_dir)"
+
+  if [ "$profile" = "end4" ]; then
+    hyprlock_target="$dir/end4/hyprlock.conf"
+    hypridle_target="$dir/end4/hypridle.conf"
+
+    if [ ! -f "$hyprlock_target" ]; then
+      log "hyprlock entrypoint missing for profile=$profile path=$hyprlock_target"
+      return 1
+    fi
+
+    if [ ! -f "$hypridle_target" ]; then
+      log "hypridle entrypoint missing for profile=$profile path=$hypridle_target"
+      return 1
+    fi
+
+    write_regular_file "$dir/hyprlock.conf" "# Active Hyprlock profile: end4
+source = $hyprlock_target" || return 1
+    write_regular_file "$dir/hypridle.conf" "# Active Hypridle profile: end4
+source = $hypridle_target"
+    return $?
+  fi
+
+  write_regular_file "$dir/hyprlock.conf" "# Active Hyprlock profile: shell-managed ($profile)
+# Caelestia and Noctalia use shell-native lock flows." || return 1
+  write_regular_file "$dir/hypridle.conf" "# Active Hypridle profile: shell-managed ($profile)
+# Caelestia and Noctalia use shell-native idle flows."
+}
+
+sync_runtime_shell_files() {
+  sync_shell_launcher || return 1
+  sync_shell_keybinds || return 1
+  sync_hypr_entrypoint || return 1
+  sync_hypr_lock_stack
+}
+
+persist_profile() {
+  mkdir -p -- "$(dirname "$persistent_state_file")"
+  write_regular_file "$persistent_state_file" "$profile"
+}
+
+reload_hypr() {
   if command -v hyprctl >/dev/null 2>&1 && hyprctl monitors >/dev/null 2>&1; then
     hyprctl reload >/dev/null 2>&1 || log "hyprctl reload failed after profile sync"
   fi
@@ -96,7 +224,7 @@ acquire_lock() {
         exit 0
       fi
 
-      log "waiting for start-shell profile switch lock; requested=$profile active=${lock_profile:-unknown} pid=$lock_pid"
+      log "waiting for start-shell switch lock; requested=$profile active=${lock_profile:-unknown} pid=$lock_pid"
       sleep 0.25
       continue
     fi
@@ -169,24 +297,44 @@ stop_noctalia() {
   pkill -u "$user_name" -f 'noctalia-shell|share/noctalia-shell' >/dev/null 2>&1 || true
 }
 
-stop_quickshells() {
-  log "stopping existing quickshell instances"
+stop_shell_selector() {
+  log "stopping shell selector"
+  pkill -u "$user_name" -f "$selector_pattern" >/dev/null 2>&1 || true
+}
 
+stop_end4() {
+  log "stopping end4 shell"
+  pkill -u "$user_name" -f "$end4_pattern" >/dev/null 2>&1 || true
+}
+
+stop_end4_idle() {
+  log "stopping end4 hypridle"
+  pkill -u "$user_name" -x hypridle >/dev/null 2>&1 || true
+}
+
+stop_quickshells() {
+  log "stopping existing shell instances"
+
+  stop_shell_selector
   stop_caelestia
   stop_noctalia
-
-  if command -v qs >/dev/null 2>&1; then
-    qs kill --any-display >/dev/null 2>&1 || true
-  fi
+  stop_end4
 }
 
 stop_inactive_shells() {
+  stop_shell_selector
   case "$1" in
     caelestia)
       stop_noctalia
+      stop_end4
       ;;
     noctalia)
       stop_caelestia
+      stop_end4
+      ;;
+    end4)
+      stop_caelestia
+      stop_noctalia
       ;;
   esac
 }
@@ -217,13 +365,32 @@ start_with_retry() {
   return 1
 }
 
-log "requested profile=$profile"
+ensure_end4_idle() {
+  local dir idle_config
+
+  dir="$(hypr_dir)"
+  idle_config="$dir/hypridle.conf"
+
+  if [ ! -f "$idle_config" ]; then
+    log "end4 hypridle config missing: $idle_config"
+    return 1
+  fi
+
+  if command -v hypridle >/dev/null 2>&1; then
+    start_with_retry "end4 hypridle" '(^|/)hypridle([[:space:]]|$)' hypridle || return 1
+    return 0
+  fi
+
+  log "hypridle command not found"
+  return 1
+}
+
+log "requested profile=$profile input=${requested_profile:-auto}"
 wait_for_session
-sync_hypr_profile || true
 
 previous=""
-if [ -f "$state_file" ]; then
-  previous="$(cat "$state_file" 2>/dev/null || true)"
+if [ -f "$persistent_state_file" ]; then
+  previous="$(tr -d '[:space:]' <"$persistent_state_file" 2>/dev/null || true)"
 fi
 
 if [ "$previous" != "$profile" ]; then
@@ -232,7 +399,14 @@ if [ "$previous" != "$profile" ]; then
 else
   stop_inactive_shells "$profile"
 fi
-printf '%s\n' "$profile" > "$state_file"
+
+if [ "$profile" != "end4" ]; then
+  stop_end4_idle
+fi
+
+sync_runtime_shell_files || log "runtime shell file sync failed for profile=$profile"
+persist_profile || log "failed to persist runtime shell state for profile=$profile"
+reload_hypr
 
 case "$profile" in
   caelestia)
@@ -261,9 +435,14 @@ case "$profile" in
     fi
     ;;
 
-  *)
-    log "unknown shell profile: $profile"
-    exit 1
-    ;;
+  end4)
+    ensure_end4_idle || true
+    dedupe_shell "end4" "$end4_pattern" stop_end4 || true
 
+    if command -v qs >/dev/null 2>&1; then
+      start_with_retry "end4" "$end4_pattern" qs -c ii || true
+    else
+      log "qs command not found"
+    fi
+    ;;
 esac

@@ -457,8 +457,8 @@ func sectionPreview(m sectionModel) []string {
 		)
 	case "Shell":
 		return previewSettings(
-			previewSetting("Shell profile", "Controls which Quickshell profile Hyprland autostarts.", s.Shell.Profile),
-			previewSettingWithLabel("Available profiles", "Supported shell choices in this installer.", "options", "caelestia, noctalia"),
+			previewSetting("Default shell", "Seeds the runtime active-shell state used by Hyprland and the shell switcher.", s.Shell.Profile),
+			previewSettingWithLabel("Available profiles", "Supported shell choices installed together in one generation.", "options", "caelestia, noctalia, end4"),
 		)
 	case "Packages":
 		return previewSettings(
@@ -499,7 +499,7 @@ func sectionPreview(m sectionModel) []string {
 	case "Doctor":
 		return previewSettings(
 			previewSettingWithLabel("System checks", "Checks /etc/nixos mirror, hardware config and flake target.", "mode", "read-only"),
-			previewSettingWithLabel("Hypr checks", "Checks shell profile, scripts and wallpaper state consistency.", "mode", "read-only"),
+			previewSettingWithLabel("Hypr checks", "Checks runtime shell state, entrypoints, scripts and wallpaper state consistency.", "mode", "read-only"),
 			previewSettingWithLabel("Recovery hints", "Shows backup paths and commands when something looks wrong.", "mode", "read-only"),
 		)
 	case "Apply":
@@ -518,7 +518,7 @@ func sectionPreview(m sectionModel) []string {
 		return previewSettings(
 			previewSetting("Host", "Current NixOS host name.", s.Host.Hostname),
 			previewSetting("User", "Current account name.", s.User.Username),
-			previewSetting("Shell", "Current shell profile.", s.Shell.Profile),
+			previewSetting("Shell", "Current shell.", s.Shell.Profile),
 			previewSetting("Packages", "Current package preset.", s.Packages.Preset),
 			previewSetting("GPU", "Current GPU profile.", s.Hardware.GPU),
 		)
@@ -1978,11 +1978,12 @@ func validateDisplayForm(display config.Display) displayFormErrors {
 func editShell(s *session) error {
 	return newForm(
 		huh.NewSelect[string]().
-			Title("Shell profile").
-			Description("Chooses which Quickshell-based shell Hyprland autostarts.").
+			Title("Default shell").
+			Description("Seeds the runtime active-shell state. All three shells are installed together; this chooses the initial active one.").
 			Options(
 				huh.NewOption("Caelestia", "caelestia"),
 				huh.NewOption("Noctalia", "noctalia"),
+				huh.NewOption("end-4 / Illogical Impulse", "end4"),
 			).
 			Value(&s.state.Shell.Profile),
 	).Run()

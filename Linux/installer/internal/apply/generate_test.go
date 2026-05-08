@@ -440,6 +440,7 @@ func TestHomeShellModuleInstallsAllBoundScripts(t *testing.T) {
 		"close-active.sh",
 		"noctalia-launcher.sh",
 		"record-toggle.sh",
+		"shell-selector.sh",
 		"screenshot.sh",
 		"spotify-toggle.sh",
 		"start-shell.sh",
@@ -451,7 +452,9 @@ func TestHomeShellModuleInstallsAllBoundScripts(t *testing.T) {
 	}
 	for _, want := range []string{
 		"hyprctl reload",
-		"start-shell.sh ${profile}",
+		"start-shell.sh >/dev/null 2>&1 || true",
+		".local/state/mysetup/active-shell",
+		`"quickshell/mysetup-shell-selector"`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("home/shells/default.nix must include %q\n%s", want, text)

@@ -12,16 +12,15 @@ import (
 	"testing"
 
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
 )
 
-func TestWriteShellProfileConfigUsesCurrentProfile(t *testing.T) {
+func TestWriteShellLauncherConfigWritesRuntimeLauncher(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "shell-profile.conf")
-	state := config.Default()
-	state.Shell.Profile = "noctalia"
 
-	if err := writeShellProfileConfig(path, state); err != nil {
+	if err := writeShellLauncherConfig(path); err != nil {
 		t.Fatal(err)
 	}
 
@@ -31,35 +30,16 @@ func TestWriteShellProfileConfigUsesCurrentProfile(t *testing.T) {
 	}
 	got := string(data)
 	for _, want := range []string{
-		"# Active shell profile: noctalia",
-		"exec-once = " + filepath.Join(dir, "scripts", "start-shell.sh") + " noctalia",
+		"# Runtime shell launcher",
+		"exec-once = " + filepath.Join(dir, "scripts", "start-shell.sh"),
 	} {
 		if !strings.Contains(got, want) {
-			t.Fatalf("shell profile missing %q\n%s", want, got)
+			t.Fatalf("shell launcher missing %q\n%s", want, got)
 		}
 	}
 }
 
-func TestWriteShellProfileConfigDefaultsToCaelestia(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "shell-profile.conf")
-	state := config.Default()
-	state.Shell.Profile = ""
-
-	if err := writeShellProfileConfig(path, state); err != nil {
-		t.Fatal(err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "start-shell.sh caelestia") {
-		t.Fatalf("shell profile should default to caelestia\n%s", string(data))
-	}
-}
-
-func TestWriteShellProfileConfigReplacesExistingSymlink(t *testing.T) {
+func TestWriteShellLauncherConfigReplacesExistingSymlink(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "shell-profile.conf")
 	target := filepath.Join(dir, "store-shell-profile.conf")
@@ -70,9 +50,7 @@ func TestWriteShellProfileConfigReplacesExistingSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state := config.Default()
-	state.Shell.Profile = "noctalia"
-	if err := writeShellProfileConfig(path, state); err != nil {
+	if err := writeShellLauncherConfig(path); err != nil {
 		t.Fatal(err)
 	}
 
@@ -81,14 +59,14 @@ func TestWriteShellProfileConfigReplacesExistingSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
-		t.Fatalf("shell profile should be rewritten as a regular file, got symlink %s", path)
+		t.Fatalf("shell launcher should be rewritten as a regular file, got symlink %s", path)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "start-shell.sh noctalia") {
-		t.Fatalf("shell profile should contain requested profile\n%s", string(data))
+	if !strings.Contains(string(data), "start-shell.sh") || strings.Contains(string(data), "start-shell.sh noctalia") {
+		t.Fatalf("shell launcher should contain runtime launcher without hardcoded profile\n%s", string(data))
 	}
 	targetData, err := os.ReadFile(target)
 	if err != nil {
@@ -99,7 +77,7 @@ func TestWriteShellProfileConfigReplacesExistingSymlink(t *testing.T) {
 	}
 }
 
-func TestWriteShellKeybindsConfigUsesCurrentProfile(t *testing.T) {
+func TestWriteShellKeybindsConfigUsesCurrentShell(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "shell-keybinds.conf")
 	noctaliaKeybinds := filepath.Join(dir, "noctalia", "keybinds.conf")
@@ -109,10 +87,7 @@ func TestWriteShellKeybindsConfigUsesCurrentProfile(t *testing.T) {
 	if err := os.WriteFile(noctaliaKeybinds, []byte("# noctalia binds\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	state := config.Default()
-	state.Shell.Profile = "noctalia"
-
-	if err := writeShellKeybindsConfig(path, state); err != nil {
+	if err := writeShellKeybindsConfig(path, "noctalia"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -126,7 +101,7 @@ func TestWriteShellKeybindsConfigUsesCurrentProfile(t *testing.T) {
 		"source = " + noctaliaKeybinds,
 	} {
 		if !strings.Contains(got, want) {
-			t.Fatalf("shell keybind config missing %q\n%s", want, got)
+			t.Fatalf("shell keybind layer missing %q\n%s", want, got)
 		}
 	}
 }
@@ -149,7 +124,7 @@ func TestWriteShellKeybindsConfigReplacesExistingSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := writeShellKeybindsConfig(path, config.Default()); err != nil {
+	if err := writeShellKeybindsConfig(path, "caelestia"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -171,15 +146,149 @@ func TestWriteShellKeybindsConfigReplacesExistingSymlink(t *testing.T) {
 
 func TestWriteShellKeybindsConfigErrorsWhenProfileMissing(t *testing.T) {
 	dir := t.TempDir()
-	state := config.Default()
-	state.Shell.Profile = "noctalia"
 
-	err := writeShellKeybindsConfig(filepath.Join(dir, "shell-keybinds.conf"), state)
+	err := writeShellKeybindsConfig(filepath.Join(dir, "shell-keybinds.conf"), "noctalia")
 	if err == nil {
-		t.Fatal("expected missing shell keybind profile error")
+		t.Fatal("expected missing shell keybind layer error")
 	}
 	if !strings.Contains(err.Error(), "shell keybind profile missing") {
-		t.Fatalf("expected missing profile error, got %v", err)
+		t.Fatalf("expected missing shell keybind layer error, got %v", err)
+	}
+}
+
+func TestWriteHyprRuntimeShellStateSeedsLegacyRuntimeFiles(t *testing.T) {
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	if err := os.MkdirAll(filepath.Join(hyprDir, "caelestia"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(hyprDir, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(hyprDir, "mysetup"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hyprDir, "caelestia", "keybinds.conf"), []byte("# binds\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hyprDir, "mysetup", "hyprland.conf"), []byte("monitor = eDP-1, 2560x1600@120, 0x0, 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	state := config.Default()
+	state.User.HomeDirectory = home
+
+	if err := writeHyprRuntimeShellState(home, state, hyprDir); err != nil {
+		t.Fatal(err)
+	}
+
+	activeShell, err := os.ReadFile(paths.ActiveShellStatePath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(activeShell)) != "caelestia" {
+		t.Fatalf("expected active shell caelestia, got %q", string(activeShell))
+	}
+
+	entrypoint, err := os.ReadFile(filepath.Join(hyprDir, "hyprland.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(entrypoint), "mysetup/hyprland.conf") {
+		t.Fatalf("expected legacy entrypoint to source mysetup config\n%s", string(entrypoint))
+	}
+
+	hyprlock, err := os.ReadFile(filepath.Join(hyprDir, "hyprlock.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(hyprlock), "shell-managed (caelestia)") {
+		t.Fatalf("expected legacy hyprlock placeholder to mention caelestia\n%s", string(hyprlock))
+	}
+
+	hypridle, err := os.ReadFile(filepath.Join(hyprDir, "hypridle.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(hypridle), "shell-managed (caelestia)") {
+		t.Fatalf("expected legacy hypridle placeholder to mention caelestia\n%s", string(hypridle))
+	}
+}
+
+func TestWriteHyprRuntimeShellStateSeedsEnd4StateBeforeProfileExists(t *testing.T) {
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	if err := os.MkdirAll(filepath.Join(hyprDir, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	state := config.Default()
+	state.User.HomeDirectory = home
+	state.Shell.Profile = "end4"
+
+	if err := writeHyprRuntimeShellState(home, state, hyprDir); err != nil {
+		t.Fatal(err)
+	}
+
+	activeShell, err := os.ReadFile(paths.ActiveShellStatePath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(activeShell)) != "end4" {
+		t.Fatalf("expected active shell end4, got %q", string(activeShell))
+	}
+
+	if _, err := os.Stat(filepath.Join(hyprDir, "hyprland.conf")); !os.IsNotExist(err) {
+		t.Fatalf("expected end4 entrypoint to stay untouched until Home Manager installs the profile, got err=%v", err)
+	}
+}
+
+func TestWriteHyprRuntimeShellStateSeedsEnd4RuntimeFilesWhenProfileExists(t *testing.T) {
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	if err := os.MkdirAll(filepath.Join(hyprDir, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(hyprDir, "end4"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for rel := range map[string]string{
+		"end4/hyprland.conf": "source = ~/.config/hypr/end4/hyprland/env.conf\n",
+		"end4/hyprlock.conf": "background {}\n",
+		"end4/hypridle.conf": "general {}\n",
+	} {
+		path := filepath.Join(hyprDir, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("placeholder\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	state := config.Default()
+	state.User.HomeDirectory = home
+	state.Shell.Profile = "end4"
+
+	if err := writeHyprRuntimeShellState(home, state, hyprDir); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		path string
+		want string
+	}{
+		{path: filepath.Join(hyprDir, "hyprland.conf"), want: "source = " + filepath.Join(hyprDir, "end4", "hyprland.conf")},
+		{path: filepath.Join(hyprDir, "hyprlock.conf"), want: "source = " + filepath.Join(hyprDir, "end4", "hyprlock.conf")},
+		{path: filepath.Join(hyprDir, "hypridle.conf"), want: "source = " + filepath.Join(hyprDir, "end4", "hypridle.conf")},
+	} {
+		data, err := os.ReadFile(tc.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), tc.want) {
+			t.Fatalf("expected %s to contain %q\n%s", tc.path, tc.want, string(data))
+		}
 	}
 }
 
@@ -391,10 +500,16 @@ func TestSharedHyprKeybindsDoNotContainShellSpecificBindings(t *testing.T) {
 		"caelestia record",
 		"caelestia resizer pip",
 		"noctalia-shell ipc call",
+		"app2unit -- $terminal",
+		"$hypr/scripts/screenshot.sh full",
+		"$hypr/scripts/record-toggle.sh",
 	} {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("shared Hypr keybinds must stay shell-neutral; found %q\n%s", forbidden, text)
 		}
+	}
+	if !strings.Contains(text, "source = $hypr/shell-keybinds.conf") {
+		t.Fatalf("shared Hypr keybinds must source the runtime profile layer\n%s", text)
 	}
 }
 
@@ -413,6 +528,9 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 		"bindin = Super, mouse:272, global, caelestia:launcherInterrupt",
 		"bindin = Super, mouse_down, global, caelestia:launcherInterrupt",
 		"start-shell.sh caelestia",
+		"shell-selector.sh toggle",
+		"app2unit -- $terminal",
+		"$hypr/scripts/screenshot.sh full",
 		"caelestia clipboard",
 	} {
 		if !strings.Contains(string(caelestia), want) {
@@ -425,6 +543,9 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 		"noctalia-launcher.sh interrupt",
 		"noctalia-launcher.sh release",
 		"start-shell.sh noctalia",
+		"shell-selector.sh toggle",
+		"app2unit -- $terminal",
+		"$hypr/scripts/screenshot.sh full",
 	} {
 		if !strings.Contains(string(noctalia), want) {
 			t.Fatalf("noctalia profile missing %q\n%s", want, string(noctalia))
@@ -450,6 +571,36 @@ func TestNoctaliaLauncherScriptIsGuarded(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("noctalia launcher wrapper missing %q\n%s", want, text)
+		}
+	}
+}
+
+func TestShellSelectorScriptTracksFocusedMonitorAndActiveShell(t *testing.T) {
+	data, err := os.ReadFile("../../../dots/hypr/scripts/shell-selector.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		`state_dir="$runtime_dir/mysetup-shell-selector"`,
+		`lock_dir="$state_dir/lock"`,
+		"selector_name=\"mysetup-shell-selector\"",
+		"MYSETUP_SHELL_SELECTOR_MONITOR",
+		"MYSETUP_ACTIVE_SHELL",
+		"acquire_lock()",
+		"wait_for_selector_spawn()",
+		"detect_shell_from_processes()",
+		"detect_shell_from_entrypoint()",
+		"quickshell/ii/shell\\.qml",
+		"mysetup/hyprland.conf",
+		"hyprctl monitors -j",
+		"active-shell",
+		"start-shell.sh",
+		"qs -c \"$selector_name\"",
+		"switch_shell()",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("shell selector script missing %q\n%s", want, text)
 		}
 	}
 }
@@ -488,7 +639,11 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		"start-shell\\.sh",
 		"running_count()",
 		"dedupe_shell()",
-		"sync_hypr_profile()",
+		"sync_runtime_shell_files()",
+		"persistent_state_file=",
+		"selector_pattern=",
+		"end4_pattern=",
+		"stop_shell_selector()",
 		"shell-keybinds.conf",
 		"hyprctl reload",
 		`("$@" >>"$log_file" 2>&1 &)`,
@@ -499,6 +654,9 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Fatalf("start-shell script missing %q\n%s", want, text)
 		}
+	}
+	if strings.Contains(text, "qs kill --any-display") {
+		t.Fatalf("start-shell script must not kill every quickshell instance\n%s", text)
 	}
 }
 
@@ -555,6 +713,39 @@ func writeScript(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func captureStdoutDots(t *testing.T, fn func()) string {
+	t.Helper()
+	original := os.Stdout
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = write
+	defer func() {
+		os.Stdout = original
+	}()
+	fn()
+	if err := write.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if _, err := out.ReadFrom(read); err != nil {
+		t.Fatal(err)
+	}
+	return out.String()
+}
+
+func configSourcesForDotsTest(t *testing.T) paths.Sources {
+	t.Helper()
+	base := t.TempDir()
+	return paths.Sources{
+		RepoRoot:  base,
+		NixOS:     filepath.Join(base, "nixos"),
+		Dots:      filepath.Join(base, "dots"),
+		Installer: filepath.Join(base, "installer"),
 	}
 }
 
