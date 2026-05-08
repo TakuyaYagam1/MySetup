@@ -70,7 +70,7 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 	state := config.Default()
 	state.User.HomeDirectory = t.TempDir()
 	hyprDir := filepath.Join(state.User.HomeDirectory, ".config/hypr")
-	if err := os.MkdirAll(filepath.Join(filepath.Dir(paths.ActiveShellStatePath(state.User.HomeDirectory))), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(paths.ActiveShellStatePath(state.User.HomeDirectory)), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(hyprDir, "scripts"), 0o755); err != nil {
@@ -159,7 +159,7 @@ func TestReportUsesEnd4ProfileChecks(t *testing.T) {
 
 	state := config.Default()
 	state.User.HomeDirectory = t.TempDir()
-	if err := os.MkdirAll(filepath.Join(filepath.Dir(paths.ActiveShellStatePath(state.User.HomeDirectory))), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(paths.ActiveShellStatePath(state.User.HomeDirectory)), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(paths.ActiveShellStatePath(state.User.HomeDirectory), []byte("end4\n"), 0o644); err != nil {

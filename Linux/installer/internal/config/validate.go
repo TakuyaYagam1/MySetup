@@ -83,9 +83,6 @@ func validateLocale(state State) []string {
 
 func validateEnums(state State) []string {
 	var errs []string
-	if !oneOf(state.Shell.Profile, "caelestia", "noctalia", "end4") {
-		errs = append(errs, "shell must be caelestia, noctalia, or end4")
-	}
 	if !oneOf(state.Packages.Preset, "minimal", "desktop", "developer", "personal") {
 		errs = append(errs, "package preset must be minimal, desktop, developer, or personal")
 	}

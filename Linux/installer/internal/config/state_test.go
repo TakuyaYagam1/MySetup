@@ -49,8 +49,8 @@ func TestLoadExistingMigratesValidState(t *testing.T) {
 	if state.User.HomeDirectory != "/home/alice" {
 		t.Fatalf("expected migrated home directory, got %q", state.User.HomeDirectory)
 	}
-	if state.Shell.Profile != "caelestia" {
-		t.Fatalf("expected migrated default shell, got %q", state.Shell.Profile)
+	if state.Packages.Preset != "personal" {
+		t.Fatalf("expected migrated default package preset, got %q", state.Packages.Preset)
 	}
 }
 

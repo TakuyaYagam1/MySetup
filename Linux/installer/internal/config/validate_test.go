@@ -29,22 +29,6 @@ func TestValidateRejectsBadUsername(t *testing.T) {
 	}
 }
 
-func TestValidateRejectsBadShell(t *testing.T) {
-	state := Default()
-	state.Shell.Profile = "zenities"
-	if err := Validate(state); err == nil {
-		t.Fatal("expected invalid shell error")
-	}
-}
-
-func TestValidateAcceptsEnd4Shell(t *testing.T) {
-	state := Default()
-	state.Shell.Profile = "end4"
-	if err := Validate(state); err != nil {
-		t.Fatalf("expected end4 shell to validate: %v", err)
-	}
-}
-
 func TestValidateRejectsBadPackagePreset(t *testing.T) {
 	state := Default()
 	state.Packages.Preset = "everything"

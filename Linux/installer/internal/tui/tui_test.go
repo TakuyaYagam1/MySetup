@@ -251,21 +251,6 @@ func TestRenderPreviewLineStylesHeadingsDescriptionsAndValues(t *testing.T) {
 	}
 }
 
-func TestShellPreviewUsesOptionsForAvailableProfiles(t *testing.T) {
-	model := sectionModel{cursor: sectionIndex(t, "Shell"), state: config.Default()}
-	preview := strings.Join(sectionPreview(model), "\n")
-
-	if !strings.Contains(preview, "current: caelestia") {
-		t.Fatalf("expected current shell, got:\n%s", preview)
-	}
-	if !strings.Contains(preview, "options: caelestia, noctalia, end4") {
-		t.Fatalf("expected available profiles to use options label, got:\n%s", preview)
-	}
-	if strings.Contains(preview, "current: caelestia, noctalia, end4") {
-		t.Fatalf("available profiles must not render as current value, got:\n%s", preview)
-	}
-}
-
 func TestPasswordsSectionExplainsManagedAndUnmanagedPasswords(t *testing.T) {
 	model := sectionModel{cursor: sectionIndex(t, "Passwords"), state: config.Default()}
 	preview := strings.Join(sectionPreview(model), "\n")

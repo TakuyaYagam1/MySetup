@@ -175,10 +175,7 @@ func TestWriteHyprRuntimeShellStateSeedsLegacyRuntimeFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state := config.Default()
-	state.User.HomeDirectory = home
-
-	if err := writeHyprRuntimeShellState(home, state, hyprDir); err != nil {
+	if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
 		t.Fatal(err)
 	}
 
@@ -215,18 +212,20 @@ func TestWriteHyprRuntimeShellStateSeedsLegacyRuntimeFiles(t *testing.T) {
 	}
 }
 
-func TestWriteHyprRuntimeShellStateSeedsEnd4StateBeforeProfileExists(t *testing.T) {
+func TestWriteHyprRuntimeShellStatePreservesExistingEnd4StateBeforeProfileExists(t *testing.T) {
 	home := t.TempDir()
 	hyprDir := filepath.Join(home, ".config", "hypr")
 	if err := os.MkdirAll(filepath.Join(hyprDir, "scripts"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(filepath.Dir(paths.ActiveShellStatePath(home)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.ActiveShellStatePath(home), []byte("end4\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
-	state := config.Default()
-	state.User.HomeDirectory = home
-	state.Shell.Profile = "end4"
-
-	if err := writeHyprRuntimeShellState(home, state, hyprDir); err != nil {
+	if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
 		t.Fatal(err)
 	}
 
@@ -240,6 +239,41 @@ func TestWriteHyprRuntimeShellStateSeedsEnd4StateBeforeProfileExists(t *testing.
 
 	if _, err := os.Stat(filepath.Join(hyprDir, "hyprland.conf")); !os.IsNotExist(err) {
 		t.Fatalf("expected end4 entrypoint to stay untouched until Home Manager installs the profile, got err=%v", err)
+	}
+}
+
+func TestWriteHyprRuntimeShellStateDetectsNoctaliaFromEntrypointWhenStateMissing(t *testing.T) {
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	if err := os.MkdirAll(filepath.Join(hyprDir, "mysetup"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(hyprDir, "noctalia"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hyprDir, "hyprland.conf"), []byte("source = "+filepath.Join(hyprDir, "mysetup", "hyprland.conf")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hyprDir, "shell-keybinds.conf"), []byte("$noctalia = noctalia-shell ipc call\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hyprDir, "mysetup", "hyprland.conf"), []byte("monitor = eDP-1, 2560x1600@120, 0x0, 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hyprDir, "noctalia", "keybinds.conf"), []byte("# noctalia binds\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
+		t.Fatal(err)
+	}
+
+	activeShell, err := os.ReadFile(paths.ActiveShellStatePath(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(activeShell)) != "noctalia" {
+		t.Fatalf("expected detected active shell noctalia, got %q", string(activeShell))
 	}
 }
 
@@ -266,11 +300,14 @@ func TestWriteHyprRuntimeShellStateSeedsEnd4RuntimeFilesWhenProfileExists(t *tes
 		}
 	}
 
-	state := config.Default()
-	state.User.HomeDirectory = home
-	state.Shell.Profile = "end4"
+	if err := os.MkdirAll(filepath.Dir(paths.ActiveShellStatePath(home)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.ActiveShellStatePath(home), []byte("end4\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
-	if err := writeHyprRuntimeShellState(home, state, hyprDir); err != nil {
+	if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
 		t.Fatal(err)
 	}
 
@@ -713,39 +750,6 @@ func writeScript(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func captureStdoutDots(t *testing.T, fn func()) string {
-	t.Helper()
-	original := os.Stdout
-	read, write, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = write
-	defer func() {
-		os.Stdout = original
-	}()
-	fn()
-	if err := write.Close(); err != nil {
-		t.Fatal(err)
-	}
-	var out bytes.Buffer
-	if _, err := out.ReadFrom(read); err != nil {
-		t.Fatal(err)
-	}
-	return out.String()
-}
-
-func configSourcesForDotsTest(t *testing.T) paths.Sources {
-	t.Helper()
-	base := t.TempDir()
-	return paths.Sources{
-		RepoRoot:  base,
-		NixOS:     filepath.Join(base, "nixos"),
-		Dots:      filepath.Join(base, "dots"),
-		Installer: filepath.Join(base, "installer"),
 	}
 }
 

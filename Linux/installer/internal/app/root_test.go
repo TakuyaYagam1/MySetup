@@ -176,8 +176,8 @@ func TestLoadDoctorStateFallsBackOnInvalidState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.Shell.Profile != "caelestia" {
-		t.Fatalf("expected default doctor fallback state, got %#v", state.Shell)
+	if state.Packages.Preset != "personal" {
+		t.Fatalf("expected default doctor fallback state, got %#v", state)
 	}
 }
 

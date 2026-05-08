@@ -48,7 +48,6 @@ var sections = []string{
 	"Passwords",
 	"Region",
 	"Display",
-	"Shell",
 	"Packages",
 	"Services",
 	"Dots",
@@ -123,7 +122,6 @@ func runSection(ctx context.Context, s *session, selected string) error {
 		"User":      func() error { return editUser(s) },
 		"Region":    func() error { return editRegion(s) },
 		"Display":   func() error { return editDisplay(s) },
-		"Shell":     func() error { return editShell(s) },
 		"Packages":  func() error { return editPackages(s) },
 		"Services":  func() error { return editServices(s) },
 		"Dots":      func() error { return editDots(s) },
@@ -244,7 +242,6 @@ func showSectionError(err error) error {
 func summary(s config.State, secrets config.Secrets) string {
 	return fmt.Sprintf(`Host: %s
 User: %s (%s)
-Shell: %s
 Packages: %s
 GPU: %s
 Secure Boot: %t
@@ -253,11 +250,10 @@ OmniRouter: %t
 Zapret: %t %s
 Dots: hypr=%t zen=%t sine=%t nvim=%t v2rayN=%t wallpapers=%t
 Passwords: linux-user=%s pgAdmin=%s
-State: /etc/nixos/mysetup/state.json`,
+	State: /etc/nixos/mysetup/state.json`,
 		s.Host.Hostname,
 		s.User.Username,
 		s.User.HomeDirectory,
-		s.Shell.Profile,
 		s.Packages.Preset,
 		s.Hardware.GPU,
 		s.Features.SecureBoot,
@@ -455,11 +451,6 @@ func sectionPreview(m sectionModel) []string {
 			previewSetting("Keyboard layouts", "Hyprland kb_layout value.", s.Locale.KeyboardLayouts),
 			previewSetting("Keyboard toggle", "Hyprland kb_options value for layout switching.", s.Locale.KeyboardToggle),
 		)
-	case "Shell":
-		return previewSettings(
-			previewSetting("Default shell", "Seeds the runtime active-shell state used by Hyprland and the shell switcher.", s.Shell.Profile),
-			previewSettingWithLabel("Available profiles", "Supported shell choices installed together in one generation.", "options", "caelestia, noctalia, end4"),
-		)
 	case "Packages":
 		return previewSettings(
 			previewSetting("Package preset", "Personal keeps the full Takuya package set; other presets trim optional user layers.", s.Packages.Preset),
@@ -518,7 +509,6 @@ func sectionPreview(m sectionModel) []string {
 		return previewSettings(
 			previewSetting("Host", "Current NixOS host name.", s.Host.Hostname),
 			previewSetting("User", "Current account name.", s.User.Username),
-			previewSetting("Shell", "Current shell.", s.Shell.Profile),
 			previewSetting("Packages", "Current package preset.", s.Packages.Preset),
 			previewSetting("GPU", "Current GPU profile.", s.Hardware.GPU),
 		)
@@ -1973,20 +1963,6 @@ func validateDisplayForm(display config.Display) displayFormErrors {
 		errors.monitorScale = "scale must be a number like 1 or 1.25."
 	}
 	return errors
-}
-
-func editShell(s *session) error {
-	return newForm(
-		huh.NewSelect[string]().
-			Title("Default shell").
-			Description("Seeds the runtime active-shell state. All three shells are installed together; this chooses the initial active one.").
-			Options(
-				huh.NewOption("Caelestia", "caelestia"),
-				huh.NewOption("Noctalia", "noctalia"),
-				huh.NewOption("end-4 / Illogical Impulse", "end4"),
-			).
-			Value(&s.state.Shell.Profile),
-	).Run()
 }
 
 func editPackages(s *session) error {

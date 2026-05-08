@@ -16,7 +16,6 @@ type State struct {
 	User          User     `json:"user"`
 	Locale        Locale   `json:"locale"`
 	Git           Git      `json:"git"`
-	Shell         Shell    `json:"shell"`
 	Packages      Packages `json:"packages"`
 	Display       Display  `json:"display"`
 	Hardware      Hardware `json:"hardware"`
@@ -50,10 +49,6 @@ type Locale struct {
 type Git struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
-}
-
-type Shell struct {
-	Profile string `json:"profile"`
 }
 
 type Packages struct {
@@ -125,9 +120,6 @@ func Default() State {
 		Git: Git{
 			Username: currentUser(),
 			Email:    "user@example.com",
-		},
-		Shell: Shell{
-			Profile: "caelestia",
 		},
 		Packages: Packages{
 			Preset: "personal",
@@ -288,9 +280,6 @@ func migrateIdentity(state State, def State) State {
 	}
 	if state.Git.Email == "" {
 		state.Git.Email = def.Git.Email
-	}
-	if state.Shell.Profile == "" {
-		state.Shell.Profile = def.Shell.Profile
 	}
 	if state.Packages.Preset == "" {
 		state.Packages.Preset = def.Packages.Preset
