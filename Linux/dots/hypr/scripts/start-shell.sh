@@ -26,6 +26,7 @@ end4_handle='__end4__'
 end4_idle_handle='__end4_idle__'
 end4_idle_config="$hypr_runtime_dir/hypridle.conf"
 noctalia_env_pattern="$mysetup_noctalia_env_pattern"
+end4_env_pattern="$mysetup_end4_env_pattern"
 
 # shellcheck source=Linux/dots/hypr/scripts/shell-runtime-env.sh
 . "$script_dir/shell-runtime-env.sh"

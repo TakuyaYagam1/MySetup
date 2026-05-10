@@ -35,7 +35,14 @@ matching_pids() {
       } | sort -u
       ;;
     "$end4_handle")
-      pgrep -u "$user_name" -f "$end4_pattern" 2>/dev/null || true
+      {
+        pgrep -u "$user_name" -f "$end4_pattern" 2>/dev/null || true
+        for pid in $(mysetup_quickshell_pids); do
+          if mysetup_pid_has_env_regex "$pid" "$end4_env_pattern"; then
+            printf '%s\n' "$pid"
+          fi
+        done
+      } | sort -u
       ;;
     "$end4_idle_handle")
       for pid in $(pgrep -u "$user_name" -x hypridle 2>/dev/null || true); do

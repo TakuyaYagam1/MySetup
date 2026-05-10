@@ -22,6 +22,7 @@ mysetup_end4_pattern='((^|[ /])(qs-end4|qs|quickshell)([[:space:]].*)?-c[[:space
 mysetup_noctalia_pattern='noctalia-shell|share/noctalia-shell'
 mysetup_caelestia_pattern='share/caelestia-shell|caelestia-shell|(^|[ /])caelestia[[:space:]]+shell([[:space:]]|$)'
 mysetup_noctalia_env_pattern='^QS_CONFIG_PATH=.*/share/noctalia-shell$'
+mysetup_end4_env_pattern='^qsConfig=.*/quickshell/ii$|^ILLOGICAL_IMPULSE_DOTFILES_SOURCE='
 
 mysetup_user_name="${USER:-}"
 if [ -z "$mysetup_user_name" ]; then
@@ -60,7 +61,7 @@ mysetup_pid_has_env_regex() {
 }
 
 mysetup_quickshell_pids() {
-  pgrep -u "$mysetup_user_name" -f '(^|[ /])quickshell([[:space:]]|$)' 2>/dev/null || true
+  pgrep -u "$mysetup_user_name" -f '(^|[ /])\.?quickshell(-wrapped)?([[:space:]]|$)' 2>/dev/null || true
 }
 
 mysetup_read_active_shell() {
