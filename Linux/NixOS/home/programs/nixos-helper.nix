@@ -1,12 +1,18 @@
-{ pkgs, var, ... }:
+{ mysetup, pkgs, ... }:
 
 let
-  cfg = var.configDirectory;
-  host = var.hostname;
+  cfg = mysetup.host.configDirectory;
+  host = mysetup.host.hostname;
 
   nixy = pkgs.writeShellApplication {
     name = "nixy";
-    runtimeInputs = with pkgs; [ fzf git coreutils nix nvd ];
+    runtimeInputs = with pkgs; [
+      fzf
+      git
+      coreutils
+      nix
+      nvd
+    ];
     text = ''
       CFG="${cfg}"
       HOST="${host}"
@@ -18,15 +24,15 @@ let
       fi
 
       rebuild() {
-        (cd "$CFG" && git add -A . && sudo nixos-rebuild switch --flake ".#$HOST" "''${EXTRA[@]}")
+        (cd "$CFG" && sudo nixos-rebuild switch --flake ".#$HOST" "''${EXTRA[@]}")
       }
 
       test_cmd() {
-        (cd "$CFG" && git add -A . && sudo nixos-rebuild test --flake ".#$HOST" "''${EXTRA[@]}")
+        (cd "$CFG" && sudo nixos-rebuild test --flake ".#$HOST" "''${EXTRA[@]}")
       }
 
       boot_cmd() {
-        (cd "$CFG" && git add -A . && sudo nixos-rebuild boot --flake ".#$HOST" "''${EXTRA[@]}")
+        (cd "$CFG" && sudo nixos-rebuild boot --flake ".#$HOST" "''${EXTRA[@]}")
       }
 
       update() {

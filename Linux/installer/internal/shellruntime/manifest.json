@@ -1,0 +1,64 @@
+{
+  "defaultProfile": "caelestia",
+  "profiles": [
+    {
+      "id": "noctalia",
+      "title": "noctalia-shell",
+      "accent": "#f48ab6",
+      "surface": "#211f31",
+      "logo": "assets/noctalia.svg",
+      "launcher": "noctalia/launcher.conf",
+      "keybinds": "noctalia/keybinds.conf"
+    },
+    {
+      "id": "caelestia",
+      "title": "caelestia-shell",
+      "accent": "#6ae5e1",
+      "surface": "#201f33",
+      "logo": "assets/caelestia.svg",
+      "launcher": "caelestia/launcher.conf",
+      "keybinds": "caelestia/keybinds.conf"
+    },
+    {
+      "id": "end4",
+      "title": "end-4",
+      "accent": "#51debd",
+      "surface": "#1d2122",
+      "logo": "assets/illogical-impulse.svg",
+      "launcher": "end4/launcher.conf",
+      "keybinds": "end4/keybinds.conf"
+    }
+  ],
+  "runtimeFiles": [
+    "hyprland.conf",
+    "hyprlock.conf",
+    "hypridle.conf",
+    "shell-profile.conf",
+    "shell-launcher.conf",
+    "shell-keybinds.conf"
+  ],
+  "hyprScripts": [
+    "close-active.sh",
+    "noctalia-launcher.sh",
+    "record-toggle.sh",
+    "restore-lock.sh",
+    "shell-end4-overrides.sh",
+    "shell-process.sh",
+    "shell-profile-sync.sh",
+    "shell-runtime-env.sh",
+    "shell-runtime.sh",
+    "shell-selector.sh",
+    "screenshot.sh",
+    "spotify-toggle.sh",
+    "start-shell.sh",
+    "wsaction.fish"
+  ],
+  "end4Scripts": [
+    ".config/hypr/end4/hyprland/scripts/launch_first_available.sh",
+    ".config/hypr/end4/hyprland/scripts/start_geoclue_agent.sh",
+    ".config/hypr/end4/custom/scripts/__restore_video_wallpaper.sh",
+    ".config/hypr/scripts/record-toggle.sh",
+    ".config/hypr/scripts/screenshot.sh",
+    ".config/hypr/scripts/spotify-toggle.sh"
+  ]
+}

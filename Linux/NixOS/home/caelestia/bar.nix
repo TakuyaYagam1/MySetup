@@ -1,4 +1,4 @@
-{ ... }:
+_:
 
 {
   caelestiaShellSettings.bar = {
@@ -9,15 +9,42 @@
     };
     dragThreshold = 20;
     entries = [
-      { id = "logo";         enabled = true; }
-      { id = "workspaces";   enabled = true; }
-      { id = "spacer";       enabled = true; }
-      { id = "activeWindow"; enabled = true; }
-      { id = "spacer";       enabled = true; }
-      { id = "tray";         enabled = true; }
-      { id = "clock";        enabled = true; }
-      { id = "statusIcons";  enabled = true; }
-      { id = "power";        enabled = true; }
+      {
+        id = "logo";
+        enabled = true;
+      }
+      {
+        id = "workspaces";
+        enabled = true;
+      }
+      {
+        id = "spacer";
+        enabled = true;
+      }
+      {
+        id = "activeWindow";
+        enabled = true;
+      }
+      {
+        id = "spacer";
+        enabled = true;
+      }
+      {
+        id = "tray";
+        enabled = true;
+      }
+      {
+        id = "clock";
+        enabled = true;
+      }
+      {
+        id = "statusIcons";
+        enabled = true;
+      }
+      {
+        id = "power";
+        enabled = true;
+      }
     ];
     persistent = true;
     popouts = {
@@ -44,7 +71,7 @@
     tray = {
       background = true;
       compact = true;
-      iconSubs = [];
+      iconSubs = [ ];
       recolour = true;
     };
     workspaces = {
@@ -58,10 +85,16 @@
       showWindows = true;
       shown = 5;
       specialWorkspaceIcons = [
-        { name = "steam"; icon = "sports_esports"; }
+        {
+          name = "steam";
+          icon = "sports_esports";
+        }
       ];
       windowIcons = [
-        { regex = "steam(_app_(default|[0-9]+))?"; icon = "sports_esports"; }
+        {
+          regex = "steam(_app_(default|[0-9]+))?";
+          icon = "sports_esports";
+        }
       ];
     };
     excludedScreens = [ ];

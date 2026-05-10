@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-const SchemaVersion = 3
+const SchemaVersion = 4
 
 type State struct {
 	SchemaVersion int      `json:"schemaVersion"`
@@ -24,18 +24,15 @@ type State struct {
 	Services      Services `json:"services"`
 	Dots          Dots     `json:"dots"`
 }
-
 type Host struct {
 	Hostname     string `json:"hostname"`
 	StateVersion string `json:"stateVersion"`
 }
-
 type User struct {
 	Username      string `json:"username"`
 	FullName      string `json:"fullName"`
 	HomeDirectory string `json:"homeDirectory"`
 }
-
 type Locale struct {
 	TimeZone        string `json:"timeZone"`
 	DefaultLocale   string `json:"defaultLocale"`
@@ -45,52 +42,45 @@ type Locale struct {
 	KeyboardLayouts string `json:"keyboardLayouts"`
 	KeyboardToggle  string `json:"keyboardToggle"`
 }
-
 type Git struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
 }
-
 type Packages struct {
 	Preset string `json:"preset"`
 }
-
 type Display struct {
 	MonitorName     string `json:"monitorName"`
 	MonitorMode     string `json:"monitorMode"`
 	MonitorPosition string `json:"monitorPosition"`
 	MonitorScale    string `json:"monitorScale"`
 }
-
 type Hardware struct {
 	GPU string `json:"gpu"`
 }
-
 type Features struct {
-	SecureBoot bool `json:"secureBoot"`
-	CTFTools   bool `json:"ctfTools"`
-	OmniRouter bool `json:"omniRouter"`
-	RussiaMode bool `json:"russiaMode"`
+	SecureBoot    bool `json:"secureBoot"`
+	CTFTools      bool `json:"ctfTools"`
+	OmniRouter    bool `json:"omniRouter"`
+	RussiaMode    bool `json:"russiaMode"`
+	Observability bool `json:"observability"`
 }
-
 type Zapret struct {
 	Enable bool   `json:"enable"`
 	Config string `json:"config"`
 }
-
 type Services struct {
 	PgAdminEmail string `json:"pgAdminEmail"`
 }
-
 type Dots struct {
-	Hypr       bool `json:"hypr"`
-	ZenTheme   bool `json:"zenTheme"`
-	Sine       bool `json:"sine"`
-	Neovim     bool `json:"neovim"`
-	V2rayN     bool `json:"v2rayN"`
-	Wallpapers bool `json:"wallpapers"`
+	Hypr             bool `json:"hypr"`
+	ZenTheme         bool `json:"zenTheme"`
+	Sine             bool `json:"sine"`
+	Neovim           bool `json:"neovim"`
+	NeovimCleanState bool `json:"neovimCleanState"`
+	V2rayN           bool `json:"v2rayN"`
+	Wallpapers       bool `json:"wallpapers"`
 }
-
 type Secrets struct {
 	UserPassword    string
 	PgAdminPassword string
@@ -141,12 +131,13 @@ func Default() State {
 			PgAdminEmail: "admin@localhost.local",
 		},
 		Dots: Dots{
-			Hypr:       true,
-			ZenTheme:   true,
-			Sine:       true,
-			Neovim:     true,
-			V2rayN:     true,
-			Wallpapers: true,
+			Hypr:             true,
+			ZenTheme:         true,
+			Sine:             true,
+			Neovim:           true,
+			NeovimCleanState: true,
+			V2rayN:           true,
+			Wallpapers:       true,
 		},
 	}
 }
@@ -188,8 +179,18 @@ func load(path string) (State, error) {
 	if err := json.Unmarshal(data, &state); err != nil {
 		return state, fmt.Errorf("parse state %s: %w", path, err)
 	}
+	if err := validateStateSchema(path, state.SchemaVersion); err != nil {
+		return State{}, err
+	}
 	state = Migrate(state)
 	return state, nil
+}
+
+func validateStateSchema(path string, version int) error {
+	if version <= SchemaVersion {
+		return nil
+	}
+	return fmt.Errorf("state %s schemaVersion %d is unsupported; expected %d; rerun TUI or regenerate state", path, version, SchemaVersion)
 }
 
 func Save(path string, state State) error {
@@ -319,6 +320,9 @@ func migrateFeatures(state State, def State, legacy bool, oldVersion int) State 
 	if oldVersion < 3 {
 		state.Dots.Sine = true
 		state.Dots.Neovim = true
+	}
+	if oldVersion < 4 {
+		state.Dots.NeovimCleanState = true
 	}
 	return state
 }

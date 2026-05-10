@@ -3,6 +3,7 @@ package apply
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,36 +15,51 @@ import (
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
 )
 
-func TestVariablesNixContainsFeatureFlags(t *testing.T) {
+func TestHostVarsNixContainsFeatureFlags(t *testing.T) {
 	state := config.Default()
 	state.Host.Hostname = "workstation"
 	state.Features.CTFTools = true
 	state.Zapret.Enable = true
 	state.Dots.Wallpapers = true
+	state.Display.MonitorMode = "1920x1080@144"
 
-	out := VariablesNix(state)
+	out, err := HostVarsNix(state)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, want := range []string{
+		`host = {`,
 		`hostname = "workstation";`,
-		`packagePreset = "personal";`,
+		`packages = {`,
+		`preset = "personal";`,
 		`ctfTools = true;`,
 		`enable = true;`,
 		`consoleKeyMap = "us";`,
 		`keyboardToggle = "grp:alt_shift_toggle";`,
+		`display = {`,
+		`monitorName = "eDP-1";`,
+		`monitorMode = "1920x1080@144";`,
+		`monitorPosition = "0x0";`,
+		`monitorScale = "1";`,
+		`windowOpacity = "0.8";`,
 		`wallpapers = {`,
 	} {
 		if !strings.Contains(out, want) {
-			t.Fatalf("variables.nix missing %q\n%s", want, out)
+			t.Fatalf("host-vars.nix missing %q\n%s", want, out)
 		}
 	}
 }
 
-func TestVariablesNixContainsWallpaperFlag(t *testing.T) {
+func TestHostVarsNixContainsWallpaperFlag(t *testing.T) {
 	state := config.Default()
 	state.Dots.Wallpapers = false
 
-	out := VariablesNix(state)
-	if !strings.Contains(out, "wallpapers = {\n      enable = false;\n    };") {
-		t.Fatalf("variables.nix must include disabled wallpapers flag\n%s", out)
+	out, err := HostVarsNix(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "wallpapers = {\n    enable = false;\n  };") {
+		t.Fatalf("host-vars.nix must include disabled wallpapers flag\n%s", out)
 	}
 }
 
@@ -67,22 +83,47 @@ func TestHomeWallpaperActivationHonorsDryRun(t *testing.T) {
 	}
 }
 
+func TestHomeFaceAvatarHasTrackedFallback(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/home/home.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"avatarSource =",
+		"builtins.pathExists ./avatar.jpg",
+		"../themes/sddm-theme/icons/logo.png",
+		`file.".face".source = avatarSource;`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("home face avatar fallback missing %q\n%s", want, text)
+		}
+	}
+}
+
 func TestHostDefaultUsesPathExistsForGeneratedPassword(t *testing.T) {
-	out := HostDefaultNix()
-	if !strings.Contains(out, "builtins.pathExists ./hashed-password.nix") {
+	data, err := os.ReadFile("../../../NixOS/hosts/NixOS/default.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "builtins.pathExists ./hashed-password.nix") {
 		t.Fatalf("host default should import hashed-password.nix conditionally")
 	}
 }
 
-func TestHostDefaultPreservesOptionalIDAPackageImports(t *testing.T) {
-	out := HostDefaultNix()
-	for _, want := range []string{
-		"# ../../packages/ida-mcp.nix",
-		"# ../../packages/ida-plugins.nix",
-		"# ../../packages/ida-pro.nix",
+func TestHostDefaultKeepsIDAPackagesOutOfDefaultImports(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/hosts/NixOS/default.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, forbidden := range []string{
+		"ida-mcp.nix",
+		"ida-plugins.nix",
+		"ida-pro.nix",
 	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("host default should preserve optional IDA import %q\n%s", want, out)
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("host default must not import quarantined IDA package %q\n%s", forbidden, text)
 		}
 	}
 }
@@ -92,72 +133,12 @@ func TestSyncToEtcPreservesLocalHashedPassword(t *testing.T) {
 	if !strings.Contains(args, "--exclude=hosts/NixOS/hashed-password.nix") {
 		t.Fatalf("syncToEtc must preserve host-local hashed-password.nix, got args: %s", args)
 	}
-}
-
-func TestSeedFlakeLockCopiesOnlyWhenMissing(t *testing.T) {
-	staging := t.TempDir()
-	dest := t.TempDir()
-	if err := os.WriteFile(filepath.Join(staging, "flake.lock"), []byte("{}\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	var out bytes.Buffer
-	runner := run.Runner{DryRun: true, Stdout: &out, Stderr: &out}
-	if err := seedFlakeLock(context.Background(), runner, staging, dest); err != nil {
-		t.Fatal(err)
-	}
-	if got := out.String(); !strings.Contains(got, "sudo install -m 644") || !strings.Contains(got, "flake.lock") {
-		t.Fatalf("expected dry-run install of missing flake.lock, got: %s", got)
-	}
-
-	out.Reset()
-	if err := os.WriteFile(filepath.Join(dest, "flake.lock"), []byte("{}\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := seedFlakeLock(context.Background(), runner, staging, dest); err != nil {
-		t.Fatal(err)
-	}
-	if got := out.String(); got != "" {
-		t.Fatalf("existing flake.lock must be preserved without command output, got: %s", got)
+	if strings.Contains(args, "--exclude=flake.lock") {
+		t.Fatalf("syncToEtc must sync flake.lock so switch uses the same lock graph as dry-build, got args: %s", args)
 	}
 }
 
-func TestSyncDotsToEtcCopiesExternalDots(t *testing.T) {
-	src := t.TempDir()
-	dest := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(src, "hypr"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	var out bytes.Buffer
-	runner := run.Runner{DryRun: true, Stdout: &out, Stderr: &out}
-	if err := syncDotsToEtc(context.Background(), runner, src, dest); err != nil {
-		t.Fatal(err)
-	}
-	got := out.String()
-	if !strings.Contains(got, "sudo mkdir -p") || !strings.Contains(got, "sudo rsync -a --delete") || !strings.Contains(got, "sudo find") {
-		t.Fatalf("expected dots mirror commands, got: %s", got)
-	}
-}
-
-func TestSyncDotsToEtcSkipsInstalledMirrorSource(t *testing.T) {
-	dest := t.TempDir()
-	src := filepath.Join(dest, "dots")
-	if err := os.MkdirAll(src, 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	var out bytes.Buffer
-	runner := run.Runner{DryRun: true, Stdout: &out, Stderr: &out}
-	if err := syncDotsToEtc(context.Background(), runner, src, dest); err != nil {
-		t.Fatal(err)
-	}
-	if got := out.String(); got != "" {
-		t.Fatalf("same source/destination dots mirror should be a no-op, got: %s", got)
-	}
-}
-
-func TestRunDryRunDryBuildsStagingBeforeWritingEtcAndStateLast(t *testing.T) {
+func TestRunDryRunNoSwitchStopsAfterDryBuildWithoutWritingEtcDotsOrState(t *testing.T) {
 	repo := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(repo, "Linux/NixOS"), 0o755); err != nil {
 		t.Fatal(err)
@@ -165,12 +146,7 @@ func TestRunDryRunDryBuildsStagingBeforeWritingEtcAndStateLast(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repo, "Linux/NixOS/flake.nix"), []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(repo, "Linux/dots/hypr/caelestia"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(repo, "Linux/dots/hypr/caelestia/keybinds.conf"), []byte("# binds\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeMinimalHyprDots(t, repo)
 	if err := os.MkdirAll(filepath.Join(repo, "Linux/installer"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -197,16 +173,44 @@ func TestRunDryRunDryBuildsStagingBeforeWritingEtcAndStateLast(t *testing.T) {
 
 	dryBuild := strings.Index(out, "sudo nixos-rebuild dry-build --flake ")
 	backup := strings.Index(out, "sudo cp -a")
+	dotsApply := strings.Index(out, "write hypr local config")
 	stateWrite := strings.LastIndex(out, filepath.Join(dest, "mysetup/state.json"))
 	noSwitch := strings.Index(out, "dry-build passed; --no-switch set")
-	if dryBuild == -1 || backup == -1 || stateWrite == -1 || noSwitch == -1 {
-		t.Fatalf("expected dry-build, backup, no-switch and state write output, got:\n%s", out)
+	if dryBuild == -1 || noSwitch == -1 {
+		t.Fatalf("expected dry-build and no-switch output, got:\n%s", out)
 	}
-	if dryBuild > backup {
-		t.Fatalf("dry-build must happen before /etc backup/sync\n%s", out)
+	if backup != -1 {
+		t.Fatalf("--no-switch must stop before /etc backup/sync\n%s", out)
 	}
-	if stateWrite < noSwitch {
-		t.Fatalf("state must be written after dots and switch/no-switch success\n%s", out)
+	if dotsApply != -1 {
+		t.Fatalf("--no-switch must stop before user dotfile apply\n%s", out)
+	}
+	if stateWrite != -1 {
+		t.Fatalf("state must not be written when --no-switch skips activation\n%s", out)
+	}
+}
+
+func writeMinimalHyprDots(t *testing.T, repo string) {
+	t.Helper()
+
+	files := map[string]string{
+		"Linux/dots/hypr/hyprland.conf":                 "monitor = eDP-1, 2560x1600@120, 0x0, 1\nsource = ~/.config/hypr/hyprland/input.conf\n",
+		"Linux/dots/hypr/hyprland/input.conf":           "input {\n    kb_layout = us\n    kb_options = grp:alt_shift_toggle\n}\n",
+		"Linux/dots/hypr/hyprland/keybinds.conf":        "source = $hypr/shell-keybinds.conf\n",
+		"Linux/dots/hypr/scripts/start-shell.sh":        "#!/usr/bin/env bash\n",
+		"Linux/dots/hypr/caelestia/keybinds.conf":       "# binds\n",
+		"Linux/dots/hypr/caelestia/launcher.conf":       "# launcher\n",
+		"Linux/dots/hypr/shell-common-keybinds.conf":    "# common\n",
+		"Linux/dots/hypr/shell-workspace-keybinds.conf": "# workspace\n",
+	}
+	for rel, content := range files {
+		path := filepath.Join(repo, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -321,7 +325,7 @@ func TestStageConfigurationIncludesDotsAndInstaller(t *testing.T) {
 		"dots/hypr/scripts/start-shell.sh",
 		"installer/go.mod",
 		"installer/cmd/mysetup/main.go",
-		"hosts/NixOS/variables.nix",
+		"hosts/NixOS/host-vars.nix",
 	} {
 		if _, err := os.Stat(filepath.Join(staging, rel)); err != nil {
 			t.Fatalf("staging missing %s: %v", rel, err)
@@ -334,20 +338,124 @@ func TestStageConfigurationIncludesDotsAndInstaller(t *testing.T) {
 	}
 }
 
+func TestStageConfigurationKeepsStagingWritableAfterReadonlyNixOSRoot(t *testing.T) {
+	repo := t.TempDir()
+	nixos := filepath.Join(repo, "Linux", "NixOS")
+	dots := filepath.Join(repo, "Linux", "dots")
+	installer := filepath.Join(repo, "Linux", "installer")
+	for _, dir := range []string{
+		nixos,
+		filepath.Join(nixos, "hosts", "NixOS"),
+		filepath.Join(dots, "hypr"),
+		installer,
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for path, content := range map[string]string{
+		filepath.Join(nixos, "flake.nix"):                       "{}\n",
+		filepath.Join(nixos, "hosts", "NixOS", "host-vars.nix"): "stale\n",
+		filepath.Join(dots, "hypr", "keybinds.conf"):            "# binds\n",
+		filepath.Join(installer, "cmd", "mysetup", "main.go"):   "package main\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Chmod(nixos, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(nixos, "hosts", "NixOS", "host-vars.nix"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(nixos, "hosts", "NixOS"), 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(filepath.Join(nixos, "hosts", "NixOS"), 0o755)
+		_ = os.Chmod(nixos, 0o755)
+	})
+
+	staging := t.TempDir()
+	err := stageConfiguration(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, paths.Sources{
+		RepoRoot:  repo,
+		NixOS:     nixos,
+		Dots:      dots,
+		Installer: installer,
+	}, staging, config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range []string{
+		"dots/hypr/keybinds.conf",
+		"installer/cmd/mysetup/main.go",
+		"hosts/NixOS/host-vars.nix",
+	} {
+		if _, err := os.Stat(filepath.Join(staging, rel)); err != nil {
+			t.Fatalf("staging missing %s after readonly NixOS copy: %v", rel, err)
+		}
+	}
+}
+
 func TestFlakeCanUseInstalledInstallerSource(t *testing.T) {
 	data, err := os.ReadFile("../../../NixOS/flake.nix")
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(data)
-	if !strings.Contains(text, "if builtins.pathExists ./installer then ./installer else ../installer") {
-		t.Fatalf("flake mysetup package must support installed /etc/nixos/installer source\n%s", text)
+	layout, err := os.ReadFile("../../../NixOS/lib/layout.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	packages, err := os.ReadFile("../../../NixOS/lib/flake-packages.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data) + string(layout) + string(packages)
+	for _, want := range []string{
+		"layout = import ./lib/layout.nix",
+		"installerSource = layout.installer",
+		`(nixosRoot + "/installer")`,
+		`(nixosRoot + "/../installer")`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("flake mysetup package must support installed /etc/nixos/installer source; missing %q\n%s", want, text)
+		}
 	}
 }
 
-func TestPrepareStagingHostLocalCopiesHardwareAndExistingLock(t *testing.T) {
+func TestFlakeMySetupWrapperCanRunFromRemoteSource(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/flake.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	packages, err := os.ReadFile("../../../NixOS/lib/flake-packages.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data) + string(packages)
+	for _, want := range []string{
+		"mysetupRuntimeSource",
+		`cp -a ${nixosSource} "$out/NixOS"`,
+		`cp -a ${dotsSource} "$out/dots"`,
+		`cp -a ${installerSource} "$out/installer"`,
+		"--set MYSETUP_REPO_ROOT ${mysetupRuntimeSource}/NixOS",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("flake mysetup wrapper missing remote source support %q\n%s", want, text)
+		}
+	}
+}
+
+func TestPrepareStagingHostLocalCopiesHardwareAndPreservesStagedLock(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
+	if err := os.WriteFile(filepath.Join(staging, "flake.lock"), []byte("staged-lock\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(dest, "hardware-configuration.nix"), []byte("hardware\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +468,7 @@ func TestPrepareStagingHostLocalCopiesHardwareAndExistingLock(t *testing.T) {
 	}
 	for path, want := range map[string]string{
 		filepath.Join(staging, "hosts/NixOS/hardware-configuration.nix"): "hardware\n",
-		filepath.Join(staging, "flake.lock"):                             "lock\n",
+		filepath.Join(staging, "flake.lock"):                             "staged-lock\n",
 	} {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -369,6 +477,34 @@ func TestPrepareStagingHostLocalCopiesHardwareAndExistingLock(t *testing.T) {
 		if string(data) != want {
 			t.Fatalf("unexpected content for %s: %q", path, string(data))
 		}
+	}
+}
+
+func TestPrepareStagingHostLocalDryRunDoesNotHashPassword(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dest, "hardware-configuration.nix"), []byte("hardware\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mkpasswd := filepath.Join(bin, "mkpasswd")
+	if err := os.WriteFile(mkpasswd, []byte("#!/bin/sh\nexit 42\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	runner := run.Runner{DryRun: true, Stdout: io.Discard, Stderr: io.Discard}
+	err := prepareStagingHostLocal(context.Background(), runner, staging, dest, config.Secrets{UserPassword: "secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(staging, "hosts", "NixOS", "hashed-password.nix"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "!mysetup-dry-run-placeholder") {
+		t.Fatalf("expected dry-run placeholder hash, got:\n%s", data)
 	}
 }
 
@@ -409,6 +545,37 @@ func TestPrepareStagingHostLocalCopiesPermissionDeniedHashWithSudo(t *testing.T)
 	}
 }
 
+func TestWriteStagedHashedPasswordInstallsStagingArtifact(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	source := filepath.Join(staging, "hosts", "NixOS", "hashed-password.nix")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte(HashedPasswordNix("hash-from-dry-build")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	writeExecutable(t, filepath.Join(bin, "sudo"), `#!/bin/sh
+printf '%s\n' "$*"
+`)
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+
+	var out bytes.Buffer
+	runner := run.Runner{Stdout: &out, Stderr: &out}
+	err := writeStagedHashedPassword(context.Background(), runner, staging, dest, config.Secrets{UserPassword: "secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.Contains(got, source) {
+		t.Fatalf("expected staged hashed-password.nix to be installed, got:\n%s", got)
+	}
+	if strings.Contains(got, "mkpasswd") {
+		t.Fatalf("write phase must not hash password again, got:\n%s", got)
+	}
+}
+
 func TestHandlePreSwitchErrorRestoresBackup(t *testing.T) {
 	var out bytes.Buffer
 	runner := run.Runner{DryRun: true, Stdout: &out, Stderr: &out}
@@ -435,25 +602,35 @@ func TestHomeShellModuleInstallsAllBoundScripts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(data)
-	for _, script := range []string{
-		"close-active.sh",
-		"noctalia-launcher.sh",
-		"record-toggle.sh",
-		"shell-selector.sh",
-		"screenshot.sh",
-		"spotify-toggle.sh",
-		"start-shell.sh",
-		"wsaction.fish",
-	} {
-		if !strings.Contains(text, `"`+script+`"`) {
-			t.Fatalf("home/shells/default.nix must install %s\n%s", script, text)
+	helpers, err := os.ReadFile("../../../NixOS/home/lib/dotfiles.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestData, err := os.ReadFile("../shellruntime/manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest struct {
+		HyprScripts []string `json:"hyprScripts"`
+	}
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	text := string(data) + string(helpers)
+	for _, script := range manifest.HyprScripts {
+		scriptPath := filepath.Join("../../../dots/hypr/scripts", script)
+		if _, err := os.Stat(scriptPath); err != nil {
+			t.Fatalf("manifest script %s must exist: %v", script, err)
 		}
+	}
+	if !strings.Contains(text, "inherit (shellRuntimeManifest) hyprScripts end4Scripts;") {
+		t.Fatalf("home shell module must source scripts from shell runtime manifest\n%s", text)
 	}
 	for _, want := range []string{
 		"hyprctl reload",
 		"start-shell.sh >/dev/null 2>&1 || true",
-		".local/state/mysetup/active-shell",
+		"mysetup/active-shell",
+		"mysetup/hypr-runtime",
 		`"quickshell/mysetup-shell-selector"`,
 	} {
 		if !strings.Contains(text, want) {

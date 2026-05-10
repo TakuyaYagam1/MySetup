@@ -1,20 +1,17 @@
-{ config, pkgs, lib, var, ... }:
+_:
 
 {
   programs.fish = {
     enable = true;
 
     shellAliases = {
-      # listing
       ls = "eza --icons --group-directories-first -1";
       ll = "eza -la --icons --group-directories-first";
       la = "eza -a --icons --group-directories-first";
       lt = "eza --tree --level=2 --icons";
 
-      # system
       nixos-install = "sudo nixos-rebuild switch --flake /etc/nixos#NixOS";
       nixos-update = "pushd /etc/nixos; and sudo nix flake update; and sudo nixos-rebuild switch --flake .#NixOS; and popd";
-      nixos-ida = "nix-store --add-fixed sha256 ~/MySetup/Linux/ida-pro_93_x64linux.run";
       cleanup = "sudo nix-collect-garbage -d && nix-collect-garbage && nix store optimise && sudo nix-store --gc --print-dead && sudo nix-store --gc";
       optimize = "sudo nix-store --optimise";
       logout = "systemctl restart display-manager.service";
@@ -23,7 +20,6 @@
       reboot = "systemctl reboot";
       poweroff = "systemctl poweroff";
 
-      # containers
       dc = "podman-compose";
       dps = "podman ps";
       dpsa = "podman ps -a";
@@ -31,7 +27,6 @@
       drm = "podman rm";
       drmi = "podman rmi";
 
-      # kubernetes
       k = "kubectl";
       kgp = "kubectl get pods";
       kgs = "kubectl get services";
@@ -39,7 +34,6 @@
       kdp = "kubectl describe pod";
       kl = "kubectl logs";
 
-      # misc
       c = "clear";
       q = "exit";
       ".." = "cd ..";
@@ -71,16 +65,14 @@
     };
 
     interactiveShellInit = ''
-      # direnv + zoxide
       command -v direnv >/dev/null 2>&1 && direnv hook fish | source
       command -v zoxide >/dev/null 2>&1 && zoxide init fish --cmd cd | source
 
-      # Caelestia terminal colour sequences
       if test -f ~/.local/state/caelestia/sequences.txt
           cat ~/.local/state/caelestia/sequences.txt
       end
 
-      # Fish syntax colours — pinned in hex so Caelestia's muted ANSI palette
+      # Pinned in hex so Caelestia's muted ANSI palette
       # doesn't make paths/commands blend with the background.
       set -g fish_color_command       B3BCFD --bold
       set -g fish_color_keyword        A178FF --bold

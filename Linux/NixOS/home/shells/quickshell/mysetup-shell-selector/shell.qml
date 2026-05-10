@@ -10,9 +10,10 @@ ShellRoot {
 
   readonly property string targetScreen: Quickshell.env("MYSETUP_SHELL_SELECTOR_MONITOR") || ""
   readonly property string activeShell: Quickshell.env("MYSETUP_ACTIVE_SHELL") || "caelestia"
-  readonly property string selectorScript: Quickshell.env("HOME") + "/.config/hypr/scripts/shell-selector.sh"
+  readonly property string selectorScript: Quickshell.env("MYSETUP_SHELL_SELECTOR_SCRIPT")
 
   property var shellOptions: [
+    // MYSETUP_SHELL_OPTIONS_BEGIN
     {
       id: "noctalia",
       title: "noctalia-shell",
@@ -34,6 +35,7 @@ ShellRoot {
       surface: "#1d2122",
       logo: Qt.resolvedUrl("assets/illogical-impulse.svg")
     }
+    // MYSETUP_SHELL_OPTIONS_END
   ]
 
   readonly property var visibleScreens: {
@@ -60,8 +62,9 @@ ShellRoot {
   }
 
   function switchShell(shellId) {
-    Quickshell.execDetached(["sh", "-lc", selectorScript + " switch " + shellId]);
-    Qt.quit();
+    console.log("[selector] activate", shellId, "via", selectorScript);
+    Quickshell.execDetached(["bash", selectorScript, "switch", shellId]);
+    Qt.callLater(() => Qt.quit());
   }
 
   Variants {
@@ -283,9 +286,9 @@ ShellRoot {
                     Layout.alignment: Qt.AlignHCenter
                     source: modelData.logo
                     fillMode: Image.PreserveAspectFit
-                    sourceSize.width: modelData.id === "end4" ? 164 : 112
+                    sourceSize.width: 112
                     sourceSize.height: 112
-                    width: modelData.id === "end4" ? 164 : 112
+                    width: 112
                     height: 82
                     smooth: true
                     mipmap: true

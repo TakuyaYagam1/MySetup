@@ -22,7 +22,7 @@ type Sources struct {
 
 func DefaultOptions() Options {
 	home, _ := os.UserHomeDir()
-	stateHome := XDGStateHome(home)
+	stateHome := xdgStateHome(home, true)
 	return Options{
 		NixOSDest: "/etc/nixos",
 		StatePath: "/etc/nixos/mysetup/state.json",
@@ -31,7 +31,11 @@ func DefaultOptions() Options {
 }
 
 func XDGStateHome(home string) string {
-	if stateHome := os.Getenv("XDG_STATE_HOME"); stateHome != "" {
+	return xdgStateHome(home, false)
+}
+
+func xdgStateHome(home string, preferEnv bool) string {
+	if stateHome := os.Getenv("XDG_STATE_HOME"); stateHome != "" && (preferEnv || home == "") {
 		return stateHome
 	}
 	if home != "" {
@@ -47,7 +51,11 @@ func ActiveShellStatePath(home string) string {
 func ResolveSources(repoRoot string) (Sources, error) {
 	candidates := make([]string, 0, 4)
 	if repoRoot != "" {
-		candidates = append(candidates, repoRoot)
+		src, ok := resolveCandidate(repoRoot)
+		if ok {
+			return src, nil
+		}
+		return Sources{}, fmt.Errorf("explicit repository root is not a MySetup source tree: %s", repoRoot)
 	}
 	if env := os.Getenv("MYSETUP_REPO_ROOT"); env != "" {
 		candidates = append(candidates, env)
@@ -65,30 +73,38 @@ func ResolveSources(repoRoot string) (Sources, error) {
 		if candidate == "" {
 			continue
 		}
-		repoSrc := Sources{
-			RepoRoot:  candidate,
-			NixOS:     filepath.Join(candidate, "Linux", "NixOS"),
-			Dots:      filepath.Join(candidate, "Linux", "dots"),
-			Installer: filepath.Join(candidate, "Linux", "installer"),
-		}
-		if exists(filepath.Join(repoSrc.NixOS, "flake.nix")) && exists(repoSrc.Dots) && exists(repoSrc.Installer) {
-			return repoSrc, nil
-		}
-		if exists(filepath.Join(candidate, "flake.nix")) {
-			dots := filepath.Join(candidate, "dots")
-			if !exists(dots) {
-				dots = filepath.Join(filepath.Dir(candidate), "dots")
-			}
-			installer := filepath.Join(candidate, "installer")
-			if !exists(installer) {
-				installer = filepath.Join(filepath.Dir(candidate), "installer")
-			}
-			// Supports both repository layout (Linux/NixOS + ../dots) and the
-			// installed mirror layout (/etc/nixos + /etc/nixos/dots).
-			return Sources{RepoRoot: candidate, NixOS: candidate, Dots: dots, Installer: installer}, nil
+		if src, ok := resolveCandidate(candidate); ok {
+			return src, nil
 		}
 	}
 	return Sources{}, fmt.Errorf("could not locate repository root; run from MySetup root or pass --repo")
+}
+
+func resolveCandidate(candidate string) (Sources, bool) {
+	repoSrc := Sources{
+		RepoRoot:  candidate,
+		NixOS:     filepath.Join(candidate, "Linux", "NixOS"),
+		Dots:      filepath.Join(candidate, "Linux", "dots"),
+		Installer: filepath.Join(candidate, "Linux", "installer"),
+	}
+	if exists(filepath.Join(repoSrc.NixOS, "flake.nix")) && exists(repoSrc.Dots) && exists(repoSrc.Installer) {
+		return repoSrc, true
+	}
+	if !exists(filepath.Join(candidate, "flake.nix")) {
+		return Sources{}, false
+	}
+	dots := filepath.Join(candidate, "dots")
+	if !exists(dots) {
+		dots = filepath.Join(filepath.Dir(candidate), "dots")
+	}
+	installer := filepath.Join(candidate, "installer")
+	if !exists(installer) {
+		installer = filepath.Join(filepath.Dir(candidate), "installer")
+	}
+	if !exists(dots) || !exists(installer) {
+		return Sources{}, false
+	}
+	return Sources{RepoRoot: candidate, NixOS: candidate, Dots: dots, Installer: installer}, true
 }
 
 func exists(path string) bool {

@@ -1,4 +1,4 @@
-{ ... }:
+_:
 
 let
   ansi = code: builtins.fromJSON ''"\u001b[${code}m"'';

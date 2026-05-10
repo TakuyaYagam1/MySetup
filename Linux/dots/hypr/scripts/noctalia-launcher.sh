@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=Linux/dots/hypr/scripts/shell-runtime.sh
+. "$script_dir/shell-runtime.sh"
+
 state_dir="${XDG_RUNTIME_DIR:-/tmp}/mysetup-noctalia-launcher"
 active_file="$state_dir/active"
 interrupt_file="$state_dir/interrupted"
@@ -10,36 +14,15 @@ lock_owner_file="$lock_dir/owner"
 
 mkdir -p "$state_dir"
 
-lock_owner_running() {
-  local owner_pid="$1"
-  local owner_name
-
-  owner_name="$(cat "$lock_owner_file" 2>/dev/null || true)"
-  [ "$owner_name" = "mysetup-noctalia-launcher" ] || return 1
-  [ -n "$owner_pid" ] || return 1
-  ps -p "$owner_pid" -o args= 2>/dev/null | grep -qE '(^|[ /])noctalia-launcher\.sh([[:space:]]|$)'
-}
-
 acquire_lock() {
-  local owner_pid
-
-  for _ in $(seq 1 20); do
-    if mkdir "$lock_dir" 2>/dev/null; then
-      printf '%s\n' "$$" >"$lock_pid_file"
-      printf '%s\n' "mysetup-noctalia-launcher" >"$lock_owner_file"
-      return 0
-    fi
-
-    owner_pid="$(cat "$lock_pid_file" 2>/dev/null || true)"
-    if lock_owner_running "$owner_pid"; then
-      sleep 0.02
-      continue
-    fi
-
-    rm -rf -- "$lock_dir"
-  done
-
-  exit 0
+  mysetup_acquire_lock \
+    "$lock_dir" \
+    "$lock_pid_file" \
+    "$lock_owner_file" \
+    "mysetup-noctalia-launcher" \
+    '(^|[ /])noctalia-launcher\.sh([[:space:]]|$)' \
+    20 \
+    0.02 || exit 0
 }
 
 acquire_lock

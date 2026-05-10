@@ -1,12 +1,13 @@
 # All ignored files needed in Linux/
-# 
+# Uncomment files in Linux/NixOS/hosts/NixOS/default.nix to use them
+#
 # Nix modules (create from repo history or manually):
 #   - Linux/NixOS/packages/ida-pro.nix
 #   - Linux/NixOS/packages/ida-mcp.nix
 #   - Linux/NixOS/packages/ida-plugins.nix
 #
 # Setup after nixos-rebuild switch:
-#   1. nix-store --add-fixed sha256 ~/MySetup/Linux/ida-pro_93_x64linux.run
+#   1. nix-store --add-fixed sha256 Linux/ida-pro_93_x64linux.run
 #   2. sudo nixos-rebuild switch --flake /etc/nixos
 #   3. install-ida-mcp-plugin   # installs ida-pro-mcp + copies IDA plugin to ~/.idapro/plugins/
 #   4. install-ida-plugins       # clones findcrypt-yara, LazyIDA, keypatch, FLARE, HexRaysCodeXplorer, patching
@@ -25,3 +26,5 @@ Linux/NixOS/packages/ida-pro.nix
 Linux/NixOS/packages/ida-mcp.nix
 Linux/NixOS/packages/ida-plugins.nix
 .codex
+__pycache__/
+*.py[cod]

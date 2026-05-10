@@ -1,8 +1,8 @@
-{ ... }:
+_:
 
 {
   caelestiaShellSettings.general = {
-    logo = "caelestia";
+    logo = "nix-snowflake";
     apps = {
       terminal = [ "foot" ];
       audio = [ "pavucontrol" ];
@@ -37,9 +37,22 @@
       lockBeforeSleep = true;
       inhibitWhenAudio = true;
       timeouts = [
-        { timeout = 600;  idleAction = "lock"; }
-        { timeout = 1800; idleAction = "dpms off"; returnAction = "dpms on"; }
-        { timeout = 3600; idleAction = [ "systemctl" "suspend-then-hibernate" ]; }
+        {
+          timeout = 600;
+          idleAction = "lock";
+        }
+        {
+          timeout = 1800;
+          idleAction = "dpms off";
+          returnAction = "dpms on";
+        }
+        {
+          timeout = 3600;
+          idleAction = [
+            "systemctl"
+            "suspend-then-hibernate"
+          ];
+        }
       ];
     };
   };

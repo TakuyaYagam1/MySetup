@@ -1,9 +1,14 @@
-{ config, pkgs, ... }:
+{
+  config,
+  mysetupLib,
+  pkgs,
+  ...
+}:
 
 {
   networking = {
-    hostName = config.var.hostname;
-    
+    hostName = config.mysetup.host.hostname;
+
     networkmanager = {
       enable = true;
       wifi = {
@@ -15,19 +20,12 @@
         networkmanager-openconnect
       ];
     };
-    
-    nameservers = [ "8.8.8.8" "1.1.1.1" "77.88.8.8" ];
-    
-    # Firewall configuration
+
+    nameservers = mysetupLib.defaults.dns;
+
     firewall = {
       enable = true;
-      
-      # MySQL(3316), PG(5442), Redis(6389), ClickHouse(8133,9010),
-      # Grafana(3010), Prometheus(9100), Loki(3110)
-      allowedTCPPorts = [
-        3316 5442 6389 8133 9010 3010 9100 3110
-      ];
-
+      allowedTCPPorts = [ ];
       allowedUDPPorts = [ ];
       logRefusedConnections = true;
       logRefusedPackets = false;
@@ -36,11 +34,9 @@
   };
 
   boot.kernel.sysctl = {
-    # Network performance
     "net.core.rmem_max" = 7500000;
     "net.core.wmem_max" = 7500000;
 
-    # SYN flood protection
     "net.ipv4.tcp_syncookies" = 1;
 
     # Ignore ICMP redirects (prevents MITM via routing manipulation)

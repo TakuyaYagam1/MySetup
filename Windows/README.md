@@ -45,10 +45,10 @@ All path modifications must be made in `yasb/config.yaml` before copying configu
 
 1. Open PowerShell as Administrator
 
-2. Navigate to the repository directory:
+2. Navigate to the Windows config directory:
 
    ```powershell
-   cd MyLinuxSetup\Windows
+   cd MySetup\Windows
    ```
 
 3. Run the installation script:
@@ -59,12 +59,13 @@ All path modifications must be made in `yasb/config.yaml` before copying configu
 
 4. After installation completes, install the required fonts (see Important Notes)
 
-5. Restart PowerShell and run the following commands:
+5. Restart PowerShell and run the following commands from `MySetup\Windows`:
 
    ```powershell
    komorebic quickstart
-   Copy-Item -Path '.\Windows\komorebi\*' -Destination $env:USERPROFILE -Recurse -Force
-   Copy-Item -Path '.\Windows\yasb\*' -Destination "$env:USERPROFILE\.config\yasb" -Recurse -Force
+   Copy-Item -Path '.\komorebi\*' -Destination $env:USERPROFILE -Recurse -Force
+   New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.config\yasb"
+   Copy-Item -Path '.\yasb\*' -Destination "$env:USERPROFILE\.config\yasb" -Recurse -Force
    komorebic enable-autostart --whkd
    komorebic start --whkd
    ```
@@ -95,10 +96,11 @@ All path modifications must be made in `yasb/config.yaml` before copying configu
    Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1
    ```
 
-5. Copy configuration files:
+5. Copy configuration files from the repository root:
 
    ```powershell
    Copy-Item -Path '.\Windows\komorebi\*' -Destination $env:USERPROFILE -Recurse -Force
+   New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.config\yasb"
    Copy-Item -Path '.\Windows\yasb\*' -Destination "$env:USERPROFILE\.config\yasb" -Recurse -Force
    ```
 

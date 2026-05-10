@@ -3,22 +3,17 @@
 {
   nix = {
     settings = {
-      experimental-features = [ "nix-command" "flakes" ];
-      trusted-users = [ "root" "@wheel" config.var.username ];
+      experimental-features = [
+        "nix-command"
+        "flakes"
+      ];
+      trusted-users = [
+        "root"
+        "@wheel"
+        config.mysetup.user.username
+      ];
 
-      # GitHub token to avoid API rate limits when updating flake inputs.
-      # Create /etc/nix/netrc manually (outside git), then rebuild:
-      #
-      #   sudo bash -c 'cat > /etc/nix/netrc << EOF
-      #   machine api.github.com
-      #     login token
-      #     password YOUR_GITHUB_TOKEN
-      #
-      #   machine github.com
-      #     login token
-      #     password YOUR_GITHUB_TOKEN
-      #   EOF
-      #   chmod 600 /etc/nix/netrc'
+      # Optional private netrc for GitHub API auth during flake input updates.
       netrc-file = "/etc/nix/netrc";
       download-buffer-size = 268435456;
 
@@ -43,7 +38,9 @@
         "numtide.cachix.org-1:2ps1kLBUWjxIneOy1Ik6cQjb41X0iXVXeHigGmycPPE="
       ];
 
-      auto-optimise-store = true;
+      sandbox = true;
+      max-jobs = "auto";
+      auto-optimise-store = config.mysetup.host.autoOptimiseStore;
       warn-dirty = false;
     };
 
@@ -51,24 +48,21 @@
       warn-dirty = false
     '';
 
-    # GC settings (managed by programs.nh.clean in programs/system-tools.nix,
-    # but keep legacy gc as persistent fallback when nh is disabled).
+    # Persistent fallback when programs.nh.clean is disabled.
     gc = {
-      automatic = config.var.autoGarbageCollector && !config.programs.nh.clean.enable;
+      automatic = config.mysetup.host.autoGarbageCollector && !config.programs.nh.clean.enable;
       persistent = true;
       dates = "weekly";
-      options = "--delete-older-than 14d";
+      options = "--delete-older-than ${config.mysetup.nix.gcRetention}";
     };
 
     daemonCPUSchedPolicy = "idle";
     daemonIOSchedClass = "idle";
 
     optimise = {
-      automatic = true;
+      automatic = config.mysetup.host.autoOptimiseStore;
       dates = [ "weekly" ];
     };
-
-    # GC is handled by programs.nh.clean in programs/system-tools.nix
   };
 
   nixpkgs.config = {
@@ -80,5 +74,4 @@
       "python3.12-pypdf2-3.0.1"
     ];
   };
-
 }

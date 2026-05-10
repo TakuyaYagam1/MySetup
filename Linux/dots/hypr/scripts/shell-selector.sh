@@ -1,80 +1,77 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-action="${1:-toggle}"
-requested_profile="${2:-}"
+script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=Linux/dots/hypr/scripts/shell-runtime.sh
+. "$script_dir/shell-runtime.sh"
 
-config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
-runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
-state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+action="${1:-toggle}"
+action_arg="${2:-}"
+requested_profile=""
+selector_monitor_override=""
+
+case "$action" in
+  switch)
+    requested_profile="$action_arg"
+    ;;
+  toggle)
+    selector_monitor_override="$action_arg"
+    ;;
+esac
+
+config_home="$mysetup_config_home"
+runtime_dir="$mysetup_runtime_session_dir"
 state_dir="$runtime_dir/mysetup-shell-selector"
+log_file="$mysetup_log_file"
 lock_dir="$state_dir/lock"
 lock_pid_file="$lock_dir/pid"
 lock_owner_file="$lock_dir/owner"
 selector_name="mysetup-shell-selector"
-selector_pattern='qs([[:space:]].*)?-c[[:space:]]mysetup-shell-selector([[:space:]]|$)|quickshell/mysetup-shell-selector/shell\.qml'
-end4_pattern='qs([[:space:]].*)?-c[[:space:]]ii([[:space:]]|$)|quickshell/ii/shell\.qml'
-noctalia_pattern='noctalia-shell|share/noctalia-shell'
-caelestia_pattern='share/caelestia-shell|caelestia-shell|(^|[ /])caelestia([[:space:]]+shell|[[:space:]]|$)'
-active_shell_state="$state_home/mysetup/active-shell"
+selector_pattern="$mysetup_selector_pattern"
+end4_pattern="$mysetup_end4_pattern"
+noctalia_pattern="$mysetup_noctalia_pattern"
+caelestia_pattern="$mysetup_caelestia_pattern"
+noctalia_env_pattern="$mysetup_noctalia_env_pattern"
+active_shell_state="$mysetup_active_shell_state"
 start_shell_script="$config_home/hypr/scripts/start-shell.sh"
 
 mkdir -p "$state_dir"
 
-pid_matches() {
-  local pid="$1"
-  local pattern="$2"
-
-  [ -n "$pid" ] || return 1
-  ps -p "$pid" -o args= 2>/dev/null | grep -qE "$pattern"
+log() {
+  printf '[%s] [shell-selector] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$log_file"
 }
 
-lock_owner_running() {
-  local owner_pid="$1"
-  local owner_name
+log "invoked action=${action:-empty} requested_profile=${requested_profile:-empty} monitor_override=${selector_monitor_override:-empty} pid=$$"
 
-  owner_name="$(cat "$lock_owner_file" 2>/dev/null || true)"
-  [ "$owner_name" = "mysetup-shell-selector" ] || return 1
-  pid_matches "$owner_pid" '(^|[ /])shell-selector\.sh([[:space:]]|$)'
+noctalia_running() {
+  local pid
+
+  if pgrep -u "${USER:-$(id -un)}" -f "$noctalia_pattern" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  for pid in $(mysetup_quickshell_pids); do
+    if mysetup_pid_has_env_regex "$pid" "$noctalia_env_pattern"; then
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 acquire_lock() {
-  local owner_pid
-
-  for _ in $(seq 1 20); do
-    if mkdir "$lock_dir" 2>/dev/null; then
-      printf '%s\n' "$$" >"$lock_pid_file"
-      printf '%s\n' "mysetup-shell-selector" >"$lock_owner_file"
-      return 0
-    fi
-
-    owner_pid="$(cat "$lock_pid_file" 2>/dev/null || true)"
-    if lock_owner_running "$owner_pid"; then
-      sleep 0.02
-      continue
-    fi
-
-    rm -rf -- "$lock_dir"
-  done
-
-  exit 0
+  mysetup_acquire_lock \
+    "$lock_dir" \
+    "$lock_pid_file" \
+    "$lock_owner_file" \
+    "mysetup-shell-selector" \
+    '(^|[ /])shell-selector\.sh([[:space:]]|$)' \
+    20 \
+    0.02 || exit 0
 }
 
 read_stored_active_shell() {
-  local stored=""
-
-  if [ -f "$active_shell_state" ]; then
-    stored="$(tr -d '[:space:]' <"$active_shell_state" 2>/dev/null || true)"
-  fi
-
-  case "$stored" in
-    caelestia|noctalia|end4)
-      printf '%s' "$stored"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
+  mysetup_read_active_shell "$active_shell_state"
 }
 
 detect_shell_from_processes() {
@@ -83,7 +80,7 @@ detect_shell_from_processes() {
     return 0
   fi
 
-  if pgrep -u "${USER:-$(id -un)}" -f "$noctalia_pattern" >/dev/null 2>&1; then
+  if noctalia_running; then
     printf '%s' noctalia
     return 0
   fi
@@ -97,10 +94,11 @@ detect_shell_from_processes() {
 }
 
 detect_shell_from_keybinds() {
-  local keybinds_path="$config_home/hypr/shell-keybinds.conf"
+  local keybinds_path="$mysetup_hypr_runtime_dir/shell-keybinds.conf"
 
   if [ ! -r "$keybinds_path" ]; then
-    return 1
+    keybinds_path="$config_home/hypr/shell-keybinds.conf"
+    [ -r "$keybinds_path" ] || return 1
   fi
 
   if grep -qE 'noctalia/keybinds\.conf|noctalia-shell ipc call|noctalia-launcher\.sh' "$keybinds_path"; then
@@ -117,10 +115,11 @@ detect_shell_from_keybinds() {
 }
 
 detect_shell_from_entrypoint() {
-  local entrypoint_path="$config_home/hypr/hyprland.conf"
+  local entrypoint_path="$mysetup_hypr_runtime_dir/hyprland.conf"
 
   if [ ! -r "$entrypoint_path" ]; then
-    return 1
+    entrypoint_path="$config_home/hypr/hyprland.conf"
+    [ -r "$entrypoint_path" ] || return 1
   fi
 
   if grep -q 'end4/hyprland.conf' "$entrypoint_path"; then
@@ -169,9 +168,9 @@ stop_selector() {
 }
 
 wait_for_selector_spawn() {
-  local attempt
+  local _
 
-  for attempt in $(seq 1 30); do
+  for _ in $(seq 1 30); do
     if selector_running; then
       return 0
     fi
@@ -185,15 +184,18 @@ start_selector() {
   local monitor active_shell
 
   if ! command -v qs >/dev/null 2>&1; then
+    log "qs command not found; selector cannot start"
     exit 1
   fi
 
-  monitor="${requested_profile:-$(detect_focused_monitor)}"
+  monitor="${selector_monitor_override:-$(detect_focused_monitor)}"
   active_shell="$(detect_active_shell)"
+  log "starting selector monitor=${monitor:-auto} active=${active_shell:-unknown}"
 
   env \
     MYSETUP_SHELL_SELECTOR_MONITOR="$monitor" \
     MYSETUP_ACTIVE_SHELL="$active_shell" \
+    MYSETUP_SHELL_SELECTOR_SCRIPT="$config_home/hypr/scripts/shell-selector.sh" \
     qs -c "$selector_name" >/dev/null 2>&1 &
 
   wait_for_selector_spawn || true
@@ -202,35 +204,48 @@ start_selector() {
 switch_shell() {
   local profile="$1"
 
-  case "$profile" in
-    caelestia|noctalia|end4) ;;
-    *)
-      exit 1
-      ;;
-  esac
+  if ! mysetup_valid_shell_profile "$profile"; then
+    log "rejecting invalid profile switch request: ${profile:-empty}"
+    exit 1
+  fi
 
-  "$start_shell_script" "$profile" >/dev/null 2>&1 &
+  if [ ! -f "$start_shell_script" ]; then
+    log "start-shell script missing: $start_shell_script"
+    exit 1
+  fi
+
+  log "dispatching shell switch profile=$profile script=$start_shell_script"
+  bash "$start_shell_script" "$profile" >>"$log_file" 2>&1 &
   stop_selector
 }
+
+case "$action" in
+  switch)
+    log "switch requested profile=${requested_profile:-empty}"
+    switch_shell "$requested_profile"
+    exit 0
+    ;;
+esac
 
 acquire_lock
 trap 'rm -rf -- "$lock_dir" 2>/dev/null || true' EXIT
 
 case "$action" in
   toggle)
+    log "toggle requested"
     if selector_running; then
+      log "selector already running; closing existing instance"
       stop_selector
       exit 0
     fi
     start_selector
     ;;
-  switch)
-    switch_shell "$requested_profile"
-    ;;
   close)
+    log "close requested"
     stop_selector
     ;;
   *)
+    log "unknown action requested: ${action:-empty}"
     exit 1
     ;;
 esac

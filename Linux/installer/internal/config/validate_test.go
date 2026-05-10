@@ -1,6 +1,11 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"reflect"
+	"regexp"
+	"testing"
+)
 
 func TestValidateDefault(t *testing.T) {
 	if err := Validate(Default()); err != nil {
@@ -37,6 +42,46 @@ func TestValidateRejectsBadPackagePreset(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsBadStateVersion(t *testing.T) {
+	state := Default()
+	state.Host.StateVersion = "latest"
+	if err := Validate(state); err == nil {
+		t.Fatal("expected invalid state version error")
+	}
+}
+
+func TestValidateRejectsBadKeyboardSettings(t *testing.T) {
+	tests := map[string]func(*State){
+		"console keymap": func(state *State) {
+			state.Locale.ConsoleKeyMap = "../us"
+		},
+		"layouts": func(state *State) {
+			state.Locale.KeyboardLayouts = "us, ru"
+		},
+		"toggle": func(state *State) {
+			state.Locale.KeyboardToggle = "grp:unknown_toggle"
+		},
+	}
+
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			state := Default()
+			mutate(&state)
+			if err := Validate(state); err == nil {
+				t.Fatal("expected invalid keyboard setting error")
+			}
+		})
+	}
+}
+
+func TestValidateRejectsBadZapretConfig(t *testing.T) {
+	state := Default()
+	state.Zapret.Config = "custom untracked preset"
+	if err := Validate(state); err == nil {
+		t.Fatal("expected invalid zapret config error")
+	}
+}
+
 func TestValidateMonitorLine(t *testing.T) {
 	if err := ValidateMonitorLine("eDP-1, 2560x1600@120, 0x0, 1"); err != nil {
 		t.Fatalf("expected monitor line to validate: %v", err)
@@ -44,4 +89,56 @@ func TestValidateMonitorLine(t *testing.T) {
 	if err := ValidateMonitorLine("eDP-1, lol, 0x0, 1"); err == nil {
 		t.Fatal("expected invalid monitor line")
 	}
+}
+
+func TestPackagePresetChoicesMatchNixContracts(t *testing.T) {
+	presetNamesNix, err := os.ReadFile("../../../NixOS/lib/preset-names.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	presetsNix, err := os.ReadFile("../../../NixOS/lib/presets.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	optionsNix, err := os.ReadFile("../../../NixOS/modules/mysetup-options.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	presetsBlock := regexp.MustCompile(`presetNames = \[([^\]]+)\];`).FindStringSubmatch(string(presetNamesNix))
+	if presetsBlock == nil {
+		t.Fatalf("presetNames missing in preset-names.nix\n%s", presetNamesNix)
+	}
+	want := sortedMatches(regexp.MustCompile(`"([^"]+)"`).FindAllStringSubmatch(presetsBlock[1], -1))
+	got := sortedStrings(PackagePresets)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Go package presets drifted from preset-names.nix\nGo:  %#v\nNix: %#v", got, want)
+	}
+
+	if !regexp.MustCompile(`orderedPresets = presetNames;`).MatchString(string(presetsNix)) {
+		t.Fatalf("presets.nix must reuse presetNames from preset-names.nix\n%s", presetsNix)
+	}
+	if !regexp.MustCompile(`type = types\.enum presetNames;`).MatchString(string(optionsNix)) {
+		t.Fatalf("mysetup-options.nix must reuse presetNames from preset-names.nix\n%s", optionsNix)
+	}
+}
+
+func sortedMatches(matches [][]string) []string {
+	values := make([]string, 0, len(matches))
+	for _, match := range matches {
+		values = append(values, match[1])
+	}
+	return sortedStrings(values)
+}
+
+func sortedStrings(values []string) []string {
+	out := append([]string(nil), values...)
+	for i := range out {
+		for j := i + 1; j < len(out); j++ {
+			if out[j] < out[i] {
+				out[i], out[j] = out[j], out[i]
+			}
+		}
+	}
+	return out
 }

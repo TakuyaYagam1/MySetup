@@ -1,8 +1,14 @@
-{ ... }:
+{
+  config,
+  mysetupLib,
+  ...
+}:
 
 {
-  programs.hyprland = {
-    enable = true;
-    xwayland.enable = true;
+  config = mysetupLib.mkIfPresetOrMore "desktop" config.mysetup {
+    programs.hyprland = {
+      enable = true;
+      xwayland.enable = true;
+    };
   };
 }

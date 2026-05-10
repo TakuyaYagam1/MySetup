@@ -26,13 +26,19 @@ let
   };
 in
 {
-  boot.plymouth = {
-    enable = true;
-    theme = "meowrch";
-    themePackages = [ plymouthTheme ];
+  boot = {
+    plymouth = {
+      enable = true;
+      theme = "meowrch";
+      themePackages = [ plymouthTheme ];
+    };
+
+    initrd.systemd.enable = true;
+
+    kernelParams = [
+      "quiet"
+      "splash"
+      "udev.log_level=3"
+    ];
   };
-
-  boot.initrd.systemd.enable = true;
-
-  boot.kernelParams = [ "quiet" "splash" "udev.log_level=3" ];
 }

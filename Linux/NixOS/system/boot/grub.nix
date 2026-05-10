@@ -5,7 +5,7 @@ let
     pname = "meowrch-grub-theme";
     version = "1.0";
     src = ../../themes/grub-theme;
-    
+
     dontBuild = true;
     installPhase = ''
       mkdir -p $out
@@ -15,11 +15,11 @@ let
 in
 {
   boot = {
-    kernelParams = [ 
-      "acpi_osi=Linux" 
-      "acpi_backlight=native" 
+    kernelParams = [
+      "acpi_osi=Linux"
+      "acpi_backlight=native"
     ];
-    
+
     tmp.cleanOnBoot = true;
 
     loader = {
@@ -39,5 +39,4 @@ in
       };
     };
   };
-
 }

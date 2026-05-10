@@ -1,4 +1,4 @@
-{ ... }:
+_:
 
 {
   caelestiaShellSettings.appearance = {
@@ -21,8 +21,8 @@
     spacing.scale = 1;
     transparency = {
       enabled = true;
-      base = 0.7;
-      layers = 0.4;
+      base = 0.8;
+      layers = 0.2;
     };
   };
 

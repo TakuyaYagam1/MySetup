@@ -1,10 +1,10 @@
-{ var, ... }:
+{ mysetup, ... }:
 
 {
   caelestiaShellSettings.session = {
     dragThreshold = 30;
     enabled = true;
-    vimKeybinds = false;
+    vimKeybinds = true;
     icons = {
       logout = "logout";
       shutdown = "power_settings_new";
@@ -12,10 +12,24 @@
       reboot = "cached";
     };
     commands = {
-      logout = [ "pkill" "-KILL" "-u" var.username ];
-      shutdown = [ "systemctl" "poweroff" ];
-      hibernate = [ "systemctl" "hibernate" ];
-      reboot = [ "systemctl" "reboot" ];
+      logout = [
+        "pkill"
+        "-KILL"
+        "-u"
+        mysetup.user.username
+      ];
+      shutdown = [
+        "systemctl"
+        "poweroff"
+      ];
+      hibernate = [
+        "systemctl"
+        "hibernate"
+      ];
+      reboot = [
+        "systemctl"
+        "reboot"
+      ];
     };
   };
 

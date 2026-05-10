@@ -1,15 +1,20 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  mysetupLib,
+  ...
+}:
 
 let
-  preset = config.var.packagePreset or "personal";
-  enabled = preset == "personal";
+  desktopEnabled = mysetupLib.presets.desktopOrMore config.mysetup;
+  gamingEnabled = mysetupLib.presets.personal config.mysetup;
 in
 {
   config = lib.mkMerge [
     {
-      programs.gpu-screen-recorder.enable = true;
+      programs.gpu-screen-recorder.enable = desktopEnabled;
     }
-    (lib.mkIf enabled {
+    (lib.mkIf gamingEnabled {
       programs.steam = {
         enable = true;
         remotePlay.openFirewall = true;

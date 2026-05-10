@@ -1,7 +1,12 @@
 # Caelestia-style dark palette: exports `config.theme.*` (UX knobs) and
 # `config.stylix.*` (base16 + fonts + cursor) consumed across the config.
 # Switch palettes by editing themes/active.nix.
-{ lib, pkgs, config, ... }:
+{
+  lib,
+  pkgs,
+  config,
+  ...
+}:
 
 {
   options.theme = lib.mkOption {

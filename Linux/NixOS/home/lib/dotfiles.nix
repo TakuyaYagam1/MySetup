@@ -1,0 +1,123 @@
+{ pkgs, ... }:
+
+let
+  layout = import ../../lib/layout.nix {
+    nixosRoot = ../..;
+  };
+  dotsRoot = layout.dots;
+  shellRuntimeManifest = builtins.fromJSON (
+    builtins.readFile (layout.installer + "/internal/shellruntime/manifest.json")
+  );
+  mkOpacityFallback =
+    path:
+    { vendor, target }:
+    ''
+      ${path} = (
+        if ${path} == null or ${path} == ${toString vendor}
+        then ${toString target}
+        else ${path}
+        end
+      )'';
+in
+{
+  inherit dotsRoot layout mkOpacityFallback;
+
+  hyprRuntimeFiles = shellRuntimeManifest.runtimeFiles;
+  inherit (shellRuntimeManifest) hyprScripts end4Scripts;
+
+  forcedSource = source: {
+    inherit source;
+    force = true;
+  };
+
+  mkOpacityDefault =
+    trans: path:
+    mkOpacityFallback path {
+      vendor = trans.vendorShell;
+      target = trans.shell;
+    };
+
+  stableRuntimeSourceFile = target: {
+    force = true;
+    text = ''
+      source = ${target}
+    '';
+  };
+
+  mutableJsonShellHelpers = ''
+    drop_store_symlink() {
+      local target="$1"
+      local resolved
+
+      if [ -L "$target" ]; then
+        resolved="$(${pkgs.coreutils}/bin/readlink -f "$target" 2>/dev/null || true)"
+        case "$resolved" in
+          /nix/store/*)
+            $DRY_RUN_CMD ${pkgs.coreutils}/bin/rm -f "$target"
+            ;;
+        esac
+      fi
+    }
+
+    seed_if_missing() {
+      local target="$1"
+      local source="$2"
+      local home_replacement="''${3:-}"
+
+      if [ ! -e "$target" ]; then
+        $DRY_RUN_CMD ${pkgs.coreutils}/bin/install -m 644 "$source" "$target"
+        if [ -n "$home_replacement" ]; then
+          $DRY_RUN_CMD ${pkgs.gnused}/bin/sed -i "s|@HOME@|$home_replacement|g" "$target"
+        fi
+      fi
+    }
+
+    ensure_json_object() {
+      local target="$1"
+      local source="$2"
+      local home_replacement="''${3:-}"
+      local backup
+
+      if [ -z "''${DRY_RUN_CMD:-}" ] && [ -e "$target" ]; then
+        if ! ${pkgs.jq}/bin/jq -e 'type == "object"' "$target" >/dev/null 2>&1; then
+          backup="$target.bak.$(${pkgs.coreutils}/bin/date +%Y%m%d%H%M%S)"
+          ${pkgs.coreutils}/bin/cp -f "$target" "$backup" 2>/dev/null || true
+          ${pkgs.coreutils}/bin/install -m 644 "$source" "$target"
+          if [ -n "$home_replacement" ]; then
+            ${pkgs.gnused}/bin/sed -i "s|@HOME@|$home_replacement|g" "$target"
+          fi
+        fi
+      fi
+    }
+
+    apply_jq_defaults() {
+      local target="$1"
+      local filter="$2"
+      local tmp
+
+      if [ -z "''${DRY_RUN_CMD:-}" ] && [ -e "$target" ]; then
+        tmp="$target.tmp.$$"
+        if ${pkgs.jq}/bin/jq "$filter" "$target" > "$tmp"; then
+          ${pkgs.coreutils}/bin/mv "$tmp" "$target"
+        else
+          ${pkgs.coreutils}/bin/rm -f "$tmp"
+        fi
+      fi
+    }
+
+    seed_json_object() {
+      local target="$1"
+      local source="$2"
+      local home_replacement="''${3:-}"
+      local filter="''${4:-}"
+
+      drop_store_symlink "$target"
+      seed_if_missing "$target" "$source" "$home_replacement"
+      ensure_json_object "$target" "$source" "$home_replacement"
+
+      if [ -n "$filter" ]; then
+        apply_jq_defaults "$target" "$filter"
+      fi
+    }
+  '';
+}

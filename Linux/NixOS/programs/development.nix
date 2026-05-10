@@ -1,11 +1,12 @@
-{ config, lib, pkgs, ... }:
-
-let
-  preset = config.var.packagePreset or "personal";
-  enabled = lib.elem preset [ "developer" "personal" ];
-in
 {
-  config = lib.mkIf enabled {
+  config,
+  mysetupLib,
+  pkgs,
+  ...
+}:
+
+{
+  config = mysetupLib.mkIfPresetOrMore "developer" config.mysetup {
     programs.nix-ld = {
       enable = true;
       libraries = with pkgs; [

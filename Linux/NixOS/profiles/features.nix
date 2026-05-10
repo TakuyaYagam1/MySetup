@@ -1,0 +1,24 @@
+{
+  config,
+  lib,
+  pkgs,
+  pkgs-stable,
+  ...
+}:
+
+let
+  packageSets = import ../lib/package-sets.nix {
+    inherit lib pkgs pkgs-stable;
+  };
+in
+{
+  imports = [
+    ../services/zapret.nix
+    ../services/omnirouter.nix
+    ../services/observability.nix
+  ];
+
+  config = lib.mkIf config.mysetup.features.ctfTools {
+    environment.systemPackages = lib.flatten (lib.attrValues packageSets.ctf);
+  };
+}

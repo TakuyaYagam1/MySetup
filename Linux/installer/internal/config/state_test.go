@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -28,29 +29,50 @@ func TestLoadExistingInvalidJSONErrors(t *testing.T) {
 	}
 }
 
-func TestLoadExistingMigratesValidState(t *testing.T) {
+func TestLoadExistingMigratesStateWithoutSchema(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	if err := os.WriteFile(path, []byte(`{
-  "user": {
-    "username": "alice"
+	  "user": {
+	    "username": "alice"
   },
   "git": {
     "email": "alice@example.com"
   }
-}
-`), 0o644); err != nil {
+	}
+	`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	state, err := LoadExisting(path)
+	got, err := LoadExisting(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.User.HomeDirectory != "/home/alice" {
-		t.Fatalf("expected migrated home directory, got %q", state.User.HomeDirectory)
+	if got.SchemaVersion != SchemaVersion {
+		t.Fatalf("expected migrated schema %d, got %d", SchemaVersion, got.SchemaVersion)
 	}
-	if state.Packages.Preset != "personal" {
-		t.Fatalf("expected migrated default package preset, got %q", state.Packages.Preset)
+	if got.User.Username != "alice" {
+		t.Fatalf("expected existing username to be preserved, got %q", got.User.Username)
+	}
+	if got.Host.StateVersion != Default().Host.StateVersion {
+		t.Fatalf("expected default stateVersion to be filled, got %q", got.Host.StateVersion)
+	}
+	if !got.Dots.NeovimCleanState {
+		t.Fatal("expected legacy state to enable neovim runtime cleanup default")
+	}
+}
+
+func TestLoadExistingRejectsFutureSchema(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := os.WriteFile(path, []byte(`{"schemaVersion":999}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadExisting(path)
+	if err == nil {
+		t.Fatal("expected schema error")
+	}
+	if !strings.Contains(err.Error(), "unsupported") {
+		t.Fatalf("expected unsupported schema error, got %v", err)
 	}
 }
 
@@ -81,31 +103,26 @@ func TestDefaultFeatureAndDotsToggles(t *testing.T) {
 	if !state.Dots.Neovim {
 		t.Fatal("neovim sync should be enabled by default")
 	}
-}
-
-func TestMigrateOldDefaultRussianConsoleKeyMapToUS(t *testing.T) {
-	state := Default()
-	state.SchemaVersion = 1
-	state.Locale.ConsoleKeyMap = "ruwin_alt_sh-UTF-8"
-
-	got := Migrate(state)
-	if got.Locale.ConsoleKeyMap != "us" {
-		t.Fatalf("expected old default Russian TTY keymap to migrate to us, got %q", got.Locale.ConsoleKeyMap)
+	if !state.Dots.NeovimCleanState {
+		t.Fatal("neovim runtime cleanup should be enabled by default")
 	}
 }
 
-func TestMigrateEnablesNewDefaultDots(t *testing.T) {
+func TestLoadExistingAcceptsCurrentSchema(t *testing.T) {
 	state := Default()
-	state.SchemaVersion = 2
-	state.Dots.Sine = false
-	state.Dots.Neovim = false
+	state.Dots.NeovimCleanState = false
 
-	got := Migrate(state)
-	if !got.Dots.Sine {
-		t.Fatal("expected old state to migrate sine default to true")
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := Save(path, state); err != nil {
+		t.Fatal(err)
 	}
-	if !got.Dots.Neovim {
-		t.Fatal("expected old state to migrate neovim default to true")
+
+	got, err := LoadExisting(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Dots.NeovimCleanState {
+		t.Fatal("expected schema-current state to preserve disabled neovim runtime cleanup")
 	}
 }
 

@@ -1,4 +1,4 @@
-{ ... }:
+_:
 
 {
   caelestiaShellSettings.background = {
@@ -8,12 +8,12 @@
       position = "top-left";
       shadow = {
         enabled = true;
-        opacity = 0.7;
+        opacity = 0.8;
         blur = 0.4;
       };
       background = {
         enabled = false;
-        opacity = 0.7;
+        opacity = 0.8;
         blur = true;
       };
       invertColors = false;

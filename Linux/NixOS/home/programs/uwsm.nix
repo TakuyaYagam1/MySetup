@@ -1,9 +1,13 @@
-{ ... }:
+{ homeLibs, ... }:
 
+let
+  qtPlatformTheme = homeLibs.qtDefaults.platformTheme;
+in
 {
   xdg.configFile."uwsm/env".text = ''
     export QT_WAYLAND_DISABLE_WINDOWDECORATION='1'
     export QT_AUTO_SCREEN_SCALE_FACTOR='1'
+    export QT_QPA_PLATFORMTHEME='${qtPlatformTheme}'
 
     export APP2UNIT_SLICES='a=app-graphical.slice b=background-graphical.slice s=session-graphical.slice'
   '';
@@ -11,6 +15,7 @@
   xdg.configFile."uwsm/env-hyprland".text = ''
     export GDK_BACKEND='wayland,x11'
     export QT_QPA_PLATFORM='wayland;xcb'
+    export QT_QPA_PLATFORMTHEME='${qtPlatformTheme}'
     export SDL_VIDEODRIVER='wayland,x11,windows'
     export CLUTTER_BACKEND='wayland'
     export ELECTRON_OZONE_PLATFORM_HINT='auto'

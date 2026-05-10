@@ -2,12 +2,9 @@ package app
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"os"
-	"strings"
-	"syscall"
+	"runtime/debug"
 
 	"github.com/spf13/cobra"
 
@@ -16,15 +13,46 @@ import (
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/doctor"
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
+	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/rollback"
+	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/secrets"
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/tui"
 )
+
+// Version is the release tag injected at build time via:
+//
+//	go build -ldflags "-X github.com/TakuyaYagam1/MySetup/Linux/installer/internal/app.Version=v0.1.0"
+//
+// When unset (the typical `go run`/`go build` case) we fall back to the VCS
+// revision embedded by the toolchain so binaries are still traceable.
+var Version = ""
+
+func resolveVersion() string {
+	if Version != "" {
+		return Version
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "dev"
+	}
+	for _, s := range info.Settings {
+		if s.Key == "vcs.revision" && s.Value != "" {
+			rev := s.Value
+			if len(rev) > 12 {
+				rev = rev[:12]
+			}
+			return "dev+" + rev
+		}
+	}
+	return "dev"
+}
 
 func NewRootCommand() *cobra.Command {
 	opts := Options{Options: paths.DefaultOptions()}
 
 	root := &cobra.Command{
-		Use:   "mysetup",
-		Short: "Catppuccin Macchiato TUI installer for MySetup",
+		Use:     "mysetup",
+		Short:   "Catppuccin Macchiato TUI installer for MySetup",
+		Version: resolveVersion(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return tui.Run(cmd.Context(), tui.Options{
 				Paths:  opts.Options,
@@ -44,9 +72,31 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(applyCommand(&opts))
 	root.AddCommand(doctorCommand(&opts))
 	root.AddCommand(cleanupCommand(&opts))
+	root.AddCommand(rollbackCommand(&opts))
 	root.AddCommand(printStateCommand(&opts))
 
 	return root
+}
+
+func rollbackCommand(opts *Options) *cobra.Command {
+	var backupPath string
+	cmd := &cobra.Command{
+		Use:   "rollback",
+		Short: "Restore /etc/nixos from a previous mysetup backup",
+		Long: "Picks the most recent <dest>.bak.* directory (or --backup <path>) " +
+			"and rsync --delete's it back into the destination. Does not roll the " +
+			"active system generation; run `sudo nixos-rebuild switch --rollback` for that.",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return rollback.Run(cmd.Context(), rollback.Options{
+				Paths:  opts.Options,
+				Backup: backupPath,
+				DryRun: opts.DryRun,
+				Yes:    opts.Yes,
+			})
+		},
+	}
+	cmd.Flags().StringVar(&backupPath, "backup", "", "explicit backup directory; defaults to the latest <dest>.bak.* sibling")
+	return cmd
 }
 
 func tuiCommand(opts *Options) *cobra.Command {
@@ -75,91 +125,24 @@ func applyCommand(opts *Options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			secrets, err := loadSecretsFromFiles(userPasswordFile, pgAdminPasswordFile)
+			secretValues, err := secrets.LoadFromFiles(userPasswordFile, pgAdminPasswordFile)
 			if err != nil {
 				return err
 			}
 			return apply.Run(cmd.Context(), apply.Options{
 				Paths:      opts.Options,
 				State:      state,
-				Secrets:    secrets,
+				Secrets:    secretValues,
 				DryRun:     opts.DryRun,
 				AssumeYes:  opts.Yes,
 				SkipSwitch: noSwitch,
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&noSwitch, "no-switch", false, "stop after dry-build and do not run nixos-rebuild switch")
+	cmd.Flags().BoolVar(&noSwitch, "no-switch", false, "stop after dry-build without switching or writing activated state")
 	cmd.Flags().StringVar(&userPasswordFile, "user-password-file", "", "read initial user password from file for hashed-password.nix")
 	cmd.Flags().StringVar(&pgAdminPasswordFile, "pgadmin-password-file", "", "read pgAdmin password from file for /etc/nixos/secrets")
 	return cmd
-}
-
-func loadSecretsFromFiles(userPasswordFile, pgAdminPasswordFile string) (config.Secrets, error) {
-	userPassword, err := readSecretFile(userPasswordFile)
-	if err != nil {
-		return config.Secrets{}, fmt.Errorf("read user password file: %w", err)
-	}
-	pgAdminPassword, err := readSecretFile(pgAdminPasswordFile)
-	if err != nil {
-		return config.Secrets{}, fmt.Errorf("read pgAdmin password file: %w", err)
-	}
-	return config.Secrets{UserPassword: userPassword, PgAdminPassword: pgAdminPassword}, nil
-}
-
-const maxSecretFileBytes = 64 * 1024
-
-func readSecretFile(path string) (string, error) {
-	if path == "" {
-		return "", nil
-	}
-	file, err := openSecretFileNoFollow(path)
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		_ = file.Close()
-	}()
-	info, err := file.Stat()
-	if err != nil {
-		return "", err
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return "", fmt.Errorf("secret file must not be a symlink: %s", path)
-	}
-	if !info.Mode().IsRegular() {
-		return "", fmt.Errorf("secret file must be a regular file: %s", path)
-	}
-	if info.Size() > maxSecretFileBytes {
-		return "", fmt.Errorf("secret file is too large: %s", path)
-	}
-	if info.Mode().Perm()&0o077 != 0 {
-		return "", fmt.Errorf("secret file permissions are too open: %s", path)
-	}
-	data, err := io.ReadAll(io.LimitReader(file, maxSecretFileBytes+1))
-	if err != nil {
-		return "", err
-	}
-	if len(data) > maxSecretFileBytes {
-		return "", fmt.Errorf("secret file is too large: %s", path)
-	}
-	secret := strings.TrimRight(string(data), "\r\n")
-	if secret == "" {
-		return "", fmt.Errorf("secret file is empty: %s", path)
-	}
-	return secret, nil
-}
-
-func openSecretFileNoFollow(path string) (*os.File, error) {
-	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
-	if err != nil {
-		if errors.Is(err, syscall.ELOOP) {
-			return nil, fmt.Errorf("secret file must not be a symlink: %s", path)
-		}
-		return nil, err
-	}
-	//nolint:gosec // syscall.Open returns a valid non-negative file descriptor here; os.NewFile requires uintptr.
-	return os.NewFile(uintptr(fd), path), nil
 }
 
 func doctorCommand(opts *Options) *cobra.Command {
@@ -192,8 +175,13 @@ func cleanupCommand(opts *Options) *cobra.Command {
 		Use:   "cleanup",
 		Short: "Clean safe managed leftovers",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			state, err := loadDoctorState(opts.StatePath)
+			if err != nil {
+				return err
+			}
 			return cleanup.Run(cmd.Context(), cleanup.Options{
 				Paths:  opts.Options,
+				State:  state,
 				DryRun: opts.DryRun,
 				Yes:    opts.Yes,
 			})

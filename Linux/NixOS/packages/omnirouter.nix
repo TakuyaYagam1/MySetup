@@ -1,4 +1,20 @@
-{ lib, buildNpmPackage, fetchFromGitHub, python3, pkg-config, libsecret, libx11, stdenv, nodejs_22, python311, vips, gnumake, gcc, perl, writeText }:
+{
+  lib,
+  buildNpmPackage,
+  fetchFromGitHub,
+  python3,
+  pkg-config,
+  libsecret,
+  libx11,
+  stdenv,
+  nodejs_22,
+  python311,
+  vips,
+  gnumake,
+  gcc,
+  perl,
+  writeText,
+}:
 
 let
   nodejs = nodejs_22;
@@ -44,7 +60,8 @@ buildNpmPackage' rec {
   buildInputs = [
     libsecret
     vips
-  ] ++ lib.optionals stdenv.isLinux [
+  ]
+  ++ lib.optionals stdenv.isLinux [
     libx11
   ];
 

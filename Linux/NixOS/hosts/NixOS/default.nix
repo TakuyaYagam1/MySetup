@@ -1,63 +1,20 @@
-{ config, pkgs, lib, inputs, ... }:
-
-# Host entry point. hardware-configuration.nix is host-local (not in repo).
+{ config, lib, ... }:
 
 {
   imports = [
-    # Host-specific
     ./variables.nix
-
-    # Shared system modules
-    ../../system/boot/grub.nix
-    ../../system/boot/plymouth.nix
-    ../../system/boot/secure.nix
-    ../../system/locale.nix
-    ../../system/networking.nix
-    ../../system/security.nix
-    ../../system/nvidia-drivers.nix
-    ../../system/power.nix
-    ../../system/hardware.nix
-    ../../system/settings.nix
-
-    # Services
-    ../../services/sddm.nix
-    ../../services/databases.nix
-    # ../../services/observability.nix    # Grafana/Prometheus/Loki - see services/observability.nix.example
-    ../../services/virtualization.nix
-    ../../services/system-services.nix
-    ../../services/zapret.nix
-
-    # Programs
-    ../../programs/hyprland.nix
-    ../../programs/thunar.nix
-    ../../programs/gaming.nix
-    ../../programs/fish.nix
-    ../../programs/development.nix
-    ../../programs/system-tools.nix
-
-    # Packages & Users
-    ../../packages/system-packages.nix
-    ../../packages/dev-tools.nix
-    ../../packages/fonts.nix
-    ../../packages/zen-browser.nix
-    ../../packages/ctf
-    # ../../packages/ida-mcp.nix
-    # ../../packages/ida-plugins.nix
-    # ../../packages/ida-pro.nix
-    ../../users/user.nix
-
-    # Custom modules
-    ../../modules/omnirouter.nix
+    ../../profiles/base.nix
+    ../../profiles/personal.nix
+    ../../profiles/features.nix
   ]
   ++ lib.optional (builtins.pathExists ./hardware-configuration.nix) ./hardware-configuration.nix
-  ++ lib.optional (builtins.pathExists ./hashed-password.nix) ./hashed-password.nix;
-
-  boot.kernelPackages = lib.mkForce pkgs.linuxPackages_6_18;
+  ++ lib.optional (builtins.pathExists ./hashed-password.nix) ./hashed-password.nix
+  ++ lib.optional (builtins.pathExists ./secrets/secrets.yaml) ./secrets/sops.nix;
 
   environment.sessionVariables = {
     NIXOS_OZONE_WL = "1";
     ELECTRON_OZONE_PLATFORM_HINT = "wayland";
   };
 
-  system.stateVersion = config.var.stateVersion;
+  system.stateVersion = config.mysetup.host.stateVersion;
 }

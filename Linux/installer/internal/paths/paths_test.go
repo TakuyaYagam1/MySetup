@@ -61,6 +61,39 @@ func TestResolveSourcesFromInstalledMirror(t *testing.T) {
 	}
 }
 
+func TestResolveSourcesExplicitRepoDoesNotFallback(t *testing.T) {
+	root := t.TempDir()
+	valid := filepath.Join(root, "valid")
+	mkdir(t, filepath.Join(valid, "Linux", "NixOS"))
+	mkdir(t, filepath.Join(valid, "Linux", "dots"))
+	mkdir(t, filepath.Join(valid, "Linux", "installer"))
+	write(t, filepath.Join(valid, "Linux", "NixOS", "flake.nix"))
+	t.Setenv("MYSETUP_REPO_ROOT", valid)
+
+	if _, err := ResolveSources(filepath.Join(root, "missing")); err == nil {
+		t.Fatal("explicit invalid repo should fail instead of falling back")
+	}
+}
+
+func TestXDGStateHomeUsesExplicitHomeOverProcessEnv(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", filepath.Join(t.TempDir(), "state"))
+
+	home := filepath.Join(t.TempDir(), "managed-user")
+	if got, want := XDGStateHome(home), filepath.Join(home, ".local", "state"); got != want {
+		t.Fatalf("expected explicit home state path %q, got %q", want, got)
+	}
+}
+
+func TestDefaultOptionsStillHonorsProcessXDGStateHome(t *testing.T) {
+	stateHome := filepath.Join(t.TempDir(), "state")
+	t.Setenv("XDG_STATE_HOME", stateHome)
+
+	opts := DefaultOptions()
+	if got, want := opts.DraftPath, filepath.Join(stateHome, "mysetup", "draft.json"); got != want {
+		t.Fatalf("expected process XDG state home in default options %q, got %q", want, got)
+	}
+}
+
 func mkdir(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(path, 0o755); err != nil {

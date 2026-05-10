@@ -1,4 +1,4 @@
-{ ... }:
+_:
 
 {
   xdg.configFile."vesktop/settings/quickCss.css".text = ''

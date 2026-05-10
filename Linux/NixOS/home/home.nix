@@ -1,12 +1,31 @@
-{ config, pkgs, inputs, lib, var, ... }:
-
 {
-  imports = [
-    inputs.caelestia-shell.homeManagerModules.default
-    inputs.noctalia-shell.homeModules.default
+  config,
+  pkgs,
+  inputs,
+  lib,
+  mysetup,
+  mysetupLib,
+  ...
+}:
+
+let
+  desktopOrMore = mysetupLib.presets.desktopOrMore mysetup;
+  mysetupPkgs = pkgs.mysetup or { };
+  homeLibs = import ./lib { inherit lib pkgs; };
+  avatarSource =
+    if builtins.pathExists ./avatar.jpg then ./avatar.jpg else ../themes/sddm-theme/icons/logo.png;
+  generatedConfigFiles = [
+    "foot/foot.ini"
+    "btop/btop.conf"
+    "gtk-3.0/gtk.css"
+    "gtk-4.0/gtk.css"
+    "cava/config"
+    "qt5ct/qt5ct.conf"
+    "qt6ct/qt6ct.conf"
+  ];
+  coreImports = [
     inputs.stylix.homeModules.stylix
     ../themes/active.nix
-    # ./secrets       # HM-level sops; bootstrap: see home/secrets/default.nix
     ./theming.nix
     ./apps.nix
     ./dev-packages.nix
@@ -21,8 +40,6 @@
     ./programs/thunar.nix
     ./programs/uwsm.nix
     ./programs/vesktop.nix
-
-    # Application package groups (categorised home.packages lists).
     ./programs/user-apps/desktop.nix
     ./programs/user-apps/dev.nix
     ./programs/user-apps/api-tools.nix
@@ -31,26 +48,48 @@
     ./programs/user-apps/games.nix
     ./programs/user-apps/containers.nix
     ./programs/user-apps/misc.nix
+  ];
+  shellImports = [
+    inputs.caelestia-shell.homeManagerModules.default
+    inputs.noctalia-shell.homeModules.default
     ./shells
     ./caelestia
     ./noctalia
     ./end4
   ];
+in
+{
+  _module.args.homeLibs = homeLibs;
 
-  home.username = var.username;
-  home.homeDirectory = var.homeDirectory;
-  home.stateVersion = var.stateVersion;
+  imports = coreImports ++ lib.optionals desktopOrMore shellImports;
 
-  assertions = [
-    {
-      assertion = lib.elem (var.packagePreset or "personal") [ "minimal" "desktop" "developer" "personal" ];
-      message = "var.packagePreset must be one of: minimal, desktop, developer, personal";
-    }
-  ];
+  home = {
+    inherit (mysetup.user) username homeDirectory;
+    inherit (mysetup.host) stateVersion;
+
+    # AccountsService consumers (GNOME/KDE) read this; SDDM uses /etc/sddm/faces/ instead.
+    file.".face".source = avatarSource;
+
+    activation.copyWallpapers = lib.mkIf mysetup.wallpapers.enable (
+      lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        WALLS_SRC="${./../Wallpapers}"
+        WALLS_DST="${config.home.homeDirectory}/Pictures/Wallpapers"
+
+        $DRY_RUN_CMD mkdir -p "$WALLS_DST"
+        if [ -d "$WALLS_SRC" ]; then
+          $DRY_RUN_CMD ${pkgs.findutils}/bin/find "$WALLS_DST" -maxdepth 1 -type f -name 'preview-*' -delete
+          for wall in "$WALLS_SRC"/*; do
+            [ -e "$wall" ] || continue
+            $DRY_RUN_CMD ${pkgs.coreutils}/bin/cp -n "$wall" "$WALLS_DST/"
+          done
+        fi
+      ''
+    );
+  };
 
   programs.neovim = {
     enable = true;
-    package = pkgs.neovim;
+    package = mysetupPkgs.neovim or pkgs.neovim;
     withRuby = true;
     withPython3 = true;
   };
@@ -58,39 +97,14 @@
   # Caelestia ships its own bar - block any upstream waybar enable.
   programs.waybar.enable = lib.mkForce false;
 
-  # Silence HM 26.05 warning: keep legacy behaviour (gtk4 inherits gtk theme).
+  # Silence HM 26.05 warning: keep gtk4 inheriting the gtk theme.
   gtk.gtk4.theme = config.gtk.theme;
 
   # When HM uses the system package set, Stylix must not install package overlays
   # inside the HM evaluation as well.
   stylix.overlays.enable = false;
 
-  # These files are fully generated from Nix options. Force them into place so
-  # stale manual copies or old *.hm-backup files do not block HM activation.
-  xdg.configFile."foot/foot.ini".force = true;
-  xdg.configFile."btop/btop.conf".force = true;
-  xdg.configFile."gtk-3.0/gtk.css".force = true;
-  xdg.configFile."gtk-4.0/gtk.css".force = true;
-  xdg.configFile."cava/config".force = true;
-  xdg.configFile."qt5ct/qt5ct.conf".force = true;
-  xdg.configFile."qt6ct/qt6ct.conf".force = true;
-
-  # AccountsService consumers (GNOME/KDE) read this; SDDM uses /etc/sddm/faces/ instead.
-  home.file.".face".source = ./avatar.gif;
-
-  home.activation.copyWallpapers = lib.mkIf (var.wallpapers.enable or true) (
-    lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      WALLS_SRC="${./../Wallpapers}"
-      WALLS_DST="${config.home.homeDirectory}/Pictures/Wallpapers"
-
-      $DRY_RUN_CMD mkdir -p "$WALLS_DST"
-      if [ -d "$WALLS_SRC" ]; then
-        $DRY_RUN_CMD ${pkgs.findutils}/bin/find "$WALLS_DST" -maxdepth 1 -type f -name 'preview-*' -delete
-        for wall in "$WALLS_SRC"/*; do
-          [ -e "$wall" ] || continue
-          $DRY_RUN_CMD ${pkgs.coreutils}/bin/cp -n "$wall" "$WALLS_DST/"
-        done
-      fi
-    ''
-  );
+  xdg.configFile = lib.genAttrs generatedConfigFiles (_: {
+    force = true;
+  });
 }

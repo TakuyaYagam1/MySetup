@@ -5,9 +5,7 @@ return {
     "neovim/nvim-lspconfig",
     opts = {
       servers = {
-        dartls = {
-          -- cmd = { "/etc/profiles/per-user/your-username/bin/dart", "language-server", "--protocol=lsp" },
-        },
+        dartls = {},
       },
     },
   },

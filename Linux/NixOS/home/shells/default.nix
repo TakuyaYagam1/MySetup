@@ -1,55 +1,81 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  homeLibs,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
-  dotsRoot =
-    let
-      installedDots = ../../dots;
-      repoDots = ../../../dots;
-    in
-      if builtins.pathExists installedDots then installedDots else repoDots;
+  dotfilesLib = homeLibs.dotfiles;
+  shellProfiles = import ./profiles.nix;
+  inherit (dotfilesLib) dotsRoot;
   shellSelectorRoot = ./quickshell/mysetup-shell-selector;
-
-  hyprScripts = [
-    "close-active.sh"
-    "noctalia-launcher.sh"
-    "record-toggle.sh"
-    "shell-selector.sh"
-    "screenshot.sh"
-    "spotify-toggle.sh"
-    "start-shell.sh"
-    "wsaction.fish"
-  ];
+  defaultProfile = shellProfiles.byId.${shellProfiles.defaultProfile};
+  hyprDir = "${config.xdg.configHome}/hypr";
+  hyprRuntimeDir = "${config.xdg.stateHome}/mysetup/hypr-runtime";
+  activeShellState = "${config.xdg.stateHome}/mysetup/active-shell";
+  stableEntrypoints = dotfilesLib.hyprRuntimeFiles;
+  inherit (dotfilesLib) hyprScripts;
 
   hyprScriptFiles = lib.genAttrs (map (name: "hypr/scripts/${name}") hyprScripts) (target: {
     force = true;
     executable = true;
     source = dotsRoot + "/${target}";
   });
-in
-{
-  xdg.configFile = hyprScriptFiles // {
-    "hypr/shell-profile.conf" = {
-      force = true;
-      text = ''
-        # Runtime shell launcher. The selected shell is stored in
-        # ${config.home.homeDirectory}/.local/state/mysetup/active-shell.
-        exec-once = ${config.xdg.configHome}/hypr/scripts/start-shell.sh
-      '';
-    };
 
-    "hypr/shell-keybinds.conf" = {
+  commonHyprFiles = {
+    "hypr/shell-common-keybinds.conf" = {
       force = true;
-      source = dotsRoot + "/hypr/caelestia/keybinds.conf";
+      source = dotsRoot + "/hypr/shell-common-keybinds.conf";
     };
-
-    "quickshell/mysetup-shell-selector" = {
+    "hypr/shell-workspace-keybinds.conf" = {
       force = true;
-      source = shellSelectorRoot;
+      source = dotsRoot + "/hypr/shell-workspace-keybinds.conf";
     };
   };
 
-  home.activation.seedMySetupHyprConfig =
-    lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+  selectorShellOptions = homeLibs.shellSelectorOptions.buildOptionsFile shellProfiles.ordered;
+
+  shellSelectorSource = homeLibs.shellSelectorOptions.buildSelectorSource {
+    selectorRoot = shellSelectorRoot;
+    optionsFile = selectorShellOptions;
+  };
+
+  stableEntrypointFiles = lib.genAttrs (map (name: "hypr/${name}") stableEntrypoints) (
+    target:
+    let
+      name = lib.removePrefix "hypr/" target;
+    in
+    dotfilesLib.stableRuntimeSourceFile "${hyprRuntimeDir}/${name}"
+  );
+
+  managedHyprPaths =
+    (map (name: "hypr/${name}") stableEntrypoints)
+    ++ [
+      "hypr/shell-common-keybinds.conf"
+      "hypr/shell-workspace-keybinds.conf"
+    ]
+    ++ (map (name: "hypr/scripts/${name}") hyprScripts);
+
+  backupTargets = lib.concatMapStringsSep " \\\n" (
+    path: ''"${config.xdg.configHome}/${path}.hm-backup"''
+  ) managedHyprPaths;
+in
+{
+  xdg.configFile =
+    hyprScriptFiles
+    // stableEntrypointFiles
+    // commonHyprFiles
+    // {
+      "quickshell/mysetup-shell-selector" = {
+        force = true;
+        source = shellSelectorSource;
+      };
+    };
+
+  home.activation = {
+    seedMySetupHyprConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       target="${config.xdg.configHome}/hypr/mysetup/hyprland.conf"
       src="${dotsRoot}/hypr/hyprland.conf"
 
@@ -64,11 +90,60 @@ in
       fi
     '';
 
-  home.activation.startHyprShell =
-    lib.hm.dag.entryAfter [ "seedMySetupHyprConfig" ] ''
+    seedHyprShellRuntime =
+      lib.hm.dag.entryAfter
+        [
+          "caelestiaSeedShellJson"
+          "noctaliaSeedConfig"
+          "end4SeedConfig"
+          "end4RepairRuntime"
+          "end4SeedAppConfig"
+          "seedMySetupHyprConfig"
+        ]
+        ''
+          runtime_dir="${hyprRuntimeDir}"
+          active_shell="${activeShellState}"
+
+          $DRY_RUN_CMD mkdir -p "$runtime_dir" "$(dirname "$active_shell")"
+
+          seed_file() {
+            local target="$1"
+            local source="$2"
+
+            if [ ! -e "$target" ]; then
+              $DRY_RUN_CMD install -m 644 "$source" "$target"
+            fi
+          }
+
+          seed_file "$active_shell" "${pkgs.writeText "mysetup-active-shell-default" "${defaultProfile.id}\n"}"
+          seed_file "$runtime_dir/hyprland.conf" "${pkgs.writeText "mysetup-hypr-runtime-default" ''
+            source = ${hyprDir}/mysetup/hyprland.conf
+            source = ${hyprRuntimeDir}/shell-profile.conf
+          ''}"
+          seed_file "$runtime_dir/shell-profile.conf" "${pkgs.writeText "mysetup-shell-profile-default" ''
+            exec-once = ${hyprDir}/scripts/start-shell.sh
+          ''}"
+          seed_file "$runtime_dir/hyprlock.conf" "${pkgs.writeText "mysetup-empty-hyprlock" ""}"
+          seed_file "$runtime_dir/hypridle.conf" "${pkgs.writeText "mysetup-empty-hypridle" ""}"
+          seed_file "$runtime_dir/shell-launcher.conf" "${dotsRoot}/hypr/${defaultProfile.launcher}"
+          seed_file "$runtime_dir/shell-keybinds.conf" "${dotsRoot}/hypr/${defaultProfile.keybinds}"
+        '';
+
+    liveSyncHyprShell = lib.hm.dag.entryAfter [ "seedHyprShellRuntime" ] ''
       if command -v hyprctl >/dev/null 2>&1 && hyprctl instances >/dev/null 2>&1; then
         $DRY_RUN_CMD hyprctl reload >/dev/null 2>&1 || true
         $DRY_RUN_CMD ${config.xdg.configHome}/hypr/scripts/start-shell.sh >/dev/null 2>&1 || true
       fi
     '';
+
+    pruneMySetupHyprBackups = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      for backup in \
+        ${backupTargets}
+      do
+        if [ -e "$backup" ]; then
+          $DRY_RUN_CMD rm -f "$backup"
+        fi
+      done
+    '';
+  };
 }

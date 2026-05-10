@@ -1,16 +1,19 @@
-{ config, pkgs, lib, ... }:
-
-# Boot with secure boot enabled
+{ config, lib, ... }:
 
 {
-  config = lib.mkIf (config.var.features.secureBoot or false) {
-  boot.loader.grub.enable = lib.mkForce false;
-  boot.loader.systemd-boot.enable = lib.mkForce false;
-  boot.plymouth.enable = lib.mkForce false;
+  config = lib.mkIf config.mysetup.features.secureBoot {
+    boot = {
+      loader = {
+        grub.enable = lib.mkForce false;
+        systemd-boot.enable = lib.mkForce false;
+      };
 
-  boot.lanzaboote = {
-    enable = true;
-    pkiBundle = "/var/lib/sbctl";
-  };
+      plymouth.enable = lib.mkForce false;
+
+      lanzaboote = {
+        enable = true;
+        pkiBundle = "/var/lib/sbctl";
+      };
+    };
   };
 }

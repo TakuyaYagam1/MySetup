@@ -72,7 +72,8 @@
       --zen-primary-color: #c6a0f6 !important;
     }
 
-    groupbox , moz-card{
+    groupbox,
+    moz-card {
       background: #24273a !important;
     }
 
@@ -149,7 +150,6 @@
       --in-content-primary-button-background: #494d64 !important;
       --in-content-primary-button-text-color: #cad3f5 !important;
     }
-
 
     .card {
       background-color: #363a4f !important;

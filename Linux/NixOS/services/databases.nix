@@ -1,52 +1,47 @@
-{ config, lib, pkgs, ... }:
-
 {
-  services.postgresql = {
-    enable = true;
-    package = pkgs.postgresql_17;
-    settings = {
-      listen_addresses = lib.mkForce "127.0.0.1";
-      port = 5442;
-    };
-  };
+  config,
+  lib,
+  pkgs,
+  mysetupLib,
+  ...
+}:
 
-  services.mysql = {
-    enable = true;
-    package = pkgs.mariadb;
-    settings = {
-      mysqld = {
-        port = 3316;
-        bind-address = "127.0.0.1";
+let
+  pgAdminPasswordFile =
+    if builtins.hasAttr "pgadmin-password" config.sops.secrets then
+      config.sops.secrets."pgadmin-password".path
+    else
+      config.mysetup.services.pgadminPasswordFile;
+in
+{
+  config = mysetupLib.mkIfPresetOrMore "developer" config.mysetup {
+    services = {
+      postgresql = {
+        enable = true;
+        package = pkgs.postgresql_17;
+        settings = {
+          listen_addresses = lib.mkForce "127.0.0.1";
+          port = mysetupLib.ports.postgresql;
+        };
+      };
+
+      mysql = {
+        enable = true;
+        package = pkgs.mariadb;
+        settings = {
+          mysqld = {
+            port = mysetupLib.ports.mariadb;
+            bind-address = "127.0.0.1";
+          };
+        };
+      };
+
+      pgadmin = {
+        enable = true;
+        port = mysetupLib.ports.pgadmin;
+        initialEmail = config.mysetup.services.pgadminEmail or "admin@localhost.local";
+        initialPasswordFile = pgAdminPasswordFile;
       };
     };
   };
-
-  services.pgadmin = {
-    enable = true;
-    port = 5050;
-    initialEmail = config.var.services.pgadminEmail or "admin@localhost.local";
-    initialPasswordFile = "/etc/nixos/secrets/pgadmin-password";
-  };
-
-  # Uncomment if needed:
-  
-  # services.redis.servers."default" = {
-  #   enable = true;
-  #   port = 6389;
-  #   bind = "0.0.0.0";
-  # };
-
-  # services.memcached = {
-  #   enable = true;
-  #   maxMemory = 256;
-  #   listen = "0.0.0.0";
-  # };
-
-  # services.clickhouse = {
-  #   enable = true;
-  #   extraServerConfig = ''
-  #     <http_port>8133</http_port>
-  #     <tcp_port>9010</tcp_port>
-  #   '';
-  # };
 }

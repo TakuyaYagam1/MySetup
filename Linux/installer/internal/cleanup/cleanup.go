@@ -8,12 +8,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
+	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/shellruntime"
 )
 
 type Options struct {
 	Paths  paths.Options
+	State  config.State
 	DryRun bool
 	Yes    bool
 	Stdout io.Writer
@@ -29,9 +32,9 @@ func Run(ctx context.Context, opts Options) error {
 	if out == nil {
 		out = os.Stdout
 	}
-	home, err := os.UserHomeDir()
+	home, err := Home(opts)
 	if err != nil {
-		return fmt.Errorf("resolve home directory: %w", err)
+		return err
 	}
 	if _, err := fmt.Fprint(out, ReportForHome(home)); err != nil {
 		return err
@@ -43,6 +46,9 @@ func Run(ctx context.Context, opts Options) error {
 	if err := runner.Command(ctx, "rm", "-f", filepath.Join(home, ".cache/noctalia/wallpapers.json")); err != nil {
 		return err
 	}
+	if err := repairActiveEnd4ProfileLink(ctx, runner, home); err != nil {
+		return err
+	}
 	wallpaperDir := filepath.Join(home, "Pictures/Wallpapers")
 	if _, err := os.Stat(wallpaperDir); err != nil {
 		if os.IsNotExist(err) {
@@ -51,6 +57,17 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 	return runner.Command(ctx, "find", wallpaperDir, "-maxdepth", "1", "-type", "f", "-name", "preview-*", "-delete")
+}
+
+func Home(opts Options) (string, error) {
+	if opts.State.User.HomeDirectory != "" {
+		return opts.State.User.HomeDirectory, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home directory: %w", err)
+	}
+	return home, nil
 }
 
 func Report() (string, error) {
@@ -71,4 +88,40 @@ func candidates(home string) []string {
 		filepath.Join(home, "Pictures/Wallpapers/preview-*"),
 		filepath.Join(home, ".cache/noctalia/wallpapers.json"),
 	}
+}
+
+func repairActiveEnd4ProfileLink(ctx context.Context, runner run.CommandRunner, home string) error {
+	if shellruntime.ReadActiveShell(shellruntime.ActiveShellStatePath(home)) != shellruntime.End4 {
+		return nil
+	}
+	configDir := filepath.Join(home, ".config")
+	target := filepath.Join(configDir, "hypr", "end4")
+	if ok, err := shellruntime.RuntimeConfigExists(filepath.Join(target, "hyprland.conf")); err != nil || ok {
+		return err
+	}
+	source, err := shellruntime.End4SourceFromHomeManager(configDir)
+	if err != nil || source == "" {
+		return err
+	}
+	if err := removeInvalidEnd4Target(ctx, runner, target); err != nil {
+		return err
+	}
+	return runner.Command(ctx, "ln", "-sfn", source, target)
+}
+
+func removeInvalidEnd4Target(ctx context.Context, runner run.CommandRunner, target string) error {
+	info, err := os.Lstat(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return runner.Command(ctx, "rm", "-f", "--", target)
+	}
+	if info.IsDir() {
+		return runner.Command(ctx, "rm", "-rf", "--", target)
+	}
+	return nil
 }

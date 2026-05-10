@@ -1,4 +1,4 @@
-{ ... }:
+_:
 
 {
   xdg.configFile."Thunar/thunar-volman.xml".text = ''

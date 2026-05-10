@@ -1,11 +1,12 @@
-{ config, lib, pkgs, ... }:
-
-let
-  preset = config.var.packagePreset or "personal";
-  enabled = lib.elem preset [ "developer" "personal" ];
-in
 {
-  config = lib.mkIf enabled {
+  config,
+  mysetupLib,
+  pkgs,
+  ...
+}:
+
+{
+  config = mysetupLib.mkIfPresetOrMore "developer" config.mysetup {
     environment.systemPackages = with pkgs; [
       virt-manager
       virt-viewer
@@ -30,7 +31,7 @@ in
       docker = {
         enable = true;
         daemon.settings = {
-          dns = [ "8.8.8.8" "1.1.1.1" "77.88.8.8" ];
+          inherit (mysetupLib.defaults) dns;
           log-driver = "journald";
         };
       };
