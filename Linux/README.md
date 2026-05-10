@@ -271,38 +271,78 @@ make -C Linux/installer nix-installed-mirror-build
 ```text
 Linux/NixOS/
 ├── flake.nix
+├── flake.lock
 ├── hosts/NixOS/
 │   ├── default.nix
 │   ├── host-vars.nix
 │   ├── variables.nix
+│   ├── secrets/                   # optional sops-nix system secrets
 │   ├── hashed-password.nix        # generated locally when password is reset
 │   └── hardware-configuration.nix # host-local, preserved from /etc/nixos
-├── profiles/
-├── home/
-│   ├── caelestia/
-│   ├── noctalia/
-│   ├── end4/
+├── lib/                           # flake glue: layout, hosts, packages,
+│   │                              # overlays, modules, presets, ports,
+│   │                              # mysetupLib helpers
+│   └── package-sets/              # per-preset package set definitions
+├── modules/
+│   └── mysetup-options.nix        # `mysetup.*` NixOS options
+├── profiles/                      # base / desktop / developer / personal /
+│                                  # features import layers
+├── home/                          # home-manager root + shell profiles
+│   ├── home.nix
+│   ├── apps.nix
+│   ├── dev-packages.nix
+│   ├── theming.nix
+│   ├── avatar.jpg
+│   ├── lib/                       # dotfile sync + shell selector helpers
+│   ├── caelestia/                 # caelestia-shell profile
+│   ├── noctalia/                  # noctalia-shell profile
+│   ├── end4/                      # end-4 Illogical Impulse profile
+│   ├── programs/                  # btop, cava, fastfetch, fish, foot, git,
+│   │                              # starship, thunar, vesktop, uwsm, …
+│   ├── secrets/                   # optional sops-nix user secrets
 │   └── shells/
-│       └── quickshell/mysetup-shell-selector/
-├── packages/
-├── programs/
-├── services/
-├── system/
-├── themes/
+│       └── quickshell/mysetup-shell-selector/  # Super+Shift+W picker
+├── packages/                      # IDA Pro/MCP/plugins, fonts, dev-tools,
+│                                  # zen-browser, sddm-meowrch-theme, …
+├── programs/                      # system-wide program modules
+│                                  # (fish, hyprland, gaming, thunar, …)
+├── services/                      # databases, observability, sddm,
+│                                  # virtualization, zapret, omnirouter, …
+├── system/                        # hardware, kernel, locale, networking,
+│   │                              # nvidia, power, security, settings
+│   └── boot/                      # grub, plymouth, secure boot
+├── themes/                        # active theme switch + grub/plymouth/sddm
+├── users/                         # user + android-sdk modules
 └── Wallpapers/
 
 Linux/dots/
 ├── hypr/
+│   ├── hyprland.conf
+│   ├── variables.conf
 │   ├── caelestia/
 │   ├── noctalia/
 │   ├── end4/
-│   ├── scripts/
+│   ├── hyprland/                  # shared hyprland fragments
+│   ├── scheme/                    # color scheme outputs
+│   ├── scripts/                   # bash + fish helpers (sourced by Hypr)
 │   ├── shell-common-keybinds.conf
 │   └── shell-workspace-keybinds.conf
+├── nvim/                          # LazyVim-based Neovim config
 └── zen/
+    └── chrome/                    # Zen Browser Catppuccin chrome
 
-Linux/installer/
-└── Go source for mysetup
+Linux/installer/                   # Go TUI/CLI (`mysetup`)
+├── cmd/mysetup/                   # binary entrypoint
+├── internal/                      # app, apply, cleanup, config, defaults,
+│                                  # doctor, dots, paths, rollback, run,
+│                                  # secrets, shellruntime, tui, zenutil
+├── scripts/                       # nix-eval helpers used by Makefile checks
+├── Makefile                       # local CI: lint, fmt, test, nix checks
+├── go.mod
+└── go.sum
+
+Linux/Makefile                     # aggregate make targets for the Linux tree
+                                   # (delegates to installer/Makefile + nix)
 ```
 
 ## Recovery
