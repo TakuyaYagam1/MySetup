@@ -13,26 +13,11 @@
   gnumake,
   gcc,
   perl,
-  writeText,
 }:
 
 let
   nodejs = nodejs_22;
   buildNpmPackage' = buildNpmPackage.override { inherit nodejs; };
-
-  patchLayout = writeText "patch-layout.py" ''
-    import re, pathlib
-    p = pathlib.Path("src/app/layout.tsx")
-    t = p.read_text()
-    t = t.replace("import { Inter } from \"next/font/google\";", "")
-    t = re.sub(
-      r"const inter = Inter\(\{[^}]+\}\);",
-      "const inter = { variable: \"--font-inter\", className: \"\" };",
-      t,
-      flags=re.DOTALL,
-    )
-    p.write_text(t)
-  '';
 in
 buildNpmPackage' rec {
   pname = "omnirouter";
@@ -73,10 +58,13 @@ buildNpmPackage' rec {
 
   doCheck = false;
 
-  # next/font/google fetches Inter from Google Fonts at build time,
-  # which fails in the Nix sandbox (no network). Replace with a plain object.
   postPatch = ''
-    python3 ${patchLayout}
+    if [ -f src/app/layout.tsx ]; then
+      ${perl}/bin/perl -i -0pe '
+        s|import \{ Inter \} from "next/font/google";\n?||g;
+        s|const inter = Inter\(\{[^}]*\}\);|const inter = { variable: "--font-inter", className: "" };|gs;
+      ' src/app/layout.tsx
+    fi
   '';
 
   buildPhase = ''

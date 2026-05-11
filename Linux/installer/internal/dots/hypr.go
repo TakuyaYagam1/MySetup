@@ -93,8 +93,6 @@ func prepareHyprDestination(ctx context.Context, runner run.CommandRunner, dst, 
 }
 
 func syncHyprDotfiles(ctx context.Context, runner run.CommandRunner, src, dst string) error {
-	// --chmod overrides source perms: nix-store dirs ship 555 and would otherwise
-	// propagate, locking us out of subsequent symlink/file creation in the dest.
 	return runner.Command(ctx, "rsync", "-a", "--delete",
 		"--chmod=Du+rwX,Fu+rw,go+rX,go-w",
 		"--exclude", "/hyprland.conf",

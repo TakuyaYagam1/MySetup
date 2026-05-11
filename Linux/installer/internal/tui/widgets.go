@@ -22,9 +22,9 @@ func stringsBuilder(fn func(*builder)) string {
 }
 
 var (
-	tuiMonitorModeRe     = regexp.MustCompile(`^[0-9]+x[0-9]+@[0-9]+(\.[0-9]+)?$`)
+	tuiMonitorModeRe     = regexp.MustCompile(`^([0-9]+x[0-9]+@[0-9]+(\.[0-9]+)?|preferred|auto|highres|highrr)$`)
 	tuiMonitorNameRe     = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
-	tuiMonitorPositionRe = regexp.MustCompile(`^-?[0-9]+x-?[0-9]+$`)
+	tuiMonitorPositionRe = regexp.MustCompile(`^(-?[0-9]+x-?[0-9]+|auto)$`)
 	tuiMonitorScaleRe    = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?$`)
 )
 

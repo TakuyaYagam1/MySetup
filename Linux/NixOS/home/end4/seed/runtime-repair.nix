@@ -13,22 +13,19 @@
     fi
   '';
 
-  home.activation.end4RepairRuntime = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+  home.activation.end4PruneRedundantSymlinks = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     hypr_dir="$HOME/.config/hypr"
-    end4_dir="$hypr_dir/end4"
-    active_shell_file="$HOME/.local/state/mysetup/active-shell"
-    active_shell=""
 
-    $DRY_RUN_CMD mkdir -p "$hypr_dir"
-
-    if [ -f "$active_shell_file" ]; then
-      active_shell="$(${pkgs.coreutils}/bin/tr -d '[:space:]' < "$active_shell_file" 2>/dev/null || true)"
-    fi
-
-    if [ "$active_shell" = "end4" ]; then
-      $DRY_RUN_CMD rm -f "$hypr_dir/monitors.conf" "$hypr_dir/workspaces.conf"
-      $DRY_RUN_CMD ln -sfn "$end4_dir/monitors.conf" "$hypr_dir/monitors.conf"
-      $DRY_RUN_CMD ln -sfn "$end4_dir/workspaces.conf" "$hypr_dir/workspaces.conf"
-    fi
+    for name in monitors.conf workspaces.conf; do
+      target="$hypr_dir/$name"
+      if [ -L "$target" ]; then
+        resolved="$(${pkgs.coreutils}/bin/readlink -f "$target" 2>/dev/null || true)"
+        case "$resolved" in
+          "$hypr_dir/end4/"*)
+            $DRY_RUN_CMD ${pkgs.coreutils}/bin/rm -f "$target"
+            ;;
+        esac
+      fi
+    done
   '';
 }

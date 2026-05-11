@@ -9,14 +9,16 @@ import (
 )
 
 var (
-	usernameRe = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
-	hostnameRe = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
-	emailRe    = regexp.MustCompile(`^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$`)
-	localeRe   = regexp.MustCompile(`^[a-z]{2,3}_[A-Z]{2}\.UTF-8$`)
-	monitorRe  = regexp.MustCompile(`^[A-Za-z0-9_.-]+,\s*[0-9]+x[0-9]+@[0-9]+(\.[0-9]+)?,\s*-?[0-9]+x-?[0-9]+,\s*[0-9]+(\.[0-9]+)?$`)
-	versionRe  = regexp.MustCompile(`^[0-9]{2}\.[0-9]{2}$`)
-	keymapRe   = regexp.MustCompile(`^[A-Za-z0-9_.+-]+$`)
-	layoutsRe  = regexp.MustCompile(`^[A-Za-z0-9_-]+(,[A-Za-z0-9_-]+)*$`)
+	usernameRe      = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
+	hostnameRe      = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
+	emailRe         = regexp.MustCompile(`^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$`)
+	localeRe        = regexp.MustCompile(`^[a-z]{2,3}_[A-Z]{2}\.UTF-8$`)
+	monitorRe       = regexp.MustCompile(`^[A-Za-z0-9_.-]+,\s*[0-9]+x[0-9]+@[0-9]+(\.[0-9]+)?,\s*-?[0-9]+x-?[0-9]+,\s*[0-9]+(\.[0-9]+)?$`)
+	monitorAutoRe   = regexp.MustCompile(`^[A-Za-z0-9_.-]*,\s*(preferred|auto)(@[0-9]+(\.[0-9]+)?)?,\s*(auto|-?[0-9]+x-?[0-9]+),\s*[0-9]+(\.[0-9]+)?$`)
+	monitorModeAuto = regexp.MustCompile(`^(preferred|auto|highres|highrr)(@[0-9]+(\.[0-9]+)?)?$`)
+	versionRe       = regexp.MustCompile(`^[0-9]{2}\.[0-9]{2}$`)
+	keymapRe        = regexp.MustCompile(`^[A-Za-z0-9_.+-]+$`)
+	layoutsRe       = regexp.MustCompile(`^[A-Za-z0-9_-]+(,[A-Za-z0-9_-]+)*$`)
 )
 
 type FieldErrors struct {
@@ -37,6 +39,7 @@ type FieldErrors struct {
 	GPU           string
 	ZapretConfig  string
 	Monitor       string
+	ExtraMonitors []string
 }
 
 func (e FieldErrors) Messages() []string {
@@ -64,6 +67,11 @@ func (e FieldErrors) Messages() []string {
 			messages = append(messages, message)
 		}
 	}
+	for i, message := range e.ExtraMonitors {
+		if message != "" {
+			messages = append(messages, fmt.Sprintf("extra monitor #%d: %s", i+1, message))
+		}
+	}
 	return messages
 }
 
@@ -86,6 +94,14 @@ func ValidateDetailed(state State) FieldErrors {
 	validateEnumFields(state, &errs)
 	if err := validateMonitor(state.Display); err != nil {
 		errs.Monitor = err.Error()
+	}
+	if len(state.Display.ExtraMonitors) > 0 {
+		errs.ExtraMonitors = make([]string, len(state.Display.ExtraMonitors))
+		for i, monitor := range state.Display.ExtraMonitors {
+			if err := validateExtraMonitor(monitor); err != nil {
+				errs.ExtraMonitors[i] = err.Error()
+			}
+		}
 	}
 	return errs
 }
@@ -165,15 +181,29 @@ func validateHomeDirectory(homeDirectory, username string) error {
 }
 
 func validateMonitor(display Display) error {
-	monitorLine := fmt.Sprintf("%s, %s, %s, %s", display.MonitorName, display.MonitorMode, display.MonitorPosition, display.MonitorScale)
+	return validateMonitorRow(display.MonitorName, display.MonitorMode, display.MonitorPosition, display.MonitorScale)
+}
+
+func validateExtraMonitor(monitor Monitor) error {
+	if strings.TrimSpace(monitor.Name) == "" {
+		return fmt.Errorf("monitor name cannot be empty")
+	}
+	return validateMonitorRow(monitor.Name, monitor.Mode, monitor.Position, monitor.Scale)
+}
+
+func validateMonitorRow(name, mode, position, scale string) error {
+	if monitorModeAuto.MatchString(strings.TrimSpace(mode)) {
+		return nil
+	}
+	monitorLine := fmt.Sprintf("%s, %s, %s, %s", name, mode, position, scale)
 	return ValidateMonitorLine(monitorLine)
 }
 
 func ValidateMonitorLine(line string) error {
-	if monitorRe.MatchString(line) {
+	if monitorRe.MatchString(line) || monitorAutoRe.MatchString(line) {
 		return nil
 	}
-	return fmt.Errorf("monitor line must look like eDP-1, 2560x1600@120, 0x0, 1")
+	return fmt.Errorf("monitor line must look like eDP-1, 2560x1600@120, 0x0, 1 or use ,preferred,auto,1")
 }
 
 func oneOf(value string, allowed ...string) bool {

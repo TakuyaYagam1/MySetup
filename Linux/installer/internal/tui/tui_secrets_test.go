@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -162,7 +163,7 @@ func TestEditSecretsWithReaderStoresPasswordsOnlyInSession(t *testing.T) {
 	if s.secrets.PgAdminPassword != "pgadmin-secret" {
 		t.Fatalf("expected pgAdmin password in session secrets, got %q", s.secrets.PgAdminPassword)
 	}
-	if s.state != state {
+	if !reflect.DeepEqual(s.state, state) {
 		t.Fatal("passwords must not mutate persistent installer state")
 	}
 }

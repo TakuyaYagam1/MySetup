@@ -35,8 +35,8 @@
     },
     "transparency": {
       "automatic": false,
-      "backgroundTransparency": 0.2,
-      "contentTransparency": 0.2,
+      "backgroundTransparency": 0.4,
+      "contentTransparency": 0.4,
       "enable": true
     },
     "wallpaperTheming": {
@@ -248,7 +248,7 @@
       "sourceLanguage": "English",
       "targetLanguage": "English"
     },
-    "ui": "ru_RU"
+    "ui": "en_US"
   },
   "launcher": {
     "pinnedApps": ["org.kde.dolphin", "kitty", "cmake-gui"]
@@ -301,7 +301,7 @@
     "pinnedOnStartup": false
   },
   "overlay": {
-    "clickthroughOpacity": 0.2,
+    "clickthroughOpacity": 0.4,
     "darkenScreen": true,
     "floatingImage": {
       "imageSource": "https://media.tenor.com/H5U5bJzj3oAAAAAi/kukuru.gif",
@@ -336,9 +336,9 @@
     },
     "targetRegions": {
       "content": true,
-      "contentRegionOpacity": 0.8,
+      "contentRegionOpacity": 0.4,
       "layers": true,
-      "opacity": 0.2,
+      "opacity": 0.4,
       "selectionPadding": 5,
       "showLabel": false,
       "windows": true

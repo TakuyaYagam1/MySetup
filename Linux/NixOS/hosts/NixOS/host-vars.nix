@@ -59,9 +59,10 @@
 
   display = {
     monitorName = "eDP-1";
-    monitorMode = "2560x1600@120";
+    monitorMode = "preferred";
     monitorPosition = "0x0";
     monitorScale = "1";
+    extraMonitors = [ ];
   };
 
   wallpapers = {

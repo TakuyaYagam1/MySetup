@@ -95,9 +95,11 @@ in
       local filter="$2"
       local tmp
 
+      shift 2 || true
+
       if [ -z "''${DRY_RUN_CMD:-}" ] && [ -e "$target" ]; then
         tmp="$target.tmp.$$"
-        if ${pkgs.jq}/bin/jq "$filter" "$target" > "$tmp"; then
+        if ${pkgs.jq}/bin/jq "$@" "$filter" "$target" > "$tmp"; then
           ${pkgs.coreutils}/bin/mv "$tmp" "$target"
         else
           ${pkgs.coreutils}/bin/rm -f "$tmp"
@@ -111,12 +113,14 @@ in
       local home_replacement="''${3:-}"
       local filter="''${4:-}"
 
+      shift 4 || shift "$#"
+
       drop_store_symlink "$target"
       seed_if_missing "$target" "$source" "$home_replacement"
       ensure_json_object "$target" "$source" "$home_replacement"
 
       if [ -n "$filter" ]; then
-        apply_jq_defaults "$target" "$filter"
+        apply_jq_defaults "$target" "$filter" "$@"
       fi
     }
   '';

@@ -18,8 +18,9 @@ func HostVarsNix(s config.State) (string, error) {
 }
 
 var hostVarsTemplate = template.Must(template.New("host-vars.nix").Funcs(template.FuncMap{
-	"nixBool":   nixBool,
-	"nixString": nixString,
+	"nixBool":        nixBool,
+	"nixString":      nixString,
+	"nixMonitorList": nixMonitorList,
 }).Parse(`{
   host = {
     hostname = {{ nixString .Host.Hostname }};
@@ -84,6 +85,7 @@ var hostVarsTemplate = template.Must(template.New("host-vars.nix").Funcs(templat
     monitorMode = {{ nixString .Display.MonitorMode }};
     monitorPosition = {{ nixString .Display.MonitorPosition }};
     monitorScale = {{ nixString .Display.MonitorScale }};
+    extraMonitors = {{ nixMonitorList .Display.ExtraMonitors }};
   };
 
   wallpapers = {
@@ -113,4 +115,22 @@ func nixString(value string) string {
 	escaped = strings.ReplaceAll(escaped, `"`, `\"`)
 	escaped = strings.ReplaceAll(escaped, `${`, `''${`)
 	return `"` + escaped + `"`
+}
+
+func nixMonitorList(monitors []config.Monitor) string {
+	if len(monitors) == 0 {
+		return "[ ]"
+	}
+	var b strings.Builder
+	b.WriteString("[\n")
+	for _, monitor := range monitors {
+		b.WriteString("      {\n")
+		fmt.Fprintf(&b, "        name = %s;\n", nixString(monitor.Name))
+		fmt.Fprintf(&b, "        mode = %s;\n", nixString(monitor.Mode))
+		fmt.Fprintf(&b, "        position = %s;\n", nixString(monitor.Position))
+		fmt.Fprintf(&b, "        scale = %s;\n", nixString(monitor.Scale))
+		b.WriteString("      }\n")
+	}
+	b.WriteString("    ]")
+	return b.String()
 }

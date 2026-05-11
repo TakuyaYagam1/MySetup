@@ -62,7 +62,7 @@ let
               'MySetup start-shell owns end4 hypridle lifecycle'
 
             cat > "$out/monitors.conf" <<'EOF'
-        monitor = ${settings.monitor.rule}
+        ${lib.concatMapStringsSep "\n" (r: "monitor = ${r}") settings.monitor.rules}
         EOF
 
             cat > "$out/hypridle.conf" <<'EOF'
@@ -108,24 +108,17 @@ let
             gaps_out = 40
         }
 
-        decoration {
-            active_opacity = ${end4WindowOpacity}
-            inactive_opacity = ${end4WindowOpacity}
-            fullscreen_opacity = 1.0
-            dim_inactive = false
-
-            blur {
-                xray = true
-            }
+        animations {
+            bezier = mysetupStandard, 0.2, 0, 0, 1
+            animation = workspaces, 1, 5, mysetupStandard, slide
         }
         EOF
 
             cat >> "$out/custom/rules.conf" <<'EOF'
 
-        windowrule = opacity ${end4WindowOpacity} override ${end4WindowOpacity} override 1.0 override, match:fullscreen false
+        windowrule = opacity ${end4WindowOpacity} override, match:fullscreen false
+        windowrule = no_blur off, match:class .*
 
-        layerrule = match:namespace .*, xray on
-        layerrule = match:namespace quickshell:.*, xray on
         layerrule = match:namespace quickshell:.*, ignore_alpha 0.79
         EOF
 

@@ -39,8 +39,7 @@ func writeHyprLocalConfigFiles(state config.State, hyprSourceDir, hyprDir string
 		return err
 	}
 
-	monitorLine := fmt.Sprintf("monitor = %s, %s, %s, %s", state.Display.MonitorName, state.Display.MonitorMode, state.Display.MonitorPosition, state.Display.MonitorScale)
-	if err := replaceFirstLine(mysetupHyprland, "monitor =", monitorLine); err != nil {
+	if err := replaceBlock(mysetupHyprland, monitorBlockBegin, monitorBlockEnd, state.Display.MonitorLines()); err != nil {
 		return err
 	}
 	if err := replaceFirstLine(input, "    kb_layout =", "    kb_layout = "+state.Locale.KeyboardLayouts); err != nil {
@@ -137,4 +136,48 @@ func replaceFirstLine(path, prefix, replacement string) error {
 		lines = append(lines, replacement)
 	}
 	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+}
+
+const (
+	monitorBlockBegin = "# >>> MYSETUP MONITORS"
+	monitorBlockEnd   = "# <<< MYSETUP MONITORS"
+)
+
+//nolint:unparam // markers are part of the documented contract.
+func replaceBlock(path, beginMarker, endMarker string, body []string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(string(data), "\n")
+	beginIdx := -1
+	endIdx := -1
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if beginIdx == -1 && trimmed == beginMarker {
+			beginIdx = i
+			continue
+		}
+		if beginIdx != -1 && trimmed == endMarker {
+			endIdx = i
+			break
+		}
+	}
+	block := make([]string, 0, len(body)+2)
+	block = append(block, beginMarker)
+	block = append(block, body...)
+	block = append(block, endMarker)
+	out := make([]string, 0, len(lines)+len(block)+1)
+	if beginIdx == -1 || endIdx == -1 {
+		out = append(out, lines...)
+		if len(out) > 0 && out[len(out)-1] != "" {
+			out = append(out, "")
+		}
+		out = append(out, block...)
+	} else {
+		out = append(out, lines[:beginIdx]...)
+		out = append(out, block...)
+		out = append(out, lines[endIdx+1:]...)
+	}
+	return os.WriteFile(path, []byte(strings.Join(out, "\n")), 0o644)
 }

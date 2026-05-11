@@ -65,3 +65,40 @@ func TestValidateDisplayFormReportsFieldErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateMultiMonitorStateClean(t *testing.T) {
+	state := config.Default()
+	state.Display.ExtraMonitors = []config.Monitor{
+		{Name: "HDMI-A-1", Mode: "preferred", Position: "auto", Scale: "1"},
+		{Name: "DP-2", Mode: "1920x1080@144", Position: "2560x0", Scale: "1.25"},
+	}
+	if err := config.Validate(state); err != nil {
+		t.Fatalf("multi-monitor state with valid extras must validate: %v", err)
+	}
+}
+
+func TestValidateMultiMonitorStateSurfacesIndexedError(t *testing.T) {
+	state := config.Default()
+	state.Display.ExtraMonitors = []config.Monitor{
+		{Name: "HDMI-A-1", Mode: "preferred", Position: "auto", Scale: "1"},
+		{Name: "DP-2", Mode: "not-a-mode", Position: "auto", Scale: "1"},
+	}
+	errs := config.ValidateDetailed(state)
+	if errs.ExtraMonitors == nil || len(errs.ExtraMonitors) != 2 {
+		t.Fatalf("expected 2 extra-monitor slots, got %#v", errs.ExtraMonitors)
+	}
+	if errs.ExtraMonitors[0] != "" {
+		t.Fatalf("first extra must be clean, got %q", errs.ExtraMonitors[0])
+	}
+	if errs.ExtraMonitors[1] == "" {
+		t.Fatal("second extra must surface mode error")
+	}
+}
+
+func TestMonitorRowErrorsAcceptsPreferredSentinel(t *testing.T) {
+	row := config.Monitor{Name: "HDMI-A-1", Mode: "preferred", Position: "auto", Scale: "1"}
+	errs := monitorRowErrors(row)
+	if !errs.empty() {
+		t.Fatalf("preferred sentinel must validate cleanly, got %#v", errs)
+	}
+}

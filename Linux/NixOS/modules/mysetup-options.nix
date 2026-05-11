@@ -133,6 +133,29 @@ let
             monitorMode = strOption;
             monitorPosition = strOption;
             monitorScale = strOption;
+            extraMonitors = mkOption {
+              type = types.listOf (
+                types.submodule {
+                  options = {
+                    name = strOption;
+                    mode = mkOption {
+                      type = types.str;
+                      default = "preferred";
+                    };
+                    position = mkOption {
+                      type = types.str;
+                      default = "auto";
+                    };
+                    scale = mkOption {
+                      type = types.str;
+                      default = "1";
+                    };
+                  };
+                }
+              );
+              default = [ ];
+              description = "Additional Hyprland outputs beyond the primary monitor.";
+            };
           };
         };
       };

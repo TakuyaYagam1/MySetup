@@ -56,8 +56,8 @@ func TestLoadExistingMigratesStateWithoutSchema(t *testing.T) {
 	if got.Host.StateVersion != Default().Host.StateVersion {
 		t.Fatalf("expected default stateVersion to be filled, got %q", got.Host.StateVersion)
 	}
-	if !got.Dots.NeovimCleanState {
-		t.Fatal("expected legacy state to enable neovim runtime cleanup default")
+	if got.Dots.NeovimCleanState {
+		t.Fatal("legacy state should land on the conservative neovim runtime default (off)")
 	}
 }
 
@@ -103,14 +103,14 @@ func TestDefaultFeatureAndDotsToggles(t *testing.T) {
 	if !state.Dots.Neovim {
 		t.Fatal("neovim sync should be enabled by default")
 	}
-	if !state.Dots.NeovimCleanState {
-		t.Fatal("neovim runtime cleanup should be enabled by default")
+	if state.Dots.NeovimCleanState {
+		t.Fatal("neovim runtime cleanup should be opt-in (off by default)")
 	}
 }
 
 func TestLoadExistingAcceptsCurrentSchema(t *testing.T) {
 	state := Default()
-	state.Dots.NeovimCleanState = false
+	state.Dots.NeovimCleanState = true
 
 	path := filepath.Join(t.TempDir(), "state.json")
 	if err := Save(path, state); err != nil {
@@ -121,8 +121,8 @@ func TestLoadExistingAcceptsCurrentSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Dots.NeovimCleanState {
-		t.Fatal("expected schema-current state to preserve disabled neovim runtime cleanup")
+	if !got.Dots.NeovimCleanState {
+		t.Fatal("expected schema-current state to preserve user-enabled neovim runtime cleanup")
 	}
 }
 

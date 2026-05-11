@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
-const SchemaVersion = 4
+const SchemaVersion = 5
 
 type State struct {
 	SchemaVersion int      `json:"schemaVersion"`
@@ -50,11 +51,51 @@ type Packages struct {
 	Preset string `json:"preset"`
 }
 type Display struct {
-	MonitorName     string `json:"monitorName"`
-	MonitorMode     string `json:"monitorMode"`
-	MonitorPosition string `json:"monitorPosition"`
-	MonitorScale    string `json:"monitorScale"`
+	MonitorName     string    `json:"monitorName"`
+	MonitorMode     string    `json:"monitorMode"`
+	MonitorPosition string    `json:"monitorPosition"`
+	MonitorScale    string    `json:"monitorScale"`
+	ExtraMonitors   []Monitor `json:"extraMonitors,omitempty"`
 }
+
+type Monitor struct {
+	Name     string `json:"name"`
+	Mode     string `json:"mode"`
+	Position string `json:"position"`
+	Scale    string `json:"scale"`
+}
+
+func (m Monitor) MonitorLine() string {
+	mode := strings.TrimSpace(m.Mode)
+	switch mode {
+	case "preferred", "auto", "highres", "highrr", "":
+		if mode == "" {
+			mode = "preferred"
+		}
+		return fmt.Sprintf(",%s,auto,%s", mode, m.Scale)
+	default:
+		return fmt.Sprintf("%s, %s, %s, %s", m.Name, m.Mode, m.Position, m.Scale)
+	}
+}
+
+func (d Display) MonitorLine() string {
+	return Monitor{
+		Name:     d.MonitorName,
+		Mode:     d.MonitorMode,
+		Position: d.MonitorPosition,
+		Scale:    d.MonitorScale,
+	}.MonitorLine()
+}
+
+func (d Display) MonitorLines() []string {
+	lines := make([]string, 0, 1+len(d.ExtraMonitors))
+	lines = append(lines, "monitor = "+d.MonitorLine())
+	for _, extra := range d.ExtraMonitors {
+		lines = append(lines, "monitor = "+extra.MonitorLine())
+	}
+	return lines
+}
+
 type Hardware struct {
 	GPU string `json:"gpu"`
 }
@@ -116,7 +157,7 @@ func Default() State {
 		},
 		Display: Display{
 			MonitorName:     "eDP-1",
-			MonitorMode:     "2560x1600@120",
+			MonitorMode:     "preferred",
 			MonitorPosition: "0x0",
 			MonitorScale:    "1",
 		},
@@ -135,7 +176,7 @@ func Default() State {
 			ZenTheme:         true,
 			Sine:             true,
 			Neovim:           true,
-			NeovimCleanState: true,
+			NeovimCleanState: false,
 			V2rayN:           true,
 			Wallpapers:       true,
 		},
@@ -320,9 +361,6 @@ func migrateFeatures(state State, def State, legacy bool, oldVersion int) State 
 	if oldVersion < 3 {
 		state.Dots.Sine = true
 		state.Dots.Neovim = true
-	}
-	if oldVersion < 4 {
-		state.Dots.NeovimCleanState = true
 	}
 	return state
 }

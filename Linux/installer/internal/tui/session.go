@@ -108,7 +108,7 @@ func runSection(ctx context.Context, s *session, selected string) error {
 		"General":   func() error { return editGeneral(s) },
 		"User":      func() error { return editUser(s) },
 		"Region":    func() error { return editRegion(s) },
-		"Display":   func() error { return editDisplay(s) },
+		"Display":   func() error { return editDisplay(ctx, s) },
 		"Packages":  func() error { return editPackages(s) },
 		"Services":  func() error { return editServices(s) },
 		"Dots":      func() error { return editDots(s) },

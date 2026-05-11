@@ -67,12 +67,23 @@ func previewRegion(s config.State) []string {
 }
 
 func previewDisplay(s config.State) []string {
-	return previewSettings(
+	settings := make([][]string, 0, 4+len(s.Display.ExtraMonitors))
+	settings = append(settings,
 		previewSetting("GPU", "Selects driver/session defaults for the system config.", s.Hardware.GPU),
-		previewSetting("Monitor", "Generates: monitor = name, mode, position, scale.", fmt.Sprintf("%s, %s, %s, %s", s.Display.MonitorName, s.Display.MonitorMode, s.Display.MonitorPosition, s.Display.MonitorScale)),
+		previewSetting("Monitor (primary)", "Generates: monitor = <line>; `preferred` collapses to ,preferred,auto,scale.", s.Display.MonitorLine()),
+	)
+	for i, monitor := range s.Display.ExtraMonitors {
+		settings = append(settings, previewSetting(
+			fmt.Sprintf("Monitor (extra #%d)", i+1),
+			"Additional output rendered after the primary monitor in monitors.conf.",
+			monitor.MonitorLine(),
+		))
+	}
+	settings = append(settings,
 		previewSetting("Keyboard layouts", "Hyprland kb_layout value.", s.Locale.KeyboardLayouts),
 		previewSetting("Keyboard toggle", "Hyprland kb_options value for layout switching.", s.Locale.KeyboardToggle),
 	)
+	return previewSettings(settings...)
 }
 
 func previewPackages(s config.State) []string {

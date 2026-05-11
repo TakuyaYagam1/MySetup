@@ -50,6 +50,45 @@ func TestHostVarsNixContainsFeatureFlags(t *testing.T) {
 	}
 }
 
+func TestHostVarsNixEmitsEmptyExtraMonitorsByDefault(t *testing.T) {
+	out, err := HostVarsNix(config.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "extraMonitors = [ ];") {
+		t.Fatalf("default state must emit empty extraMonitors list\n%s", out)
+	}
+}
+
+func TestHostVarsNixRendersExtraMonitorsList(t *testing.T) {
+	state := config.Default()
+	state.Display.ExtraMonitors = []config.Monitor{
+		{Name: "HDMI-A-1", Mode: "preferred", Position: "2560x0", Scale: "1"},
+		{Name: "DP-2", Mode: "1920x1080@144", Position: "auto", Scale: "1.25"},
+	}
+	out, err := HostVarsNix(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`name = "HDMI-A-1";`,
+		`mode = "preferred";`,
+		`position = "2560x0";`,
+		`scale = "1";`,
+		`name = "DP-2";`,
+		`mode = "1920x1080@144";`,
+		`position = "auto";`,
+		`scale = "1.25";`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("host-vars.nix missing %q in extraMonitors list\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, "extraMonitors = [\n") {
+		t.Fatalf("non-empty extraMonitors must render as multi-line list\n%s", out)
+	}
+}
+
 func TestHostVarsNixContainsWallpaperFlag(t *testing.T) {
 	state := config.Default()
 	state.Dots.Wallpapers = false

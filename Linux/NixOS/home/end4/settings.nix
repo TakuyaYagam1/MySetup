@@ -10,12 +10,33 @@ let
 
   transparency = transparencyDefaults;
 
-  monitor = rec {
+  renderMonitorRule =
+    m:
+    let
+      isAuto = m.mode == "preferred" || m.mode == "auto" || m.mode == "";
+    in
+    if isAuto then
+      ",${if m.mode == "" then "preferred" else m.mode},auto,${m.scale}"
+    else
+      "${m.name}, ${m.mode}, ${m.position}, ${m.scale}";
+
+  primaryMonitor = {
     name = display.monitorName or "eDP-1";
-    mode = display.monitorMode or "2560x1600@120";
+    mode = display.monitorMode or "preferred";
     position = display.monitorPosition or "0x0";
     scale = display.monitorScale or "1";
-    rule = "${name}, ${mode}, ${position}, ${scale}";
+  };
+  extraMonitors = display.extraMonitors or [ ];
+
+  monitor = rec {
+    inherit (primaryMonitor)
+      name
+      mode
+      position
+      scale
+      ;
+    rule = renderMonitorRule primaryMonitor;
+    rules = [ rule ] ++ map renderMonitorRule extraMonitors;
   };
 in
 {
@@ -51,7 +72,7 @@ in
     toggle = hypr.keyboardToggle or "grp:alt_shift_toggle";
   };
 
-  window.opacity = toString (hypr.windowOpacity or "0.8");
+  window.opacity = toString (hypr.windowOpacity or "0.85");
 
   fallbackBaseConfig = {
     appearance.transparency = {

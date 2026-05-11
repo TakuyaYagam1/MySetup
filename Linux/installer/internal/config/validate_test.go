@@ -4,6 +4,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -83,11 +84,63 @@ func TestValidateRejectsBadZapretConfig(t *testing.T) {
 }
 
 func TestValidateMonitorLine(t *testing.T) {
-	if err := ValidateMonitorLine("eDP-1, 2560x1600@120, 0x0, 1"); err != nil {
-		t.Fatalf("expected monitor line to validate: %v", err)
+	valid := []string{
+		"eDP-1, 2560x1600@120, 0x0, 1",
+		",preferred,auto,1",
+		",preferred,auto,1.5",
+		",auto,auto,1",
+		"eDP-1, 2560x1600@120, 0x0, 1.25",
 	}
-	if err := ValidateMonitorLine("eDP-1, lol, 0x0, 1"); err == nil {
-		t.Fatal("expected invalid monitor line")
+	for _, line := range valid {
+		if err := ValidateMonitorLine(line); err != nil {
+			t.Fatalf("expected %q to validate: %v", line, err)
+		}
+	}
+	invalid := []string{
+		"eDP-1, lol, 0x0, 1",
+		"eDP-1, , 0x0, 1",
+		"eDP-1, 2560x1600@120, 0x0",
+	}
+	for _, line := range invalid {
+		if err := ValidateMonitorLine(line); err == nil {
+			t.Fatalf("expected %q to fail validation", line)
+		}
+	}
+}
+
+func TestValidateExtraMonitorsReportsIndexedErrors(t *testing.T) {
+	state := Default()
+	state.Display.ExtraMonitors = []Monitor{
+		{Name: "HDMI-A-1", Mode: "preferred", Position: "auto", Scale: "1"},
+		{Name: "DP-2", Mode: "nope", Position: "auto", Scale: "1"},
+		{Name: "", Mode: "preferred", Position: "auto", Scale: "1"},
+	}
+	errs := ValidateDetailed(state)
+	if errs.ExtraMonitors == nil {
+		t.Fatal("expected per-extra-monitor error slice")
+	}
+	if errs.ExtraMonitors[0] != "" {
+		t.Fatalf("first extra must validate cleanly, got %q", errs.ExtraMonitors[0])
+	}
+	if errs.ExtraMonitors[1] == "" {
+		t.Fatal("second extra must report its bad mode")
+	}
+	if errs.ExtraMonitors[2] == "" {
+		t.Fatal("third extra must report empty name")
+	}
+	messages := errs.Messages()
+	wantFragments := []string{"extra monitor #2", "extra monitor #3"}
+	for _, fragment := range wantFragments {
+		found := false
+		for _, message := range messages {
+			if strings.Contains(message, fragment) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected messages to surface %q, got %#v", fragment, messages)
+		}
 	}
 }
 
