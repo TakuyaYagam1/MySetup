@@ -349,7 +349,7 @@
     "updateInterval": 3000
   },
   "screenRecord": {
-    "savePath": "@HOME@/Pictures/Videos"
+    "savePath": "@HOME@/Videos/Recordings"
   },
   "screenSnip": {
     "savePath": ""

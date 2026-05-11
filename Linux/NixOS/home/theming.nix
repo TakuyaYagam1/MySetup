@@ -61,9 +61,18 @@ in
     platformTheme.name = lib.mkForce qtPlatformTheme;
   };
 
+  gtk = {
+    enable = true;
+    iconTheme = {
+      name = qtIconTheme;
+      package = pkgs.papirus-icon-theme;
+    };
+  };
+
   dconf.settings = {
     "org/gnome/desktop/interface" = {
       color-scheme = "prefer-dark";
+      icon-theme = qtIconTheme;
     };
   };
 

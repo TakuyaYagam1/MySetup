@@ -129,6 +129,10 @@ jobs:
         run: |
           nix build --no-write-lock-file "$FLAKE#omnirouter"
 
+      - name: Drop nix build artifact before PR commit
+        if: steps.compare.outputs.should_update == 'true'
+        run: rm -f result result-*
+
       - name: Create pull request
         if: steps.compare.outputs.should_update == 'true'
         uses: peter-evans/create-pull-request@v8
@@ -136,6 +140,8 @@ jobs:
           commit-message: "chore: update omnirouter"
           branch: "update-omnirouter"
           delete-branch: true
+          add-paths: |
+            Linux/NixOS/packages/omnirouter.nix
           title: "Update OmniRouter to v${{ steps.release.outputs.version }}"
           body: |
             Updates local `omnirouter` package to `v${{ steps.release.outputs.version }}`.

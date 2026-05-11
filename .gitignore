@@ -28,3 +28,7 @@ Linux/NixOS/packages/ida-plugins.nix
 .codex
 __pycache__/
 *.py[cod]
+result
+result-*
+**/result
+**/result-*
