@@ -2,7 +2,6 @@ package dots
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -15,9 +14,6 @@ type Options struct {
 	Sources paths.Sources
 	State   config.State
 	DryRun  bool
-	// Runner is the command executor used for all external invocations.
-	// When nil, Apply falls back to run.New(DryRun) so callers (and tests)
-	// can either inject a custom runner or rely on the default behaviour.
 	Runner run.CommandRunner
 }
 
@@ -61,12 +57,23 @@ func Apply(ctx context.Context, opts Options) error {
 			return err
 		}
 	}
+	refreshThumbnailDaemons(ctx, runner, opts.State.User.Username, home)
 	return nil
 }
 
-// copyWallpapers seeds ~/Pictures/Wallpapers from the in-repo Wallpapers/ tree
-// so Hyprland/Caelestia/end4 wallpaper selectors discover them on first launch
-// without forcing the home-manager activation to recopy on every switch.
+func refreshThumbnailDaemons(ctx context.Context, runner run.CommandRunner, username, home string) {
+	if username == "" {
+		return
+	}
+	for _, daemon := range []string{"tumblerd", "gvfsd", "gvfsd-fuse", "Thunar", "thunar"} {
+		_ = runner.Command(ctx, "pkill", "-u", username, "-x", daemon)
+	}
+	_ = runner.Command(ctx, "pkill", "-u", username, "-f", "gvfs-udisks2-volume-monitor")
+	if home != "" {
+		_ = runner.Command(ctx, "rm", "-rf", filepath.Join(home, ".cache", "thumbnails"))
+	}
+}
+
 func copyWallpapers(ctx context.Context, runner run.CommandRunner, nixosSrc, home string) error {
 	src := filepath.Join(nixosSrc, "Wallpapers")
 	if _, err := os.Stat(src); err != nil {
@@ -85,8 +92,14 @@ func copyWallpapers(ctx context.Context, runner run.CommandRunner, nixosSrc, hom
 	if same, err := sourceSubsetMatches(src, dst, nil); err != nil {
 		return err
 	} else if same {
-		fmt.Printf("Wallpapers already exist in %s; skipping copy\n", dst)
-		return nil
+		return runner.Command(ctx, "chmod", "-R", "u+w", dst)
 	}
-	return runner.Command(ctx, "rsync", "-a", "--ignore-existing", src+"/", dst+"/")
+	if err := runner.Command(ctx,
+		"rsync", "-a", "--ignore-existing",
+		"--chmod=Du=rwx,Dg=rx,Do=rx,Fu=rw,Fg=r,Fo=r",
+		src+"/", dst+"/",
+	); err != nil {
+		return err
+	}
+	return runner.Command(ctx, "chmod", "-R", "u+w", dst)
 }

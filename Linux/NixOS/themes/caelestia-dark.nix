@@ -32,26 +32,6 @@
   config.stylix = {
     enable = true;
 
-    # Dark Catppuccin Macchiato-ish palette, tweaked for Caelestia visual feel.
-    base16Scheme = {
-      base00 = "1e1e2e"; # Default Background
-      base01 = "181825"; # Lighter BG (status bars)
-      base02 = "313244"; # Selection BG
-      base03 = "45475a"; # Comments, line highlight
-      base04 = "585b70"; # Dark foreground
-      base05 = "cdd6f4"; # Default foreground
-      base06 = "f5e0dc"; # Light foreground
-      base07 = "b4befe"; # Light BG
-      base08 = "f38ba8"; # Red / diff deleted
-      base09 = "fab387"; # Orange / constants
-      base0A = "f9e2af"; # Yellow / classes
-      base0B = "a6e3a1"; # Green / strings
-      base0C = "94e2d5"; # Cyan / regex
-      base0D = "89b4fa"; # Blue / functions
-      base0E = "cba6f7"; # Purple / keywords
-      base0F = "f2cdcd"; # Pink / embedded tags
-    };
-
     cursor = {
       name = "Bibata-Modern-Classic";
       package = pkgs.bibata-cursors;

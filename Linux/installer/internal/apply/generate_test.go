@@ -110,8 +110,9 @@ func TestHomeWallpaperActivationHonorsDryRun(t *testing.T) {
 	text := string(data)
 	for _, want := range []string{
 		`$DRY_RUN_CMD ${pkgs.findutils}/bin/find "$WALLS_DST" -maxdepth 1 -type f -name 'preview-*' -delete`,
-		`$DRY_RUN_CMD ${pkgs.coreutils}/bin/cp -n "$wall" "$WALLS_DST/"`,
+		`$DRY_RUN_CMD ${pkgs.coreutils}/bin/cp -n --no-preserve=mode "$wall" "$WALLS_DST/"`,
 		`[ -e "$wall" ] || continue`,
+		`$DRY_RUN_CMD ${pkgs.coreutils}/bin/chmod -R u+w "$WALLS_DST"`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("home wallpaper activation missing %q\n%s", want, text)
@@ -119,6 +120,9 @@ func TestHomeWallpaperActivationHonorsDryRun(t *testing.T) {
 	}
 	if strings.Contains(text, `cp -n "$WALLS_SRC"/* "$WALLS_DST" 2>/dev/null || true`) {
 		t.Fatalf("home wallpaper activation must not hide copy failures\n%s", text)
+	}
+	if strings.Contains(text, `${pkgs.coreutils}/bin/cp -n "$wall"`) {
+		t.Fatalf("home wallpaper cp must keep the --no-preserve=mode flag\n%s", text)
 	}
 }
 

@@ -54,3 +54,51 @@ func TestSetupV2rayNSeedsSingBoxWhenTargetRootExists(t *testing.T) {
 		t.Fatalf("seeded sing-box mode = %v, want 0755", info.Mode().Perm())
 	}
 }
+
+func TestRefreshThumbnailDaemonsKillsDaemonsAndClearsCache(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	runner := run.Runner{DryRun: true, Stdout: &stdout, Stderr: &stderr}
+
+	refreshThumbnailDaemons(context.Background(), runner, "alice", "/home/alice")
+
+	text := stdout.String()
+	for _, want := range []string{
+		"pkill -u alice -x tumblerd",
+		"pkill -u alice -x gvfsd",
+		"pkill -u alice -x gvfsd-fuse",
+		"pkill -u alice -x Thunar",
+		"pkill -u alice -x thunar",
+		"pkill -u alice -f gvfs-udisks2-volume-monitor",
+		"rm -rf /home/alice/.cache/thumbnails",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("refreshThumbnailDaemons missing %q in command log:\n%s", want, text)
+		}
+	}
+}
+
+func TestRefreshThumbnailDaemonsSkipsWithoutUsername(t *testing.T) {
+	var stdout bytes.Buffer
+	runner := run.Runner{DryRun: true, Stdout: &stdout}
+
+	refreshThumbnailDaemons(context.Background(), runner, "", "/home/alice")
+
+	if stdout.Len() != 0 {
+		t.Fatalf("no commands expected without username, got %q", stdout.String())
+	}
+}
+
+func TestRefreshThumbnailDaemonsSkipsCacheWipeWithoutHome(t *testing.T) {
+	var stdout bytes.Buffer
+	runner := run.Runner{DryRun: true, Stdout: &stdout}
+
+	refreshThumbnailDaemons(context.Background(), runner, "alice", "")
+
+	text := stdout.String()
+	if !strings.Contains(text, "pkill -u alice -x tumblerd") {
+		t.Fatalf("expected pkill to still run when home is empty\n%s", text)
+	}
+	if strings.Contains(text, "rm -rf") {
+		t.Fatalf("rm must be skipped when home is empty\n%s", text)
+	}
+}

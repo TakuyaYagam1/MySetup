@@ -66,6 +66,16 @@ in
       '';
     };
 
+    home.activation.caelestiaSeedDynamicScheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      scheme_state="$HOME/.local/state/caelestia/scheme.json"
+      if [ ! -e "$scheme_state" ]; then
+        $DRY_RUN_CMD ${pkgs.coreutils}/bin/mkdir -p "$HOME/.local/state/caelestia"
+        if command -v caelestia >/dev/null 2>&1; then
+          $DRY_RUN_CMD caelestia scheme set -n dynamic -v rainbow >/dev/null 2>&1 || true
+        fi
+      fi
+    '';
+
     home.packages = [ (mysetupPkgs.quickshell or pkgs.quickshell) ];
   };
 }

@@ -42,29 +42,11 @@ in
               target = trans.regionContent;
             }
           } |
-          ${
-            dotfilesLib.mkOpacityFallback ".regionSelector.targetRegions.opacity" {
-              vendor = 0.3;
-              target = trans.shell;
-            }
-          } |
-          . as $live
-          | (($repo[0] // {}) | {
-              appearance: {
-                transparency: ((.appearance // {}).transparency // {}),
-                wallpaperTheming: ((.appearance // {}).wallpaperTheming // {})
-              },
-              bar: (.bar // {}),
-              background: { widgets: ((.background // {}).widgets // {}) },
-              dock: (.dock // {}),
-              time: (.time // {}),
-              light: (.light // {}),
-              language: (.language // {}),
-              sidebar: { translator: ((.sidebar // {}).translator // {}) },
-              tray: { pinnedItems: ((.tray // {}).pinnedItems // []) }
-            }) as $owned
-          | $live * $owned
-      ' --slurpfile repo "${end4ConfigJson}"
+          ${dotfilesLib.mkOpacityFallback ".regionSelector.targetRegions.opacity" {
+            vendor = 0.3;
+            target = trans.shell;
+          }}
+      '
     '';
   };
 }
