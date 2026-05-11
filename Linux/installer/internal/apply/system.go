@@ -43,7 +43,7 @@ func syncToEtc(ctx context.Context, runner run.CommandRunner, staging, dest stri
 
 func syncToEtcArgs(staging, dest string) []string {
 	return []string{
-		"rsync", "-a", "--delete",
+		"rsync", "-a", "--delete", "--checksum",
 		"--exclude=/mysetup/",
 		"--exclude=/secrets/",
 		"--exclude=hardware-configuration.nix",

@@ -59,15 +59,15 @@ func copyTree(ctx context.Context, runner run.CommandRunner, src, dst string, ex
 	if !info.IsDir() {
 		return fmt.Errorf("source is not a directory: %s", src)
 	}
-	args := make([]string, 0, 4+len(extraExcludes))
-	args = append(args, "-a", "--delete")
+	args := make([]string, 0, 5+len(extraExcludes))
+	args = append(args, "-a", "--delete", "--checksum")
 	args = append(args, extraExcludes...)
 	args = append(args, src+"/", dst+"/")
 	return runner.Command(ctx, "rsync", args...)
 }
 
 func copyNixOS(ctx context.Context, runner run.CommandRunner, src, dst string, deleteExtra bool) error {
-	args := []string{"-a"}
+	args := []string{"-a", "--checksum"}
 	if deleteExtra {
 		args = append(args, "--delete")
 	}
