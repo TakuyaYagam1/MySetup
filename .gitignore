@@ -32,3 +32,6 @@ result
 result-*
 **/result
 **/result-*
+*.mp4
+*.mkv
+*.webm

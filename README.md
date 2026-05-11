@@ -7,6 +7,10 @@
 
 Personal system configuration for Linux (NixOS + Hyprland) and Windows (Komorebi + YASB).
 
+[![NixOS Rice & Dev Environment](assets/preview.png)](https://youtu.be/fgmueUOnfhk)
+
+*[8-minute video tour of the NixOS side](https://youtu.be/fgmueUOnfhk) - click the image above*
+
 ## Structure
 
 - **Linux/** - NixOS configuration with Hyprland, custom themes, dev environment
