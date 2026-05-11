@@ -11,6 +11,8 @@ Personal system configuration for Linux (NixOS + Hyprland) and Windows (Komorebi
 
 *[8-minute video tour of the NixOS side](https://youtu.be/fgmueUOnfhk) - click the image above*
 
+> Contributors: read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR. Security issues: see [SECURITY.md](SECURITY.md).
+
 ## Structure
 
 - **Linux/** - NixOS configuration with Hyprland, custom themes, dev environment

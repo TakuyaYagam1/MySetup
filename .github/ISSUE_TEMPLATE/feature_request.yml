@@ -1,0 +1,63 @@
+name: Feature request
+description: Suggest a new feature, enhancement, or upstream integration.
+title: "[FEATURE] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing an enhancement. Please be specific —
+        "make it better" is not actionable.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which subsystem would this affect?
+      options:
+        - installer (Go)
+        - NixOS flake / Nix modules
+        - Hyprland / WM
+        - Shell profile (caelestia / noctalia / end-4)
+        - Zapret / region tools
+        - Komorebi / YASB (Windows)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like added?
+      description: Describe the feature or change in concrete terms.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is this useful?
+      description: Motivation, use case, the problem it solves.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches, existing tools, upstream solutions you looked at.
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Screenshots, links to upstream projects, reference configs, mockups.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-flight checklist
+      options:
+        - label: I searched existing issues and confirmed this is not a duplicate.
+          required: true

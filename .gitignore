@@ -1,5 +1,5 @@
 # All ignored files needed in Linux/
-# Uncomment files in Linux/NixOS/hosts/NixOS/default.nix to use them
+# Uncomment files in Linux/NixOS/profiles/developer.nix to use them
 #
 # Nix modules (create from repo history or manually):
 #   - Linux/NixOS/packages/ida-pro.nix

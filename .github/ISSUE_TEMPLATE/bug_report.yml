@@ -1,0 +1,113 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly.
+title: "[BUG] "
+labels:
+  - bug
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill in as much detail as possible —
+        unstructured "it doesn't work" reports will be closed.
+
+        Read the relevant platform README before submitting:
+        - [Linux/README.md](https://github.com/TakuyaYagam1/MySetup/blob/main/Linux/README.md)
+        - [Windows/README.md](https://github.com/TakuyaYagam1/MySetup/blob/main/Windows/README.md)
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Which side of the repo is affected?
+      options:
+        - Linux (NixOS)
+        - Windows
+        - Both
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which subsystem is affected? Pick "Other" if unsure.
+      options:
+        - installer (Go)
+        - NixOS flake / Nix modules
+        - Hyprland / WM
+        - Shell profile (caelestia / noctalia / end-4)
+        - Zapret / region tools
+        - Komorebi / YASB (Windows)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the actual behavior.
+      placeholder: When I ran `nix run github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup` it crashed with...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimal step-by-step that reliably reproduces the bug.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: version
+    attributes:
+      label: Version info
+      description: |
+        Linux: paste output of
+        ```
+        git -C /etc/nixos rev-parse HEAD
+        nixos-rebuild --version
+        uname -a
+        ```
+        Windows: paste output of `winver` and `komorebic --version`.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: |
+        Paste only the relevant excerpt. Useful sources:
+        - `journalctl -b -p err`
+        - full `nixos-rebuild switch` output
+        - installer stderr / `~/.local/state/mysetup/`
+        **Redact** usernames, tokens, IPs, and absolute paths that leak personal info.
+      render: shell
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-flight checklist
+      options:
+        - label: I read the platform README and the FAQ section.
+          required: true
+        - label: I redacted secrets and personal paths from logs and version output.
+          required: true
+        - label: I searched existing issues and confirmed this is not a duplicate.
+          required: true
