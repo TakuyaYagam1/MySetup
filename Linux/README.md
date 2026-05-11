@@ -20,7 +20,7 @@ flake source still includes sibling `Linux/dots` and `Linux/installer`.
 Or run directly from GitHub without cloning first:
 
 ```bash
-nix run 'github:skr1ms/MySetup?dir=Linux/NixOS#mysetup'
+nix run 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup'
 ```
 
 This is still the normal full apply path. Nix fetches the repository source into
@@ -28,10 +28,21 @@ This is still the normal full apply path. Nix fetches the repository source into
 source, then the installer stages `NixOS`, `dots`, and `installer` into `/tmp`
 before applying them to `/etc/nixos`.
 
-For reproducible installs, pin a commit:
+Nix caches the resolved source for ~1 hour (`tarball-ttl` default). If you just
+pushed a commit and want the new HEAD right now, force a re-fetch:
 
 ```bash
-nix run 'github:skr1ms/MySetup/<commit>?dir=Linux/NixOS#mysetup'
+nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup'
+```
+
+For reproducible installs, pin a commit, branch, or tag:
+
+```bash
+# Specific commit (full SHA):
+nix run 'github:TakuyaYagam1/MySetup/<commit>?dir=Linux/NixOS#mysetup'
+
+# Specific branch (e.g. develop):
+nix run 'github:TakuyaYagam1/MySetup/develop?dir=Linux/NixOS#mysetup'
 ```
 
 Fresh install through `/mnt` is not supported in v1. Run this on an already

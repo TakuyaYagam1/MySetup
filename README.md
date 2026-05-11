@@ -19,10 +19,20 @@ Personal system configuration for Linux (NixOS + Hyprland) and Windows (Komorebi
 > **Read [Linux/README.md](Linux/README.md) first** - contains pre-installation requirements,
 > path configuration, regional notes, and troubleshooting.
 
+No-clone install (recommended for fresh boxes - Nix fetches the flake source
+into `/nix/store`, the wrapped installer points `MYSETUP_REPO_ROOT` at that
+immutable source, then stages it to `/etc/nixos`):
+
 ```bash
-git clone https://github.com/skr1ms/MySetup.git
+nix run 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup'
+```
+
+Or with a local clone (useful when iterating on the config):
+
+```bash
+git clone https://github.com/TakuyaYagam1/MySetup.git
 cd MySetup
-nix run ./Linux/NixOS#mysetup
+nix run "path:$PWD?dir=Linux/NixOS#mysetup"
 ```
 
 The installer will ask you about:
@@ -51,7 +61,7 @@ applied, switch between `caelestia-shell`, `noctalia-shell`, and `end-4`
 2. Run:
 
 ```powershell
-git clone https://github.com/skr1ms/MySetup.git
+git clone https://github.com/TakuyaYagam1/MySetup.git
 cd MySetup\Windows
 .\install.ps1
 ```
