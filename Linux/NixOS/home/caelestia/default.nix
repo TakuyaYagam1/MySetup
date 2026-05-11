@@ -46,36 +46,40 @@ in
       };
     };
 
-    home.activation.caelestiaSeedShellJson = homeLibs.shellSeed.mkSeedActivation {
-      dirs = [ "$HOME/.config/caelestia" ];
-      body = ''
-        seed_json_object "$HOME/.config/caelestia/shell.json" "${shellJson}" "" '
-            if .bar.excludedScreens? then .bar.excludedScreens |= map(select(. != "")) else . end |
-            .appearance //= {} |
-            .appearance.transparency //= {} |
-            .appearance.transparency.enabled //= true |
-            ${dotfilesLib.mkOpacityDefault trans ".appearance.transparency.base"} |
-            .appearance.transparency.layers //= ${toString trans.content} |
-            .background //= {} |
-            .background.desktopClock //= {} |
-            .background.desktopClock.shadow //= {} |
-            ${dotfilesLib.mkOpacityDefault trans ".background.desktopClock.shadow.opacity"} |
-            .background.desktopClock.background //= {} |
-            ${dotfilesLib.mkOpacityDefault trans ".background.desktopClock.background.opacity"}
-        '
-      '';
+    home = {
+      activation = {
+        caelestiaSeedShellJson = homeLibs.shellSeed.mkSeedActivation {
+          dirs = [ "$HOME/.config/caelestia" ];
+          body = ''
+            seed_json_object "$HOME/.config/caelestia/shell.json" "${shellJson}" "" '
+                if .bar.excludedScreens? then .bar.excludedScreens |= map(select(. != "")) else . end |
+                .appearance //= {} |
+                .appearance.transparency //= {} |
+                .appearance.transparency.enabled //= true |
+                ${dotfilesLib.mkOpacityDefault trans ".appearance.transparency.base"} |
+                .appearance.transparency.layers //= ${toString trans.content} |
+                .background //= {} |
+                .background.desktopClock //= {} |
+                .background.desktopClock.shadow //= {} |
+                ${dotfilesLib.mkOpacityDefault trans ".background.desktopClock.shadow.opacity"} |
+                .background.desktopClock.background //= {} |
+                ${dotfilesLib.mkOpacityDefault trans ".background.desktopClock.background.opacity"}
+            '
+          '';
+        };
+
+        caelestiaSeedDynamicScheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          scheme_state="$HOME/.local/state/caelestia/scheme.json"
+          if [ ! -e "$scheme_state" ]; then
+            $DRY_RUN_CMD ${pkgs.coreutils}/bin/mkdir -p "$HOME/.local/state/caelestia"
+            if command -v caelestia >/dev/null 2>&1; then
+              $DRY_RUN_CMD caelestia scheme set -n dynamic -v rainbow >/dev/null 2>&1 || true
+            fi
+          fi
+        '';
+      };
+
+      packages = [ (mysetupPkgs.quickshell or pkgs.quickshell) ];
     };
-
-    home.activation.caelestiaSeedDynamicScheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      scheme_state="$HOME/.local/state/caelestia/scheme.json"
-      if [ ! -e "$scheme_state" ]; then
-        $DRY_RUN_CMD ${pkgs.coreutils}/bin/mkdir -p "$HOME/.local/state/caelestia"
-        if command -v caelestia >/dev/null 2>&1; then
-          $DRY_RUN_CMD caelestia scheme set -n dynamic -v rainbow >/dev/null 2>&1 || true
-        fi
-      fi
-    '';
-
-    home.packages = [ (mysetupPkgs.quickshell or pkgs.quickshell) ];
   };
 }

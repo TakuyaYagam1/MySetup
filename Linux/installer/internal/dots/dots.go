@@ -14,7 +14,7 @@ type Options struct {
 	Sources paths.Sources
 	State   config.State
 	DryRun  bool
-	Runner run.CommandRunner
+	Runner  run.CommandRunner
 }
 
 func Apply(ctx context.Context, opts Options) error {
