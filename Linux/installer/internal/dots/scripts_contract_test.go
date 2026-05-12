@@ -154,7 +154,8 @@ func TestShellProfilesMatchRuntimeScriptContract(t *testing.T) {
 	}
 	runtime := string(runtimeData)
 	for _, profile := range profiles {
-		if !strings.Contains(runtime, profile+"|") && !strings.Contains(runtime, "|"+profile) {
+		pattern := regexp.MustCompile(`(\|\s*` + regexp.QuoteMeta(profile) + `\b)|(\b` + regexp.QuoteMeta(profile) + `\s*\|)`)
+		if !pattern.MatchString(runtime) {
 			t.Fatalf("shell-runtime.sh valid profile case is missing %q\n%s", profile, runtime)
 		}
 	}

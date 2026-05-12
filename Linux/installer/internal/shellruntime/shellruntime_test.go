@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -55,7 +56,8 @@ func TestProfilesMatchNixAndShellRuntime(t *testing.T) {
 		t.Fatalf("shell-runtime default profile drifted from manifest default %q\n%s", DefaultProfile, runtime)
 	}
 	for _, profile := range Profiles {
-		if !strings.Contains(runtime, profile+"|") && !strings.Contains(runtime, "|"+profile) {
+		pattern := regexp.MustCompile(`(\|\s*` + regexp.QuoteMeta(profile) + `\b)|(\b` + regexp.QuoteMeta(profile) + `\s*\|)`)
+		if !pattern.MatchString(runtime) {
 			t.Fatalf("shell-runtime valid profile case is missing %q\n%s", profile, runtime)
 		}
 	}

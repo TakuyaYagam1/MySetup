@@ -43,7 +43,10 @@ func Run(ctx context.Context, opts Options) error {
 		_, err := fmt.Fprintln(out, "Run with --yes to clean the safe managed candidates.")
 		return err
 	}
-	if err := runner.Command(ctx, "rm", "-f", filepath.Join(home, ".cache/noctalia/wallpapers.json")); err != nil {
+	if err := removePaths(ctx, runner, safeRemovablePaths(home)); err != nil {
+		return err
+	}
+	if err := removeHomeManagerBackups(ctx, runner, filepath.Join(home, ".config")); err != nil {
 		return err
 	}
 	if err := repairActiveEnd4ProfileLink(ctx, runner, home); err != nil {
@@ -86,8 +89,44 @@ func ReportForHome(home string) string {
 func candidates(home string) []string {
 	return []string{
 		filepath.Join(home, "Pictures/Wallpapers/preview-*"),
-		filepath.Join(home, ".cache/noctalia/wallpapers.json"),
+		filepath.Join(home, ".cache/noctalia"),
+		filepath.Join(home, ".cache/nvim/treesitter"),
+		filepath.Join(home, ".local/share/nvim/treesitter"),
+		filepath.Join(home, ".config/**/*.hm-backup"),
 	}
+}
+
+func safeRemovablePaths(home string) []string {
+	return []string{
+		filepath.Join(home, ".cache/noctalia"),
+		filepath.Join(home, ".cache/nvim/treesitter"),
+		filepath.Join(home, ".local/share/nvim/treesitter"),
+	}
+}
+
+func removePaths(ctx context.Context, runner run.CommandRunner, paths []string) error {
+	for _, p := range paths {
+		if _, err := os.Lstat(p); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+		if err := runner.Command(ctx, "rm", "-rf", "--", p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func removeHomeManagerBackups(ctx context.Context, runner run.CommandRunner, configDir string) error {
+	if _, err := os.Stat(configDir); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	return runner.Command(ctx, "find", configDir, "-type", "f", "-name", "*.hm-backup", "-delete")
 }
 
 func repairActiveEnd4ProfileLink(ctx context.Context, runner run.CommandRunner, home string) error {

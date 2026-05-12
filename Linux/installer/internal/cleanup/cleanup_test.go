@@ -18,6 +18,15 @@ func TestRunDryRunPrintsCleanupCommands(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, "Pictures/Wallpapers"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(filepath.Join(home, ".cache/noctalia"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".config/nvim"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".config/nvim/init.lua.hm-backup"), []byte("-- backup\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	out := captureStdout(t, func() {
 		if err := Run(context.Background(), Options{DryRun: true, Yes: true}); err != nil {
@@ -25,7 +34,7 @@ func TestRunDryRunPrintsCleanupCommands(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"rm -f", "preview-*", "wallpapers.json"} {
+	for _, want := range []string{"rm -rf", "preview-*", ".cache/noctalia", "*.hm-backup"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected cleanup output to contain %q\n%s", want, out)
 		}
@@ -38,11 +47,17 @@ func TestReportForHomeListsCleanupCandidates(t *testing.T) {
 	for _, want := range []string{
 		"== Safe cleanup candidates ==",
 		filepath.Join(home, "Pictures/Wallpapers/preview-*"),
-		filepath.Join(home, ".cache/noctalia/wallpapers.json"),
+		filepath.Join(home, ".cache/noctalia"),
+		filepath.Join(home, ".cache/nvim/treesitter"),
+		filepath.Join(home, ".local/share/nvim/treesitter"),
+		filepath.Join(home, ".config/**/*.hm-backup"),
 	} {
 		if !strings.Contains(report, want) {
 			t.Fatalf("expected cleanup report to contain %q, got:\n%s", want, report)
 		}
+	}
+	if strings.Contains(report, ".cache/thumbnails") {
+		t.Fatalf("thumbnail cache must not be a managed cleanup target, got:\n%s", report)
 	}
 }
 
@@ -112,6 +127,9 @@ func TestRunReturnsCleanupCommandError(t *testing.T) {
 func TestRunUsesDirectRmInsteadOfShell(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".cache/noctalia"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	bin := t.TempDir()
 	if err := os.WriteFile(filepath.Join(bin, "rm"), []byte("#!/bin/sh\nprintf '%s\\n' \"$0 $@\"\n"), 0o755); err != nil {
 		t.Fatal(err)
@@ -126,7 +144,7 @@ func TestRunUsesDirectRmInsteadOfShell(t *testing.T) {
 	if strings.Contains(out, "sh -c") {
 		t.Fatalf("cleanup must not use shell interpolation\n%s", out)
 	}
-	if !strings.Contains(out, "rm -f") {
+	if !strings.Contains(out, "rm -rf") {
 		t.Fatalf("cleanup should log direct rm command\n%s", out)
 	}
 }

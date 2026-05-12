@@ -61,17 +61,15 @@ func Apply(ctx context.Context, opts Options) error {
 	return nil
 }
 
-func refreshThumbnailDaemons(ctx context.Context, runner run.CommandRunner, username, home string) {
+func refreshThumbnailDaemons(ctx context.Context, runner run.CommandRunner, username, _ string) {
 	if username == "" {
 		return
 	}
-	for _, daemon := range []string{"tumblerd", "gvfsd", "gvfsd-fuse", "Thunar", "thunar"} {
+	for _, daemon := range []string{"gvfsd", "gvfsd-fuse", "Thunar", "thunar"} {
 		_ = runner.Command(ctx, "pkill", "-u", username, "-x", daemon)
 	}
 	_ = runner.Command(ctx, "pkill", "-u", username, "-f", "gvfs-udisks2-volume-monitor")
-	if home != "" {
-		_ = runner.Command(ctx, "rm", "-rf", filepath.Join(home, ".cache", "thumbnails"))
-	}
+	_ = runner.Command(ctx, "pkill", "-u", username, "-f", "tumbler-1/tumblerd")
 }
 
 func copyWallpapers(ctx context.Context, runner run.CommandRunner, nixosSrc, home string) error {
