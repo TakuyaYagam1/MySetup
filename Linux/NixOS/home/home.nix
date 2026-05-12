@@ -40,14 +40,7 @@ let
     ./programs/thunar.nix
     ./programs/uwsm.nix
     ./programs/vesktop.nix
-    ./programs/user-apps/desktop.nix
-    ./programs/user-apps/dev.nix
-    ./programs/user-apps/api-tools.nix
-    ./programs/user-apps/wayland.nix
-    ./programs/user-apps/media.nix
-    ./programs/user-apps/games.nix
-    ./programs/user-apps/containers.nix
-    ./programs/user-apps/misc.nix
+    ./programs/packages.nix
   ];
   shellImports = [
     inputs.caelestia-shell.homeManagerModules.default
@@ -93,6 +86,15 @@ in
     package = mysetupPkgs.neovim or pkgs.neovim;
     withRuby = true;
     withPython3 = true;
+    plugins = [
+      (pkgs.symlinkJoin {
+        name = "nvim-treesitter-parsers";
+        paths = pkgs.vimPlugins.nvim-treesitter.withAllGrammars.dependencies;
+      })
+    ];
+    initLua = ''
+      require("config.lazy")
+    '';
   };
 
   # Caelestia ships its own bar - block any upstream waybar enable.
@@ -104,6 +106,7 @@ in
   # When HM uses the system package set, Stylix must not install package overlays
   # inside the HM evaluation as well.
   stylix.overlays.enable = false;
+  stylix.targets.neovim.enable = false;
 
   xdg.configFile = lib.genAttrs generatedConfigFiles (_: {
     force = true;

@@ -4,7 +4,8 @@
   imports = [
     ../../modules/mysetup-options.nix
     ../../profiles/base.nix
-    ../../profiles/personal.nix
+    ../../profiles/desktop.nix
+    ../../profiles/developer.nix
     ../../profiles/features.nix
   ]
   ++ lib.optional (builtins.pathExists ./hardware-configuration.nix) ./hardware-configuration.nix
