@@ -11,6 +11,15 @@ Personal system configuration for Linux (NixOS + Hyprland) and Windows (Komorebi
 
 *[8-minute video tour of the NixOS side](https://youtu.be/fgmueUOnfhk) - click the image above*
 
+## Screenshots
+
+| Zen Browser (Catppuccin chrome) | Zen + Sine mods | Neovim (LazyVim) |
+| :---: | :---: | :---: |
+| ![Zen Browser](assets/zen.png) | ![Zen + Sine mods](assets/zen_sine_mods.png) | ![LazyVim](assets/lazyvim.png) |
+
+> Zen Browser theming lives in [`Linux/dots/zen/chrome/`](Linux/dots/zen/chrome).
+> Neovim config (LazyVim-based) lives in [`Linux/dots/nvim/`](Linux/dots/nvim).
+
 > Contributors: read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR. Security issues: see [SECURITY.md](SECURITY.md).
 
 ## Structure

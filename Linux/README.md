@@ -6,6 +6,19 @@ The old `install.sh` and `dots/install.fish` entry points are gone. System
 settings, host-local generated files, and user dotfiles are applied through the
 flake app.
 
+## Quick Start
+
+Already booted into NixOS and the host has `/etc/nixos/hardware-configuration.nix`?
+The single command below opens the TUI installer, lets you pick a preset, and
+applies everything:
+
+```bash
+nix run "path:$PWD?dir=Linux/NixOS#mysetup"
+```
+
+Run this from the cloned repository root. The detailed forms (GitHub-direct,
+pinned commit/branch, refresh) are documented in the next section.
+
 ## Install / Reconfigure
 
 Run from the repository root:
@@ -135,7 +148,9 @@ Secret files must be regular files, non-symlinks, and not group/world readable.
 
 - Host/user settings: hostname, username, full name, home directory.
 - Git identity: `user.name` and `user.email` for Home Manager Git config.
-- Region: timezone, locale, console keymap, weather location, Russia mode.
+- Region: timezone, locale, console keymap, weather location, Russia mode
+  (`mysetup.features.russiaMode` - when `true`, drops JetBrains products
+  such as `jetbrains.datagrip` / `jetbrains.goland` from the home package set).
 - Display: monitor name, mode, position, scale, Hypr keyboard layouts/toggle.
 - Package preset: `personal`, `developer`, `desktop`, or `minimal`.
 - Feature flags: GPU type, Secure Boot, CTF tools, OmniRouter.
@@ -177,6 +192,9 @@ The QuickShell selector opens on the focused monitor and switches between:
 - `noctalia-shell`
 - `end4` / Illogical Impulse
 
+The full per-shell keybind reference (common + caelestia + noctalia + end4)
+lives in the [GitHub Wiki](https://github.com/TakuyaYagam1/MySetup/wiki).
+
 Runtime state:
 
 ```text
@@ -200,7 +218,8 @@ Manual switch commands:
 The shell stack is intentionally split:
 
 - `caelestia` and `noctalia` use the installer-managed `Linux/dots/hypr`
-  entrypoint with runtime `shell-keybinds.conf` and `shell-launcher.conf`.
+  entrypoint with shared `shell-common-keybinds.conf` and
+  `shell-workspace-keybinds.conf` fragments.
 - `end4` uses a dedicated Home Manager profile based on
   `end-4/dots-hyprland`, with patched Hyprland and QuickShell paths.
 - `end4` keeps mutable runtime settings under `~/.config/illogical-impulse`,
@@ -230,7 +249,8 @@ The installer applies changes defensively:
 5. Backs up `/etc/nixos` to a unique `/etc/nixos.bak.<timestamp>.<pid>.<n>`.
 6. Syncs the staging tree to `/etc/nixos`, including `flake.lock` so switch uses
    the same lock graph as dry-build.
-7. Mirrors external dots into `/etc/nixos/dots`.
+7. Mirrors `Linux/dots/` from the staged repository copy into
+   `/etc/nixos/dots/` so the flake can reference dotfiles by path.
 8. Applies selected user dotfiles and reloads Hypr when a session is running.
 9. Asks before `nixos-rebuild switch` in TUI mode.
 10. Writes `/etc/nixos/mysetup/state.json` only after switch succeeds.
@@ -270,12 +290,13 @@ nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --dry-run --no-switch
 
 Useful checks after changing installer or shell integration:
 
-```bash
-make -C Linux/installer check
-make -C Linux/installer shell-check
-make -C Linux/installer nix-hm-eval
-make -C Linux/installer nix-installed-mirror-build
-```
+| Make target | Run it when |
+| --- | --- |
+| `make -C Linux/installer check` | Before pushing or applying - full local CI: lint, fmt-check, hypr-bind-check, shell-check, tests, nix evals. |
+| `make -C Linux/installer shell-check` | After editing Hypr scripts, JSON, or Python patch sources under `Linux/dots/hypr/`. |
+| `make -C Linux/installer nix-hm-eval` | After touching `home/`, end4 runtime-env, or shell-profile imports - evaluates the runtime shell module and all-on home-manager imports including end4. |
+| `make -C Linux/installer nix-installed-mirror-build` | After flake changes that affect an already-installed system - builds `mysetup` from an `/etc/nixos`-style temporary mirror. |
+| `make all` (run from `Linux/`) | Aggregate: delegates to installer Makefile + `statix` + `deadnix` + json-lint. |
 
 ## Configuration Structure
 
@@ -286,7 +307,6 @@ Linux/NixOS/
 ├── hosts/NixOS/
 │   ├── default.nix
 │   ├── host-vars.nix
-│   ├── variables.nix
 │   ├── secrets/                   # optional sops-nix system secrets
 │   ├── hashed-password.nix        # generated locally when password is reset
 │   └── hardware-configuration.nix # host-local, preserved from /etc/nixos
@@ -296,8 +316,8 @@ Linux/NixOS/
 │   └── package-sets/              # per-preset package set definitions
 ├── modules/
 │   └── mysetup-options.nix        # `mysetup.*` NixOS options
-├── profiles/                      # base / desktop / developer / personal /
-│                                  # features import layers
+├── profiles/                      # base / desktop / developer / features
+│                                  # import layers (composed in hosts/NixOS)
 ├── home/                          # home-manager root + shell profiles
 │   ├── home.nix
 │   ├── apps.nix
@@ -309,11 +329,12 @@ Linux/NixOS/
 │   ├── noctalia/                  # noctalia-shell profile
 │   ├── end4/                      # end-4 Illogical Impulse profile
 │   ├── programs/                  # btop, cava, fastfetch, fish, foot, git,
+│   │                              # packages (preset-gated home pkgs),
 │   │                              # starship, thunar, vesktop, uwsm, …
 │   ├── secrets/                   # optional sops-nix user secrets
 │   └── shells/
 │       └── quickshell/mysetup-shell-selector/  # Super+Shift+W picker
-├── packages/                      # IDA Pro/MCP/plugins, fonts, dev-tools,
+├── packages/                      # fonts, dev-tools,
 │                                  # zen-browser, sddm-meowrch-theme, …
 ├── programs/                      # system-wide program modules
 │                                  # (fish, hyprland, gaming, thunar, …)
@@ -356,15 +377,54 @@ Linux/Makefile                     # aggregate make targets for the Linux tree
                                    # (delegates to installer/Makefile + nix)
 ```
 
+## Layer Model: NixOS vs Home-Manager
+
+Many programs (Thunar, fish, Hyprland, …) intentionally appear in **two**
+files. They are not duplicates - they configure two different layers:
+
+| Layer | Scope | Owns | Example |
+| --- | --- | --- | --- |
+| NixOS module (`programs/<x>.nix`, `services/<x>.nix`, `packages/<x>.nix`) | system-wide, applied by root via `nixos-rebuild` | package install in `/etc`, polkit/dbus/systemd, mime database, kernel/udev | `programs/thunar.nix`: `programs.thunar.enable`, `environment.systemPackages = [ tumbler ffmpegthumbnailer ]` |
+| Home-Manager module (`home/programs/<x>.nix`) | per-user, applied by your user via `home-manager activate` | `~/.config` dotfiles, xfconf/gsettings, GTK theme, user-only `home.activation` hooks | `home/programs/thunar.nix`: `xfconf.settings.thunar.*`, `xdg.configFile."Thunar/uca.xml"`, restart of user thumbnail daemons |
+
+These two scopes run in **different processes with different privileges** and
+cannot be merged into one file. The same split exists in every serious NixOS
+configuration. If a program only has one file, it is because it does not need
+the other half:
+
+- **NixOS-only** (no home-manager half): `programs/gaming.nix`,
+  `programs/xdg-portal.nix`, `programs/system-tools.nix`,
+  `programs/development.nix`. These provide system features that have no
+  per-user dotfile surface (gamemode, steam, portals, build tooling).
+- **Home-Manager-only** (no NixOS half): `home/programs/btop.nix`,
+  `home/programs/starship.nix`, `home/programs/cava.nix`,
+  `home/programs/fastfetch.nix`. These are user-scope CLI tools with config
+  files in `~/.config/`; no system service or polkit/dbus rule is required.
+- **Asymmetric pair**: `programs/fish.nix` (system-wide shell enable +
+  `users.defaultUserShell`) plus `home/programs/fish.nix` (aliases,
+  abbreviations, functions, integrations like `direnv` / `zoxide`).
+
+Preset gating (`mysetupLib.mkIfPresetOrMore "desktop" config.mysetup`) decides
+**whether** a NixOS module is active per host preset
+(`minimal -> desktop -> developer -> personal`). Home-manager packages use the
+same preset helpers via `home/programs/packages.nix`.
+
+Compositional note: there is no separate `profiles/personal.nix` file. The
+`personal` preset is just `developer` + `desktop` + everything gated on
+`presets.personal` (e.g. games in `home/programs/packages.nix`).
+`hosts/NixOS/default.nix` imports `profiles/{base,desktop,developer,features}.nix`
+directly, and each module checks `mysetup.packages.preset` at evaluation time.
+
 ## Recovery
 
-The installer keeps `/etc/nixos.bak.<timestamp>` backups before replacing
-`/etc/nixos`.
+The installer keeps unique `/etc/nixos.bak.<timestamp>.<pid>.<n>` backups
+before replacing `/etc/nixos` (matches Apply Flow step 5).
 
-To recover manually:
+To recover manually, pick the most recent backup and roll it forward:
 
 ```bash
-sudo rsync -a --delete /etc/nixos.bak.<timestamp>/ /etc/nixos/
+ls -dt /etc/nixos.bak.* | head -1                # most recent backup
+sudo rsync -a --delete /etc/nixos.bak.<timestamp>.<pid>.<n>/ /etc/nixos/
 sudo nixos-rebuild switch --flake /etc/nixos#NixOS
 ```
 
@@ -379,6 +439,35 @@ For shell-switch issues, inspect:
 ```bash
 cat "${XDG_RUNTIME_DIR:-/tmp}/mysetup-shell.log"
 ```
+
+## Troubleshooting
+
+Quick triage for the most common breakage paths. If none of these apply,
+run `mysetup doctor` and check the relevant log.
+
+- **Shell-swap (Super+Shift+W) does nothing or freezes.** Check
+  `$XDG_STATE_HOME/mysetup/active-shell` (should be one of `caelestia`,
+  `noctalia`, `end4`). Tail `$XDG_RUNTIME_DIR/mysetup-shell.log` while you
+  press the binding. Most failures are stale lockfiles under
+  `$XDG_STATE_HOME/mysetup/hypr-runtime/` - remove that directory and retry.
+- **Thunar shows generic icons instead of image previews.** Check that
+  `tumbler` is running (`pgrep -f tumbler-1/tumblerd`), that
+  `~/.cache/thumbnails/normal/` is writable, and that `XDG_DATA_DIRS`
+  contains `/run/current-system/sw/share` and `~/.nix-profile/share`. If end4
+  is active, this is most likely upstream `env = XDG_DATA_DIRS,...` leaking
+  through - re-apply and re-login.
+- **`apply --no-switch` fails at dry-build.** Read the Nix error tail; the
+  installer aborts before touching `/etc/nixos`. Re-run
+  `make -C Linux/installer nix-hm-eval` to localise the failure to a single
+  module before retrying apply.
+- **Build is huge / slow on first apply.** Expected: the config pulls in
+  multiple Wayland shells, Qt/QML, desktop apps, optional CTF stacks. Make
+  sure the listed binary caches are accepted (see Install / Reconfigure) -
+  without them everything compiles from source.
+- **`sudo nixos-rebuild switch` works locally but `mysetup apply` fails.**
+  The installer wraps switch with stricter checks (dry-build, password
+  hash, dots mirror). Run `nix run "path:$PWD?dir=Linux/NixOS#mysetup" --
+  doctor` to see which precondition is missing.
 
 ## Maintenance
 

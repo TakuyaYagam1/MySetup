@@ -30,7 +30,7 @@ Describe what you actually ran, on what hardware/VM, and what you observed.
 -->
 
 - [ ] `make -C Linux all` passes locally (required for any change under `Linux/**`)
-- [ ] Manually tested on real hardware or VM — specify:
+- [ ] Manually tested on real hardware or VM - specify:
 - [ ] Breaking change documented above (or N/A)
 
 ## Checklist
