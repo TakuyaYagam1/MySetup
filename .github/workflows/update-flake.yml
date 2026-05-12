@@ -1,0 +1,74 @@
+name: Update flake inputs
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 0"
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: Linux/NixOS
+
+jobs:
+  update-flake:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Nix
+        uses: nixbuild/nix-quick-install-action@v34
+        with:
+          nix_conf: |
+            keep-env-derivations = true
+            keep-outputs = true
+            experimental-features = nix-command flakes
+
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          restore-prefixes-first-match: nix-
+          gc-max-store-size-linux: 1G
+          purge: true
+          purge-prefixes: nix-
+          purge-created: 0
+          purge-last-accessed: 0
+          purge-primary-key: never
+
+      - name: Update flake inputs
+        run: nix flake update
+
+      - name: Evaluate flake (no build)
+        run: nix flake check --no-build
+
+      - name: Build mysetup package
+        run: nix build .#mysetup --print-build-logs
+
+      - name: Smoke-test mysetup binary
+        run: ./result/bin/mysetup --help
+
+      - name: Check for changes
+        id: check
+        working-directory: ${{ github.workspace }}
+        run: |
+          if git diff --exit-code Linux/NixOS/flake.lock > /dev/null; then
+            echo "modified=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "modified=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push changes
+        if: steps.check.outputs.modified == 'true'
+        uses: EndBug/add-and-commit@v10
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          add: Linux/NixOS/flake.lock
+          default_author: github_actions
+          message: "chore(nix): update flake.lock"
