@@ -39,7 +39,7 @@ mysetup_runtime_file() {
 
 mysetup_valid_shell_profile() {
   case "$1" in
-    caelestia|noctalia|end4) return 0 ;;
+    caelestia | noctalia | end4) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -73,8 +73,8 @@ mysetup_read_active_shell() {
   fi
 
   if mysetup_valid_shell_profile "$stored"; then
-      printf '%s' "$stored"
-      return 0
+    printf '%s' "$stored"
+    return 0
   fi
 
   return 1

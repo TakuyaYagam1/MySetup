@@ -53,6 +53,8 @@ in
           body = ''
             seed_json_object "$HOME/.config/caelestia/shell.json" "${shellJson}" "" '
                 if .bar.excludedScreens? then .bar.excludedScreens |= map(select(. != "")) else . end |
+                .general //= {} |
+                .general.logo = "${config.caelestiaShellSettings.general.logo}" |
                 .appearance //= {} |
                 .appearance.transparency //= {} |
                 .appearance.transparency.enabled //= true |

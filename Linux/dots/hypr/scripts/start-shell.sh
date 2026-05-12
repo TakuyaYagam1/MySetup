@@ -57,8 +57,8 @@ resolve_profile() {
   fi
 
   if mysetup_valid_shell_profile "$stored"; then
-      printf '%s' "$stored"
-      return 0
+    printf '%s' "$stored"
+    return 0
   fi
 
   printf '%s' "$mysetup_default_shell_profile"
@@ -301,6 +301,7 @@ if ! start_profile_shell; then
       persist_profile || log "failed to persist runtime shell state for fallback profile=$profile"
       reload_hypr
       apply_end4_hypr_runtime_overrides
+      propagate_runtime_environment
       exit 1
     fi
   fi
@@ -311,3 +312,4 @@ fi
 persist_profile || log "failed to persist runtime shell state for profile=$profile"
 reload_hypr
 apply_end4_hypr_runtime_overrides
+propagate_runtime_environment

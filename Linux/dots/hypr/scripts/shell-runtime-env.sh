@@ -11,7 +11,7 @@ dedupe_colon_path() {
   for item in $raw; do
     IFS="$old_ifs"
     case "$item" in
-      ""|\$*) ;;
+      "" | \$*) ;;
       *)
         case ":$result:" in
           *":$item:"*) ;;
@@ -75,4 +75,42 @@ prepare_runtime_environment() {
   PATH="$(build_runtime_path)"
   QS_ICON_THEME="${QS_ICON_THEME:-Papirus-Dark}"
   QT_QPA_PLATFORMTHEME="${QT_QPA_PLATFORMTHEME:-qt6ct}"
+}
+
+propagate_runtime_environment() {
+  local vars=(
+    XDG_DATA_DIRS
+    PATH
+    XDG_CURRENT_DESKTOP
+    XDG_SESSION_DESKTOP
+    QT_QPA_PLATFORMTHEME
+    QS_ICON_THEME
+    GTK_THEME
+    HYPRLAND_INSTANCE_SIGNATURE
+  )
+
+  if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+    dbus-update-activation-environment --systemd --all >/dev/null 2>&1 || true
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user import-environment "${vars[@]}" >/dev/null 2>&1 || true
+  fi
+
+  if command -v hyprctl >/dev/null 2>&1; then
+    local v val
+    for v in "${vars[@]}"; do
+      val="$(printf '%s' "${!v-}")"
+      [ -n "$val" ] || continue
+      hyprctl setenv "$v" "$val" >/dev/null 2>&1 || true
+    done
+  fi
+
+  local daemon
+  for daemon in Thunar thunar tumblerd; do
+    pkill -u "$USER" -x "$daemon" >/dev/null 2>&1 || true
+  done
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user try-restart tumblerd.service >/dev/null 2>&1 || true
+  fi
 }

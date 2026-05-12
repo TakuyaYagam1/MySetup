@@ -79,8 +79,7 @@ eval_hm_full() {
             localSystem = system;
             config.allowUnfree = true;
           };
-          varsModule = import (nixosDir + \"/hosts/NixOS/variables.nix\") { inherit lib; };
-          baseMysetup = varsModule.config.mysetup;
+          baseMysetup = import (nixosDir + \"/hosts/NixOS/host-vars.nix\");
           mysetup =
             if presetOverride == \"\"
             then baseMysetup

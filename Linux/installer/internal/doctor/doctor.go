@@ -39,7 +39,6 @@ func Report(ctx context.Context, opts Options) (string, error) {
 	check(out, "state", opts.Paths.StatePath)
 	check(out, "hardware config", filepath.Join(opts.Paths.NixOSDest, "hosts/NixOS/hardware-configuration.nix"))
 	check(out, "flake", filepath.Join(opts.Paths.NixOSDest, "flake.nix"))
-	check(out, "variables", filepath.Join(opts.Paths.NixOSDest, "hosts/NixOS/variables.nix"))
 	check(out, "host vars", filepath.Join(opts.Paths.NixOSDest, "hosts/NixOS/host-vars.nix"))
 	checkShellRuntime(out, opts)
 	checkWallpapers(out, opts)

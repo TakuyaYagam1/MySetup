@@ -13,20 +13,38 @@
         stdenv.cc.cc.lib
         glibc
         zlib
-        libpng
+        zstd
+        xz
+        bzip2
+        libffi
+        libuuid
+        libxml2
+        libxslt
+        libgcrypt
+        openssl
         nss
         nspr
-        openssl
-        libxml2
-        dbus
-        expat
-        libdrm
-        libxi
-        libxkbfile
-        libbsd
+        icu
+        libuv
+        ncurses
+        readline
+        sqlite
+        libpng
         libGL
         libGLU
+        libdrm
+        libepoxy
         libxkbcommon
+        libxkbfile
+        libx11
+        libxext
+        libxrender
+        libxrandr
+        libxcursor
+        libxi
+        libxfixes
+        libxcomposite
+        xcbutil
         xcbutilxrm
         libxcb-keysyms
         libxcb-wm
@@ -34,16 +52,11 @@
         libxcb-image
         libxcb-cursor
         pcre
-        libepoxy
-        libx11
-        libxext
-        libxrender
-        libxrandr
-        libxcursor
-        xcbutil
-        libxfixes
-        libxcomposite
         pulseaudio
+        dbus
+        expat
+        libbsd
+        glib
         qt6.qtbase
         qt6.qtwayland
         qt6.qtmultimedia

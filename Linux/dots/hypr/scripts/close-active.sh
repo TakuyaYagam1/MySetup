@@ -19,8 +19,8 @@ case "${class,,}" in
     fi
     ;;
   *)
-    hyprctl dispatch closewindow "address:$address" >/dev/null 2>&1 \
-      || hyprctl dispatch killactive >/dev/null 2>&1 \
-      || true
+    hyprctl dispatch closewindow "address:$address" >/dev/null 2>&1 ||
+      hyprctl dispatch killactive >/dev/null 2>&1 ||
+      true
     ;;
 esac

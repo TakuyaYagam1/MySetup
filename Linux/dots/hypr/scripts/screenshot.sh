@@ -8,7 +8,7 @@ mkdir -p "$dir"
 file="$dir/screenshot-$(date +%Y%m%d-%H%M%S).png"
 
 copy_to_clipboard() {
-  wl-copy --type image/png < "$file"
+  wl-copy --type image/png <"$file"
 }
 
 notify_saved() {

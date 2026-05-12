@@ -60,7 +60,6 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 	}
 	for _, path := range []string{
 		"flake.nix",
-		"hosts/NixOS/variables.nix",
 		"hosts/NixOS/host-vars.nix",
 		"hosts/NixOS/hardware-configuration.nix",
 	} {
@@ -161,7 +160,6 @@ func TestReportUsesEnd4ProfileChecks(t *testing.T) {
 	}
 	for _, path := range []string{
 		"flake.nix",
-		"hosts/NixOS/variables.nix",
 		"hosts/NixOS/host-vars.nix",
 		"hosts/NixOS/hardware-configuration.nix",
 	} {

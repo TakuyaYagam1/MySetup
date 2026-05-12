@@ -108,8 +108,8 @@ gpu-screen-recorder \
   >"$log_file" 2>&1 &
 
 pid="$!"
-printf '%s\n' "$pid" > "$pid_file"
-printf '%s\n' "$file" > "$path_file"
+printf '%s\n' "$pid" >"$pid_file"
+printf '%s\n' "$file" >"$path_file"
 
 sleep 0.2
 if ! kill -0 "$pid" 2>/dev/null; then
