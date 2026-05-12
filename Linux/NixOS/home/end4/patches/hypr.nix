@@ -32,8 +32,7 @@ let
 
             cp -r ${dotfilesSource}/dots/.config/hypr $out
             chmod -R +w $out
-            # $out/mysetup/ is our customization point: layered on top of upstream
-            # end-4 dotfiles so MySetup keybinds/launcher overrides survive upgrades.
+            find $out -type f -name '*.sh' -exec chmod +x {} +
             mkdir -p $out/mysetup
             cp ${mysetupHyprSource}/keybinds.conf $out/mysetup/keybinds.conf
             cp ${mysetupHyprSource}/launcher.conf $out/launcher.conf
@@ -43,6 +42,7 @@ let
         ${runtimeEnv.hyprEnv}
         EOF
             cat ${dotfilesSource}/dots/.config/hypr/hyprland/env.conf >> $out/hyprland/env.conf
+            sed -i '/^env *= *XDG_DATA_DIRS,/d' "$out/hyprland/env.conf"
 
             optional_patch_line "$out/hyprland/general.conf" \
               'enable_gesture = false' \
@@ -111,6 +111,19 @@ let
         animations {
             bezier = mysetupStandard, 0.2, 0, 0, 1
             animation = workspaces, 1, 5, mysetupStandard, slide
+        }
+
+        misc {
+            vrr = 2
+            vfr = true
+        }
+
+        render {
+            direct_scanout = 1
+        }
+
+        cursor {
+            no_hardware_cursors = false
         }
         EOF
 

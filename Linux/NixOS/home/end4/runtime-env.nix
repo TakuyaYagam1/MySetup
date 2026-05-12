@@ -32,7 +32,6 @@ let
     "/usr/share"
   ];
 
-  hyprXdgDataDirs = lib.concatStringsSep ":" xdgDataDirBase;
   shellXdgDataDirs = lib.concatStringsSep ":" (xdgDataDirBase ++ [ "$XDG_DATA_DIRS" ]);
 
   sessionVariables = {
@@ -56,7 +55,6 @@ let
 
   hyprVariables = commonQtVars // {
     PATH = "${runtimeBinPath}:${config.home.homeDirectory}/.nix-profile/bin:/etc/profiles/per-user/${config.home.username}/bin:$PATH";
-    XDG_DATA_DIRS = hyprXdgDataDirs;
     inherit (sessionVariables) qsConfig;
     inherit (sessionVariables) ILLOGICAL_IMPULSE_VIRTUAL_ENV;
   };
@@ -70,7 +68,6 @@ in
 {
   inherit
     hyprVariables
-    hyprXdgDataDirs
     qmlImportPath
     qtPluginPath
     qtRuntime
