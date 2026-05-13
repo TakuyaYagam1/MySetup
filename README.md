@@ -20,6 +20,12 @@ Personal system configuration for Linux (NixOS + Hyprland) and Windows (Komorebi
 > Zen Browser theming lives in [`Linux/dots/zen/chrome/`](Linux/dots/zen/chrome).
 > Neovim config (LazyVim-based) lives in [`Linux/dots/nvim/`](Linux/dots/nvim).
 
+### TUI Installer
+
+| User section | Display / Region section |
+| :---: | :---: |
+| ![TUI installer — User](assets/tui1.png) | ![TUI installer — Display](assets/tui2.png) |
+
 > Contributors: read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR. Security issues: see [SECURITY.md](SECURITY.md).
 
 ## Structure

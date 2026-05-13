@@ -26,6 +26,7 @@ Linux/NixOS/packages/ida-pro.nix
 Linux/NixOS/packages/ida-mcp.nix
 Linux/NixOS/packages/ida-plugins.nix
 .codex
+.cursor/
 __pycache__/
 *.py[cod]
 result
