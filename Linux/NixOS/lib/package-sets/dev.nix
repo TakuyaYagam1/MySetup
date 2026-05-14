@@ -84,6 +84,8 @@ let
     subversion
     tldr
     opencv
+    typst
+    ghgrab
   ];
 in
 {

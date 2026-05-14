@@ -40,7 +40,7 @@
   "bar": {
     "autoHideDelay": 500,
     "autoShowDelay": 150,
-    "backgroundOpacity": 0.8,
+    "backgroundOpacity": 0.7000000000000001,
     "barType": "floating",
     "capsuleColorKey": "none",
     "capsuleOpacity": 0.8,
@@ -98,10 +98,10 @@
       ],
       "left": [
         {
-          "colorizeSystemIcon": "none",
+          "colorizeSystemIcon": "primary",
           "colorizeSystemText": "none",
           "customIconPath": "",
-          "enableColorization": false,
+          "enableColorization": true,
           "icon": "nix-snowflake",
           "iconColor": "none",
           "id": "Launcher",
@@ -133,7 +133,7 @@
       "right": [
         {
           "blacklist": [],
-          "chevronColor": "none",
+          "chevronColor": "error",
           "colorizeIcons": false,
           "drawerEnabled": true,
           "hidePassive": false,
@@ -190,10 +190,10 @@
         },
         {
           "colorizeDistroLogo": false,
-          "colorizeSystemIcon": "none",
+          "colorizeSystemIcon": "primary",
           "colorizeSystemText": "none",
           "customIconPath": "",
-          "enableColorization": false,
+          "enableColorization": true,
           "icon": "nix-snowflake",
           "id": "ControlCenter",
           "useDistroLogo": true
