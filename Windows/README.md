@@ -1,43 +1,55 @@
 # Windows Configuration
 
-Windows configuration with Komorebi tiling window manager and YASB status bar.
+Windows configuration with Komorebi tiling window manager, whkd hotkey
+daemon, and YASB status bar - keybinds ported 1:1 from the Linux/Hyprland
+setup (`Super` mapped to `Alt`).
 
 ## Important Notes
 
 ### Administrator Rights
 
-The installation script requires administrator privileges. Run PowerShell as Administrator before executing the installation.
+The installation script requires administrator privileges (winget installs,
+long-path registry key, and writing Zen's autoconfig into `Program Files`).
+Run PowerShell as Administrator before executing the installation.
 
 ### Fonts
 
-Install the following fonts before using the configuration:
-
-- **JetBrains Mono**: [jetbrains.com/lp/mono](https://www.jetbrains.com/lp/mono/)
-- **JetBrains Mono Nerd Font**: [nerdfonts.com/font-downloads](https://www.nerdfonts.com/font-downloads)
+The installation script installs **JetBrainsMono Nerd Font** via winget
+(`DEVCOM.JetBrainsMonoNerdFont`) - it is required for the glyphs in the
+YASB / komorebi bar. The Nerd Font is used everywhere; the non-patched
+JetBrains Mono is not needed. No manual font download required.
 
 ### Long Paths
 
-The installation script automatically enables long path support in Windows. This is required for proper operation of Komorebi.
+The installation script automatically enables long path support in Windows.
+This is required for proper operation of Komorebi.
 
 ### Path Configuration
 
-Before running the installation script, you must update all paths in `yasb/config.yaml` to match your system:
+The repo uses `username_here` as a placeholder in machine-specific config
+paths (komorebi/YASB wallpapers, etc.). The installation script
+**automatically substitutes** it with `$env:USERNAME` on copy to
+`~/.config/`, so no manual editing is needed in the common case.
 
-1. Replace `username_here` with your actual Windows username in application paths:
-   - Telegram: `C:\Users\username_here\AppData\Roaming\Telegram Desktop\Telegram.exe`
-   - Discord: `C:\Users\username_here\AppData\Local\Discord\app-1.0.9219\Discord.exe`
-   - TeraBox: `C:\Users\username_here\AppData\Roaming\TeraBox\terabox.exe`
-   - Spotify: `C:\Users\username_here\AppData\Roaming\Spotify\Spotify.exe`
+If you copy configs manually (without `install.ps1`), do the substitution
+yourself, e.g.:
 
-2. Update wallpaper paths in the `wallpapers` widget section:
-   - Default: `C:\\Users\\username_here\\Pictures\\Wallpapers`
-   - Add or modify paths according to your wallpaper directory locations
+```powershell
+(Get-Content -Raw .\yasb\config.yaml) -replace 'username_here', $env:USERNAME |
+    Set-Content "$env:USERPROFILE\.config\yasb\config.yaml" -Encoding UTF8
+```
 
-3. Verify application executable paths in the `apps` widget section:
-   - Update paths for applications installed in non-standard locations
-   - Ensure all application icons and launch commands are correct
+### Dynamic App Launching (no hardcoded paths)
 
-All path modifications must be made in `yasb/config.yaml` before copying configuration files to your system.
+App launcher keybinds do **not** hardcode executable paths. `whkd/launch.ps1`
+resolves an app by its Start-menu name via the Windows app index
+(`Get-StartApps`) and launches it through `shell:AppsFolder`. This survives
+reinstalls, version bumps, drive-letter and username changes - nothing to
+edit per machine.
+
+A keybind whose app is not installed is a harmless no-op: `launch.ps1` exits
+quietly (hidden window), the rest of the config keeps working. So unused
+launchers (e.g. GoLand, Antigravity, v2rayN) can stay in `whkdrc`.
 
 ## Installation
 
@@ -57,54 +69,44 @@ All path modifications must be made in `yasb/config.yaml` before copying configu
    .\install.ps1
    ```
 
-4. After installation completes, install the required fonts (see Important Notes)
+4. After installation completes, finish the manual steps the script prints
+   (Vencord, Zen - see [Post-install](#post-install-manual-steps)).
 
-5. Restart PowerShell and run the following commands from `MySetup\Windows`:
-
-   ```powershell
-   komorebic quickstart
-   Copy-Item -Path '.\komorebi\*' -Destination $env:USERPROFILE -Recurse -Force
-   New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.config\yasb"
-   Copy-Item -Path '.\yasb\*' -Destination "$env:USERPROFILE\.config\yasb" -Recurse -Force
-   komorebic enable-autostart --whkd
-   komorebic start --whkd
-   ```
+   The script handles end-to-end: long paths, winget installs (komorebi,
+   whkd, yasb, JetBrainsMono Nerd Font, Zen Browser, Discord, WinToys,
+   TranslucentTB), `komorebic quickstart`, copying configs + `launch.ps1`
+   with username substitution, autostart, Vencord patch, and the Zen Sine
+   + Catppuccin setup.
 
 ### Manual Installation
 
-1. Install Komorebi:
+1. Install the binaries:
 
    ```powershell
    winget install --id LGUG2Z.komorebi --accept-package-agreements --accept-source-agreements
-   ```
-
-2. Install whkd:
-
-   ```powershell
    winget install --id LGUG2Z.whkd --accept-package-agreements --accept-source-agreements
-   ```
-
-3. Install YASB:
-
-   ```powershell
    winget install --id AmN.yasb --accept-package-agreements --accept-source-agreements
+   winget install --id DEVCOM.JetBrainsMonoNerdFont --accept-package-agreements --accept-source-agreements
    ```
 
-4. Enable long paths support:
+2. Enable long paths support:
 
    ```powershell
    Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1
    ```
 
-5. Copy configuration files from the repository root:
+3. Copy configuration files from the repository root (substitute
+   `username_here` as shown in [Path Configuration](#path-configuration)):
 
    ```powershell
    Copy-Item -Path '.\Windows\komorebi\*' -Destination $env:USERPROFILE -Recurse -Force
    New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.config\yasb"
    Copy-Item -Path '.\Windows\yasb\*' -Destination "$env:USERPROFILE\.config\yasb" -Recurse -Force
+   Copy-Item -Path '.\Windows\whkd\whkdrc' -Destination "$env:USERPROFILE\.config\whkdrc" -Force
+   Copy-Item -Path '.\Windows\whkd\launch.ps1' -Destination "$env:USERPROFILE\.config\launch.ps1" -Force
    ```
 
-6. Initialize Komorebi:
+4. Initialize Komorebi:
 
    ```powershell
    komorebic quickstart
@@ -112,34 +114,112 @@ All path modifications must be made in `yasb/config.yaml` before copying configu
    komorebic start --whkd
    ```
 
+   > `komorebic quickstart` overwrites `~/.config/whkdrc` with a default -
+   > re-copy our `whkdrc` (step 3) **after** running it.
+
+5. (Optional) Zen Sine + Catppuccin theme:
+
+   ```powershell
+   .\Windows\zen\setup-zen.ps1
+   ```
+
+## Keybindings
+
+`Super` is mapped to `Alt`. Source: `Linux/dots/hypr` keybinds.
+
+### Window management (komorebi)
+
+| Keybind | Action |
+| --- | --- |
+| `Alt + Q` | Close focused window |
+| `Alt + H/J/K/L` | Focus left / down / up / right |
+| `Alt + Shift + H/J/K/L` | Move window left / down / up / right |
+| `Alt + [` / `Alt + ]` | Cycle focus in container |
+| `Alt + 1..7` | Focus workspace 1..7 |
+| `Alt + Shift + 1..7` | Move window to workspace 1..7 |
+| `Alt + Space` | Toggle float |
+| `Alt + Shift + Space` | Toggle monocle |
+| `Alt + P` | Toggle pause |
+| `Alt + Shift + R` | Retile |
+| `Alt + Shift + Enter` | Promote to main |
+| `Alt + -` / `Alt + =` | Resize horizontal decrease / increase |
+| `Alt + Shift + -` / `Alt + Shift + =` | Resize vertical decrease / increase |
+| `Alt + X` / `Alt + Y` | Flip layout horizontal / vertical |
+
+### App launchers
+
+| Keybind | App |
+| --- | --- |
+| `Alt + Enter` | Termius (terminal) |
+| `Alt + Shift + F` | Zen Browser |
+| `Alt + Shift + C` | Cursor |
+| `Alt + Shift + V` | VS Code |
+| `Alt + Shift + G` | GoLand |
+| `Alt + Shift + D` | DataGrip |
+| `Alt + Shift + A` | Antigravity |
+| `Alt + E` | File Explorer |
+| `Alt + Shift + Q` | Amnezia VPN |
+| `Alt + Shift + N` | v2rayN |
+| `Alt + Shift + I` | Spotify |
+| `Alt + Shift + T` | Telegram |
+| `Alt + Shift + B` | Discord |
+
+## Post-install (manual steps)
+
+1. **YASB** - `yasbc start` if it did not autostart.
+2. **komorebi** - verify with `komorebic state`.
+3. **Vencord** - launch Discord once. If client mods do not appear, rerun:
+
+   ```powershell
+   winget install --id Vendicated.Vencord --override "-install -branch stable"
+   ```
+
+4. **Zen Sine + Catppuccin** - open `about:support` -> **Clear startup
+   cache**, then fully restart Zen. Re-run `Windows\zen\setup-zen.ps1`
+   after Zen browser updates (updates wipe the install-dir autoconfig).
+
 ## Structure
 
 ```text
 Windows/
-├── install.ps1          # Automated installation script
-├── komorebi/            # Komorebi configuration
-│   ├── komorebi.json    # Main Komorebi configuration
+├── install.ps1           # Automated installation script
+├── komorebi/             # Komorebi configuration
+│   ├── komorebi.json     # Main Komorebi configuration
 │   ├── komorebi.bar.json # Komorebi bar configuration
 │   └── applications.json # Application-specific rules
-└── yasb/                # YASB status bar configuration
-    ├── config.yaml      # YASB main configuration
-    └── styles.css       # YASB styling
+├── whkd/
+│   ├── whkdrc            # whkd hotkey bindings (komorebi nav + launchers)
+│   └── launch.ps1        # Dynamic app resolver (Start-menu index)
+├── yasb/                 # YASB status bar configuration
+│   ├── config.yaml       # YASB main configuration
+│   └── styles.css        # YASB styling
+└── zen/
+    └── setup-zen.ps1     # Zen Sine mod loader + Catppuccin theme
 ```
 
 ## Features
 
-- Komorebi tiling window manager with multiple layout modes
-- YASB status bar with system information and workspace indicators
-- whkd hotkey daemon for window management
-- Application-specific window rules
-- Customizable themes and animations
-- Multiple workspace layouts (BSP, VerticalStack, HorizontalStack, etc.)
++ Komorebi tiling window manager with multiple layout modes
+  (BSP, VerticalStack, HorizontalStack, etc.)
++ YASB status bar with system information and workspace indicators
++ whkd hotkey daemon with dynamic, path-free app launching
++ Application-specific window rules
++ **Zen Browser** with the Sine mod loader and Catppuccin Macchiato
+  Mauve theme (pinned, SHA256-verified Sine archives - parity with the
+  Linux/Nix setup)
++ **Discord + Vencord** - Vencord is patched headlessly during install
+  (winget verifies the installer hash)
++ Extras: **WinToys** (system tweak utility, on-demand - intentionally not
+  auto-started) and **TranslucentTB** (taskbar styler, auto-starts via a
+  Startup-folder shortcut)
 
 ## Credits
 
-- [Komorebi](https://github.com/LGUG2Z/komorebi) - Tiling window manager
-- [YASB](https://github.com/amnweb/yasb) - Status bar
-- [whkd](https://github.com/LGUG2Z/whkd) - Hotkey daemon
++ [Komorebi](https://github.com/LGUG2Z/komorebi) - Tiling window manager
++ [YASB](https://github.com/amnweb/yasb) - Status bar
++ [whkd](https://github.com/LGUG2Z/whkd) - Hotkey daemon
++ [Sine](https://github.com/CosmoCreeper/Sine) - Zen/Firefox mod loader
++ [Vencord](https://github.com/Vendicated/Vencord) - Discord client mod
 
 ## License
 
