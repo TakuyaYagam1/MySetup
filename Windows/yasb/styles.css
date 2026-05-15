@@ -1,19 +1,20 @@
-/* 
-This is default and very simple styles file for Yasb. 
+/*
+This is default and very simple styles file for Yasb.
 For more information about configuration options, please visit the Wiki https://github.com/amnweb/yasb/wiki
 */
 :root {
-    --mauve: #cba6f7;
-    --red: #f38ba8;
-    --yellow: #ffd16d;
-    --blue: #448fff;
-    --lavender: #b4befe;
-    --text1: #d4d9eb;
-    --text2: #8f929e;
-    --text3: #9399b2;
-    --text4: #7f849c;
-    --bg-color1: #191919;
-    --bg-color2: #333333;
+    /* Catppuccin Macchiato - https://github.com/catppuccin/catppuccin */
+    --mauve: #c6a0f6;
+    --red: #ed8796;
+    --yellow: #eed49f;
+    --blue: #8aadf4;
+    --lavender: #b7bdf8;
+    --text1: #cad3f5;   /* text */
+    --text2: #b8c0e0;   /* subtext1 */
+    --text3: #a5adcb;   /* subtext0 */
+    --text4: #8087a2;   /* overlay1 */
+    --bg-color1: #24273a; /* base */
+    --bg-color2: #363a4f; /* surface0 */
 }
 * {
     font-size: 12px;
@@ -23,13 +24,13 @@ For more information about configuration options, please visit the Wiki https://
 }
 .yasb-bar {
     background-color: var(--bg-color1);
-    border-radius: 8px;
+    border-radius: 16px;
     border: 1px solid var(--bg-color2);
 }
 /* Global styles for ToolTip */
 .tooltip {
     background-color: var(--bg-color1);
-    border-radius: 4px;
+    border-radius: 8px;
     color: var(--text1);
     padding: 5px 10px;
     font-size: 12px;
@@ -151,52 +152,113 @@ For more information about configuration options, please visit the Wiki https://
     color: #f38ba8;
     font-size: 13px;
 }
-.power-menu-popup {
-    background-color: transparent
+/* Power menu (Noctalia-style cards, both fullscreen & popup modes) */
+.power-menu-popup,
+.power-menu-compact {
+    background-color: var(--bg-color1);
+    border-radius: 16px;
+    border: 1px solid var(--bg-color2);
 }
-.power-menu-popup .button {
+.power-menu-popup .button,
+.power-menu-compact .button {
     padding: 0;
-    width: 180px;
-    height: 230px;
-    border-radius: 8px;
-    background-color: var(--bg-color1);
-    border: 4px solid transparent;
-    margin: 0px;
+    width: 130px;
+    height: 140px;
+    border-radius: 18px;
+    background-color: rgba(36, 39, 58, 0.85);   /* base @ 85% */
+    border: 1px solid var(--bg-color2);
+    margin: 6px;
 }
-.power-menu-popup .button.hover {
-    background-color: var(--bg-color1);
-    border: 4px solid var(--bg-color1);
+.power-menu-popup .button.hover,
+.power-menu-compact .button.hover {
+    background-color: rgba(54, 58, 79, 0.95);   /* surface0 @ 95% */
+    border: 1px solid var(--lavender);
 }
-.power-menu-popup .button .label {
-    margin-bottom: 8px;
-    font-size: 16px;
+.power-menu-popup .button .icon,
+.power-menu-compact .button .icon {
+    font-size: 44px;
+    padding-top: 20px;
+    color: var(--text3);
+}
+.power-menu-popup .button .label,
+.power-menu-compact .button .label {
+    margin-bottom: 14px;
+    font-size: 13px;
     font-weight: 500;
-    color: var(--text3)
-}
-.power-menu-popup .button .icon {
-    font-size: 64px;
-    padding-top: 32px;
-    color: var(--text4)
+    color: var(--text2);
+    font-family: "Segoe UI";
 }
 .power-menu-popup .button.hover .label,
-.power-menu-popup .button.hover .icon {
-    color: rgba(255, 255, 255, 0.808)
+.power-menu-popup .button.hover .icon,
+.power-menu-compact .button.hover .label,
+.power-menu-compact .button.hover .icon {
+    color: var(--text1);
 }
-.power-menu-popup .button.cancel .icon {
+
+/* Per-button accent on hover (Noctalia-like color coding) */
+.power-menu-popup .button.lock.hover,
+.power-menu-compact .button.lock.hover            { border: 1px solid var(--blue); }
+.power-menu-popup .button.lock.hover .icon,
+.power-menu-compact .button.lock.hover .icon      { color: var(--blue); }
+
+.power-menu-popup .button.sleep.hover,
+.power-menu-compact .button.sleep.hover           { border: 1px solid var(--lavender); }
+.power-menu-popup .button.sleep.hover .icon,
+.power-menu-compact .button.sleep.hover .icon     { color: var(--lavender); }
+
+.power-menu-popup .button.hibernate.hover,
+.power-menu-compact .button.hibernate.hover       { border: 1px solid var(--yellow); }
+.power-menu-popup .button.hibernate.hover .icon,
+.power-menu-compact .button.hibernate.hover .icon { color: var(--yellow); }
+
+.power-menu-popup .button.restart.hover,
+.power-menu-compact .button.restart.hover         { border: 1px solid var(--mauve); }
+.power-menu-popup .button.restart.hover .icon,
+.power-menu-compact .button.restart.hover .icon   { color: var(--mauve); }
+
+.power-menu-popup .button.signout.hover,
+.power-menu-compact .button.signout.hover         { border: 1px solid var(--mauve); }
+.power-menu-popup .button.signout.hover .icon,
+.power-menu-compact .button.signout.hover .icon   { color: var(--mauve); }
+
+.power-menu-popup .button.shutdown.hover,
+.power-menu-compact .button.shutdown.hover        { border: 1px solid var(--red); }
+.power-menu-popup .button.shutdown.hover .icon,
+.power-menu-compact .button.shutdown.hover .icon  { color: var(--red); }
+
+/* Cancel - slim bar across the bottom, red text */
+.power-menu-popup .button.cancel,
+.power-menu-compact .button.cancel {
+    width: auto;
+    height: 36px;
+    border-radius: 12px;
+    background-color: rgba(36, 39, 58, 0.85);
+    border: 1px solid var(--bg-color2);
+    margin: 0 6px 6px 6px;
+}
+.power-menu-popup .button.cancel .icon,
+.power-menu-compact .button.cancel .icon {
     padding: 0;
     margin: 0;
+    font-size: 0;
 }
-.power-menu-popup .button.cancel .label {
+.power-menu-popup .button.cancel .label,
+.power-menu-compact .button.cancel .label {
     color: var(--red);
     margin: 0;
+    font-size: 13px;
+    font-weight: 600;
 }
-.power-menu-popup .button.cancel {
-    height: 32px;
-    border-radius: 4px;
+.power-menu-popup .button.cancel.hover,
+.power-menu-compact .button.cancel.hover {
+    background-color: rgba(237, 135, 150, 0.12);  /* red @ 12% */
+    border: 1px solid var(--red);
 }
-.power-menu-popup .button.cancel.hover .label {
-    color: rgb(255, 255, 255)
+.power-menu-popup .button.cancel.hover .label,
+.power-menu-compact .button.cancel.hover .label {
+    color: var(--text1);
 }
+
 .uptime {
     font-size: 14px;
     margin-bottom: 10px;
@@ -228,7 +290,7 @@ For more information about configuration options, please visit the Wiki https://
 }
 .weather-card {
     background-color: var(--bg-color1);
-    border-radius: 8px;
+    border-radius: 14px;
     min-width: 540px;
     border: 1px solid var(--bg-color2);
 }
@@ -250,7 +312,7 @@ For more information about configuration options, please visit the Wiki https://
 }
 .weather-card-day {
     border: 1px solid transparent;
-    border-radius: 8px;
+    border-radius: 12px;
     background-color: rgba(17, 17, 27, 0.2);
 }
 .weather-card-day.active {
@@ -299,7 +361,7 @@ For more information about configuration options, please visit the Wiki https://
     min-width: 420px;
     max-width: 420px;
     background-color: var(--bg-color1);
-    border-radius: 8px;
+    border-radius: 14px;
     border: 1px solid var(--bg-color2);
 }
 .media-menu .title,
@@ -411,7 +473,7 @@ For more information about configuration options, please visit the Wiki https://
 }
 .home-menu {
     background-color: var(--bg-color1);
-    border-radius: 8px;
+    border-radius: 14px;
     border: 1px solid var(--bg-color2);
 }
 .home-menu .menu-item {
@@ -441,7 +503,7 @@ For more information about configuration options, please visit the Wiki https://
 
 .calendar {
     background-color: var(--bg-color1);
-    border-radius: 8px;
+    border-radius: 14px;
     border: 1px solid var(--bg-color2);
 }
 .calendar .calendar-table,

@@ -1,4 +1,4 @@
-# This is default and very simple configuration file for Yasb. 
+# This is default and very simple configuration file for Yasb.
 # For more information about configuration options, please visit the Wiki https://github.com/amnweb/yasb/wiki
 watch_stylesheet: true
 watch_config: true
@@ -39,33 +39,32 @@ bars:
       right: 4
     widgets:
       left:
-      - "home"
-      - "komorebi_workspaces"
-      - "komorebi_active_layout"
-      - "active_window"
-      - "disk"
+        - "home"
+        - "komorebi_workspaces"
+        - "komorebi_active_layout"
+        - "active_window"
+        - "disk"
       center:
-      - "clock"
-      - "apps"
+        - "clock"
       right:
-      - "language"
-      - "media"
-      - "weather"
-      - "wallpapers"
-      - "microphone"
-      - "volume"
-      - "notifications"
-      - "power_menu"
+        - "language"
+        - "media"
+        - "weather"
+        - "wallpapers"
+        - "microphone"
+        - "volume"
+        - "notifications"
+        - "power_menu"
 widgets:
   home:
     type: "yasb.home.HomeWidget"
     options:
       label: "<span>\udb81\udf17</span>"
       menu_list:
-      - { title: "User Home", path: "~" }
-      - { title: "Download", path: "~\\Downloads" }
-      - { title: "Documents", path: "~\\Documents" }
-      - { title: "Pictures", path: "~\\Pictures" }
+        - { title: "User Home", path: "~" }
+        - { title: "Download", path: "~\\Downloads" }
+        - { title: "Documents", path: "~\\Documents" }
+        - { title: "Pictures", path: "~\\Pictures" }
       system_menu: true
       power_menu: true
       blur: false
@@ -107,7 +106,7 @@ widgets:
         enabled: true
         color: "#000000"
         radius: 2
-        offset: [ 1, 1 ]
+        offset: [1, 1]
       scrolling_label:
         enabled: true
         update_interval_ms: 50
@@ -135,7 +134,7 @@ widgets:
       label: "{%a, %d %b %H:%M}"
       label_alt: "{%A, %d %B %Y %H:%M}"
       timezones: []
-      calendar: 
+      calendar:
         blur: false
         round_corners: false
         alignment: "center"
@@ -248,17 +247,19 @@ widgets:
     type: "yasb.power_menu.PowerMenuWidget"
     options:
       label: "\uf011"
-      uptime: True
-      blur: False
-      blur_background: True
+      menu_style: "fullscreen"
+      uptime: true
+      blur: false
+      blur_background: true
       animation_duration: 200
-      button_row: 5
+      button_row: 6
       buttons:
-        shutdown: ["\uf011", "Shut Down"]
-        restart: ["\uead2", "Restart"]
-        signout: ["\udb80\udf43", "Sign out"]
-        hibernate: ["\uf28e", "Hibernate"]
-        sleep: ["\u23fe", "Sleep"]
+        lock: ["\uf023", "Lock"]
+        sleep: ["\udb80\udcde", "Suspend"]
+        hibernate: ["\uf186", "Hibernate"]
+        restart: ["\udb81\udc50", "Reboot"]
+        signout: ["\udb80\udf43", "Logout"]
+        shutdown: ["\udb81\udf30", "Shutdown"]
         cancel: ["", "Cancel"]
   notifications:
     type: "yasb.notifications.NotificationsWidget"
@@ -271,88 +272,31 @@ widgets:
         on_left: "toggle_notification"
         on_right: "do_nothing"
         on_middle: "toggle_label"
-  apps:
-    type: "yasb.applications.ApplicationsWidget"
-    options:
-      label: "{data}"
-      app_list:
-        # Search
-        - {icon: "\uf002", launch: "search", name: "Search"}
-        
-        # File Explorer
-        - {icon: "\uf07c", launch: "explorer", name: "File Explorer"}
-        
-        # Firefox
-        - {icon: "\uf269", launch: 'C:\Program Files\Mozilla Firefox\firefox.exe', name: "Firefox"}
-  
-        # Telegram
-        - {icon: "\uf2c6", launch: 'C:\Users\username_here\AppData\Roaming\Telegram Desktop\Telegram.exe', name: "Telegram"}
-        
-        # Discord
-        - {icon: "\uf392", launch: 'C:\Users\username_here\AppData\Local\Discord\app-1.0.9219\Discord.exe', name: "Discord"}
-        
-        # Cursor
-        - {icon: "\ue70c", launch: 'C:\Program Files\cursor\Cursor.exe', name: "Cursor"}
-        
-        # DataGrip
-        - {icon: "\uf1c0", launch: 'C:\Program Files\JetBrains\DataGrip 2025.2.4\bin\datagrip64.exe', name: "DataGrip"}
-        
-        # Warp Terminal
-        - {icon: "\uf489", launch: 'C:\Program Files\Warp\warp.exe', name: "Warp Terminal"}
-        
-        # Docker Desktop
-        - {icon: "\uf308", launch: 'C:\Program Files\Docker\Docker\Docker Desktop.exe', name: "Docker Desktop"}
-        
-        # VirtualBox
-        - {icon: "\uf233", launch: 'C:\Program Files\Oracle\VirtualBox\VirtualBox.exe', name: "VirtualBox"}
-        
-        # VMware Workstation
-        - {icon: "\uf108", launch: 'C:\Program Files (x86)\VMware\VMware Workstation\vmware.exe', name: "VMware Workstation"}
-        
-        # Amnezia VPN
-        - {icon: "\uf023", launch: 'C:\Program Files\AmneziaVPN\AmneziaVPN.exe', name: "Amnezia VPN"}
-        
-        # TeraBox
-        - {icon: "\uf0c2", launch: 'C:\Users\username_here\AppData\Roaming\TeraBox\terabox.exe', name: "TeraBox"}
-        
-        # Spotify
-        - {icon: "\uf1bc", launch: 'C:\Users\username_here\AppData\Roaming\Spotify\Spotify.exe', name: "Spotify"}
-        
-        # Steam
-        - {icon: "\uf1b6", launch: 'C:\Program Files (x86)\Steam\steam.exe', name: "Steam"}
-        
-        # Riot Client
-        - {icon: "\uf11b", launch: 'C:\Riot Games\Riot Client\RiotClientServices.exe', name: "Riot Client"} 
-      label_shadow:
-        enabled: true
-        color: "black"
-        radius: 3
-        offset: [1, 1]
   wallpapers:
     type: "yasb.wallpapers.WallpapersWidget"
     options:
       label: "<span>\udb83\ude09</span>"
-      image_path: 
+      image_path:
         - "C:\\Users\\username_here\\Pictures\\Wallpapers"
         - "D:\\Wallpapers"
       change_automatically: false
       update_interval: 3600
       gallery:
-          enabled: true
-          blur: true
-          image_width: 220
-          image_per_page: 12
-          gallery_columns: 0
-          horizontal_position: "center"
-          vertical_position: "center"
-          position_offset: 0
-          respect_work_area: true
-          show_buttons: true
-          orientation: "landscape"
-          image_spacing: 8
-          lazy_load: true
-          lazy_load_fadein: 400
-          image_corner_radius: 12
+        enabled: true
+        blur: true
+        image_width: 220
+        image_per_page: 12
+        gallery_columns: 0
+        horizontal_position: "center"
+        vertical_position: "center"
+        position_offset: 0
+        respect_work_area: true
+        show_buttons: true
+        orientation: "landscape"
+        image_spacing: 8
+        lazy_load: true
+        lazy_load_fadein: 400
+        image_corner_radius: 12
       label_shadow:
         enabled: true
         color: "black"
@@ -387,29 +331,29 @@ widgets:
   disk:
     type: "yasb.disk.DiskWidget"
     options:
-        label: "{volume_label} {space[used][percent]}"
-        label_alt: "{volume_label} {space[used][gb]} / {space[total][gb]}"
-        volume_label: "C"
-        update_interval: 60
-        group_label:
-          volume_labels: ["C", "D", "E", "F"]
-          show_label_name: true
-          blur: True
-          round_corners: True
-          round_corners_type: "small"
-          border_color: "System"
-          alignment: "right"
-          direction: "down"
-        callbacks:
-          on_left: "toggle_group"
-          on_middle: "toggle_label"
-          on_right: "exec explorer C:\\"
-        label_shadow:
-          enabled: true
-          color: "black"
-          radius: 3
-          offset: [ 1, 1 ]
-        disk_thresholds:
-            low: 25
-            medium: 50
-            high: 90
+      label: "{volume_label} {space[used][percent]}"
+      label_alt: "{volume_label} {space[used][gb]} / {space[total][gb]}"
+      volume_label: "C"
+      update_interval: 60
+      group_label:
+        volume_labels: ["C", "D", "E", "F"]
+        show_label_name: true
+        blur: True
+        round_corners: True
+        round_corners_type: "small"
+        border_color: "System"
+        alignment: "right"
+        direction: "down"
+      callbacks:
+        on_left: "toggle_group"
+        on_middle: "toggle_label"
+        on_right: "exec explorer C:\\"
+      label_shadow:
+        enabled: true
+        color: "black"
+        radius: 3
+        offset: [1, 1]
+      disk_thresholds:
+        low: 25
+        medium: 50
+        high: 90
