@@ -24,7 +24,11 @@ Personal system configuration for Linux (NixOS + Hyprland) and Windows (Komorebi
 
 | User section | Display / Region section |
 | :---: | :---: |
-| ![TUI installer — User](assets/tui1.png) | ![TUI installer — Display](assets/tui2.png) |
+| ![TUI installer - User](assets/tui1.png) | ![TUI installer - Display](assets/tui2.png) |
+
+### Windows (Komorebi + YASB)
+
+![Windows - Komorebi tiling WM + YASB status bar](assets/windows.png)
 
 > Contributors: read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR. Security issues: see [SECURITY.md](SECURITY.md).
 
