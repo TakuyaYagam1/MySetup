@@ -78,6 +78,8 @@ try {
     Write-Warning "Vencord patch failed (run VencordInstallerCli manually): $_"
 }
 
+# PowerToys: Microsoft utility suite (manages its own run-at-startup).
+winget install --id Microsoft.PowerToys --accept-package-agreements --accept-source-agreements --silent
 winget install --id 9P8LTPGCBZXD --accept-package-agreements --accept-source-agreements --silent
 winget install --id 9PF4KZ2VN4W9 --accept-package-agreements --accept-source-agreements --silent
 

@@ -73,10 +73,10 @@ launchers (e.g. GoLand, Antigravity, v2rayN) can stay in `whkdrc`.
    (Vencord, Zen - see [Post-install](#post-install-manual-steps)).
 
    The script handles end-to-end: long paths, winget installs (komorebi,
-   whkd, yasb, JetBrainsMono Nerd Font, Zen Browser, Discord, WinToys,
-   TranslucentTB), `komorebic quickstart`, copying configs + `launch.ps1`
-   with username substitution, autostart, Vencord patch, and the Zen Sine
-   + Catppuccin setup.
+   whkd, yasb, JetBrainsMono Nerd Font, Zen Browser, Discord, PowerToys,
+   WinToys, TranslucentTB), `komorebic quickstart`, copying configs +
+   `launch.ps1` with username substitution, autostart, Vencord patch, and
+   the Zen Sine + Catppuccin setup.
 
 ### Manual Installation
 
@@ -209,9 +209,10 @@ Windows/
   Linux/Nix setup)
 + **Discord + Vencord** - Vencord is patched headlessly during install
   (winget verifies the installer hash)
-+ Extras: **WinToys** (system tweak utility, on-demand - intentionally not
-  auto-started) and **TranslucentTB** (taskbar styler, auto-starts via a
-  Startup-folder shortcut)
++ Extras: **PowerToys** (Microsoft utility suite, manages its own
+  run-at-startup), **WinToys** (system tweak utility, on-demand -
+  intentionally not auto-started) and **TranslucentTB** (taskbar styler,
+  auto-starts via a Startup-folder shortcut)
 
 ## Credits
 
