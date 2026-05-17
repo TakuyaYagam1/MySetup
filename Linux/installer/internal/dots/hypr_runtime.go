@@ -38,7 +38,7 @@ func writeHyprRuntimeShellState(home, hyprDir string) error {
 		return writeLegacyRuntimeShellState(hyprDir, shellKeybinds, hyprland, hyprlock, hypridle, shellLauncher, profile)
 	}
 
-	return writeEnd4RuntimeShellState(hyprDir, hyprland, hyprlock, hypridle, shellLauncher)
+	return writeEnd4RuntimeShellState(hyprDir, hyprland, hyprlock, hypridle)
 }
 
 func removeLegacyHyprlandRuntimeFiles(home, hyprDir string) error {
@@ -87,7 +87,7 @@ func writeLegacyRuntimeShellState(hyprDir, shellKeybinds, hyprland, hyprlock, hy
 	return writeShellManagedRuntimePlaceholder(hypridle, "Hypridle", profile, "Caelestia and Noctalia use shell-native idle flows.")
 }
 
-func writeEnd4RuntimeShellState(hyprDir, hyprland, hyprlock, hypridle, shellLauncher string) error {
+func writeEnd4RuntimeShellState(hyprDir, hyprland, hyprlock, hypridle string) error {
 	end4Hyprland := filepath.Join(hyprDir, "end4", "hyprland.lua")
 	ok, err := shellruntime.RuntimeConfigExists(end4Hyprland)
 	if err != nil || !ok {
