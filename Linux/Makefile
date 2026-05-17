@@ -19,19 +19,20 @@ STYLUA := $(NIX_RUN)stylua --
 NIX_FIND := find $(NIXOS_DIR) -type f -name '*.nix' -print0
 SHELL_FIND := find $(DOTS_DIR)/hypr/scripts -type f -name '*.sh' -print0
 FISH_FIND := find $(DOTS_DIR)/hypr/scripts -type f -name '*.fish' -print0
-LUA_FIND := find $(DOTS_DIR)/nvim -type f -name '*.lua' -print0
+LUA_DIRS := $(DOTS_DIR)/nvim $(DOTS_DIR)/hypr
+LUA_FIND := find $(LUA_DIRS) -type f -name '*.lua' -print0
 JSON_FIND := find $(NIXOS_DIR) $(DOTS_DIR) $(INSTALLER_DIR)/internal/shellruntime -type f -name '*.json' ! -name 'lazy-lock.json' -print0
 
 ##@ Aggregate
 
 .PHONY: lint
-lint: lint-go lint-nix lint-shell lint-json ## Run all linters across go/nix/shell/json
+lint: lint-go lint-nix lint-shell lint-lua lint-json ## Run all linters across go/nix/shell/lua/json
 
 .PHONY: fmt-check
-fmt-check: fmt-check-go fmt-check-nix fmt-check-shell ## Check formatting without writing
+fmt-check: fmt-check-go fmt-check-nix fmt-check-shell fmt-check-lua ## Check formatting without writing
 
 .PHONY: fmt
-fmt: fmt-go fmt-nix fmt-shell ## Apply formatting in place across go/nix/shell
+fmt: fmt-go fmt-nix fmt-shell fmt-lua ## Apply formatting in place across go/nix/shell/lua
 
 .PHONY: test
 test: test-go ## Run all test suites
@@ -135,12 +136,15 @@ fmt-check-shell: ## shfmt -d (diff) on dots/hypr/scripts/*.sh
 	@$(SHELL_FIND) | xargs -0 -r $(SHFMT) -d -i 2 -ci
 
 .PHONY: lint-lua
-lint-lua: ## stylua --check on Neovim config (optional)
-	@if $(LUA_FIND) | grep -qz .; then $(STYLUA) --check $(DOTS_DIR)/nvim; fi
+lint-lua: ## stylua --check on Neovim and Hypr Lua configs
+	@if $(LUA_FIND) | grep -qz .; then $(STYLUA) --check $(LUA_DIRS); fi
+
+.PHONY: fmt-check-lua
+fmt-check-lua: lint-lua ## Check Lua formatting without writing
 
 .PHONY: fmt-lua
-fmt-lua: ## stylua write on Neovim config
-	@if $(LUA_FIND) | grep -qz .; then $(STYLUA) $(DOTS_DIR)/nvim; fi
+fmt-lua: ## stylua write on Neovim and Hypr Lua configs
+	@if $(LUA_FIND) | grep -qz .; then $(STYLUA) $(LUA_DIRS); fi
 
 .PHONY: lint-json
 lint-json: ## jq empty on every JSON in NixOS/, dots/, installer manifests

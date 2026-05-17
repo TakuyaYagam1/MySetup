@@ -1,7 +1,11 @@
 local mysetup = require("lib.mysetup")
 local v = require("variables")
 
-mysetup.bind_exec("SUPER + SHIFT + W", mysetup.hypr .. "/scripts/shell-selector.sh toggle", { description = "Toggle shell selector" })
+mysetup.bind_exec(
+	"SUPER + SHIFT + W",
+	mysetup.hypr .. "/scripts/shell-selector.sh toggle",
+	{ description = "Toggle shell selector" }
+)
 
 mysetup.bind_exec(v.kbTerminal, "app2unit -- " .. v.terminal, { description = "Open terminal" })
 mysetup.bind_exec(v.kbZen, "app2unit -- " .. v.zen, { description = "Open Zen" })
@@ -20,9 +24,17 @@ mysetup.bind_exec(v.kbFileExplorer, "app2unit -- " .. v.fileExplorer, { descript
 mysetup.bind_exec("SUPER + ALT + E", "app2unit -- " .. v.fileExplorer, { description = "Open file explorer" })
 mysetup.bind_exec("CTRL + ALT + V", "app2unit -- pavucontrol", { description = "Open pavucontrol" })
 
-mysetup.bind_exec("SUPER + S", mysetup.hypr .. "/scripts/screenshot.sh full", { locked = true, description = "Screenshot" })
+mysetup.bind_exec(
+	"SUPER + S",
+	mysetup.hypr .. "/scripts/screenshot.sh full",
+	{ locked = true, description = "Screenshot" }
+)
 mysetup.bind_exec("SUPER + SHIFT + S", mysetup.hypr .. "/scripts/screenshot.sh region", { description = "Screen snip" })
-mysetup.bind_exec("SUPER + SHIFT + ALT + S", mysetup.hypr .. "/scripts/screenshot.sh edit", { description = "Screen snip editor" })
+mysetup.bind_exec(
+	"SUPER + SHIFT + ALT + S",
+	mysetup.hypr .. "/scripts/screenshot.sh edit",
+	{ description = "Screen snip editor" }
+)
 mysetup.bind_exec("SUPER + C", "hyprpicker -a", { description = "Pick color" })
 
 mysetup.bind_exec(v.kbRecord, mysetup.hypr .. "/scripts/record-toggle.sh", { description = "Toggle screen recording" })

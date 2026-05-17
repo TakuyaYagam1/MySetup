@@ -6,60 +6,66 @@ hl.window_rule({ match = { class = "foot|equibop|org\\.quickshell|imv|swappy" },
 hl.window_rule({ match = { float = true, xwayland = false }, center = true })
 
 for _, class in ipairs({
-    "guifetch",
-    "yad",
-    "zenity",
-    "wev",
-    "org\\.gnome\\.FileRoller",
-    "file-roller",
-    "blueman-manager",
-    "com\\.github\\.GradienceTeam\\.Gradience",
-    "feh",
-    "imv",
-    "system-config-printer",
-    "org\\.quickshell",
+	"guifetch",
+	"yad",
+	"zenity",
+	"wev",
+	"org\\.gnome\\.FileRoller",
+	"file-roller",
+	"blueman-manager",
+	"com\\.github\\.GradienceTeam\\.Gradience",
+	"feh",
+	"imv",
+	"system-config-printer",
+	"org\\.quickshell",
 }) do
-    hl.window_rule({ match = { class = class }, float = true })
+	hl.window_rule({ match = { class = class }, float = true })
 end
 
 for _, rule in ipairs({
-    { match = { class = "foot", title = "nmtui" }, size = "60% 70%" },
-    { match = { class = "org\\.gnome\\.Settings" }, size = "70% 80%" },
-    { match = { class = "org\\.pulseaudio\\.pavucontrol|yad-icon-browser" }, size = "60% 70%" },
-    { match = { class = "nwg-look" }, size = "50% 60%" },
+	{ match = { class = "foot", title = "nmtui" }, size = "60% 70%" },
+	{ match = { class = "org\\.gnome\\.Settings" }, size = "70% 80%" },
+	{ match = { class = "org\\.pulseaudio\\.pavucontrol|yad-icon-browser" }, size = "60% 70%" },
+	{ match = { class = "nwg-look" }, size = "50% 60%" },
 }) do
-    hl.window_rule({ match = rule.match, float = true })
-    hl.window_rule({ match = rule.match, size = rule.size })
-    hl.window_rule({ match = rule.match, center = true })
+	hl.window_rule({ match = rule.match, float = true })
+	hl.window_rule({ match = rule.match, size = rule.size })
+	hl.window_rule({ match = rule.match, center = true })
 end
 
 hl.window_rule({ match = { class = "btop" }, workspace = "special:sysmon" })
-hl.window_rule({ match = { class = "(?i)(feishin|supersonic|cider|com\\.github\\.th_ch\\.youtube_music|plexamp)" }, workspace = "special:music" })
+hl.window_rule({
+	match = { class = "(?i)(feishin|supersonic|cider|com\\.github\\.th_ch\\.youtube_music|plexamp)" },
+	workspace = "special:music",
+})
 hl.window_rule({ match = { class = "(?i)(discord|equibop|vesktop|whatsapp)" }, workspace = "special:communication" })
 hl.window_rule({ match = { class = "(?i)todoist" }, workspace = "special:todo" })
 
 for _, title in ipairs({
-    "(Select|Open)( a)? (File|Folder)(s)?",
-    "File (Operation|Upload)( Progress)?",
-    ".* Properties",
-    "Export Image as PNG",
-    "GIMP Crash Debug",
-    "Save As",
-    "Library",
+	"(Select|Open)( a)? (File|Folder)(s)?",
+	"File (Operation|Upload)( Progress)?",
+	".* Properties",
+	"Export Image as PNG",
+	"GIMP Crash Debug",
+	"Save As",
+	"Library",
 }) do
-    hl.window_rule({ match = { title = title }, float = true })
+	hl.window_rule({ match = { title = title }, float = true })
 end
 
 local pip_title = "Picture(-| )in(-| )[Pp]icture"
 hl.window_rule({
-    match = { title = pip_title },
-    move = { "monitor_w-window_w-(monitor_w*0.02)", "monitor_h-window_h-(monitor_h*0.03)" },
+	match = { title = pip_title },
+	move = { "monitor_w-window_w-(monitor_w*0.02)", "monitor_h-window_h-(monitor_h*0.03)" },
 })
 hl.window_rule({ match = { title = pip_title }, keep_aspect_ratio = true })
 hl.window_rule({ match = { title = pip_title }, float = true })
 hl.window_rule({ match = { title = pip_title }, pin = true })
 
-hl.window_rule({ match = { class = "krita|gimp|inkscape|darktable|resolve|kdenlive|shotcut|blender|godot" }, opaque = true })
+hl.window_rule({
+	match = { class = "krita|gimp|inkscape|darktable|resolve|kdenlive|shotcut|blender|godot" },
+	opaque = true,
+})
 
 hl.window_rule({ match = { class = "^(ueberzugpp_.*)$" }, float = true })
 hl.window_rule({ match = { class = "^(ueberzugpp_.*)$" }, no_initial_focus = true })

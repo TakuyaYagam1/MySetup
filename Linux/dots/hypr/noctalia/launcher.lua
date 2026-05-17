@@ -2,11 +2,43 @@ local mysetup = require("lib.mysetup")
 
 mysetup.bind_exec("SUPER + SUPER_L", mysetup.hypr .. "/scripts/noctalia-launcher.sh press")
 mysetup.bind_exec("SUPER + SUPER_L", mysetup.hypr .. "/scripts/noctalia-launcher.sh release", { release = true })
-mysetup.bind_exec("SUPER + mouse:272", mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt", { non_consuming = true })
-mysetup.bind_exec("SUPER + mouse:273", mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt", { non_consuming = true })
-mysetup.bind_exec("SUPER + mouse:274", mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt", { non_consuming = true })
-mysetup.bind_exec("SUPER + mouse:275", mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt", { non_consuming = true })
-mysetup.bind_exec("SUPER + mouse:276", mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt", { non_consuming = true })
-mysetup.bind_exec("SUPER + mouse:277", mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt", { non_consuming = true })
-mysetup.bind_exec("SUPER + mouse_up", mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt", { non_consuming = true })
-mysetup.bind_exec("SUPER + mouse_down", mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt", { non_consuming = true })
+mysetup.bind_exec(
+	"SUPER + mouse:272",
+	mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt",
+	{ non_consuming = true }
+)
+mysetup.bind_exec(
+	"SUPER + mouse:273",
+	mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt",
+	{ non_consuming = true }
+)
+mysetup.bind_exec(
+	"SUPER + mouse:274",
+	mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt",
+	{ non_consuming = true }
+)
+mysetup.bind_exec(
+	"SUPER + mouse:275",
+	mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt",
+	{ non_consuming = true }
+)
+mysetup.bind_exec(
+	"SUPER + mouse:276",
+	mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt",
+	{ non_consuming = true }
+)
+mysetup.bind_exec(
+	"SUPER + mouse:277",
+	mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt",
+	{ non_consuming = true }
+)
+mysetup.bind_exec(
+	"SUPER + mouse_up",
+	mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt",
+	{ non_consuming = true }
+)
+mysetup.bind_exec(
+	"SUPER + mouse_down",
+	mysetup.hypr .. "/scripts/noctalia-launcher.sh interrupt",
+	{ non_consuming = true }
+)

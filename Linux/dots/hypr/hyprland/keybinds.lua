@@ -6,8 +6,8 @@ mysetup.load_runtime("shell-launcher.lua")
 local wsaction = mysetup.hypr .. "/scripts/wsaction.fish"
 
 for i = 1, 10 do
-    local key = tostring(i % 10)
-    mysetup.bind_exec(v.kbGoToWs .. " + " .. key, wsaction .. " workspace " .. tostring(i))
+	local key = tostring(i % 10)
+	mysetup.bind_exec(v.kbGoToWs .. " + " .. key, wsaction .. " workspace " .. tostring(i))
 end
 
 mysetup.bind_dispatch("SUPER + mouse_down", "workspace -1")
@@ -76,10 +76,24 @@ mysetup.bind_dispatch(v.kbTodo, "togglespecialworkspace todo")
 mysetup.bind_exec("XF86AudioMute", "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle", { locked = true })
 mysetup.bind_exec("XF86AudioMicMute", "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle", { locked = true })
 mysetup.bind_exec("SUPER + SHIFT + M", "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle", { locked = true })
-mysetup.bind_exec("XF86AudioRaiseVolume", "wpctl set-mute @DEFAULT_AUDIO_SINK@ 0; wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ " .. tostring(v.volumeStep) .. "%+", { locked = true, repeating = true })
-mysetup.bind_exec("XF86AudioLowerVolume", "wpctl set-mute @DEFAULT_AUDIO_SINK@ 0; wpctl set-volume @DEFAULT_AUDIO_SINK@ " .. tostring(v.volumeStep) .. "%-", { locked = true, repeating = true })
+mysetup.bind_exec(
+	"XF86AudioRaiseVolume",
+	"wpctl set-mute @DEFAULT_AUDIO_SINK@ 0; wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ "
+		.. tostring(v.volumeStep)
+		.. "%+",
+	{ locked = true, repeating = true }
+)
+mysetup.bind_exec(
+	"XF86AudioLowerVolume",
+	"wpctl set-mute @DEFAULT_AUDIO_SINK@ 0; wpctl set-volume @DEFAULT_AUDIO_SINK@ " .. tostring(v.volumeStep) .. "%-",
+	{ locked = true, repeating = true }
+)
 
 mysetup.bind_exec("SUPER + SHIFT + L", "systemctl suspend-then-hibernate", { locked = true })
-mysetup.bind_exec("CTRL + SHIFT + ALT + V", [[sleep 0.5s && ydotool type -d 1 "$(cliphist list | head -1 | cliphist decode)"]], { locked = true })
+mysetup.bind_exec(
+	"CTRL + SHIFT + ALT + V",
+	[[sleep 0.5s && ydotool type -d 1 "$(cliphist list | head -1 | cliphist decode)"]],
+	{ locked = true }
+)
 
 mysetup.load_runtime("shell-keybinds.lua")

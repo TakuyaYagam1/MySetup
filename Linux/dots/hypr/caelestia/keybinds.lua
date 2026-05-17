@@ -22,7 +22,11 @@ mysetup.bind_dispatch("XF86AudioPrev", "global caelestia:mediaPrev", { locked = 
 mysetup.bind_dispatch("XF86AudioStop", "global caelestia:mediaStop", { locked = true })
 
 mysetup.bind_exec("CTRL + SUPER + SHIFT + R", "qs -c caelestia kill", { release = true })
-mysetup.bind_exec("CTRL + SUPER + ALT + R", "qs -c caelestia kill; sleep .1; " .. mysetup.hypr .. "/scripts/start-shell.sh caelestia", { release = true })
+mysetup.bind_exec(
+	"CTRL + SUPER + ALT + R",
+	"qs -c caelestia kill; sleep .1; " .. mysetup.hypr .. "/scripts/start-shell.sh caelestia",
+	{ release = true }
+)
 
 mysetup.bind_exec(v.kbWindowPip, "caelestia resizer pip")
 
