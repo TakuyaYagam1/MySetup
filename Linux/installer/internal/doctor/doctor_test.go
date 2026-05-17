@@ -87,22 +87,22 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 	if err := os.WriteFile(paths.ActiveShellStatePath(state.User.HomeDirectory), []byte("caelestia\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "shell-profile.conf"), []byte("source = "+filepath.Join(runtimeDir, "shell-profile.conf")+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "shell-profile.lua"), []byte(`dofile("`+filepath.Join(runtimeDir, "shell-profile.lua")+`")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "hyprland.conf"), []byte("source = "+filepath.Join(runtimeDir, "hyprland.conf")+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "hyprland.lua"), []byte(`dofile("`+filepath.Join(runtimeDir, "hyprland.lua")+`")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(runtimeDir, "shell-profile.conf"), []byte("exec-once = /home/user/.config/hypr/scripts/start-shell.sh\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(runtimeDir, "shell-profile.lua"), []byte(`hl.on("hyprland.start", function() hl.exec_cmd("/home/user/.config/hypr/scripts/start-shell.sh") end)`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(runtimeDir, "hyprland.conf"), []byte("source = /home/user/.config/hypr/mysetup/hyprland.conf\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(runtimeDir, "hyprland.lua"), []byte(`dofile("/home/user/.config/hypr/mysetup/hyprland.lua")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "mysetup", "hyprland.conf"), []byte("monitor = eDP-1, 2560x1600@120, 0x0, 1\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "mysetup", "hyprland.lua"), []byte("hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@120\", position = \"0x0\", scale = \"1\" })\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(runtimeDir, "shell-keybinds.conf"), []byte("source = /home/user/.config/hypr/caelestia/keybinds.conf\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(runtimeDir, "shell-keybinds.lua"), []byte(`require("caelestia.keybinds")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(state.User.HomeDirectory, ".config/quickshell", "mysetup-shell-selector"), 0o755); err != nil {
@@ -180,16 +180,16 @@ func TestReportUsesEnd4ProfileChecks(t *testing.T) {
 	}
 
 	for path, content := range map[string]string{
-		filepath.Join(state.User.HomeDirectory, ".config/hypr/shell-profile.conf"):                               "source=" + filepath.Join(runtimeDir, "shell-profile.conf") + "\n",
-		filepath.Join(state.User.HomeDirectory, ".config/hypr/hyprland.conf"):                                    "source=" + filepath.Join(runtimeDir, "hyprland.conf") + "\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/shell-profile.lua"):                                `dofile("` + filepath.Join(runtimeDir, "shell-profile.lua") + "\")\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/hyprland.lua"):                                     `dofile("` + filepath.Join(runtimeDir, "hyprland.lua") + "\")\n",
 		filepath.Join(state.User.HomeDirectory, ".config/hypr/hyprlock.conf"):                                    "source=" + filepath.Join(runtimeDir, "hyprlock.conf") + "\n",
 		filepath.Join(state.User.HomeDirectory, ".config/hypr/hypridle.conf"):                                    "source=" + filepath.Join(runtimeDir, "hypridle.conf") + "\n",
-		filepath.Join(runtimeDir, "shell-profile.conf"):                                                          "exec-once = /home/user/.config/hypr/scripts/start-shell.sh\n",
-		filepath.Join(runtimeDir, "hyprland.conf"):                                                               "source=~/.config/hypr/end4/hyprland.conf\n",
+		filepath.Join(runtimeDir, "shell-profile.lua"):                                                           `hl.on("hyprland.start", function() hl.exec_cmd("/home/user/.config/hypr/scripts/start-shell.sh") end)` + "\n",
+		filepath.Join(runtimeDir, "hyprland.lua"):                                                                "dofile(os.getenv(\"HOME\") .. \"/.config/hypr/end4/hyprland.lua\")\n",
 		filepath.Join(runtimeDir, "hyprlock.conf"):                                                               "source=~/.config/hypr/end4/hyprlock.conf\n",
 		filepath.Join(runtimeDir, "hypridle.conf"):                                                               "source=~/.config/hypr/end4/hypridle.conf\n",
-		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/hyprland.conf"):                               "source=~/.config/hypr/end4/hyprland/env.conf\n",
-		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/mysetup/keybinds.conf"):                       "bind = Super, R, exec, ~/.config/hypr/scripts/record-toggle.sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/hyprland.lua"):                                "require(\"hyprland.env\")\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/mysetup/keybinds.lua"):                        "mysetup.bind_exec(\"SUPER + R\", \"~/.config/hypr/scripts/record-toggle.sh\")\n",
 		filepath.Join(state.User.HomeDirectory, ".config/quickshell/ii/shell.qml"):                               "ShellRoot {}\n",
 		filepath.Join(state.User.HomeDirectory, ".config/quickshell/mysetup-shell-selector/shell.qml"):           "ShellRoot {}\n",
 		filepath.Join(state.User.HomeDirectory, ".config/illogical-impulse/config.json"):                         "{}\n",
@@ -258,8 +258,8 @@ func TestReportUsesEnd4ProfileChecks(t *testing.T) {
 }
 
 func TestCheckShellKeybindsWarnsOnProfileMismatch(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "shell-keybinds.conf")
-	if err := os.WriteFile(path, []byte("source = /tmp/hypr/caelestia/keybinds.conf\n"), 0o644); err != nil {
+	path := filepath.Join(t.TempDir(), "shell-keybinds.lua")
+	if err := os.WriteFile(path, []byte(`require("caelestia.keybinds")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	out := &reportWriter{}
@@ -274,8 +274,8 @@ func TestCheckShellKeybindsWarnsOnProfileMismatch(t *testing.T) {
 
 func TestCheckShellKeybindsAcceptsHomeManagerSymlinkContent(t *testing.T) {
 	dir := t.TempDir()
-	target := filepath.Join(dir, "store-keybinds.conf")
-	path := filepath.Join(dir, "shell-keybinds.conf")
+	target := filepath.Join(dir, "store-keybinds.lua")
+	path := filepath.Join(dir, "shell-keybinds.lua")
 	if err := os.WriteFile(target, []byte(`$noctalia = noctalia-shell ipc call
 bindi = Super, Super_L, exec, $hypr/scripts/noctalia-launcher.sh press
 `), 0o644); err != nil {

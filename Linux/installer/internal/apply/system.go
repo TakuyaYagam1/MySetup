@@ -31,9 +31,6 @@ func writeSystemConfiguration(ctx context.Context, runner run.CommandRunner, sta
 	if err := writeStagedHashedPassword(ctx, runner, staging, dest, opts.Secrets); err != nil {
 		return result, err
 	}
-	if err := writeSecrets(ctx, runner, dest, opts.Secrets); err != nil {
-		return result, err
-	}
 	return result, nil
 }
 

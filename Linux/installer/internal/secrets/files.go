@@ -13,16 +13,12 @@ import (
 
 const MaxSecretFileBytes = 64 * 1024
 
-func LoadFromFiles(userPasswordFile, pgAdminPasswordFile string) (config.Secrets, error) {
+func LoadFromFiles(userPasswordFile string) (config.Secrets, error) {
 	userPassword, err := readFile(userPasswordFile)
 	if err != nil {
 		return config.Secrets{}, fmt.Errorf("read user password file: %w", err)
 	}
-	pgAdminPassword, err := readFile(pgAdminPasswordFile)
-	if err != nil {
-		return config.Secrets{}, fmt.Errorf("read pgAdmin password file: %w", err)
-	}
-	return config.Secrets{UserPassword: userPassword, PgAdminPassword: pgAdminPassword}, nil
+	return config.Secrets{UserPassword: userPassword}, nil
 }
 
 func readFile(path string) (string, error) {

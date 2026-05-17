@@ -22,10 +22,10 @@ func TestSyncHyprReturnsExecutableCommandError(t *testing.T) {
 	writeScript(t, filepath.Join(bin, "rsync"), `last=
 for arg do last=$arg; done
 mkdir -p "$last/scripts" "$last/caelestia" "$last/hyprland"
-printf '%s\n' '# caelestia binds' > "$last/caelestia/keybinds.conf"
-printf '%s\n' '# caelestia launcher' > "$last/caelestia/launcher.conf"
-printf '%s\n' 'input {' '    kb_layout = us' '    kb_options = grp:alt_shift_toggle' '}' > "$last/hyprland/input.conf"
-printf '%s\n' 'source = $hypr/shell-keybinds.conf' > "$last/hyprland/keybinds.conf"
+printf '%s\n' '-- caelestia binds' > "$last/caelestia/keybinds.lua"
+printf '%s\n' '-- caelestia launcher' > "$last/caelestia/launcher.lua"
+printf '%s\n' 'hl.config({ input = { kb_layout = "us", kb_options = "grp:alt_shift_toggle" } })' > "$last/hyprland/input.lua"
+printf '%s\n' 'mysetup.load_runtime("shell-keybinds.lua")' > "$last/hyprland/keybinds.lua"
 printf '%s\n' '#!/usr/bin/env bash' > "$last/scripts/start-shell.sh"`)
 	writeScript(t, filepath.Join(bin, "chmod"), "exit 0")
 	writeScript(t, filepath.Join(bin, "find"), "exit 27")
@@ -49,10 +49,10 @@ func TestSyncHyprIgnoresHyprctlReloadFailure(t *testing.T) {
 	writeScript(t, filepath.Join(bin, "rsync"), `last=
 for arg do last=$arg; done
 mkdir -p "$last/scripts" "$last/caelestia" "$last/hyprland"
-printf '%s\n' '# caelestia binds' > "$last/caelestia/keybinds.conf"
-printf '%s\n' '# caelestia launcher' > "$last/caelestia/launcher.conf"
-printf '%s\n' 'input {' '    kb_layout = us' '    kb_options = grp:alt_shift_toggle' '}' > "$last/hyprland/input.conf"
-printf '%s\n' 'source = $hypr/shell-keybinds.conf' > "$last/hyprland/keybinds.conf"
+printf '%s\n' '-- caelestia binds' > "$last/caelestia/keybinds.lua"
+printf '%s\n' '-- caelestia launcher' > "$last/caelestia/launcher.lua"
+printf '%s\n' 'hl.config({ input = { kb_layout = "us", kb_options = "grp:alt_shift_toggle" } })' > "$last/hyprland/input.lua"
+printf '%s\n' 'mysetup.load_runtime("shell-keybinds.lua")' > "$last/hyprland/keybinds.lua"
 printf '%s\n' '#!/usr/bin/env bash' > "$last/scripts/start-shell.sh"`)
 	writeScript(t, filepath.Join(bin, "chmod"), "exit 0")
 	writeScript(t, filepath.Join(bin, "find"), "exit 0")
@@ -75,7 +75,7 @@ func TestSyncHyprExcludesHomeManagerEnd4Profile(t *testing.T) {
 	if err := os.MkdirAll(staleEnd4Dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(staleEnd4Dir, "launcher.conf"), []byte("# stale lite profile\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(staleEnd4Dir, "launcher.lua"), []byte("-- stale lite profile\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -90,7 +90,7 @@ func TestSyncHyprExcludesHomeManagerEnd4Profile(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"rm -rf -- " + staleEnd4Dir,
-		"--exclude /hyprland.conf",
+		"--exclude /hyprland.lua",
 		"--exclude /hyprlock.conf",
 		"--exclude /hypridle.conf",
 		"--exclude /runtime/",
@@ -111,7 +111,7 @@ func TestSyncHyprPreservesEnd4ProfileWhenActive(t *testing.T) {
 	if err := os.MkdirAll(staleEnd4Dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(staleEnd4Dir, "launcher.conf"), []byte("# stale lite profile\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(staleEnd4Dir, "launcher.lua"), []byte("-- stale lite profile\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -160,10 +160,10 @@ func TestWriteHyprLocalConfigRepairsTreeOnPermissionDenied(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(hyprDir, "hyprland"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprSourceDir, "hyprland.conf"), []byte("monitor = old\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprSourceDir, "hyprland.lua"), []byte("-- old\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "hyprland", "input.conf"), []byte("    kb_layout = old\n    kb_options = old\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "hyprland", "input.lua"), []byte("hl.config({ input = { kb_layout = \"old\", kb_options = \"old\" } })\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(hyprDir, 0o500); err != nil {
@@ -189,12 +189,12 @@ esac`)
 		t.Fatal(err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(hyprDir, "mysetup", "hyprland.conf"))
+	data, err := os.ReadFile(filepath.Join(hyprDir, "mysetup", "local.lua"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "monitor =") {
-		t.Fatalf("expected generated mysetup hyprland config, got:\n%s", data)
+	if !strings.Contains(string(data), "hl.monitor") || !strings.Contains(string(data), "kb_layout") {
+		t.Fatalf("expected generated mysetup local Lua config, got:\n%s", data)
 	}
 	for _, want := range []string{
 		"sudo chown -R tester:",
@@ -210,11 +210,14 @@ func writeRequiredHyprSource(t *testing.T, dotsSrc string) {
 	t.Helper()
 
 	files := map[string]string{
-		"hypr/hyprland.conf":                 "monitor = eDP-1, 2560x1600@120, 0x0, 1\n",
-		"hypr/hyprland/input.conf":           "input {\n    kb_layout = us\n    kb_options = grp:alt_shift_toggle\n}\n",
-		"hypr/hyprland/keybinds.conf":        "source = $hypr/shell-keybinds.conf\n",
-		"hypr/shell-common-keybinds.conf":    "bind = Super+Shift, W, exec, $hypr/scripts/shell-selector.sh toggle\n",
-		"hypr/shell-workspace-keybinds.conf": "bind = $kbGoToWsGroup, 1, exec, $wsaction -g workspace 1\n",
+		"hypr/hyprland.lua":                 "require(\"hyprland.keybinds\")\n",
+		"hypr/hyprland/input.lua":           "hl.config({ input = { kb_layout = \"us\", kb_options = \"grp:alt_shift_toggle\" } })\n",
+		"hypr/hyprland/keybinds.lua":        "mysetup.load_runtime(\"shell-keybinds.lua\")\n",
+		"hypr/shell-common-keybinds.lua":    "mysetup.bind_exec(\"SUPER + SHIFT + W\", mysetup.hypr .. \"/scripts/shell-selector.sh toggle\")\n",
+		"hypr/shell-workspace-keybinds.lua": "mysetup.bind_exec(\"SUPER + 1\", mysetup.hypr .. \"/scripts/wsaction.fish -g workspace 1\")\n",
+		"hypr/lib/mysetup.lua":              "return {}\n",
+		"hypr/variables.lua":                "return {}\n",
+		"hypr/scheme/default.lua":           "return {}\n",
 	}
 	for _, profile := range shellruntime.ProfileSpecs {
 		files[filepath.Join("hypr", profile.Launcher)] = "# launcher profile\n"

@@ -22,7 +22,6 @@ type State struct {
 	Hardware      Hardware `json:"hardware"`
 	Features      Features `json:"features"`
 	Zapret        Zapret   `json:"zapret"`
-	Services      Services `json:"services"`
 	Dots          Dots     `json:"dots"`
 }
 type Host struct {
@@ -110,9 +109,6 @@ type Zapret struct {
 	Enable bool   `json:"enable"`
 	Config string `json:"config"`
 }
-type Services struct {
-	PgAdminEmail string `json:"pgAdminEmail"`
-}
 type Dots struct {
 	Hypr             bool `json:"hypr"`
 	ZenTheme         bool `json:"zenTheme"`
@@ -123,8 +119,7 @@ type Dots struct {
 	Wallpapers       bool `json:"wallpapers"`
 }
 type Secrets struct {
-	UserPassword    string
-	PgAdminPassword string
+	UserPassword string
 }
 
 func Default() State {
@@ -167,9 +162,6 @@ func Default() State {
 		Features: Features{},
 		Zapret: Zapret{
 			Config: "general (FAKE_TLS_AUTO_ALT3)",
-		},
-		Services: Services{
-			PgAdminEmail: "admin@localhost.local",
 		},
 		Dots: Dots{
 			Hypr:             true,
@@ -351,9 +343,6 @@ func migrateFeatures(state State, def State, legacy bool, oldVersion int) State 
 	}
 	if state.Zapret.Config == "" {
 		state.Zapret.Config = def.Zapret.Config
-	}
-	if state.Services.PgAdminEmail == "" {
-		state.Services.PgAdminEmail = def.Services.PgAdminEmail
 	}
 	if legacy {
 		state.Dots = def.Dots

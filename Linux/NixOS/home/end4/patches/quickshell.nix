@@ -25,10 +25,6 @@ let
         find $out -name '*.py' -print0 | xargs -0 sed -i 's|^#!.*ILLOGICAL_IMPULSE_VIRTUAL_ENV.*|#!/usr/bin/env python3|'
         sed -i 's|/dev/pts/\*|/dev/pts/* 2>/dev/null|' $out/ii/scripts/colors/applycolor.sh
 
-        substituteInPlace $out/ii/services/HyprlandKeybinds.qml \
-          --replace-fail "\''${Directories.config}/hypr/hyprland/keybinds.conf" "\''${Directories.config}/hypr/end4/hyprland/keybinds.conf" \
-          --replace-fail "\''${Directories.config}/hypr/custom/keybinds.conf" "\''${Directories.config}/hypr/end4/mysetup/keybinds.conf"
-
         substituteInPlace $out/ii/modules/settings/About.qml \
           --replace-fail 'Quickshell.iconPath("illogical-impulse")' 'Quickshell.iconPath("nix-snowflake")'
 

@@ -67,11 +67,11 @@ func validateHyprSource(src string) error {
 func requiredHyprSourceFiles() []string {
 	files := make([]string, 0, 5+2*len(shellruntime.ProfileSpecs)+len(shellruntime.HyprScripts))
 	files = append(files,
-		"hyprland.conf",
-		filepath.Join("hyprland", "input.conf"),
-		filepath.Join("hyprland", "keybinds.conf"),
-		"shell-common-keybinds.conf",
-		"shell-workspace-keybinds.conf",
+		"hyprland.lua",
+		filepath.Join("hyprland", "input.lua"),
+		filepath.Join("hyprland", "keybinds.lua"),
+		"shell-common-keybinds.lua",
+		"shell-workspace-keybinds.lua",
 	)
 	for _, profile := range shellruntime.ProfileSpecs {
 		files = append(files, profile.Launcher, profile.Keybinds)
@@ -95,12 +95,12 @@ func prepareHyprDestination(ctx context.Context, runner run.CommandRunner, dst, 
 func syncHyprDotfiles(ctx context.Context, runner run.CommandRunner, src, dst string) error {
 	return runner.Command(ctx, "rsync", "-a", "--delete",
 		"--chmod=Du+rwX,Fu+rw,go+rX,go-w",
-		"--exclude", "/hyprland.conf",
+		"--exclude", "/hyprland.lua",
 		"--exclude", "/hyprlock.conf",
 		"--exclude", "/hypridle.conf",
-		"--exclude", "/shell-profile.conf",
-		"--exclude", "/shell-launcher.conf",
-		"--exclude", "/shell-keybinds.conf",
+		"--exclude", "/shell-profile.lua",
+		"--exclude", "/shell-launcher.lua",
+		"--exclude", "/shell-keybinds.lua",
 		"--exclude", "/runtime/",
 		"--exclude", "/end4/",
 		src+"/", dst+"/")

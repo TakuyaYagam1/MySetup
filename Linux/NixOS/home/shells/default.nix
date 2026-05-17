@@ -17,6 +17,10 @@ let
   activeShellState = "${config.xdg.stateHome}/mysetup/active-shell";
   stableEntrypoints = dotfilesLib.hyprRuntimeFiles;
   inherit (dotfilesLib) hyprScripts;
+  # end4 is installed as one patched tree at hypr/end4. Adding nested
+  # xdg.configFile entries under that symlink makes Home Manager reject them as
+  # outside $HOME.
+  standaloneShellProfiles = lib.filter (profile: profile.id != "end4") shellProfiles.ordered;
 
   hyprScriptFiles = lib.genAttrs (map (name: "hypr/scripts/${name}") hyprScripts) (target: {
     force = true;
@@ -24,14 +28,52 @@ let
     source = dotsRoot + "/${target}";
   });
 
-  commonHyprFiles = {
-    "hypr/shell-common-keybinds.conf" = {
+  mysetupHyprFiles = {
+    "hypr/mysetup/hyprland.lua" = {
       force = true;
-      source = dotsRoot + "/hypr/shell-common-keybinds.conf";
+      source = dotsRoot + "/hypr/hyprland.lua";
     };
-    "hypr/shell-workspace-keybinds.conf" = {
+    "hypr/lib/mysetup.lua" = dotfilesLib.forcedSource (dotsRoot + "/hypr/lib/mysetup.lua");
+    "hypr/variables.lua" = dotfilesLib.forcedSource (dotsRoot + "/hypr/variables.lua");
+    "hypr/scheme/default.lua" = dotfilesLib.forcedSource (dotsRoot + "/hypr/scheme/default.lua");
+  }
+  // lib.genAttrs
+    (
+      map (name: "hypr/hyprland/${name}.lua") [
+        "animations"
+        "decoration"
+        "env"
+        "execs"
+        "general"
+        "gestures"
+        "group"
+        "input"
+        "keybinds"
+        "misc"
+        "rules"
+        "scrolling"
+      ]
+    )
+    (target: dotfilesLib.forcedSource (dotsRoot + "/${target}"))
+  // lib.genAttrs
+    (
+      map (target: "hypr/${target}") (
+        lib.concatMap (profile: [
+          profile.launcher
+          profile.keybinds
+        ]) standaloneShellProfiles
+      )
+    )
+    (target: dotfilesLib.forcedSource (dotsRoot + "/${target}"));
+
+  commonHyprFiles = {
+    "hypr/shell-common-keybinds.lua" = {
       force = true;
-      source = dotsRoot + "/hypr/shell-workspace-keybinds.conf";
+      source = dotsRoot + "/hypr/shell-common-keybinds.lua";
+    };
+    "hypr/shell-workspace-keybinds.lua" = {
+      force = true;
+      source = dotsRoot + "/hypr/shell-workspace-keybinds.lua";
     };
   };
 
@@ -47,25 +89,43 @@ let
     let
       name = lib.removePrefix "hypr/" target;
     in
-    dotfilesLib.stableRuntimeSourceFile "${hyprRuntimeDir}/${name}"
+    if lib.hasSuffix ".lua" name then
+      dotfilesLib.stableLuaRuntimeSourceFile "${hyprRuntimeDir}/${name}"
+    else
+      dotfilesLib.stableRuntimeSourceFile "${hyprRuntimeDir}/${name}"
   );
 
   managedHyprPaths =
     (map (name: "hypr/${name}") stableEntrypoints)
     ++ [
-      "hypr/shell-common-keybinds.conf"
-      "hypr/shell-workspace-keybinds.conf"
+      "hypr/shell-common-keybinds.lua"
+      "hypr/shell-workspace-keybinds.lua"
     ]
     ++ (map (name: "hypr/scripts/${name}") hyprScripts);
 
   backupTargets = lib.concatMapStringsSep " \\\n" (
     path: ''"${config.xdg.configHome}/${path}.hm-backup"''
   ) managedHyprPaths;
+
+  legacyHyprlandRuntimePaths = [
+    "${hyprDir}/hyprland.conf"
+    "${hyprDir}/shell-profile.conf"
+    "${hyprDir}/shell-launcher.conf"
+    "${hyprDir}/shell-keybinds.conf"
+    "${hyprDir}/mysetup/hyprland.conf"
+    "${hyprRuntimeDir}/hyprland.conf"
+    "${hyprRuntimeDir}/shell-profile.conf"
+    "${hyprRuntimeDir}/shell-launcher.conf"
+    "${hyprRuntimeDir}/shell-keybinds.conf"
+  ];
+
+  legacyHyprlandRuntimeTargets = lib.concatMapStringsSep " \\\n" (path: ''"${path}"'') legacyHyprlandRuntimePaths;
 in
 {
   xdg.configFile =
     hyprScriptFiles
     // stableEntrypointFiles
+    // mysetupHyprFiles
     // commonHyprFiles
     // {
       "quickshell/mysetup-shell-selector" = {
@@ -75,20 +135,16 @@ in
     };
 
   home.activation = {
-    seedMySetupHyprConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      target="${config.xdg.configHome}/hypr/mysetup/hyprland.conf"
-      src="${dotsRoot}/hypr/hyprland.conf"
-
-      $DRY_RUN_CMD mkdir -p "$(dirname "$target")"
-
-      if [ -L "$target" ]; then
-        $DRY_RUN_CMD rm -f "$target"
-      fi
-
-      if [ ! -e "$target" ]; then
-        $DRY_RUN_CMD install -m 644 "$src" "$target"
-      fi
-    '';
+    pruneLegacyHyprlandRuntime =
+      lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        for target in \
+          ${legacyHyprlandRuntimeTargets}
+        do
+          if [ -e "$target" ] || [ -L "$target" ]; then
+            $DRY_RUN_CMD rm -f -- "$target"
+          fi
+        done
+      '';
 
     seedHyprShellRuntime =
       lib.hm.dag.entryAfter
@@ -98,7 +154,7 @@ in
           "end4SeedConfig"
           "end4RepairRuntime"
           "end4SeedAppConfig"
-          "seedMySetupHyprConfig"
+          "pruneLegacyHyprlandRuntime"
         ]
         ''
           runtime_dir="${hyprRuntimeDir}"
@@ -116,17 +172,37 @@ in
           }
 
           seed_file "$active_shell" "${pkgs.writeText "mysetup-active-shell-default" "${defaultProfile.id}\n"}"
-          seed_file "$runtime_dir/hyprland.conf" "${pkgs.writeText "mysetup-hypr-runtime-default" ''
-            source = ${hyprDir}/mysetup/hyprland.conf
-            source = ${hyprRuntimeDir}/shell-profile.conf
+          seed_file "$runtime_dir/hyprland.lua" "${pkgs.writeText "mysetup-hypr-runtime-default" ''
+            -- Active Hyprland profile: mysetup (${defaultProfile.id})
+            local home = os.getenv("HOME")
+            if home == nil then
+                error("HOME is not set; cannot locate MySetup Hyprland config")
+            end
+
+            local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
+            local state_home = os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")
+            local hypr_root = config_home .. "/hypr"
+            local runtime_root = state_home .. "/mysetup/hypr-runtime"
+            package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
+            dofile(hypr_root .. "/mysetup/hyprland.lua")
+            dofile(runtime_root .. "/shell-profile.lua")
           ''}"
-          seed_file "$runtime_dir/shell-profile.conf" "${pkgs.writeText "mysetup-shell-profile-default" ''
-            exec-once = ${hyprDir}/scripts/start-shell.sh
+          seed_file "$runtime_dir/shell-profile.lua" "${pkgs.writeText "mysetup-shell-profile-default" ''
+            -- Runtime shell launcher
+            hl.on("hyprland.start", function()
+                hl.exec_cmd("${hyprDir}/scripts/start-shell.sh")
+            end)
           ''}"
           seed_file "$runtime_dir/hyprlock.conf" "${pkgs.writeText "mysetup-empty-hyprlock" ""}"
           seed_file "$runtime_dir/hypridle.conf" "${pkgs.writeText "mysetup-empty-hypridle" ""}"
-          seed_file "$runtime_dir/shell-launcher.conf" "${dotsRoot}/hypr/${defaultProfile.launcher}"
-          seed_file "$runtime_dir/shell-keybinds.conf" "${dotsRoot}/hypr/${defaultProfile.keybinds}"
+          seed_file "$runtime_dir/shell-launcher.lua" "${pkgs.writeText "mysetup-shell-launcher-default" ''
+            -- Active shell launcher profile: ${defaultProfile.id}
+            require("${defaultProfile.id}.launcher")
+          ''}"
+          seed_file "$runtime_dir/shell-keybinds.lua" "${pkgs.writeText "mysetup-shell-keybinds-default" ''
+            -- Active shell keybind profile: ${defaultProfile.id}
+            require("${defaultProfile.id}.keybinds")
+          ''}"
         '';
 
     liveSyncHyprShell = lib.hm.dag.entryAfter [ "seedHyprShellRuntime" ] ''

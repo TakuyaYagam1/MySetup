@@ -5,5 +5,4 @@
   loki = 3110;
   postgresql = 5442;
   mariadb = 3316;
-  pgadmin = 5050;
 }

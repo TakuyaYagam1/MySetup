@@ -84,26 +84,6 @@ func hashPassword(ctx context.Context, password string) (string, error) {
 	return hash, nil
 }
 
-func writeSecrets(ctx context.Context, runner run.CommandRunner, dest string, secrets config.Secrets) error {
-	if secrets.PgAdminPassword == "" {
-		return nil
-	}
-	secretDir := filepath.Join(dest, "secrets")
-	if err := runner.Command(ctx, "sudo", "mkdir", "-p", secretDir); err != nil {
-		return err
-	}
-	tmpPath, cleanup, err := writeTempString("mysetup-pgadmin-*", secrets.PgAdminPassword)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-	target := filepath.Join(secretDir, "pgadmin-password")
-	if err := runner.Command(ctx, "sudo", "install", "-m", "600", tmpPath, target); err != nil {
-		return err
-	}
-	return runner.Command(ctx, "sudo", "chown", "-R", "root:root", secretDir)
-}
-
 func writeStagedHashedPassword(ctx context.Context, runner run.CommandRunner, staging, dest string, secrets config.Secrets) error {
 	if secrets.UserPassword == "" {
 		return nil
@@ -118,28 +98,4 @@ func writeStagedHashedPassword(ctx context.Context, runner run.CommandRunner, st
 		return err
 	}
 	return runner.Command(ctx, "sudo", "chown", "root:root", target)
-}
-
-func writeTempString(pattern, content string) (string, func(), error) {
-	tmp, err := os.CreateTemp("", pattern)
-	if err != nil {
-		return "", nil, err
-	}
-	tmpPath := tmp.Name()
-	cleanup := func() {
-		_ = os.Remove(tmpPath)
-	}
-	if _, err := tmp.WriteString(content); err != nil {
-		closeErr := tmp.Close()
-		cleanup()
-		if closeErr != nil {
-			return "", nil, fmt.Errorf("write temp file: %w; close temp file: %w", err, closeErr)
-		}
-		return "", nil, fmt.Errorf("write temp file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		cleanup()
-		return "", nil, fmt.Errorf("close temp file: %w", err)
-	}
-	return tmpPath, cleanup, nil
 }

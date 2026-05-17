@@ -12,15 +12,12 @@ import (
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
 )
 
-func TestPasswordsSectionExplainsManagedAndUnmanagedPasswords(t *testing.T) {
+func TestPasswordsSectionExplainsManagedPassword(t *testing.T) {
 	model := sectionModel{cursor: sectionIndex(t, "Passwords"), state: config.Default()}
 	preview := strings.Join(sectionPreview(model), "\n")
 
 	for _, want := range []string{
 		"## Linux user password",
-		"## pgAdmin web password",
-		"## PostgreSQL database role",
-		"status: not managed",
 		"Plain passwords are kept only in memory",
 		"status: session-only",
 		"status: not entered",
@@ -33,19 +30,16 @@ func TestPasswordsSectionExplainsManagedAndUnmanagedPasswords(t *testing.T) {
 
 func TestPasswordsSectionShowsPendingSecretStatus(t *testing.T) {
 	model := sectionModel{
-		cursor: sectionIndex(t, "Passwords"),
-		state:  config.Default(),
-		secrets: config.Secrets{
-			UserPassword:    "user-secret",
-			PgAdminPassword: "pg-secret",
-		},
+		cursor:  sectionIndex(t, "Passwords"),
+		state:   config.Default(),
+		secrets: config.Secrets{UserPassword: "user-secret"},
 	}
 	preview := strings.Join(sectionPreview(model), "\n")
 
-	if got := strings.Count(preview, "status: ready for apply (session only)"); got != 2 {
-		t.Fatalf("expected both password secrets to be ready, count=%d preview:\n%s", got, preview)
+	if got := strings.Count(preview, "status: ready for apply (session only)"); got != 1 {
+		t.Fatalf("expected Linux user password to be ready, count=%d preview:\n%s", got, preview)
 	}
-	if strings.Contains(preview, "user-secret") || strings.Contains(preview, "pg-secret") {
+	if strings.Contains(preview, "user-secret") {
 		t.Fatalf("preview must not leak plaintext secrets, got:\n%s", preview)
 	}
 }
@@ -55,14 +49,13 @@ func TestPasswordsSectionShowsExistingSecretStatus(t *testing.T) {
 		cursor: sectionIndex(t, "Passwords"),
 		state:  config.Default(),
 		existingSecrets: secretAvailability{
-			UserPassword:    secretPresenceExists,
-			PgAdminPassword: secretPresenceExists,
+			UserPassword: secretPresenceExists,
 		},
 	}
 	preview := strings.Join(sectionPreview(model), "\n")
 
-	if got := strings.Count(preview, "status: already exists (preserved if left blank)"); got != 2 {
-		t.Fatalf("expected both password secrets to show existing status, count=%d preview:\n%s", got, preview)
+	if got := strings.Count(preview, "status: already exists (preserved if left blank)"); got != 1 {
+		t.Fatalf("expected Linux user password to show existing status, count=%d preview:\n%s", got, preview)
 	}
 }
 
@@ -71,13 +64,7 @@ func TestDetectExistingSecrets(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "hosts", "NixOS"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "secrets"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	if err := os.WriteFile(filepath.Join(dir, "hosts", "NixOS", "hashed-password.nix"), []byte("hash"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "secrets", "pgadmin-password"), []byte("secret"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -85,23 +72,17 @@ func TestDetectExistingSecrets(t *testing.T) {
 	if got.UserPassword != secretPresenceExists {
 		t.Fatalf("expected existing Linux password hash, got %q", got.UserPassword)
 	}
-	if got.PgAdminPassword != secretPresenceExists {
-		t.Fatalf("expected existing pgAdmin password secret, got %q", got.PgAdminPassword)
-	}
 }
 
 func TestSummaryShowsPendingSecretsWithoutValues(t *testing.T) {
 	state := config.Default()
-	secrets := config.Secrets{
-		UserPassword:    "linux-secret",
-		PgAdminPassword: "pgadmin-secret",
-	}
+	secrets := config.Secrets{UserPassword: "linux-secret"}
 
 	got := summary(state, secrets, secretAvailability{}, "/etc/nixos/mysetup/state.json")
-	if !strings.Contains(got, "Passwords: linux-user=ready pgAdmin=ready") {
+	if !strings.Contains(got, "Passwords: linux-user=ready") {
 		t.Fatalf("expected summary to show ready secret status, got:\n%s", got)
 	}
-	if strings.Contains(got, "linux-secret") || strings.Contains(got, "pgadmin-secret") {
+	if strings.Contains(got, "linux-secret") {
 		t.Fatalf("summary must not leak plaintext secrets, got:\n%s", got)
 	}
 }
@@ -109,12 +90,11 @@ func TestSummaryShowsPendingSecretsWithoutValues(t *testing.T) {
 func TestSummaryShowsExistingSecretsWithoutValues(t *testing.T) {
 	state := config.Default()
 	existingSecrets := secretAvailability{
-		UserPassword:    secretPresenceExists,
-		PgAdminPassword: secretPresenceExists,
+		UserPassword: secretPresenceExists,
 	}
 
 	got := summary(state, config.Secrets{}, existingSecrets, "/etc/nixos/mysetup/state.json")
-	if !strings.Contains(got, "Passwords: linux-user=existing pgAdmin=existing") {
+	if !strings.Contains(got, "Passwords: linux-user=existing") {
 		t.Fatalf("expected summary to show existing secret status, got:\n%s", got)
 	}
 }
@@ -128,21 +108,14 @@ func TestPasswordFormUsesDirectMaskedInputs(t *testing.T) {
 	for _, want := range []string{
 		`Title("Linux user password")`,
 		`Title("Confirm Linux user password")`,
-		`Title("pgAdmin web password")`,
-		`Title("Confirm pgAdmin web password")`,
 		`EchoMode(huh.EchoModePassword)`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("expected password form source to contain %q", want)
 		}
 	}
-	for _, gone := range []string{
-		`Title("Set Linux user password")`,
-		`Title("Set pgAdmin web password")`,
-	} {
-		if strings.Contains(text, gone) {
-			t.Fatalf("password flow should not contain enable toggle title %q", gone)
-		}
+	if strings.Contains(text, `Title("Set Linux user password")`) {
+		t.Fatalf("password flow should not contain enable toggle title")
 	}
 }
 
@@ -150,8 +123,8 @@ func TestEditSecretsWithReaderStoresPasswordsOnlyInSession(t *testing.T) {
 	state := config.Default()
 	s := &session{state: state}
 
-	err := editSecretsWithReader(s, func() (string, string, error) {
-		return "linux-secret", "pgadmin-secret", nil
+	err := editSecretsWithReader(s, func() (string, error) {
+		return "linux-secret", nil
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -159,9 +132,6 @@ func TestEditSecretsWithReaderStoresPasswordsOnlyInSession(t *testing.T) {
 
 	if s.secrets.UserPassword != "linux-secret" {
 		t.Fatalf("expected Linux password in session secrets, got %q", s.secrets.UserPassword)
-	}
-	if s.secrets.PgAdminPassword != "pgadmin-secret" {
-		t.Fatalf("expected pgAdmin password in session secrets, got %q", s.secrets.PgAdminPassword)
 	}
 	if !reflect.DeepEqual(s.state, state) {
 		t.Fatal("passwords must not mutate persistent installer state")
@@ -172,13 +142,13 @@ func TestEditSecretsWithReaderPropagatesError(t *testing.T) {
 	wantErr := errors.New("password mismatch")
 	s := &session{}
 
-	err := editSecretsWithReader(s, func() (string, string, error) {
-		return "", "", wantErr
+	err := editSecretsWithReader(s, func() (string, error) {
+		return "", wantErr
 	})
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected password reader error, got %v", err)
 	}
-	if s.secrets.UserPassword != "" || s.secrets.PgAdminPassword != "" {
+	if s.secrets.UserPassword != "" {
 		t.Fatalf("secrets should stay empty on error, got %#v", s.secrets)
 	}
 }
@@ -191,26 +161,19 @@ func TestPasswordsSectionDoesNotDirtyDraftState(t *testing.T) {
 
 func TestValidateSecretFormValuesReportsInlineErrors(t *testing.T) {
 	got := validateSecretFormValues(secretFormValues{
-		userPassword:    "one",
-		userConfirm:     "two",
-		pgAdminPassword: "",
-		pgAdminConfirm:  "",
+		userPassword: "one",
+		userConfirm:  "two",
 	}, secretAvailability{})
 
 	if got.userConfirm == "" {
 		t.Fatal("expected Linux password confirmation mismatch error")
 	}
-	if got.pgAdminPassword == "" || got.pgAdminConfirm == "" {
-		t.Fatalf("expected pgAdmin password errors, got %#v", got)
-	}
 }
 
 func TestValidateSecretFormValuesAcceptsMatchingPasswords(t *testing.T) {
 	got := validateSecretFormValues(secretFormValues{
-		userPassword:    "linux-secret",
-		userConfirm:     "linux-secret",
-		pgAdminPassword: "pg-secret",
-		pgAdminConfirm:  "pg-secret",
+		userPassword: "linux-secret",
+		userConfirm:  "linux-secret",
 	}, secretAvailability{})
 
 	if !got.empty() {
@@ -220,8 +183,7 @@ func TestValidateSecretFormValuesAcceptsMatchingPasswords(t *testing.T) {
 
 func TestValidateSecretFormValuesAllowsBlankExistingSecrets(t *testing.T) {
 	got := validateSecretFormValues(secretFormValues{}, secretAvailability{
-		UserPassword:    secretPresenceExists,
-		PgAdminPassword: secretPresenceExists,
+		UserPassword: secretPresenceExists,
 	})
 
 	if !got.empty() {

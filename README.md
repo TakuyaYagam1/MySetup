@@ -6,6 +6,9 @@
 > - Windows: [Windows/README.md](Windows/README.md)
 
 Personal system configuration for Linux (NixOS + Hyprland) and Windows (Komorebi + YASB).
+The Linux Hyprland runtime targets Hyprland 0.55+ and uses Lua config
+entrypoints (`hyprland.lua` plus Lua modules) instead of legacy hyprlang
+`hyprland.conf` fragments.
 
 [![NixOS Rice & Dev Environment](assets/preview.png)](https://youtu.be/fgmueUOnfhk)
 
@@ -34,7 +37,7 @@ Personal system configuration for Linux (NixOS + Hyprland) and Windows (Komorebi
 
 ## Structure
 
-- **Linux/** - NixOS configuration with Hyprland, custom themes, dev environment
+- **Linux/** - NixOS configuration with Hyprland 0.55+ Lua config, custom themes, dev environment
 - **Windows/** - Windows configuration with Komorebi tiling WM and YASB status bar
 
 ## Quick Start

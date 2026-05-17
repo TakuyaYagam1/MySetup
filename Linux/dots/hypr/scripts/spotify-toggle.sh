@@ -23,12 +23,12 @@ if [[ "$workspace" == special:* ]]; then
   ')"
 
   if [[ "$visible_special" == "0" ]]; then
-    hyprctl dispatch togglespecialworkspace "$special_name" >/dev/null
+    hyprctl dispatch "hl.dsp.workspace.toggle_special(\"$special_name\")" >/dev/null
   fi
 
-  hyprctl dispatch focuswindow "address:$address" >/dev/null 2>&1 || true
+  hyprctl dispatch "hl.dsp.focus({ window = \"address:$address\" })" >/dev/null 2>&1 || true
   exit 0
 fi
 
-hyprctl dispatch workspace "$workspace" >/dev/null 2>&1 || true
-hyprctl dispatch focuswindow "address:$address" >/dev/null 2>&1 || true
+hyprctl dispatch "hl.dsp.focus({ workspace = \"$workspace\" })" >/dev/null 2>&1 || true
+hyprctl dispatch "hl.dsp.focus({ window = \"address:$address\" })" >/dev/null 2>&1 || true

@@ -4,7 +4,7 @@
   home.activation.end4PruneStaleProfile = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
     end4_dir="$HOME/.config/hypr/end4"
 
-    if [ -d "$end4_dir" ] && [ ! -L "$end4_dir" ] && [ ! -f "$end4_dir/hyprland.conf" ]; then
+    if [ -d "$end4_dir" ] && [ ! -L "$end4_dir" ] && [ ! -f "$end4_dir/hyprland.lua" ]; then
       backup="$end4_dir.stale.$(${pkgs.coreutils}/bin/date +%Y%m%d%H%M%S)"
       if [ -e "$backup" ]; then
         backup="$backup.$$"

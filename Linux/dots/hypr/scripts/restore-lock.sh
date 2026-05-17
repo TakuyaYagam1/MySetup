@@ -39,7 +39,7 @@ wait_for_profile || true
 
 case "$profile" in
   caelestia)
-    hyprctl dispatch global caelestia:lock >/dev/null
+    hyprctl dispatch 'hl.dsp.global("caelestia:lock")' >/dev/null
     ;;
   noctalia)
     noctalia-shell ipc call lockScreen lock

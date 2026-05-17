@@ -47,10 +47,6 @@
     config = "general (FAKE_TLS_AUTO_ALT3)";
   };
 
-  services = {
-    pgadminEmail = "admin@localhost.local";
-  };
-
   hypr = {
     keyboardLayouts = "us,ru";
     keyboardToggle = "grp:alt_shift_toggle";

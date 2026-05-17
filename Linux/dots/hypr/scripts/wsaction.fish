@@ -13,11 +13,23 @@ end
 
 set -l active_ws (hyprctl activeworkspace -j | jq -r '.id')
 
+function dispatch_workspace --argument-names action target
+    switch "$action"
+        case workspace
+            hyprctl dispatch "hl.dsp.focus({ workspace = \"$target\" })"
+        case movetoworkspace
+            hyprctl dispatch "hl.dsp.window.move({ workspace = \"$target\" })"
+        case '*'
+            echo "unsupported wsaction dispatcher: $action" >&2
+            return 2
+    end
+end
+
 if test "$group_mode" -eq 1
     # Move to group
     set -l active_slot (math "(($active_ws - 1) % 10) + 1")
-    hyprctl dispatch $argv[1] (math "($argv[2] - 1) * 10 + $active_slot")
+    dispatch_workspace $argv[1] (math "($argv[2] - 1) * 10 + $active_slot")
 else
     # Move to ws in group
-    hyprctl dispatch $argv[1] (math "floor(($active_ws - 1) / 10) * 10 + $argv[2]")
+    dispatch_workspace $argv[1] (math "floor(($active_ws - 1) / 10) * 10 + $argv[2]")
 end

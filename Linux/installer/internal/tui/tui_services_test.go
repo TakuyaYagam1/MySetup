@@ -15,9 +15,6 @@ func TestServicesPreviewHidesZapretConfigUntilEnabled(t *testing.T) {
 	if strings.Contains(preview, "## Zapret config") {
 		t.Fatalf("disabled zapret must hide config from services preview, got:\n%s", preview)
 	}
-	if strings.Contains(preview, "pgAdmin email") {
-		t.Fatalf("pgAdmin email belongs to User preview, got:\n%s", preview)
-	}
 
 	state.Zapret.Enable = true
 	model.state = state

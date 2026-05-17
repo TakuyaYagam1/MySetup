@@ -6,13 +6,6 @@
   ...
 }:
 
-let
-  pgAdminPasswordFile =
-    if builtins.hasAttr "pgadmin-password" config.sops.secrets then
-      config.sops.secrets."pgadmin-password".path
-    else
-      config.mysetup.services.pgadminPasswordFile;
-in
 {
   config = mysetupLib.mkIfPresetOrMore "developer" config.mysetup {
     services = {
@@ -34,13 +27,6 @@ in
             bind-address = "127.0.0.1";
           };
         };
-      };
-
-      pgadmin = {
-        enable = true;
-        port = mysetupLib.ports.pgadmin;
-        initialEmail = config.mysetup.services.pgadminEmail or "admin@localhost.local";
-        initialPasswordFile = pgAdminPasswordFile;
       };
     };
   };

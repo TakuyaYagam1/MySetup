@@ -1,0 +1,11 @@
+local mysetup = require("lib.mysetup")
+
+mysetup.bind_dispatch("SUPER + SUPER_L", "global caelestia:launcher")
+mysetup.bind_dispatch("SUPER + mouse:272", "global caelestia:launcherInterrupt", { non_consuming = true })
+mysetup.bind_dispatch("SUPER + mouse:273", "global caelestia:launcherInterrupt", { non_consuming = true })
+mysetup.bind_dispatch("SUPER + mouse:274", "global caelestia:launcherInterrupt", { non_consuming = true })
+mysetup.bind_dispatch("SUPER + mouse:275", "global caelestia:launcherInterrupt", { non_consuming = true })
+mysetup.bind_dispatch("SUPER + mouse:276", "global caelestia:launcherInterrupt", { non_consuming = true })
+mysetup.bind_dispatch("SUPER + mouse:277", "global caelestia:launcherInterrupt", { non_consuming = true })
+mysetup.bind_dispatch("SUPER + mouse_up", "global caelestia:launcherInterrupt", { non_consuming = true })
+mysetup.bind_dispatch("SUPER + mouse_down", "global caelestia:launcherInterrupt", { non_consuming = true })

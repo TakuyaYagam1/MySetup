@@ -104,20 +104,20 @@ func TestReadActiveShellAcceptsKnownProfilesOnly(t *testing.T) {
 
 func TestDetectShellFromEntrypointUsesEntrypointAndKeybinds(t *testing.T) {
 	dir := t.TempDir()
-	entrypoint := filepath.Join(dir, "hyprland.conf")
-	keybinds := filepath.Join(dir, "shell-keybinds.conf")
+	entrypoint := filepath.Join(dir, "hyprland.lua")
+	keybinds := filepath.Join(dir, "shell-keybinds.lua")
 
-	if err := os.WriteFile(entrypoint, []byte("source = /home/user/.config/hypr/end4/hyprland.conf\n"), 0o644); err != nil {
+	if err := os.WriteFile(entrypoint, []byte(`dofile("/home/user/.config/hypr/end4/hyprland.lua")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if got := DetectShellFromEntrypoint(entrypoint, keybinds); got != End4 {
 		t.Fatalf("expected end4 profile, got %q", got)
 	}
 
-	if err := os.WriteFile(entrypoint, []byte("source = /home/user/.config/hypr/mysetup/hyprland.conf\n"), 0o644); err != nil {
+	if err := os.WriteFile(entrypoint, []byte(`dofile("/home/user/.config/hypr/mysetup/hyprland.lua")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(keybinds, []byte("source = /home/user/.config/hypr/noctalia/keybinds.conf\n"), 0o644); err != nil {
+	if err := os.WriteFile(keybinds, []byte(`require("noctalia.keybinds")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if got := DetectShellFromEntrypoint(entrypoint, keybinds); got != Noctalia {
@@ -142,10 +142,10 @@ func TestBootstrapActiveShellPriorityAndFallback(t *testing.T) {
 		t.Fatalf("empty runtime should fall back to default profile, got %q", got)
 	}
 
-	if err := os.WriteFile(RuntimeFile(home, "hyprland.conf"), []byte("source = /home/user/.config/hypr/mysetup/hyprland.conf\n"), 0o644); err != nil {
+	if err := os.WriteFile(RuntimeFile(home, "hyprland.lua"), []byte(`dofile("/home/user/.config/hypr/mysetup/hyprland.lua")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(RuntimeFile(home, "shell-keybinds.conf"), []byte("source = /home/user/.config/hypr/caelestia/keybinds.conf\n"), 0o644); err != nil {
+	if err := os.WriteFile(RuntimeFile(home, "shell-keybinds.lua"), []byte(`require("caelestia.keybinds")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if got := BootstrapActiveShell(home, hyprDir); got != Caelestia {
@@ -178,7 +178,7 @@ func TestEnd4SourceFromHomeManagerResolvesGenerationSource(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(end4Source, "hyprland.conf"), []byte("source = ./custom/general.conf\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(end4Source, "hyprland.lua"), []byte("require(\"custom.general\")\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(qsSource, filepath.Join(configDir, "quickshell", "ii")); err != nil {

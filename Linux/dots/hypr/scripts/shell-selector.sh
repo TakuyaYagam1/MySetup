@@ -94,19 +94,19 @@ detect_shell_from_processes() {
 }
 
 detect_shell_from_keybinds() {
-  local keybinds_path="$mysetup_hypr_runtime_dir/shell-keybinds.conf"
+  local keybinds_path="$mysetup_hypr_runtime_dir/shell-keybinds.lua"
 
   if [ ! -r "$keybinds_path" ]; then
-    keybinds_path="$config_home/hypr/shell-keybinds.conf"
+    keybinds_path="$config_home/hypr/shell-keybinds.lua"
     [ -r "$keybinds_path" ] || return 1
   fi
 
-  if grep -qE 'noctalia/keybinds\.conf|noctalia-shell ipc call|noctalia-launcher\.sh' "$keybinds_path"; then
+  if grep -qE 'noctalia[/.]keybinds|noctalia-shell ipc call|noctalia-launcher\.sh' "$keybinds_path"; then
     printf '%s' noctalia
     return 0
   fi
 
-  if grep -qE 'caelestia/keybinds\.conf|caelestia:launcher' "$keybinds_path"; then
+  if grep -qE 'caelestia[/.]keybinds|caelestia:launcher' "$keybinds_path"; then
     printf '%s' caelestia
     return 0
   fi
@@ -115,19 +115,19 @@ detect_shell_from_keybinds() {
 }
 
 detect_shell_from_entrypoint() {
-  local entrypoint_path="$mysetup_hypr_runtime_dir/hyprland.conf"
+  local entrypoint_path="$mysetup_hypr_runtime_dir/hyprland.lua"
 
   if [ ! -r "$entrypoint_path" ]; then
-    entrypoint_path="$config_home/hypr/hyprland.conf"
+    entrypoint_path="$config_home/hypr/hyprland.lua"
     [ -r "$entrypoint_path" ] || return 1
   fi
 
-  if grep -q 'end4/hyprland.conf' "$entrypoint_path"; then
+  if grep -q 'end4/hyprland.lua' "$entrypoint_path"; then
     printf '%s' end4
     return 0
   fi
 
-  if grep -q 'mysetup/hyprland.conf' "$entrypoint_path"; then
+  if grep -q 'mysetup/hyprland.lua' "$entrypoint_path"; then
     detect_shell_from_keybinds
     return $?
   fi

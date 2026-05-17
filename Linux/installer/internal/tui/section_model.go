@@ -42,7 +42,7 @@ OmniRouter: %t
 Observability: %t
 Zapret: %t %s
 Dots: hypr=%t zen=%t sine=%t nvim=%t nvimClean=%t v2rayN=%t wallpapers=%t
-Passwords: linux-user=%s pgAdmin=%s
+Passwords: linux-user=%s
 State: %s`,
 		s.Host.Hostname,
 		s.User.Username,
@@ -63,7 +63,6 @@ State: %s`,
 		s.Dots.V2rayN,
 		s.Dots.Wallpapers,
 		secretSummaryStatus(secrets.UserPassword, existingSecrets.UserPassword),
-		secretSummaryStatus(secrets.PgAdminPassword, existingSecrets.PgAdminPassword),
 		statePath,
 	)
 }

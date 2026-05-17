@@ -114,7 +114,7 @@ func TestMakeCheckRunsHomeManagerShellEval(t *testing.T) {
 		t.Fatalf("nix-hm-eval target should source the shared helper script\n%s", makefileText)
 	}
 	combined := makefileText + string(helpers)
-	if !strings.Contains(combined, "seedMySetupHyprConfig") || !strings.Contains(combined, "hypr/shell-profile.conf") {
+	if !strings.Contains(combined, "seedHyprShellRuntime") || !strings.Contains(combined, "hypr/shell-profile.lua") {
 		t.Fatalf("nix-hm-eval should cover the runtime shell module\n%s", combined)
 	}
 	if !strings.Contains(combined, "hypr/end4") {

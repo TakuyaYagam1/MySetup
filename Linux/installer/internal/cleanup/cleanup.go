@@ -135,7 +135,7 @@ func repairActiveEnd4ProfileLink(ctx context.Context, runner run.CommandRunner, 
 	}
 	configDir := filepath.Join(home, ".config")
 	target := filepath.Join(configDir, "hypr", "end4")
-	if ok, err := shellruntime.RuntimeConfigExists(filepath.Join(target, "hyprland.conf")); err != nil || ok {
+	if ok, err := shellruntime.RuntimeConfigExists(filepath.Join(target, "hyprland.lua")); err != nil || ok {
 		return err
 	}
 	source, err := shellruntime.End4SourceFromHomeManager(configDir)

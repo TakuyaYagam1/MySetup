@@ -10,8 +10,6 @@ _:
       la = "eza -a --icons --group-directories-first";
       lt = "eza --tree --level=2 --icons";
 
-      nixos-install = "sudo nixos-rebuild switch --flake /etc/nixos#NixOS";
-      nixos-update = "pushd /etc/nixos; and sudo nix flake update; and sudo nixos-rebuild switch --flake .#NixOS; and popd";
       cleanup = "sudo nix-collect-garbage -d && nix-collect-garbage && nix store optimise && sudo nix-store --gc --print-dead && sudo nix-store --gc";
       optimize = "sudo nix-store --optimise";
       logout = "systemctl restart display-manager.service";
@@ -116,6 +114,33 @@ _:
         echo '                               |_____|         '
         set_color normal
         command -v fastfetch >/dev/null 2>&1 && fastfetch --key-padding-left 5
+      '';
+
+      nixos-switch = ''
+        sudo nixos-rebuild switch --flake /etc/nixos#NixOS $argv
+      '';
+
+      nixos-update = ''
+        set -l old_pwd $PWD
+
+        cd /etc/nixos
+        or return $status
+
+        nix flake update $argv
+        set -l update_status $status
+        if test $update_status -ne 0
+            cd "$old_pwd"
+            return $update_status
+        end
+
+        sudo nixos-rebuild switch --flake .#NixOS
+        set -l rebuild_status $status
+        cd "$old_pwd"
+        return $rebuild_status
+      '';
+
+      nixos-install = ''
+        nixos-update $argv
       '';
 
       wifi-connect = ''

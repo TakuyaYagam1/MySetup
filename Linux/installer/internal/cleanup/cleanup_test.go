@@ -158,7 +158,7 @@ func TestRunRepairsActiveEnd4ProfileLink(t *testing.T) {
 	if err := os.MkdirAll(end4Source, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(end4Source, "hyprland.conf"), []byte("source = env.conf\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(end4Source, "hyprland.lua"), []byte("require(\"hyprland.env\")\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

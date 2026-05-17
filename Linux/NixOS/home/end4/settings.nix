@@ -35,31 +35,13 @@ let
       position
       scale
       ;
+    definitions = [ primaryMonitor ] ++ extraMonitors;
     rule = renderMonitorRule primaryMonitor;
     rules = [ rule ] ++ map renderMonitorRule extraMonitors;
   };
 in
 {
   inherit monitor transparency;
-
-  hyprSourceFiles = [
-    "hyprland/env.conf"
-    "custom/env.conf"
-    "hyprland/variables.conf"
-    "custom/variables.conf"
-    "hyprland/execs.conf"
-    "hyprland/general.conf"
-    "hyprland/rules.conf"
-    "hyprland/colors.conf"
-    "hyprland/keybinds.conf"
-    "custom/execs.conf"
-    "custom/general.conf"
-    "custom/rules.conf"
-    "custom/keybinds.conf"
-    "workspaces.conf"
-    "monitors.conf"
-    "hyprland/shellOverrides/main.conf"
-  ];
 
   idle = {
     lockTimeout = 600;

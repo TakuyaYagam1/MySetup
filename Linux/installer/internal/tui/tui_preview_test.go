@@ -36,7 +36,6 @@ func TestSectionPreviewUsesSettingBlocksWithBlankLines(t *testing.T) {
 		"## Full name\nDisplay name stored in the generated user module.\ncurrent: Takuya",
 		"## Home directory\nUser home used by Home Manager and dots install paths.\ncurrent: /home/takuya",
 		"## Git identity\nGit user.name and user.email written by Home Manager.",
-		"## pgAdmin email\npgAdmin web UI login email; password is handled in Passwords.",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("expected user preview block %q, got:\n%s", want, joined)

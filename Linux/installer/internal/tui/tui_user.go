@@ -41,10 +41,6 @@ func runUserForm(s *session, errors userFormErrors) error {
 			Title("Git user.email").
 			Description(fieldDescription("Written to Home Manager git config and used by commits.", errors.gitEmail)).
 			Value(&s.state.Git.Email),
-		huh.NewInput().
-			Title("pgAdmin email").
-			Description(fieldDescription("pgAdmin web UI login email. The password is set in the Passwords section.", errors.pgAdminEmail)).
-			Value(&s.state.Services.PgAdminEmail),
 	).Run()
 }
 
@@ -54,7 +50,6 @@ type userFormErrors struct {
 	homeDirectory string
 	gitUsername   string
 	gitEmail      string
-	pgAdminEmail  string
 }
 
 func (e userFormErrors) empty() bool {
@@ -62,8 +57,7 @@ func (e userFormErrors) empty() bool {
 		e.fullName == "" &&
 		e.homeDirectory == "" &&
 		e.gitUsername == "" &&
-		e.gitEmail == "" &&
-		e.pgAdminEmail == ""
+		e.gitEmail == ""
 }
 
 func validateUserForm(state config.State) userFormErrors {
@@ -83,9 +77,6 @@ func validateUserForm(state config.State) userFormErrors {
 	}
 	if fieldErrors.GitEmail != "" {
 		errors.gitEmail = "git user.email must look like name@example.com."
-	}
-	if fieldErrors.PgAdminEmail != "" {
-		errors.pgAdminEmail = "pgAdmin email must look like name@example.com."
 	}
 	return errors
 }

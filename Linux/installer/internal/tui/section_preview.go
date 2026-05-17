@@ -51,7 +51,6 @@ func previewUser(s config.State) []string {
 		previewSetting("Full name", "Display name stored in the generated user module.", s.User.FullName),
 		previewSetting("Home directory", "User home used by Home Manager and dots install paths.", s.User.HomeDirectory),
 		previewSetting("Git identity", "Git user.name and user.email written by Home Manager.", fmt.Sprintf("%s <%s>", s.Git.Username, s.Git.Email)),
-		previewSetting("pgAdmin email", "pgAdmin web UI login email; password is handled in Passwords.", s.Services.PgAdminEmail),
 	)
 }
 
@@ -121,8 +120,6 @@ func previewDots(s config.State) []string {
 func previewPasswords(m sectionModel) []string {
 	return previewSettings(
 		previewSettingWithLabel("Linux user password", "Enter a new value only when changing it. If already present on disk, Apply preserves it when left blank.", "status", secretStatus(m.secrets.UserPassword, m.existingSecrets.UserPassword, "not entered")),
-		previewSettingWithLabel("pgAdmin web password", "Enter a new value only when changing it. If already present on disk, Apply preserves it when left blank.", "status", secretStatus(m.secrets.PgAdminPassword, m.existingSecrets.PgAdminPassword, "not entered")),
-		previewSettingWithLabel("PostgreSQL database role", "Not the same as pgAdmin. The installer does not change the postgres database role password.", "status", "not managed"),
 		previewSettingWithLabel("State safety", "Plain passwords are kept only in memory for this installer run. They are never written to draft.json.", "status", "session-only"),
 	)
 }

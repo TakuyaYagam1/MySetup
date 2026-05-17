@@ -23,7 +23,6 @@ func TestValidateUserFormReportsFieldErrors(t *testing.T) {
 	state.User.HomeDirectory = "/tmp/takuya"
 	state.Git.Username = ""
 	state.Git.Email = "not-email"
-	state.Services.PgAdminEmail = "also-not-email"
 
 	got := validateUserForm(state)
 	if got.empty() {
@@ -35,7 +34,6 @@ func TestValidateUserFormReportsFieldErrors(t *testing.T) {
 		"homeDirectory": got.homeDirectory,
 		"gitUsername":   got.gitUsername,
 		"gitEmail":      got.gitEmail,
-		"pgAdminEmail":  got.pgAdminEmail,
 	} {
 		if value == "" {
 			t.Fatalf("expected %s validation error, got %#v", name, got)

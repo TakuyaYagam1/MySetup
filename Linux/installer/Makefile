@@ -100,8 +100,8 @@ NIX_HM_ENV := NIXOS_DIR='$(NIXOS_DIR)' \
 .PHONY: nix-hm-eval
 nix-hm-eval: ## Eval runtime shell module and all-on Home Manager imports, including end4
 	@$(NIX_HM_ENV) bash -c 'source scripts/nix-eval-helpers.sh && \
-		eval_hm_simple "hm.config.home.activation.seedMySetupHyprConfig.data" && \
-		eval_hm_simple "hm.config.xdg.configFile.\"hypr/shell-profile.conf\".text" && \
+		eval_hm_simple "hm.config.home.activation.seedHyprShellRuntime.data" && \
+		eval_hm_simple "hm.config.xdg.configFile.\"hypr/shell-profile.lua\".text" && \
 		eval_hm_full "" "builtins.toString (hm.config.xdg.configFile.\"hypr/end4\".source)"'
 
 .PHONY: nix-profile-eval

@@ -13,9 +13,9 @@ func checkShellRuntime(out *reportWriter, opts Options) {
 	profile := detectActiveShell(home)
 
 	checkShellStateFile(out, shellruntime.ActiveShellStatePath(home), profile)
-	checkRuntimeConfig(out, "stable hyprland entrypoint", hyprConfigPath(home, "hyprland.conf"), "hypr-runtime/hyprland.conf")
-	checkRuntimeConfig(out, "stable shell launcher entrypoint", hyprConfigPath(home, "shell-profile.conf"), "hypr-runtime/shell-profile.conf")
-	checkShellLauncher(out, hyprRuntimePath(home, "shell-profile.conf"))
+	checkRuntimeConfig(out, "stable hyprland entrypoint", hyprConfigPath(home, "hyprland.lua"), "hypr-runtime/hyprland.lua")
+	checkRuntimeConfig(out, "stable shell launcher entrypoint", hyprConfigPath(home, "shell-profile.lua"), "hypr-runtime/shell-profile.lua")
+	checkShellLauncher(out, hyprRuntimePath(home, "shell-profile.lua"))
 	check(out, "shell selector config", filepath.Join(home, ".config/quickshell/mysetup-shell-selector/shell.qml"))
 	checkHyprScripts(out, filepath.Join(home, ".config/hypr/scripts"))
 	checkHyprScripts(out, filepath.Join(opts.Paths.NixOSDest, "dots/hypr/scripts"))
@@ -71,9 +71,9 @@ func checkShellLauncher(out *reportWriter, path string) {
 }
 
 func checkMySetupProfile(out *reportWriter, home, profile string) {
-	checkShellEntrypoint(out, hyprRuntimePath(home, "hyprland.conf"), "mysetup/hyprland.conf", profile)
-	check(out, "mysetup hypr config", hyprConfigPath(home, "mysetup/hyprland.conf"))
-	checkShellKeybinds(out, hyprRuntimePath(home, "shell-keybinds.conf"), profile)
+	checkShellEntrypoint(out, hyprRuntimePath(home, "hyprland.lua"), "mysetup/hyprland.lua", profile)
+	check(out, "mysetup hypr config", hyprConfigPath(home, "mysetup/hyprland.lua"))
+	checkShellKeybinds(out, hyprRuntimePath(home, "shell-keybinds.lua"), profile)
 }
 
 func checkShellEntrypoint(out *reportWriter, path, wantFragment, profile string) {
@@ -93,14 +93,14 @@ func checkShellKeybinds(out *reportWriter, path, profile string) {
 	if profile == "" {
 		profile = "caelestia"
 	}
-	want := profile + "/keybinds.conf"
+	want := profile + ".keybinds"
 	if target, ok := readSymlink(path); ok {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			out.printf("WARN shell keybinds symlink unreadable: %s -> %s\n", path, target)
 			return
 		}
-		if strings.Contains(target, want) || shellKeybindTextMatchesProfile(string(data), profile) {
+		if strings.Contains(target, profile+"/keybinds.lua") || strings.Contains(string(data), want) || shellKeybindTextMatchesProfile(string(data), profile) {
 			out.printf("OK   shell keybinds: %s -> %s\n", path, profile)
 			return
 		}
@@ -112,7 +112,7 @@ func checkShellKeybinds(out *reportWriter, path, profile string) {
 		out.printf("WARN shell keybinds missing: %s\n", path)
 		return
 	}
-	if strings.Contains(string(data), want) || shellKeybindTextMatchesProfile(string(data), profile) {
+	if strings.Contains(string(data), want) || strings.Contains(string(data), profile+"/keybinds.lua") || shellKeybindTextMatchesProfile(string(data), profile) {
 		out.printf("OK   shell keybinds: %s -> %s\n", path, profile)
 		return
 	}
@@ -122,8 +122,7 @@ func checkShellKeybinds(out *reportWriter, path, profile string) {
 func shellKeybindTextMatchesProfile(text, profile string) bool {
 	switch profile {
 	case "caelestia":
-		return strings.Contains(text, "bindi = Super, Super_L, global, caelestia:launcher") &&
-			strings.Contains(text, "bindin = Super, catchall, global, caelestia:launcherInterrupt")
+		return strings.Contains(text, "caelestia:session") || strings.Contains(text, "caelestia:launcher")
 	case "noctalia":
 		return strings.Contains(text, "noctalia-shell ipc call") || strings.Contains(text, "noctalia-launcher.sh")
 	default:
@@ -132,11 +131,11 @@ func shellKeybindTextMatchesProfile(text, profile string) bool {
 }
 
 func checkEnd4Profile(out *reportWriter, home string) {
-	checkShellEntrypoint(out, hyprRuntimePath(home, "hyprland.conf"), "end4/hyprland.conf", "end4")
+	checkShellEntrypoint(out, hyprRuntimePath(home, "hyprland.lua"), "end4/hyprland.lua", "end4")
 	checkRuntimeConfig(out, "end4 hyprlock entrypoint", hyprRuntimePath(home, "hyprlock.conf"), "end4/hyprlock.conf")
 	checkRuntimeConfig(out, "end4 hypridle entrypoint", hyprRuntimePath(home, "hypridle.conf"), "end4/hypridle.conf")
-	check(out, "end4 hypr config", hyprConfigPath(home, "end4/hyprland.conf"))
-	check(out, "end4 mysetup keybinds", hyprConfigPath(home, "end4/mysetup/keybinds.conf"))
+	check(out, "end4 hypr config", hyprConfigPath(home, "end4/hyprland.lua"))
+	check(out, "end4 mysetup keybinds", hyprConfigPath(home, "end4/mysetup/keybinds.lua"))
 	check(out, "end4 quickshell shell", filepath.Join(home, ".config/quickshell/ii/shell.qml"))
 	checkDirectory(out, "end4 runtime config dir", filepath.Join(home, ".config/illogical-impulse"))
 	checkWritableFile(out, "end4 kdeglobals", filepath.Join(home, ".config/kdeglobals"))
@@ -169,16 +168,16 @@ func detectActiveShell(home string) string {
 		entrypoint string
 		keybinds   string
 	}{
-		{hyprRuntimePath(home, "hyprland.conf"), hyprRuntimePath(home, "shell-keybinds.conf")},
-		{hyprConfigPath(home, "hyprland.conf"), hyprConfigPath(home, "shell-keybinds.conf")},
+		{hyprRuntimePath(home, "hyprland.lua"), hyprRuntimePath(home, "shell-keybinds.lua")},
+		{hyprConfigPath(home, "hyprland.lua"), hyprConfigPath(home, "shell-keybinds.lua")},
 	} {
 		if profile := shellruntime.DetectShellFromEntrypoint(candidate.entrypoint, candidate.keybinds); profile != "" {
 			return profile
 		}
 	}
 	for _, path := range []string{
-		hyprRuntimePath(home, "shell-keybinds.conf"),
-		hyprConfigPath(home, "shell-keybinds.conf"),
+		hyprRuntimePath(home, "shell-keybinds.lua"),
+		hyprConfigPath(home, "shell-keybinds.lua"),
 	} {
 		if profile := detectShellFromKeybinds(path); profile != "" {
 			return profile
@@ -189,10 +188,10 @@ func detectActiveShell(home string) string {
 
 func detectShellFromKeybinds(path string) string {
 	if target, ok := readSymlink(path); ok {
-		if strings.Contains(target, "noctalia/keybinds.conf") {
+		if strings.Contains(target, "noctalia/keybinds.lua") {
 			return "noctalia"
 		}
-		if strings.Contains(target, "caelestia/keybinds.conf") {
+		if strings.Contains(target, "caelestia/keybinds.lua") {
 			return "caelestia"
 		}
 	}
@@ -201,9 +200,9 @@ func detectShellFromKeybinds(path string) string {
 		return ""
 	}
 	switch {
-	case strings.Contains(string(data), "noctalia/keybinds.conf") || shellKeybindTextMatchesProfile(string(data), "noctalia"):
+	case strings.Contains(string(data), "noctalia.keybinds") || strings.Contains(string(data), "noctalia/keybinds.lua") || shellKeybindTextMatchesProfile(string(data), "noctalia"):
 		return "noctalia"
-	case strings.Contains(string(data), "caelestia/keybinds.conf") || shellKeybindTextMatchesProfile(string(data), "caelestia"):
+	case strings.Contains(string(data), "caelestia.keybinds") || strings.Contains(string(data), "caelestia/keybinds.lua") || shellKeybindTextMatchesProfile(string(data), "caelestia"):
 		return "caelestia"
 	default:
 		return ""

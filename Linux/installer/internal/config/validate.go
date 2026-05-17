@@ -29,7 +29,6 @@ type FieldErrors struct {
 	HomeDirectory string
 	GitUsername   string
 	GitEmail      string
-	PgAdminEmail  string
 	TimeZone      string
 	DefaultLocale string
 	ExtraLocale   string
@@ -52,7 +51,6 @@ func (e FieldErrors) Messages() []string {
 		e.HomeDirectory,
 		e.GitUsername,
 		e.GitEmail,
-		e.PgAdminEmail,
 		e.TimeZone,
 		e.DefaultLocale,
 		e.ExtraLocale,
@@ -127,9 +125,6 @@ func validateUserFields(state State, errs *FieldErrors) {
 	}
 	if !emailRe.MatchString(state.Git.Email) {
 		errs.GitEmail = "git email is invalid"
-	}
-	if state.Services.PgAdminEmail != "" && !emailRe.MatchString(state.Services.PgAdminEmail) {
-		errs.PgAdminEmail = "pgAdmin email is invalid"
 	}
 }
 

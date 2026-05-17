@@ -13,14 +13,14 @@ fi
 case "${class,,}" in
   spotify)
     if [[ "$workspace" == "special:music" ]]; then
-      hyprctl dispatch togglespecialworkspace music >/dev/null 2>&1 || true
+      hyprctl dispatch 'hl.dsp.workspace.toggle_special("music")' >/dev/null 2>&1 || true
     else
-      hyprctl dispatch movetoworkspacesilent "special:music,address:$address" >/dev/null 2>&1 || true
+      hyprctl dispatch "hl.dsp.window.move({ workspace = \"special:music\", window = \"address:$address\" })" >/dev/null 2>&1 || true
     fi
     ;;
   *)
-    hyprctl dispatch closewindow "address:$address" >/dev/null 2>&1 ||
-      hyprctl dispatch killactive >/dev/null 2>&1 ||
+    hyprctl dispatch "hl.dsp.window.close(\"address:$address\")" >/dev/null 2>&1 ||
+      hyprctl dispatch 'hl.dsp.window.kill()' >/dev/null 2>&1 ||
       true
     ;;
 esac

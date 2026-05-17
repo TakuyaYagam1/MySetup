@@ -16,14 +16,12 @@ const (
 )
 
 type secretAvailability struct {
-	UserPassword    secretPresence
-	PgAdminPassword secretPresence
+	UserPassword secretPresence
 }
 
 func detectExistingSecrets(opts paths.Options) secretAvailability {
 	return secretAvailability{
-		UserPassword:    detectSecretPath(userPasswordHashPath(opts)),
-		PgAdminPassword: detectSecretPath(pgAdminPasswordPath(opts)),
+		UserPassword: detectSecretPath(userPasswordHashPath(opts)),
 	}
 }
 
@@ -41,10 +39,6 @@ func detectSecretPath(path string) secretPresence {
 
 func userPasswordHashPath(opts paths.Options) string {
 	return filepath.Join(opts.NixOSDest, "hosts", "NixOS", "hashed-password.nix")
-}
-
-func pgAdminPasswordPath(opts paths.Options) string {
-	return filepath.Join(opts.NixOSDest, "secrets", "pgadmin-password")
 }
 
 func secretStatus(value string, existing secretPresence, emptyStatus string) string {

@@ -1,6 +1,8 @@
 # NixOS Configuration
 
 NixOS + Hyprland configuration managed by the `mysetup` Go TUI/CLI installer.
+Hyprland itself is configured through Lua for Hyprland 0.55+; this setup no
+longer maintains a `hyprland.conf` fallback.
 
 The old `install.sh` and `dots/install.fish` entry points are gone. System
 settings, host-local generated files, and user dotfiles are applied through the
@@ -93,7 +95,6 @@ Managed secret files:
 
 ```text
 /etc/nixos/hosts/NixOS/hashed-password.nix
-/etc/nixos/secrets/pgadmin-password
 ```
 
 Optional sops-nix modules are split by scope:
@@ -138,8 +139,7 @@ through shell history:
 
 ```bash
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply \
-  --user-password-file /path/to/user-password \
-  --pgadmin-password-file /path/to/pgadmin-password
+  --user-password-file /path/to/user-password
 ```
 
 Secret files must be regular files, non-symlinks, and not group/world readable.
@@ -154,10 +154,10 @@ Secret files must be regular files, non-symlinks, and not group/world readable.
 - Display: monitor name, mode, position, scale, Hypr keyboard layouts/toggle.
 - Package preset: `personal`, `developer`, `desktop`, or `minimal`.
 - Feature flags: GPU type, Secure Boot, CTF tools, OmniRouter.
-- Services: pgAdmin email, Zapret enable flag, Zapret config preset.
-- Passwords: Linux user password hash and pgAdmin web password secret.
-- Dots: Hypr config, scripts chmod, wallpapers, Zen Browser Catppuccin chrome,
-  optional Sine profile, Neovim, v2rayN `sing-box`.
+- Services: Zapret enable flag, Zapret config preset.
+- Passwords: Linux user password hash.
+- Dots: Hyprland Lua config, scripts chmod, wallpapers, Zen Browser Catppuccin
+  chrome, optional Sine profile, Neovim, v2rayN `sing-box`.
 
 Package presets are intentionally coarse:
 
@@ -174,6 +174,30 @@ Implementation note: `hosts/NixOS/default.nix` imports the full local module
 group, and individual modules gate behavior with `mysetup.packages.preset`.
 This keeps one host graph while letting `minimal`, `desktop`, `developer`, and
 `personal` evaluate through the same code path.
+
+## Hyprland Lua Runtime
+
+The active Hyprland config is Lua-only and assumes Hyprland 0.55 or newer:
+
+- `~/.config/hypr/hyprland.lua` is the stable entrypoint owned by Home Manager.
+- That file loads `$XDG_STATE_HOME/mysetup/hypr-runtime/hyprland.lua`, which is
+  rewritten by the shell runtime when switching profiles.
+- Shared MySetup modules live under `Linux/dots/hypr/hyprland/*.lua`,
+  `variables.lua`, `scheme/default.lua`, and `lib/mysetup.lua`.
+- Shell-specific binds and launchers live under
+  `Linux/dots/hypr/{caelestia,noctalia,end4}/*.lua`.
+- Common runtime fragments are `shell-common-keybinds.lua`,
+  `shell-workspace-keybinds.lua`, `shell-keybinds.lua`,
+  `shell-launcher.lua`, and `shell-profile.lua`.
+
+`hyprlock.conf` and `hypridle.conf` intentionally stay in hyprlang because the
+Hyprland companion tools have not moved to Lua config here. Hyprland's old
+`hyprland.conf`, `shell-keybinds.conf`, `shell-launcher.conf`, and
+`shell-profile.conf` are no longer active entrypoints.
+
+Lua bind helpers call `hl.dsp.*` directly. This matters on Hyprland 0.55:
+legacy commands such as `hyprctl dispatch movewindow l` are parsed as Lua and
+will not behave like old hyprlang dispatchers.
 
 ## Runtime Shells
 
@@ -218,10 +242,10 @@ Manual switch commands:
 The shell stack is intentionally split:
 
 - `caelestia` and `noctalia` use the installer-managed `Linux/dots/hypr`
-  entrypoint with shared `shell-common-keybinds.conf` and
-  `shell-workspace-keybinds.conf` fragments.
+  Lua entrypoint with shared `shell-common-keybinds.lua` and
+  `shell-workspace-keybinds.lua` fragments.
 - `end4` uses a dedicated Home Manager profile based on
-  `end-4/dots-hyprland`, with patched Hyprland and QuickShell paths.
+  `end-4/dots-hyprland`, with patched Lua Hyprland and QuickShell paths.
 - `end4` keeps mutable runtime settings under `~/.config/illogical-impulse`,
   so shell-side JSON changes can persist without a rebuild.
 
@@ -349,16 +373,17 @@ Linux/NixOS/
 
 Linux/dots/
 ├── hypr/
-│   ├── hyprland.conf
-│   ├── variables.conf
+│   ├── hyprland.lua
+│   ├── variables.lua
 │   ├── caelestia/
 │   ├── noctalia/
 │   ├── end4/
-│   ├── hyprland/                  # shared hyprland fragments
+│   ├── hyprland/                  # shared Hyprland Lua modules
+│   ├── lib/                       # Lua helpers for paths and bind wrappers
 │   ├── scheme/                    # color scheme outputs
 │   ├── scripts/                   # bash + fish helpers (sourced by Hypr)
-│   ├── shell-common-keybinds.conf
-│   └── shell-workspace-keybinds.conf
+│   ├── shell-common-keybinds.lua
+│   └── shell-workspace-keybinds.lua
 ├── nvim/                          # LazyVim-based Neovim config
 └── zen/
     └── chrome/                    # Zen Browser Catppuccin chrome
@@ -450,6 +475,10 @@ run `mysetup doctor` and check the relevant log.
   `noctalia`, `end4`). Tail `$XDG_RUNTIME_DIR/mysetup-shell.log` while you
   press the binding. Most failures are stale lockfiles under
   `$XDG_STATE_HOME/mysetup/hypr-runtime/` - remove that directory and retry.
+- **Hyprland keybinds are listed but do nothing.** Run `hyprctl configerrors`
+  first. On Hyprland 0.55+, dispatch commands must use the Lua dispatcher API;
+  MySetup binds should go through `lib/mysetup.lua` helpers or direct
+  `hl.dsp.*` calls, not old `hyprctl dispatch movewindow l` style strings.
 - **Thunar shows generic icons instead of image previews.** Check that
   `tumbler` is running (`pgrep -f tumbler-1/tumblerd`), that
   `~/.cache/thumbnails/normal/` is writable, and that `XDG_DATA_DIRS`

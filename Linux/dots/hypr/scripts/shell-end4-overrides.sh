@@ -10,7 +10,7 @@ hypr_config_value() {
 
   value="$(awk -F= -v key="$key" '
     $1 ~ "^[[:space:]]*" key "[[:space:]]*$" {
-      gsub(/[[:space:]]/, "", $2)
+      gsub(/[[:space:]\",]/, "", $2)
       print $2
       exit
     }
@@ -42,8 +42,8 @@ apply_end4_hypr_runtime_overrides() {
 
   dir="$(hypr_dir)"
   rules="$(end4_monitor_rules)"
-  layouts="$(hypr_config_value "$dir/end4/custom/general.conf" kb_layout "us,ru")"
-  options="$(hypr_config_value "$dir/end4/custom/general.conf" kb_options "grp:alt_shift_toggle")"
+  layouts="$(hypr_config_value "$dir/end4/custom/general.lua" kb_layout "us,ru")"
+  options="$(hypr_config_value "$dir/end4/custom/general.lua" kb_options "grp:alt_shift_toggle")"
 
   if [ -n "$rules" ]; then
     while IFS= read -r rule; do

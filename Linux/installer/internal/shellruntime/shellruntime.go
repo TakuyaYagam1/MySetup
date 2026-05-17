@@ -130,9 +130,9 @@ func DetectShellFromEntrypoint(entrypointPath, keybindsPath string) string {
 	}
 	text := string(data)
 	switch {
-	case strings.Contains(text, "end4/hyprland.conf"):
+	case strings.Contains(text, "end4/hyprland.lua"):
 		return End4
-	case strings.Contains(text, "mysetup/hyprland.conf"):
+	case strings.Contains(text, "mysetup/hyprland.lua"):
 		return DetectShellFromKeybinds(keybindsPath)
 	default:
 		return ""
@@ -146,9 +146,9 @@ func DetectShellFromKeybinds(path string) string {
 	}
 	text := string(data)
 	switch {
-	case strings.Contains(text, "noctalia/keybinds.conf") || strings.Contains(text, "noctalia-shell ipc call") || strings.Contains(text, "noctalia-launcher.sh"):
+	case strings.Contains(text, "noctalia.keybinds") || strings.Contains(text, "noctalia/keybinds.lua") || strings.Contains(text, "noctalia-shell ipc call") || strings.Contains(text, "noctalia-launcher.sh"):
 		return Noctalia
-	case strings.Contains(text, "caelestia/keybinds.conf") || strings.Contains(text, "caelestia:launcher"):
+	case strings.Contains(text, "caelestia.keybinds") || strings.Contains(text, "caelestia/keybinds.lua") || strings.Contains(text, "caelestia:launcher"):
 		return Caelestia
 	default:
 		return ""
@@ -159,10 +159,10 @@ func BootstrapActiveShell(home, hyprDir string) string {
 	if profile := ReadActiveShell(ActiveShellStatePath(home)); profile != "" {
 		return profile
 	}
-	if profile := DetectShellFromEntrypoint(RuntimeFile(home, "hyprland.conf"), RuntimeFile(home, "shell-keybinds.conf")); profile != "" {
+	if profile := DetectShellFromEntrypoint(RuntimeFile(home, "hyprland.lua"), RuntimeFile(home, "shell-keybinds.lua")); profile != "" {
 		return profile
 	}
-	if profile := DetectShellFromEntrypoint(filepath.Join(hyprDir, "hyprland.conf"), filepath.Join(hyprDir, "shell-keybinds.conf")); profile != "" {
+	if profile := DetectShellFromEntrypoint(filepath.Join(hyprDir, "hyprland.lua"), filepath.Join(hyprDir, "shell-keybinds.lua")); profile != "" {
 		return profile
 	}
 	return DefaultProfile
@@ -192,7 +192,7 @@ func end4SourceFromGCRoot(home string) (string, error) {
 		return "", err
 	}
 	source := filepath.Join(target, "home-files", ".config", "hypr", "end4")
-	ok, err := RuntimeConfigExists(filepath.Join(source, "hyprland.conf"))
+	ok, err := RuntimeConfigExists(filepath.Join(source, "hyprland.lua"))
 	if err != nil || !ok {
 		return "", err
 	}
@@ -214,7 +214,7 @@ func end4SourceFromQuickshellLink(configDir string) (string, error) {
 		return "", nil
 	}
 	source := filepath.Join(root, ".config", "hypr", "end4")
-	ok, err = RuntimeConfigExists(filepath.Join(source, "hyprland.conf"))
+	ok, err = RuntimeConfigExists(filepath.Join(source, "hyprland.lua"))
 	if err != nil || !ok {
 		return "", err
 	}

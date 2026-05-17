@@ -237,14 +237,17 @@ func writeMinimalHyprDots(t *testing.T, repo string) {
 	t.Helper()
 
 	files := map[string]string{
-		"Linux/dots/hypr/hyprland.conf":                 "monitor = eDP-1, 2560x1600@120, 0x0, 1\nsource = ~/.config/hypr/hyprland/input.conf\n",
-		"Linux/dots/hypr/hyprland/input.conf":           "input {\n    kb_layout = us\n    kb_options = grp:alt_shift_toggle\n}\n",
-		"Linux/dots/hypr/hyprland/keybinds.conf":        "source = $hypr/shell-keybinds.conf\n",
-		"Linux/dots/hypr/scripts/start-shell.sh":        "#!/usr/bin/env bash\n",
-		"Linux/dots/hypr/caelestia/keybinds.conf":       "# binds\n",
-		"Linux/dots/hypr/caelestia/launcher.conf":       "# launcher\n",
-		"Linux/dots/hypr/shell-common-keybinds.conf":    "# common\n",
-		"Linux/dots/hypr/shell-workspace-keybinds.conf": "# workspace\n",
+		"Linux/dots/hypr/hyprland.lua":                 "require(\"hyprland.input\")\nrequire(\"hyprland.keybinds\")\n",
+		"Linux/dots/hypr/hyprland/input.lua":           "hl.config({ input = { kb_layout = \"us\", kb_options = \"grp:alt_shift_toggle\" } })\n",
+		"Linux/dots/hypr/hyprland/keybinds.lua":        "mysetup.load_runtime(\"shell-keybinds.lua\")\n",
+		"Linux/dots/hypr/scripts/start-shell.sh":       "#!/usr/bin/env bash\n",
+		"Linux/dots/hypr/caelestia/keybinds.lua":       "-- binds\n",
+		"Linux/dots/hypr/caelestia/launcher.lua":       "-- launcher\n",
+		"Linux/dots/hypr/shell-common-keybinds.lua":    "-- common\n",
+		"Linux/dots/hypr/shell-workspace-keybinds.lua": "-- workspace\n",
+		"Linux/dots/hypr/lib/mysetup.lua":              "return {}\n",
+		"Linux/dots/hypr/variables.lua":                "return {}\n",
+		"Linux/dots/hypr/scheme/default.lua":           "return {}\n",
 	}
 	for rel, content := range files {
 		path := filepath.Join(repo, rel)
@@ -268,7 +271,7 @@ func TestRunDoesNotWriteStateWhenDryBuildFails(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(repo, "Linux/dots/hypr/caelestia"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(repo, "Linux/dots/hypr/caelestia/keybinds.conf"), []byte("# binds\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(repo, "Linux/dots/hypr/caelestia/keybinds.lua"), []byte("-- binds\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(repo, "Linux/installer"), 0o755); err != nil {
@@ -334,14 +337,14 @@ func TestStageConfigurationIncludesDotsAndInstaller(t *testing.T) {
 		}
 	}
 	files := map[string]string{
-		filepath.Join(nixos, "flake.nix"):                         "{}\n",
-		filepath.Join(dots, "hypr", "caelestia", "keybinds.conf"): "# caelestia\n",
-		filepath.Join(dots, "hypr", "noctalia", "keybinds.conf"):  "# noctalia\n",
-		filepath.Join(dots, "hypr", "scripts", "start-shell.sh"):  "#!/usr/bin/env bash\n",
-		filepath.Join(installer, "go.mod"):                        "module test\n",
-		filepath.Join(installer, "cmd", "mysetup", "main.go"):     "package main\n",
-		filepath.Join(installer, "bin", "mysetup"):                "ignored\n",
-		filepath.Join(installer, "coverage.out"):                  "ignored\n",
+		filepath.Join(nixos, "flake.nix"):                        "{}\n",
+		filepath.Join(dots, "hypr", "caelestia", "keybinds.lua"): "-- caelestia\n",
+		filepath.Join(dots, "hypr", "noctalia", "keybinds.lua"):  "-- noctalia\n",
+		filepath.Join(dots, "hypr", "scripts", "start-shell.sh"): "#!/usr/bin/env bash\n",
+		filepath.Join(installer, "go.mod"):                       "module test\n",
+		filepath.Join(installer, "cmd", "mysetup", "main.go"):    "package main\n",
+		filepath.Join(installer, "bin", "mysetup"):               "ignored\n",
+		filepath.Join(installer, "coverage.out"):                 "ignored\n",
 	}
 	for path, content := range files {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -363,8 +366,8 @@ func TestStageConfigurationIncludesDotsAndInstaller(t *testing.T) {
 	}
 
 	for _, rel := range []string{
-		"dots/hypr/caelestia/keybinds.conf",
-		"dots/hypr/noctalia/keybinds.conf",
+		"dots/hypr/caelestia/keybinds.lua",
+		"dots/hypr/noctalia/keybinds.lua",
 		"dots/hypr/scripts/start-shell.sh",
 		"installer/go.mod",
 		"installer/cmd/mysetup/main.go",
@@ -399,7 +402,7 @@ func TestStageConfigurationKeepsStagingWritableAfterReadonlyNixOSRoot(t *testing
 	for path, content := range map[string]string{
 		filepath.Join(nixos, "flake.nix"):                       "{}\n",
 		filepath.Join(nixos, "hosts", "NixOS", "host-vars.nix"): "stale\n",
-		filepath.Join(dots, "hypr", "keybinds.conf"):            "# binds\n",
+		filepath.Join(dots, "hypr", "keybinds.lua"):             "-- binds\n",
 		filepath.Join(installer, "cmd", "mysetup", "main.go"):   "package main\n",
 	} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -434,7 +437,7 @@ func TestStageConfigurationKeepsStagingWritableAfterReadonlyNixOSRoot(t *testing
 		t.Fatal(err)
 	}
 	for _, rel := range []string{
-		"dots/hypr/keybinds.conf",
+		"dots/hypr/keybinds.lua",
 		"installer/cmd/mysetup/main.go",
 		"hosts/NixOS/host-vars.nix",
 	} {

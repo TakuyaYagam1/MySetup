@@ -70,10 +70,6 @@ var hostVarsTemplate = template.Must(template.New("host-vars.nix").Funcs(templat
     config = {{ nixString .Zapret.Config }};
   };
 
-  services = {
-    pgadminEmail = {{ nixString .Services.PgAdminEmail }};
-  };
-
   hypr = {
     keyboardLayouts = {{ nixString .Locale.KeyboardLayouts }};
     keyboardToggle = {{ nixString .Locale.KeyboardToggle }};

@@ -11,7 +11,7 @@ import (
 )
 
 func TestSharedHyprKeybindsDoNotContainShellSpecificBindings(t *testing.T) {
-	data, err := os.ReadFile("../../../dots/hypr/hyprland/keybinds.conf")
+	data, err := os.ReadFile("../../../dots/hypr/hyprland/keybinds.lua")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,39 +23,39 @@ func TestSharedHyprKeybindsDoNotContainShellSpecificBindings(t *testing.T) {
 		"caelestia resizer pip",
 		"noctalia-shell ipc call",
 		"app2unit -- $terminal",
-		"$hypr/scripts/screenshot.sh full",
+		`mysetup.hypr .. "/scripts/screenshot.sh full"`,
 		"$hypr/scripts/record-toggle.sh",
 	} {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("shared Hypr keybinds must stay shell-neutral; found %q\n%s", forbidden, text)
 		}
 	}
-	if !strings.Contains(text, "source = $hypr/shell-keybinds.conf") {
-		t.Fatalf("shared Hypr keybinds must source the stable profile layer\n%s", text)
+	if !strings.Contains(text, `mysetup.load_runtime("shell-keybinds.lua")`) {
+		t.Fatalf("shared Hypr keybinds must load the runtime profile layer\n%s", text)
 	}
-	if !strings.Contains(text, "source = $hypr/shell-launcher.conf") {
-		t.Fatalf("shared Hypr keybinds must source the stable launcher layer\n%s", text)
+	if !strings.Contains(text, `mysetup.load_runtime("shell-launcher.lua")`) {
+		t.Fatalf("shared Hypr keybinds must load the runtime launcher layer\n%s", text)
 	}
 }
 
 func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
-	caelestia, err := os.ReadFile("../../../dots/hypr/caelestia/keybinds.conf")
+	caelestia, err := os.ReadFile("../../../dots/hypr/caelestia/keybinds.lua")
 	if err != nil {
 		t.Fatal(err)
 	}
-	caelestiaLauncher, err := os.ReadFile("../../../dots/hypr/caelestia/launcher.conf")
+	caelestiaLauncher, err := os.ReadFile("../../../dots/hypr/caelestia/launcher.lua")
 	if err != nil {
 		t.Fatal(err)
 	}
-	noctalia, err := os.ReadFile("../../../dots/hypr/noctalia/keybinds.conf")
+	noctalia, err := os.ReadFile("../../../dots/hypr/noctalia/keybinds.lua")
 	if err != nil {
 		t.Fatal(err)
 	}
-	noctaliaLauncher, err := os.ReadFile("../../../dots/hypr/noctalia/launcher.conf")
+	noctaliaLauncher, err := os.ReadFile("../../../dots/hypr/noctalia/launcher.lua")
 	if err != nil {
 		t.Fatal(err)
 	}
-	common, err := os.ReadFile("../../../dots/hypr/shell-common-keybinds.conf")
+	common, err := os.ReadFile("../../../dots/hypr/shell-common-keybinds.lua")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,8 +64,8 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 	for _, want := range []string{
 		"restore-lock.sh caelestia",
 		"shell-selector.sh toggle",
-		"app2unit -- $terminal",
-		"$hypr/scripts/screenshot.sh full",
+		`"app2unit -- " .. v.terminal`,
+		`mysetup.hypr .. "/scripts/screenshot.sh full"`,
 		"caelestia clipboard",
 	} {
 		if !strings.Contains(caelestiaProfile, want) {
@@ -73,10 +73,9 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"bindi = Super, Super_L, global, caelestia:launcher",
-		"bindin = Super, catchall, global, caelestia:launcherInterrupt",
-		"bindin = Super, mouse:272, global, caelestia:launcherInterrupt",
-		"bindin = Super, mouse_down, global, caelestia:launcherInterrupt",
+		`mysetup.bind_dispatch("SUPER + SUPER_L", "global caelestia:launcher")`,
+		`mysetup.bind_dispatch("SUPER + mouse:272", "global caelestia:launcherInterrupt", { non_consuming = true })`,
+		`mysetup.bind_dispatch("SUPER + mouse_down", "global caelestia:launcherInterrupt", { non_consuming = true })`,
 	} {
 		if !strings.Contains(string(caelestiaLauncher), want) {
 			t.Fatalf("caelestia launcher profile missing %q\n%s", want, string(caelestiaLauncher))
@@ -86,8 +85,8 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 		"noctalia-shell ipc call",
 		"restore-lock.sh noctalia",
 		"shell-selector.sh toggle",
-		"app2unit -- $terminal",
-		"$hypr/scripts/screenshot.sh full",
+		`"app2unit -- " .. v.terminal`,
+		`mysetup.hypr .. "/scripts/screenshot.sh full"`,
 	} {
 		if !strings.Contains(noctaliaProfile, want) {
 			t.Fatalf("noctalia profile missing %q\n%s", want, noctaliaProfile)
@@ -106,18 +105,19 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 
 func TestHyprKeybindFilesDoNotContainUnexpectedDuplicateChords(t *testing.T) {
 	allowed := map[string]bool{
-		"hyprland/keybinds.conf|bind|Ctrl+Super+Alt|Backslash": true,
+		"hyprland/keybinds.lua|CTRL+SUPER+ALT+Backslash": true,
+		"noctalia/launcher.lua|SUPER+SUPER_L":            true,
 	}
 
 	for _, rel := range []string{
-		"hyprland/keybinds.conf",
-		"caelestia/keybinds.conf",
-		"caelestia/launcher.conf",
-		"noctalia/keybinds.conf",
-		"noctalia/launcher.conf",
-		"end4/keybinds.conf",
-		"shell-common-keybinds.conf",
-		"shell-workspace-keybinds.conf",
+		"hyprland/keybinds.lua",
+		"caelestia/keybinds.lua",
+		"caelestia/launcher.lua",
+		"noctalia/keybinds.lua",
+		"noctalia/launcher.lua",
+		"end4/keybinds.lua",
+		"shell-common-keybinds.lua",
+		"shell-workspace-keybinds.lua",
 	} {
 		t.Run(rel, func(t *testing.T) {
 			assertNoUnexpectedDuplicateHyprBinds(t, rel, allowed)
@@ -221,7 +221,7 @@ func TestShellSelectorScriptTracksFocusedMonitorAndActiveShell(t *testing.T) {
 		"detect_shell_from_processes()",
 		"detect_shell_from_entrypoint()",
 		"quickshell/ii([/[:space:]]|$)",
-		"mysetup/hyprland.conf",
+		"mysetup/hyprland.lua",
 		"hyprctl monitors -j",
 		"active-shell",
 		"start-shell.sh",
@@ -295,7 +295,6 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		"prepare_profile_or_fallback()",
 		"require_file()",
 		"aborting shell switch before stopping current shell",
-		"falling back to caelestia because auto profile is not ready",
 		"persistent_state_file=",
 		"selector_pattern=",
 		"caelestia_resizer_handle=",
@@ -306,7 +305,7 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		"stop_end4_idle()",
 		"hypr_runtime_dir=",
 		"runtime_file()",
-		"shell-keybinds.conf",
+		"shell-keybinds.lua",
 		`hypridle -c "$idle_config"`,
 		"hyprctl reload",
 		`("$@" >>"$log_file" 2>&1 &)`,
@@ -354,7 +353,7 @@ func TestRestoreLockScriptStartsProfileBeforeLocking(t *testing.T) {
 		"mysetup_valid_shell_profile",
 		`"$script_dir/start-shell.sh" "$profile"`,
 		"wait_for_profile()",
-		"hyprctl dispatch global caelestia:lock",
+		`hyprctl dispatch 'hl.dsp.global("caelestia:lock")'`,
 		"noctalia-shell ipc call lockScreen lock",
 		`hyprlock -c "$mysetup_hypr_runtime_dir/hyprlock.conf"`,
 	} {
@@ -373,8 +372,8 @@ func TestEnd4HyprPatchDisablesUpstreamShellLifecycle(t *testing.T) {
 	for _, want := range []string{
 		"MySetup start-shell owns end4 QuickShell",
 		"MySetup start-shell owns end4 hypridle",
-		`/^exec-once = qs -c \$qsConfig &$/`,
-		"/^exec-once = hypridle$/",
+		`/^    hl\.exec_cmd("qs -c \$qsConfig")$/`,
+		`/^    hl\.exec_cmd("hypridle")$/`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("end4 dotfile patch missing lifecycle guard %q\n%s", want, text)
@@ -478,9 +477,9 @@ printf '%s\n' "$*" > "$CALL_FILE"
 	}
 
 	cases := map[string]string{
-		"10": "dispatch workspace 10",
-		"20": "dispatch workspace 10",
-		"23": "dispatch workspace 3",
+		"10": `dispatch hl.dsp.focus({ workspace = "10" })`,
+		"20": `dispatch hl.dsp.focus({ workspace = "10" })`,
+		"23": `dispatch hl.dsp.focus({ workspace = "3" })`,
 	}
 	for activeWS, want := range cases {
 		t.Run(activeWS, func(t *testing.T) {
@@ -521,10 +520,10 @@ func assertNoUnexpectedDuplicateHyprBinds(t *testing.T, rel string, allowed map[
 	}
 
 	seen := map[string]int{}
-	bindRe := regexp.MustCompile(`^(bind[a-z]*)\s*=\s*([^,]+),\s*([^,]+),`)
+	bindRe := regexp.MustCompile(`^(?:mysetup\.)?(?:bind_[a-z]+|bind)\("([^"]+)"`)
 	for lineNo, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
+		if line == "" || strings.HasPrefix(line, "--") {
 			continue
 		}
 		match := bindRe.FindStringSubmatch(line)
@@ -532,11 +531,7 @@ func assertNoUnexpectedDuplicateHyprBinds(t *testing.T, rel string, allowed map[
 			continue
 		}
 
-		key := strings.Join([]string{
-			match[1],
-			strings.Join(strings.Fields(match[2]), ""),
-			strings.Join(strings.Fields(match[3]), ""),
-		}, "|")
+		key := strings.Join(strings.Fields(match[1]), "")
 		allowKey := rel + "|" + key
 		if previous, ok := seen[key]; ok && !allowed[allowKey] {
 			t.Fatalf("unexpected duplicate Hypr bind in %s: line %d duplicates line %d for %s\n%s", rel, lineNo+1, previous, key, string(data))

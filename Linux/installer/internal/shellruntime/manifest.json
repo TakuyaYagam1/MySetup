@@ -7,8 +7,8 @@
       "accent": "#f48ab6",
       "surface": "#211f31",
       "logo": "assets/noctalia.svg",
-      "launcher": "noctalia/launcher.conf",
-      "keybinds": "noctalia/keybinds.conf"
+      "launcher": "noctalia/launcher.lua",
+      "keybinds": "noctalia/keybinds.lua"
     },
     {
       "id": "caelestia",
@@ -16,8 +16,8 @@
       "accent": "#6ae5e1",
       "surface": "#201f33",
       "logo": "assets/caelestia.svg",
-      "launcher": "caelestia/launcher.conf",
-      "keybinds": "caelestia/keybinds.conf"
+      "launcher": "caelestia/launcher.lua",
+      "keybinds": "caelestia/keybinds.lua"
     },
     {
       "id": "end4",
@@ -25,17 +25,17 @@
       "accent": "#51debd",
       "surface": "#1d2122",
       "logo": "assets/illogical-impulse.svg",
-      "launcher": "end4/launcher.conf",
-      "keybinds": "end4/keybinds.conf"
+      "launcher": "end4/launcher.lua",
+      "keybinds": "end4/keybinds.lua"
     }
   ],
   "runtimeFiles": [
-    "hyprland.conf",
+    "hyprland.lua",
     "hyprlock.conf",
     "hypridle.conf",
-    "shell-profile.conf",
-    "shell-launcher.conf",
-    "shell-keybinds.conf"
+    "shell-profile.lua",
+    "shell-launcher.lua",
+    "shell-keybinds.lua"
   ],
   "hyprScripts": [
     "close-active.sh",

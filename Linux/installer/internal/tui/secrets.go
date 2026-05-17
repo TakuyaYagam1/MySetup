@@ -8,57 +8,50 @@ import (
 
 func editSecrets(s *session) error {
 	existingSecrets := detectExistingSecrets(s.paths)
-	return editSecretsWithReader(s, func() (string, string, error) {
+	return editSecretsWithReader(s, func() (string, error) {
 		return readSecrets(existingSecrets)
 	})
 }
 
 func editSecretsWithReader(
 	s *session,
-	read func() (userPassword string, pgAdminPassword string, err error),
+	read func() (userPassword string, err error),
 ) error {
-	userPassword, pgAdminPassword, err := read()
+	userPassword, err := read()
 	if err != nil {
 		return err
 	}
 	s.secrets.UserPassword = userPassword
-	s.secrets.PgAdminPassword = pgAdminPassword
 	return nil
 }
 
-func readSecrets(existingSecrets secretAvailability) (string, string, error) {
+func readSecrets(existingSecrets secretAvailability) (string, error) {
 	values := secretFormValues{}
 	errors := secretFormErrors{}
 	for {
 		if err := runSecretForm(&values, errors, existingSecrets); err != nil {
-			return "", "", err
+			return "", err
 		}
 		errors = validateSecretFormValues(values, existingSecrets)
 		if errors.empty() {
-			return values.userPassword, values.pgAdminPassword, nil
+			return values.userPassword, nil
 		}
 	}
 }
 
 type secretFormValues struct {
-	userPassword    string
-	userConfirm     string
-	pgAdminPassword string
-	pgAdminConfirm  string
+	userPassword string
+	userConfirm  string
 }
 
 type secretFormErrors struct {
-	userPassword    string
-	userConfirm     string
-	pgAdminPassword string
-	pgAdminConfirm  string
+	userPassword string
+	userConfirm  string
 }
 
 func (e secretFormErrors) empty() bool {
 	return e.userPassword == "" &&
-		e.userConfirm == "" &&
-		e.pgAdminPassword == "" &&
-		e.pgAdminConfirm == ""
+		e.userConfirm == ""
 }
 
 func runSecretForm(values *secretFormValues, errors secretFormErrors, existingSecrets secretAvailability) error {
@@ -76,16 +69,6 @@ func runSecretForm(values *secretFormValues, errors secretFormErrors, existingSe
 			Description(fieldDescription("Repeat the Linux user password, or leave blank with the password field to preserve an existing hash.", errors.userConfirm)).
 			EchoMode(huh.EchoModePassword).
 			Value(&values.userConfirm),
-		huh.NewInput().
-			Title("pgAdmin web password").
-			Description(passwordFieldDescription("Written to /etc/nixos/secrets/pgadmin-password during Apply.", existingSecrets.PgAdminPassword, errors.pgAdminPassword)).
-			EchoMode(huh.EchoModePassword).
-			Value(&values.pgAdminPassword),
-		huh.NewInput().
-			Title("Confirm pgAdmin web password").
-			Description(fieldDescription("Repeat the pgAdmin web password, or leave blank with the password field to preserve an existing secret. This is not the PostgreSQL postgres role password.", errors.pgAdminConfirm)).
-			EchoMode(huh.EchoModePassword).
-			Value(&values.pgAdminConfirm),
 	).Run(); err != nil {
 		return err
 	}
@@ -99,12 +82,6 @@ func validateSecretFormValues(values secretFormValues, existingSecrets secretAva
 		values.userConfirm,
 		"Linux user password",
 		existingSecrets.UserPassword,
-	)
-	errors.pgAdminPassword, errors.pgAdminConfirm = validateSecretPair(
-		values.pgAdminPassword,
-		values.pgAdminConfirm,
-		"pgAdmin web password",
-		existingSecrets.PgAdminPassword,
 	)
 	return errors
 }
@@ -131,7 +108,6 @@ func validateSecretPair(password, confirm, label string, existing secretPresence
 func secretFormStatus(existingSecrets secretAvailability) string {
 	return strings.Join([]string{
 		"Linux user password: " + secretFormPresence(existingSecrets.UserPassword),
-		"pgAdmin web password: " + secretFormPresence(existingSecrets.PgAdminPassword),
 		"Leave password and confirmation blank only for entries marked already exists.",
 		"Plain passwords are not saved to draft.json.",
 	}, "\n")

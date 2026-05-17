@@ -13,7 +13,7 @@ import (
 func TestWriteShellLauncherConfigWritesRuntimeLauncher(t *testing.T) {
 	dir := t.TempDir()
 	hyprDir := filepath.Join(dir, ".config", "hypr")
-	path := filepath.Join(shellruntime.RuntimeDir(dir), "shell-profile.conf")
+	path := filepath.Join(shellruntime.RuntimeDir(dir), "shell-profile.lua")
 
 	if err := writeShellLauncherConfig(path, hyprDir); err != nil {
 		t.Fatal(err)
@@ -25,8 +25,8 @@ func TestWriteShellLauncherConfigWritesRuntimeLauncher(t *testing.T) {
 	}
 	got := string(data)
 	for _, want := range []string{
-		"# Runtime shell launcher",
-		"exec-once = " + filepath.Join(hyprDir, "scripts", "start-shell.sh"),
+		"-- Runtime shell launcher",
+		`hl.exec_cmd("` + filepath.Join(hyprDir, "scripts", "start-shell.sh") + `")`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("shell launcher missing %q\n%s", want, got)
@@ -37,8 +37,8 @@ func TestWriteShellLauncherConfigWritesRuntimeLauncher(t *testing.T) {
 func TestWriteShellLauncherConfigReplacesExistingSymlink(t *testing.T) {
 	dir := t.TempDir()
 	hyprDir := filepath.Join(dir, ".config", "hypr")
-	path := filepath.Join(shellruntime.RuntimeDir(dir), "shell-profile.conf")
-	target := filepath.Join(dir, "store-shell-profile.conf")
+	path := filepath.Join(shellruntime.RuntimeDir(dir), "shell-profile.lua")
+	target := filepath.Join(dir, "store-shell-profile.lua")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -79,8 +79,8 @@ func TestWriteShellLauncherConfigReplacesExistingSymlink(t *testing.T) {
 func TestWriteShellKeybindsConfigUsesCurrentShell(t *testing.T) {
 	dir := t.TempDir()
 	hyprDir := filepath.Join(dir, ".config", "hypr")
-	path := filepath.Join(shellruntime.RuntimeDir(dir), "shell-keybinds.conf")
-	noctaliaKeybinds := filepath.Join(hyprDir, "noctalia", "keybinds.conf")
+	path := filepath.Join(shellruntime.RuntimeDir(dir), "shell-keybinds.lua")
+	noctaliaKeybinds := filepath.Join(hyprDir, "noctalia", "keybinds.lua")
 	if err := os.MkdirAll(filepath.Dir(noctaliaKeybinds), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -97,8 +97,8 @@ func TestWriteShellKeybindsConfigUsesCurrentShell(t *testing.T) {
 	}
 	got := string(data)
 	for _, want := range []string{
-		"# Active shell keybind profile: noctalia",
-		"source = " + noctaliaKeybinds,
+		"-- Active shell keybind profile: noctalia",
+		`require("noctalia.keybinds")`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("shell keybind layer missing %q\n%s", want, got)
@@ -109,8 +109,8 @@ func TestWriteShellKeybindsConfigUsesCurrentShell(t *testing.T) {
 func TestWriteShellKeybindsConfigReplacesExistingSymlink(t *testing.T) {
 	dir := t.TempDir()
 	hyprDir := filepath.Join(dir, ".config", "hypr")
-	path := filepath.Join(shellruntime.RuntimeDir(dir), "shell-keybinds.conf")
-	caelestiaKeybinds := filepath.Join(hyprDir, "caelestia", "keybinds.conf")
+	path := filepath.Join(shellruntime.RuntimeDir(dir), "shell-keybinds.lua")
+	caelestiaKeybinds := filepath.Join(hyprDir, "caelestia", "keybinds.lua")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestWriteShellKeybindsConfigReplacesExistingSymlink(t *testing.T) {
 	if err := os.WriteFile(caelestiaKeybinds, []byte("# caelestia binds\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	target := filepath.Join(dir, "store-shell-keybinds.conf")
+	target := filepath.Join(dir, "store-shell-keybinds.lua")
 	if err := os.WriteFile(target, []byte("old target\n"), 0o444); err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestWriteShellKeybindsConfigReplacesExistingSymlink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "source = "+caelestiaKeybinds) {
+	if !strings.Contains(string(data), `require("caelestia.keybinds")`) {
 		t.Fatalf("shell keybind config should source default profile\n%s", string(data))
 	}
 }
@@ -152,7 +152,7 @@ func TestWriteShellKeybindsConfigErrorsWhenProfileMissing(t *testing.T) {
 	dir := t.TempDir()
 	hyprDir := filepath.Join(dir, ".config", "hypr")
 
-	err := writeShellKeybindsConfig(filepath.Join(shellruntime.RuntimeDir(dir), "shell-keybinds.conf"), hyprDir, "noctalia")
+	err := writeShellKeybindsConfig(filepath.Join(shellruntime.RuntimeDir(dir), "shell-keybinds.lua"), hyprDir, "noctalia")
 	if err == nil {
 		t.Fatal("expected missing shell keybind layer error")
 	}
@@ -174,13 +174,13 @@ func TestWriteHyprRuntimeShellStateSeedsLegacyRuntimeFiles(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(hyprDir, "mysetup"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "caelestia", "keybinds.conf"), []byte("# binds\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "caelestia", "keybinds.lua"), []byte("-- binds\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "caelestia", "launcher.conf"), []byte("# launcher\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "caelestia", "launcher.lua"), []byte("-- launcher\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "mysetup", "hyprland.conf"), []byte("monitor = eDP-1, 2560x1600@120, 0x0, 1\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "mysetup", "hyprland.lua"), []byte("hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@120\", position = \"0x0\", scale = \"1\" })\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -196,34 +196,34 @@ func TestWriteHyprRuntimeShellStateSeedsLegacyRuntimeFiles(t *testing.T) {
 		t.Fatalf("expected active shell caelestia, got %q", string(activeShell))
 	}
 
-	stableEntrypoint, err := os.ReadFile(filepath.Join(hyprDir, "hyprland.conf"))
+	stableEntrypoint, err := os.ReadFile(filepath.Join(hyprDir, "hyprland.lua"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(stableEntrypoint), filepath.Join(runtimeDir, "hyprland.conf")) {
+	if !strings.Contains(string(stableEntrypoint), filepath.Join(runtimeDir, "hyprland.lua")) {
 		t.Fatalf("expected stable entrypoint to source runtime config\n%s", string(stableEntrypoint))
 	}
 
-	entrypoint, err := os.ReadFile(filepath.Join(runtimeDir, "hyprland.conf"))
+	entrypoint, err := os.ReadFile(filepath.Join(runtimeDir, "hyprland.lua"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	entrypointText := string(entrypoint)
-	if !strings.Contains(entrypointText, "mysetup/hyprland.conf") {
+	if !strings.Contains(entrypointText, "mysetup/hyprland.lua") {
 		t.Fatalf("expected legacy entrypoint to source mysetup config\n%s", entrypointText)
 	}
-	if !strings.Contains(entrypointText, shellruntime.RuntimeFile(home, "shell-profile.conf")) {
+	if !strings.Contains(entrypointText, shellruntime.RuntimeFile(home, "shell-profile.lua")) {
 		t.Fatalf("expected legacy entrypoint to source runtime shell profile\n%s", entrypointText)
 	}
-	if strings.Contains(entrypointText, filepath.Join(hyprDir, "runtime", "shell-profile.conf")) {
+	if strings.Contains(entrypointText, filepath.Join(hyprDir, "runtime", "shell-profile.lua")) {
 		t.Fatalf("legacy entrypoint should not source old hypr runtime path\n%s", entrypointText)
 	}
 
-	launcher, err := os.ReadFile(filepath.Join(runtimeDir, "shell-launcher.conf"))
+	launcher, err := os.ReadFile(filepath.Join(runtimeDir, "shell-launcher.lua"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(launcher), "caelestia/launcher.conf") {
+	if !strings.Contains(string(launcher), `require("caelestia.launcher")`) {
 		t.Fatalf("expected launcher runtime config to source caelestia launcher layer\n%s", string(launcher))
 	}
 
@@ -260,7 +260,7 @@ func TestWriteHyprRuntimeShellStatePreservesExistingEnd4StateBeforeProfileExists
 	if err := os.WriteFile(paths.ActiveShellStatePath(home), []byte("end4\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "end4", "launcher.conf"), []byte("# end4 launcher\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "end4", "launcher.lua"), []byte("-- end4 launcher\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -276,14 +276,14 @@ func TestWriteHyprRuntimeShellStatePreservesExistingEnd4StateBeforeProfileExists
 		t.Fatalf("expected active shell end4, got %q", string(activeShell))
 	}
 
-	if _, err := os.Stat(filepath.Join(runtimeDir, "hyprland.conf")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(runtimeDir, "hyprland.lua")); !os.IsNotExist(err) {
 		t.Fatalf("expected end4 runtime entrypoint to stay untouched until Home Manager installs the profile, got err=%v", err)
 	}
-	stableEntrypoint, err := os.ReadFile(filepath.Join(hyprDir, "hyprland.conf"))
+	stableEntrypoint, err := os.ReadFile(filepath.Join(hyprDir, "hyprland.lua"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(stableEntrypoint), filepath.Join(runtimeDir, "hyprland.conf")) {
+	if !strings.Contains(string(stableEntrypoint), filepath.Join(runtimeDir, "hyprland.lua")) {
 		t.Fatalf("expected stable entrypoint to keep pointing at runtime config\n%s", string(stableEntrypoint))
 	}
 }
@@ -297,19 +297,19 @@ func TestWriteHyprRuntimeShellStateDetectsNoctaliaFromEntrypointWhenStateMissing
 	if err := os.MkdirAll(filepath.Join(hyprDir, "noctalia"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "hyprland.conf"), []byte("source = "+filepath.Join(hyprDir, "mysetup", "hyprland.conf")+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "hyprland.lua"), []byte(`dofile("`+filepath.Join(hyprDir, "mysetup", "hyprland.lua")+`")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "shell-keybinds.conf"), []byte("$noctalia = noctalia-shell ipc call\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "shell-keybinds.lua"), []byte(`require("noctalia.keybinds")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "mysetup", "hyprland.conf"), []byte("monitor = eDP-1, 2560x1600@120, 0x0, 1\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "mysetup", "hyprland.lua"), []byte("hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@120\", position = \"0x0\", scale = \"1\" })\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "noctalia", "keybinds.conf"), []byte("# noctalia binds\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "noctalia", "keybinds.lua"), []byte("-- noctalia binds\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "noctalia", "launcher.conf"), []byte("# noctalia launcher\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "noctalia", "launcher.lua"), []byte("-- noctalia launcher\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -337,10 +337,10 @@ func TestWriteHyprRuntimeShellStateSeedsEnd4RuntimeFilesWhenProfileExists(t *tes
 		t.Fatal(err)
 	}
 	for rel := range map[string]string{
-		"end4/hyprland.conf": "source = ~/.config/hypr/end4/hyprland/env.conf\n",
+		"end4/hyprland.lua":  "require(\"hyprland.env\")\n",
 		"end4/hyprlock.conf": "background {}\n",
 		"end4/hypridle.conf": "general {}\n",
-		"end4/launcher.conf": "# end4 launcher\n",
+		"end4/launcher.lua":  "-- end4 launcher\n",
 	} {
 		path := filepath.Join(hyprDir, rel)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -366,7 +366,7 @@ func TestWriteHyprRuntimeShellStateSeedsEnd4RuntimeFilesWhenProfileExists(t *tes
 		path string
 		want string
 	}{
-		{path: filepath.Join(runtimeDir, "hyprland.conf"), want: "source = " + filepath.Join(hyprDir, "end4", "hyprland.conf")},
+		{path: filepath.Join(runtimeDir, "hyprland.lua"), want: `dofile(end4_root .. "/hyprland.lua")`},
 		{path: filepath.Join(runtimeDir, "hyprlock.conf"), want: "source = " + filepath.Join(hyprDir, "end4", "hyprlock.conf")},
 		{path: filepath.Join(runtimeDir, "hypridle.conf"), want: "source = " + filepath.Join(hyprDir, "end4", "hypridle.conf")},
 	} {
@@ -379,15 +379,15 @@ func TestWriteHyprRuntimeShellStateSeedsEnd4RuntimeFilesWhenProfileExists(t *tes
 		}
 	}
 
-	entrypoint, err := os.ReadFile(filepath.Join(runtimeDir, "hyprland.conf"))
+	entrypoint, err := os.ReadFile(filepath.Join(runtimeDir, "hyprland.lua"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	entrypointText := string(entrypoint)
-	if !strings.Contains(entrypointText, shellruntime.RuntimeFile(home, "shell-profile.conf")) {
-		t.Fatalf("expected end4 entrypoint to source runtime shell profile\n%s", entrypointText)
+	if strings.Contains(entrypointText, shellruntime.RuntimeFile(home, "shell-profile.lua")) {
+		t.Fatalf("end4 entrypoint should not source MySetup shell profile\n%s", entrypointText)
 	}
-	if strings.Contains(entrypointText, filepath.Join(hyprDir, "runtime", "shell-profile.conf")) {
+	if strings.Contains(entrypointText, filepath.Join(hyprDir, "runtime", "shell-profile.lua")) {
 		t.Fatalf("end4 entrypoint should not source old hypr runtime path\n%s", entrypointText)
 	}
 }

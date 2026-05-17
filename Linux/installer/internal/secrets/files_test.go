@@ -10,19 +10,15 @@ import (
 func TestLoadFromFiles(t *testing.T) {
 	dir := t.TempDir()
 	userPassword := filepath.Join(dir, "user-password")
-	pgAdminPassword := filepath.Join(dir, "pgadmin-password")
 	if err := os.WriteFile(userPassword, []byte("linux-secret\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(pgAdminPassword, []byte("pg-secret\r\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
 
-	secrets, err := LoadFromFiles(userPassword, pgAdminPassword)
+	secrets, err := LoadFromFiles(userPassword)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if secrets.UserPassword != "linux-secret" || secrets.PgAdminPassword != "pg-secret" {
+	if secrets.UserPassword != "linux-secret" {
 		t.Fatalf("unexpected secrets: %#v", secrets)
 	}
 }

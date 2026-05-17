@@ -95,18 +95,6 @@ let
           };
         };
       };
-      services = mkOption {
-        type = types.submodule {
-          options = {
-            pgadminEmail = strOption;
-            pgadminPasswordFile = mkOption {
-              type = types.str;
-              default = "/etc/nixos/secrets/pgadmin-password";
-              description = "Fallback path used when sops does not provide pgadmin-password.";
-            };
-          };
-        };
-      };
       nix = mkOption {
         type = types.submodule {
           options.gcRetention = mkOption {

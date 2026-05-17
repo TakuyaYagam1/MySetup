@@ -115,7 +115,6 @@ func tuiCommand(opts *Options) *cobra.Command {
 func applyCommand(opts *Options) *cobra.Command {
 	var noSwitch bool
 	var userPasswordFile string
-	var pgAdminPasswordFile string
 
 	cmd := &cobra.Command{
 		Use:   "apply",
@@ -125,7 +124,7 @@ func applyCommand(opts *Options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			secretValues, err := secrets.LoadFromFiles(userPasswordFile, pgAdminPasswordFile)
+			secretValues, err := secrets.LoadFromFiles(userPasswordFile)
 			if err != nil {
 				return err
 			}
@@ -141,7 +140,6 @@ func applyCommand(opts *Options) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&noSwitch, "no-switch", false, "stop after dry-build without switching or writing activated state")
 	cmd.Flags().StringVar(&userPasswordFile, "user-password-file", "", "read initial user password from file for hashed-password.nix")
-	cmd.Flags().StringVar(&pgAdminPasswordFile, "pgadmin-password-file", "", "read pgAdmin password from file for /etc/nixos/secrets")
 	return cmd
 }
 

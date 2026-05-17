@@ -111,9 +111,6 @@ func TestPasswordPathHelpersJoinUnderNixosDest(t *testing.T) {
 	if got := userPasswordHashPath(opts); got != "/srv/nixos/hosts/NixOS/hashed-password.nix" {
 		t.Fatalf("user password path mismatch: %q", got)
 	}
-	if got := pgAdminPasswordPath(opts); got != "/srv/nixos/secrets/pgadmin-password" {
-		t.Fatalf("pgadmin password path mismatch: %q", got)
-	}
 }
 
 func TestSecretStatusReadyAndExistingPaths(t *testing.T) {

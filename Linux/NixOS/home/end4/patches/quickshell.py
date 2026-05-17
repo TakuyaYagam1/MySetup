@@ -82,6 +82,12 @@ def patch_cheatsheet_keybinds(root: Path) -> None:
     text = path.read_text()
 
     old = "    readonly property var keybinds: HyprlandKeybinds.keybinds"
+    if old not in text:
+        # Newer end-4 reads Hyprland 0.55 Lua bind descriptions directly from
+        # `hyprctl binds -j`, so the old static cheatsheet model no longer
+        # exists or needs replacement.
+        return
+
     new = r"""    readonly property var keybinds: ({
         "children": [
             {
