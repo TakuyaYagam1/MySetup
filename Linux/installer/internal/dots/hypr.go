@@ -3,9 +3,7 @@ package dots
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
@@ -43,7 +41,6 @@ func syncHypr(ctx context.Context, runner run.CommandRunner, dotsSrc, configDir 
 	if err := makeHyprScriptsExecutable(ctx, runner, dst); err != nil {
 		return err
 	}
-	reloadHyprBestEffort(ctx, runner)
 	return nil
 }
 
@@ -129,23 +126,4 @@ func makeHyprScriptsExecutable(ctx context.Context, runner run.CommandRunner, hy
 		return err
 	}
 	return runner.Command(ctx, "find", scripts, "-type", "f", "-exec", "chmod", "u+x", "{}", "+")
-}
-
-func reloadHyprBestEffort(ctx context.Context, runner run.CommandRunner) {
-	if _, err := exec.LookPath("hyprctl"); err != nil {
-		return
-	}
-	if !hyprlandRunning(ctx) {
-		return
-	}
-	if err := runner.Command(ctx, "hyprctl", "reload"); err != nil {
-		fmt.Printf("WARN hyprctl reload failed: %v\n", err)
-	}
-}
-
-func hyprlandRunning(ctx context.Context) bool {
-	cmd := exec.CommandContext(ctx, "hyprctl", "monitors")
-	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
-	return cmd.Run() == nil
 }

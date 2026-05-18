@@ -37,34 +37,26 @@ let
     "hypr/variables.lua" = dotfilesLib.forcedSource (dotsRoot + "/hypr/variables.lua");
     "hypr/scheme/default.lua" = dotfilesLib.forcedSource (dotsRoot + "/hypr/scheme/default.lua");
   }
-  // lib.genAttrs
-    (
-      map (name: "hypr/hyprland/${name}.lua") [
-        "animations"
-        "decoration"
-        "env"
-        "execs"
-        "general"
-        "gestures"
-        "group"
-        "input"
-        "keybinds"
-        "misc"
-        "rules"
-        "scrolling"
-      ]
-    )
-    (target: dotfilesLib.forcedSource (dotsRoot + "/${target}"))
-  // lib.genAttrs
-    (
-      map (target: "hypr/${target}") (
-        lib.concatMap (profile: [
-          profile.launcher
-          profile.keybinds
-        ]) standaloneShellProfiles
-      )
-    )
-    (target: dotfilesLib.forcedSource (dotsRoot + "/${target}"));
+  // lib.genAttrs (map (name: "hypr/hyprland/${name}.lua") [
+    "animations"
+    "decoration"
+    "env"
+    "execs"
+    "general"
+    "gestures"
+    "group"
+    "input"
+    "keybinds"
+    "misc"
+    "rules"
+    "scrolling"
+  ]) (target: dotfilesLib.forcedSource (dotsRoot + "/${target}"))
+  // lib.genAttrs (map (target: "hypr/${target}") (
+    lib.concatMap (profile: [
+      profile.launcher
+      profile.keybinds
+    ]) standaloneShellProfiles
+  )) (target: dotfilesLib.forcedSource (dotsRoot + "/${target}"));
 
   commonHyprFiles = {
     "hypr/shell-common-keybinds.lua" = {
@@ -95,13 +87,9 @@ let
       dotfilesLib.stableRuntimeSourceFile "${hyprRuntimeDir}/${name}"
   );
 
-  managedHyprPaths =
-    (map (name: "hypr/${name}") stableEntrypoints)
-    ++ [
-      "hypr/shell-common-keybinds.lua"
-      "hypr/shell-workspace-keybinds.lua"
-    ]
-    ++ (map (name: "hypr/scripts/${name}") hyprScripts);
+  managedHyprPaths = lib.attrNames (
+    hyprScriptFiles // stableEntrypointFiles // mysetupHyprFiles // commonHyprFiles
+  );
 
   backupTargets = lib.concatMapStringsSep " \\\n" (
     path: ''"${config.xdg.configHome}/${path}.hm-backup"''
@@ -119,7 +107,9 @@ let
     "${hyprRuntimeDir}/shell-keybinds.conf"
   ];
 
-  legacyHyprlandRuntimeTargets = lib.concatMapStringsSep " \\\n" (path: ''"${path}"'') legacyHyprlandRuntimePaths;
+  legacyHyprlandRuntimeTargets = lib.concatMapStringsSep " \\\n" (
+    path: ''"${path}"''
+  ) legacyHyprlandRuntimePaths;
 in
 {
   xdg.configFile =
@@ -135,16 +125,25 @@ in
     };
 
   home.activation = {
-    pruneLegacyHyprlandRuntime =
-      lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        for target in \
-          ${legacyHyprlandRuntimeTargets}
-        do
-          if [ -e "$target" ] || [ -L "$target" ]; then
-            $DRY_RUN_CMD rm -f -- "$target"
-          fi
-        done
-      '';
+    pruneLegacyHyprlandRuntime = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
+      for target in \
+        ${legacyHyprlandRuntimeTargets}
+      do
+        if [ -e "$target" ] || [ -L "$target" ]; then
+          $DRY_RUN_CMD rm -f -- "$target"
+        fi
+      done
+    '';
+
+    pruneMySetupHyprBackups = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
+      for backup in \
+        ${backupTargets}
+      do
+        if [ -e "$backup" ]; then
+          $DRY_RUN_CMD rm -f "$backup"
+        fi
+      done
+    '';
 
     seedHyprShellRuntime =
       lib.hm.dag.entryAfter
@@ -207,19 +206,30 @@ in
 
     liveSyncHyprShell = lib.hm.dag.entryAfter [ "seedHyprShellRuntime" ] ''
       if command -v hyprctl >/dev/null 2>&1 && hyprctl instances >/dev/null 2>&1; then
-        $DRY_RUN_CMD hyprctl reload >/dev/null 2>&1 || true
-        $DRY_RUN_CMD ${config.xdg.configHome}/hypr/scripts/start-shell.sh >/dev/null 2>&1 || true
-      fi
-    '';
+        hypr_version="$(hyprctl version 2>/dev/null | awk 'NR == 1 { print $2 }')"
+        hypr_version="''${hypr_version#v}"
+        hypr_major="''${hypr_version%%.*}"
+        hypr_rest="''${hypr_version#*.}"
+        hypr_minor="''${hypr_rest%%.*}"
 
-    pruneMySetupHyprBackups = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      for backup in \
-        ${backupTargets}
-      do
-        if [ -e "$backup" ]; then
-          $DRY_RUN_CMD rm -f "$backup"
+        case "$hypr_major" in
+          "" | *[!0-9]*)
+            hypr_major=0
+            ;;
+        esac
+        case "$hypr_minor" in
+          "" | *[!0-9]*)
+            hypr_minor=0
+            ;;
+        esac
+
+        if [ "$hypr_major" -gt 0 ] || [ "$hypr_minor" -ge 55 ]; then
+          $DRY_RUN_CMD hyprctl reload >/dev/null 2>&1 || true
+          $DRY_RUN_CMD ${config.xdg.configHome}/hypr/scripts/start-shell.sh >/dev/null 2>&1 || true
+        else
+          echo "Skipping live Hyprland reload; running Hyprland $hypr_version cannot load Lua runtime. Logout or reboot after switch." >&2
         fi
-      done
+      fi
     '';
   };
 }

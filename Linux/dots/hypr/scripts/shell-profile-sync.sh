@@ -118,6 +118,12 @@ end)"
 sync_shell_launcher_bindings() {
   local dir profile_launcher
 
+  if [ "$profile" = "end4" ]; then
+    write_regular_file "$(runtime_file shell-launcher.lua)" "-- Active shell launcher profile: end4
+-- end4 registers launcher bindings from its own Hyprland Lua modules."
+    return $?
+  fi
+
   dir="$(hypr_dir)"
   profile_launcher="$dir/$profile/launcher.lua"
 
@@ -133,11 +139,11 @@ require(\"$profile.launcher\")"
 sync_shell_keybinds() {
   local dir profile_keybinds
 
-  case "$profile" in
-    end4)
-      return 0
-      ;;
-  esac
+  if [ "$profile" = "end4" ]; then
+    write_regular_file "$(runtime_file shell-keybinds.lua)" "-- Active shell keybind profile: end4
+-- end4 registers keybinds from its own Hyprland Lua modules."
+    return $?
+  fi
 
   dir="$(hypr_dir)"
   profile_keybinds="$dir/$profile/keybinds.lua"
@@ -357,8 +363,31 @@ persist_profile() {
   write_regular_file "$persistent_state_file" "$profile"
 }
 
+hypr_supports_lua_runtime() {
+  local version major minor rest
+
+  version="$(hyprctl version 2>/dev/null | awk 'NR == 1 { print $2 }')"
+  version="${version#v}"
+  major="${version%%.*}"
+  rest="${version#*.}"
+  minor="${rest%%.*}"
+
+  case "$major" in
+    "" | *[!0-9]*) return 1 ;;
+  esac
+  case "$minor" in
+    "" | *[!0-9]*) minor=0 ;;
+  esac
+
+  [ "$major" -gt 0 ] || [ "$minor" -ge 55 ]
+}
+
 reload_hypr() {
   if command -v hyprctl >/dev/null 2>&1 && hyprctl monitors >/dev/null 2>&1; then
+    if ! hypr_supports_lua_runtime; then
+      log "skipping hyprctl reload; running Hyprland is older than 0.55 and cannot load Lua runtime"
+      return 0
+    fi
     hyprctl reload >/dev/null 2>&1 || log "hyprctl reload failed after profile sync"
   fi
 }

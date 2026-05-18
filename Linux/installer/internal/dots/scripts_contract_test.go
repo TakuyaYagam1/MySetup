@@ -307,6 +307,8 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		"runtime_file()",
 		"shell-keybinds.lua",
 		`hypridle -c "$idle_config"`,
+		"hypr_supports_lua_runtime()",
+		"running Hyprland is older than 0.55",
 		"hyprctl reload",
 		`("$@" >>"$log_file" 2>&1 &)`,
 		`(caelestia resizer -d >>"$log_file" 2>&1 &)`,
@@ -488,7 +490,7 @@ printf '%s\n' "$*" > "$CALL_FILE"
 				t.Fatal(err)
 			}
 
-			cmd := exec.Command("fish", script, "-g", "workspace", "1")
+			cmd := exec.Command("fish", "--no-config", script, "-g", "workspace", "1")
 			output, err := cmd.CombinedOutput()
 			if err != nil {
 				t.Fatalf("wsaction.fish failed: %v\n%s", err, string(output))

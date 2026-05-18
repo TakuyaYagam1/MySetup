@@ -4,6 +4,15 @@ _:
   programs.fish = {
     enable = true;
 
+    shellInit = ''
+      fish_add_path --global --move \
+        /run/wrappers/bin \
+        /run/current-system/sw/bin \
+        /etc/profiles/per-user/$USER/bin \
+        $HOME/.nix-profile/bin \
+        /nix/var/nix/profiles/default/bin
+    '';
+
     shellAliases = {
       ls = "eza --icons --group-directories-first -1";
       ll = "eza -la --icons --group-directories-first";
@@ -117,7 +126,7 @@ _:
       '';
 
       nixos-switch = ''
-        sudo nixos-rebuild switch --flake /etc/nixos#NixOS $argv
+        /run/wrappers/bin/sudo /run/current-system/sw/bin/nixos-rebuild switch --flake /etc/nixos#NixOS $argv
       '';
 
       nixos-update = ''
@@ -126,14 +135,14 @@ _:
         cd /etc/nixos
         or return $status
 
-        nix flake update $argv
+        /run/current-system/sw/bin/nix flake update $argv
         set -l update_status $status
         if test $update_status -ne 0
             cd "$old_pwd"
             return $update_status
         end
 
-        sudo nixos-rebuild switch --flake .#NixOS
+        /run/wrappers/bin/sudo /run/current-system/sw/bin/nixos-rebuild switch --flake .#NixOS
         set -l rebuild_status $status
         cd "$old_pwd"
         return $rebuild_status
@@ -147,7 +156,7 @@ _:
         set iface $argv[1]
         set ssid $argv[2]
         set pass $argv[3]
-        sudo nmcli dev wifi connect "$ssid" password "$pass"
+        /run/wrappers/bin/sudo nmcli dev wifi connect "$ssid" password "$pass"
       '';
     };
   };

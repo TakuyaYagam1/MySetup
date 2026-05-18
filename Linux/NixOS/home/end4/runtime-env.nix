@@ -10,6 +10,14 @@ let
   qtPlatformTheme = homeLibs.qtDefaults.platformTheme;
   qtRuntime = runtime.qtPackages;
   runtimeBinPath = lib.makeBinPath runtime.binPackages;
+  systemBinPath = lib.concatStringsSep ":" [
+    "/run/wrappers/bin"
+    "/run/current-system/sw/bin"
+    "/etc/profiles/per-user/${config.home.username}/bin"
+    "${config.home.homeDirectory}/.nix-profile/bin"
+    "/nix/var/nix/profiles/default/bin"
+  ];
+  sessionBinPath = "${runtimeBinPath}:${systemBinPath}:$PATH";
   qtPluginPath = qtRuntimeLib.mkSearchPath [
     "lib/qt-6/plugins"
     "lib/qt6/plugins"
@@ -35,7 +43,6 @@ let
   shellXdgDataDirs = lib.concatStringsSep ":" (xdgDataDirBase ++ [ "$XDG_DATA_DIRS" ]);
 
   sessionVariables = {
-    QT_STYLE_OVERRIDE = lib.mkForce "";
     ILLOGICAL_IMPULSE_DOTFILES_SOURCE = "${config.home.homeDirectory}/.config";
     ILLOGICAL_IMPULSE_VIRTUAL_ENV = "${config.home.homeDirectory}/.local/state/quickshell/.venv";
     qsConfig = "${config.home.homeDirectory}/.config/quickshell/ii";
@@ -49,12 +56,12 @@ let
   };
 
   shellVariables = commonQtVars // {
-    PATH = "${runtimeBinPath}:$PATH";
+    PATH = sessionBinPath;
     XDG_DATA_DIRS = shellXdgDataDirs;
   };
 
   hyprVariables = commonQtVars // {
-    PATH = "${runtimeBinPath}:${config.home.homeDirectory}/.nix-profile/bin:/etc/profiles/per-user/${config.home.username}/bin:$PATH";
+    PATH = sessionBinPath;
     inherit (sessionVariables) qsConfig;
     inherit (sessionVariables) ILLOGICAL_IMPULSE_VIRTUAL_ENV;
   };

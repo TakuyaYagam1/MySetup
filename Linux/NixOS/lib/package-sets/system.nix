@@ -3,6 +3,13 @@
   pkgs-stable ? pkgs,
 }:
 
+let
+  hyprlandQtUtils =
+    if pkgs ? hyprland-guiutils then
+      [ pkgs.hyprland-guiutils ]
+    else
+      pkgs.lib.optionals (pkgs ? hyprland-qtutils) [ pkgs.hyprland-qtutils ];
+in
 {
   systemBase = with pkgs; [
     kdePackages.qt6ct
@@ -67,12 +74,14 @@
     neohtop
     glances
   ];
-  systemDesktop = with pkgs; [
-    steam-run
-    networkmanagerapplet
-    libnotify
-    qbittorrent
-  ];
+  systemDesktop =
+    (with pkgs; [
+      steam-run
+      networkmanagerapplet
+      libnotify
+      qbittorrent
+    ])
+    ++ hyprlandQtUtils;
   systemDeveloper = with pkgs; [
     docker-compose
     podman-compose

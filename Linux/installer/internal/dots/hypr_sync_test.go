@@ -42,27 +42,17 @@ printf '%s\n' '#!/usr/bin/env bash' > "$last/scripts/start-shell.sh"`)
 	}
 }
 
-func TestSyncHyprIgnoresHyprctlReloadFailure(t *testing.T) {
+func TestSyncHyprDoesNotReloadLiveHyprland(t *testing.T) {
 	dotsSrc := t.TempDir()
 	writeRequiredHyprSource(t, dotsSrc)
-	bin := t.TempDir()
-	writeScript(t, filepath.Join(bin, "rsync"), `last=
-for arg do last=$arg; done
-mkdir -p "$last/scripts" "$last/caelestia" "$last/hyprland"
-printf '%s\n' '-- caelestia binds' > "$last/caelestia/keybinds.lua"
-printf '%s\n' '-- caelestia launcher' > "$last/caelestia/launcher.lua"
-printf '%s\n' 'hl.config({ input = { kb_layout = "us", kb_options = "grp:alt_shift_toggle" } })' > "$last/hyprland/input.lua"
-printf '%s\n' 'mysetup.load_runtime("shell-keybinds.lua")' > "$last/hyprland/keybinds.lua"
-printf '%s\n' '#!/usr/bin/env bash' > "$last/scripts/start-shell.sh"`)
-	writeScript(t, filepath.Join(bin, "chmod"), "exit 0")
-	writeScript(t, filepath.Join(bin, "find"), "exit 0")
-	writeScript(t, filepath.Join(bin, "sh"), "exit 42")
-	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
 
 	var out bytes.Buffer
-	runner := run.Runner{Stdout: &out, Stderr: &out}
+	runner := run.Runner{DryRun: true, Stdout: &out, Stderr: &out}
 	if err := syncHypr(context.Background(), runner, dotsSrc, t.TempDir(), config.Default()); err != nil {
-		t.Fatalf("hyprctl reload failure should stay best-effort, got %v", err)
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "hyprctl reload") {
+		t.Fatalf("hypr sync must not reload the live session before nixos-rebuild switch:\n%s", out.String())
 	}
 }
 

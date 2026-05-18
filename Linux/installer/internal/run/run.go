@@ -49,7 +49,7 @@ func (r Runner) Command(ctx context.Context, name string, args ...string) error 
 	if r.DryRun {
 		return nil
 	}
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := exec.CommandContext(ctx, resolveCommandName(name), args...)
 	stdoutBuf := newTailBuffer(tailBufferSize)
 	stderrBuf := newTailBuffer(tailBufferSize)
 	cmd.Stdout = io.MultiWriter(stdout, &stdoutBuf)
@@ -69,7 +69,7 @@ func (r Runner) Output(ctx context.Context, name string, args ...string) (string
 	if r.DryRun {
 		return "", nil
 	}
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := exec.CommandContext(ctx, resolveCommandName(name), args...)
 	var out bytes.Buffer
 	stderrBuf := newTailBuffer(tailBufferSize)
 	cmd.Stdout = &out
@@ -78,6 +78,25 @@ func (r Runner) Output(ctx context.Context, name string, args ...string) (string
 		return "", fmt.Errorf("%s failed: %w%s", name, err, formatCommandFailureOutput(out.String(), stderrBuf.String()))
 	}
 	return strings.TrimSpace(out.String()), nil
+}
+
+func resolveCommandName(name string) string {
+	if name != "sudo" {
+		return name
+	}
+	const sudoWrapper = "/run/wrappers/bin/sudo"
+	if path, err := exec.LookPath(name); err == nil {
+		if path == sudoWrapper {
+			return path
+		}
+		if path != "/run/current-system/sw/bin/sudo" && !strings.HasPrefix(path, "/nix/store/") {
+			return path
+		}
+	}
+	if info, err := os.Stat(sudoWrapper); err == nil && !info.IsDir() && info.Mode().Perm()&0o111 != 0 {
+		return sudoWrapper
+	}
+	return name
 }
 
 func (r Runner) commandLog(name string, args []string) string {

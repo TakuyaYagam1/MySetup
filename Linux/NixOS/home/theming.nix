@@ -27,6 +27,11 @@ let
     qtwayland
   ];
   qtIconDataDirs = lib.makeSearchPath "share" qtIconPackages;
+  xdgDataDirs = lib.concatStringsSep ":" [
+    qtIconDataDirs
+    "${config.home.homeDirectory}/.nix-profile/share"
+    "/run/current-system/sw/share"
+  ];
   qt5Runtime = with pkgs.qt5; [
     qtsvg
     qtwayland
@@ -69,6 +74,11 @@ in
     };
   };
 
+  # Stylix' Qt target injects XDG_CONFIG_DIRS using shell expansion syntax.
+  # Home Manager writes session variables to environment.d, which only accepts
+  # literal KEY=VALUE entries, so keep Qt theming explicit via qt6ct instead.
+  stylix.targets.qt.enable = lib.mkForce false;
+
   dconf.settings = {
     "org/gnome/desktop/interface" = {
       color-scheme = "prefer-dark";
@@ -81,8 +91,8 @@ in
   home.sessionVariables = {
     QS_ICON_THEME = qtIconTheme;
     QT_QPA_PLATFORMTHEME = qtPlatformTheme;
-    QT_PLUGIN_PATH = "${qtPluginPath}:$QT_PLUGIN_PATH";
-    XDG_DATA_DIRS = "${qtIconDataDirs}:$HOME/.nix-profile/share:/run/current-system/sw/share:$XDG_DATA_DIRS";
+    QT_PLUGIN_PATH = qtPluginPath;
+    XDG_DATA_DIRS = xdgDataDirs;
     CAELESTIA_SCREENSHOTS_DIR = "${config.home.homeDirectory}/Pictures/Screenshots";
   };
 

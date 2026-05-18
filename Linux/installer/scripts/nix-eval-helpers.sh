@@ -36,6 +36,8 @@ eval_hm_simple() {
           flake = builtins.getFlake (\"path:\" + nixosDir);
           system = \"x86_64-linux\";
           pkgs = import flake.inputs.nixpkgs { inherit system; config.allowUnfree = true; };
+          lib = pkgs.lib;
+          homeLibs = import (nixosDir + \"/home/lib\") { inherit lib pkgs; };
           hm = flake.inputs.home-manager.lib.homeManagerConfiguration {
             inherit pkgs;
             modules = [
@@ -46,7 +48,7 @@ eval_hm_simple() {
               })
               (nixosDir + \"/home/shells/default.nix\")
             ];
-            extraSpecialArgs = { };
+            extraSpecialArgs = { inherit homeLibs; };
           };
         in ${attr}
     "

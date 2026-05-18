@@ -1,21 +1,29 @@
 { lib, pkgs }:
 
 let
-  waylandCore = with pkgs; [
-    cliphist
-    hyprpicker
-    wl-clipboard
-    wtype
-    grim
-    slurp
-    swappy
-    hyprlock
-    hypridle
-    hyprpaper
-    playerctl
-    uwsm
-    ydotool
-  ];
+  hyprlandQtUtils =
+    if pkgs ? hyprland-guiutils then
+      [ pkgs.hyprland-guiutils ]
+    else
+      lib.optionals (pkgs ? hyprland-qtutils) [ pkgs.hyprland-qtutils ];
+
+  waylandCore =
+    (with pkgs; [
+      cliphist
+      hyprpicker
+      wl-clipboard
+      wtype
+      grim
+      slurp
+      swappy
+      hyprlock
+      hypridle
+      hyprpaper
+      playerctl
+      uwsm
+      ydotool
+    ])
+    ++ hyprlandQtUtils;
   waylandTools =
     waylandCore
     ++ (with pkgs; [

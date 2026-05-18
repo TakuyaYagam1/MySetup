@@ -31,13 +31,16 @@ func writeHyprRuntimeShellState(home, hyprDir string) error {
 	if err := writeShellLauncherConfig(shellLauncher, hyprDir); err != nil {
 		return err
 	}
-	if err := writeShellLauncherBindingsConfig(shellLauncherBindings, hyprDir, profile); err != nil {
-		return err
-	}
 	if profile != "end4" {
+		if err := writeShellLauncherBindingsConfig(shellLauncherBindings, hyprDir, profile); err != nil {
+			return err
+		}
 		return writeLegacyRuntimeShellState(hyprDir, shellKeybinds, hyprland, hyprlock, hypridle, shellLauncher, profile)
 	}
 
+	if err := writeEnd4RuntimeShellPlaceholders(shellLauncherBindings, shellKeybinds); err != nil {
+		return err
+	}
 	return writeEnd4RuntimeShellState(hyprDir, hyprland, hyprlock, hypridle)
 }
 
@@ -88,26 +91,20 @@ func writeLegacyRuntimeShellState(hyprDir, shellKeybinds, hyprland, hyprlock, hy
 }
 
 func writeEnd4RuntimeShellState(hyprDir, hyprland, hyprlock, hypridle string) error {
-	end4Hyprland := filepath.Join(hyprDir, "end4", "hyprland.lua")
-	ok, err := shellruntime.RuntimeConfigExists(end4Hyprland)
-	if err != nil || !ok {
-		return err
-	}
 	if err := writeEnd4HyprEntrypointConfig(hyprland); err != nil {
 		return err
 	}
-	if err := writeOptionalRuntimeSourceConfig(hyprlock, filepath.Join(hyprDir, "end4", "hyprlock.conf"), "Active Hyprlock profile: end4"); err != nil {
+	if err := writeRuntimeSourceConfig(hyprlock, filepath.Join(hyprDir, "end4", "hyprlock.conf"), "Active Hyprlock profile: end4"); err != nil {
 		return err
 	}
-	return writeOptionalRuntimeSourceConfig(hypridle, filepath.Join(hyprDir, "end4", "hypridle.conf"), "Active Hypridle profile: end4")
+	return writeRuntimeSourceConfig(hypridle, filepath.Join(hyprDir, "end4", "hypridle.conf"), "Active Hypridle profile: end4")
 }
 
-func writeOptionalRuntimeSourceConfig(path, target, label string) error {
-	ok, err := shellruntime.RuntimeConfigExists(target)
-	if err != nil || !ok {
+func writeEnd4RuntimeShellPlaceholders(shellLauncher, shellKeybinds string) error {
+	if err := writeRuntimeConfigFile(shellLauncher, "-- Active shell launcher profile: end4\n-- end4 registers launcher bindings from its own Hyprland Lua modules.\n"); err != nil {
 		return err
 	}
-	return writeRuntimeSourceConfig(path, target, label)
+	return writeRuntimeConfigFile(shellKeybinds, "-- Active shell keybind profile: end4\n-- end4 registers keybinds from its own Hyprland Lua modules.\n")
 }
 
 func writeRuntimeShellStateFile(path, profile string) error {

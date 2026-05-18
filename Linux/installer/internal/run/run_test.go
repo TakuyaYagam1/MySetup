@@ -3,6 +3,7 @@ package run
 import (
 	"bytes"
 	"context"
+	"os"
 	"strings"
 	"testing"
 )
@@ -51,6 +52,28 @@ func TestOutputHonorsDryRun(t *testing.T) {
 	}
 	if got := stdout.String(); !strings.Contains(got, "$ sh -c 'printf real-output'") {
 		t.Fatalf("expected dry-run command log, got %q", got)
+	}
+}
+
+func TestResolveCommandNamePrefersNixOSSudoWrapper(t *testing.T) {
+	const sudoWrapper = "/run/wrappers/bin/sudo"
+
+	got := resolveCommandName("sudo")
+	info, err := os.Stat(sudoWrapper)
+	if err == nil && !info.IsDir() && info.Mode().Perm()&0o111 != 0 {
+		if got != sudoWrapper {
+			t.Fatalf("expected sudo wrapper %q, got %q", sudoWrapper, got)
+		}
+		return
+	}
+	if got != "sudo" {
+		t.Fatalf("expected fallback sudo, got %q", got)
+	}
+}
+
+func TestResolveCommandNameLeavesNonSudoCommandsUntouched(t *testing.T) {
+	if got := resolveCommandName("nixos-rebuild"); got != "nixos-rebuild" {
+		t.Fatalf("expected non-sudo command unchanged, got %q", got)
 	}
 }
 

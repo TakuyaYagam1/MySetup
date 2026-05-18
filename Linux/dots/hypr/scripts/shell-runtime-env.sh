@@ -62,7 +62,7 @@ build_runtime_xdg_data_dirs() {
 }
 
 build_runtime_path() {
-  dedupe_colon_path "$HOME/.nix-profile/bin:/etc/profiles/per-user/$user_name/bin:/run/current-system/sw/bin:/nix/profile/bin:/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin${PATH:+:$PATH}"
+  dedupe_colon_path "/run/wrappers/bin:$HOME/.nix-profile/bin:/etc/profiles/per-user/$user_name/bin:/run/current-system/sw/bin:/nix/profile/bin:/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin${PATH:+:$PATH}"
 }
 
 prepare_runtime_environment() {
