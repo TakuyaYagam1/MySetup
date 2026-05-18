@@ -3,7 +3,7 @@ package run
 import (
 	"bytes"
 	"context"
-	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -59,8 +59,8 @@ func TestResolveCommandNamePrefersNixOSSudoWrapper(t *testing.T) {
 	const sudoWrapper = "/run/wrappers/bin/sudo"
 
 	got := resolveCommandName("sudo")
-	info, err := os.Stat(sudoWrapper)
-	if err == nil && !info.IsDir() && info.Mode().Perm()&0o111 != 0 {
+	path, _ := exec.LookPath("sudo")
+	if isExecutableFile(sudoWrapper) && shouldUseSudoWrapper(path) {
 		if got != sudoWrapper {
 			t.Fatalf("expected sudo wrapper %q, got %q", sudoWrapper, got)
 		}
@@ -68,6 +68,27 @@ func TestResolveCommandNamePrefersNixOSSudoWrapper(t *testing.T) {
 	}
 	if got != "sudo" {
 		t.Fatalf("expected fallback sudo, got %q", got)
+	}
+}
+
+func TestShouldUseSudoWrapperForNixOSNonSetuidSudo(t *testing.T) {
+	for _, path := range []string{
+		"",
+		"/run/current-system/sw/bin/sudo",
+		"/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-sudo-1.9.17p2/bin/sudo",
+	} {
+		if !shouldUseSudoWrapper(path) {
+			t.Fatalf("expected sudo wrapper for %q", path)
+		}
+	}
+	for _, path := range []string{
+		"/run/wrappers/bin/sudo",
+		"/usr/bin/sudo",
+		"/tmp/TestResolveCommandName/bin/sudo",
+	} {
+		if shouldUseSudoWrapper(path) {
+			t.Fatalf("did not expect sudo wrapper for %q", path)
+		}
 	}
 }
 

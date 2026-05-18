@@ -85,18 +85,20 @@ func resolveCommandName(name string) string {
 		return name
 	}
 	const sudoWrapper = "/run/wrappers/bin/sudo"
-	if path, err := exec.LookPath(name); err == nil {
-		if path == sudoWrapper {
-			return path
-		}
-		if path != "/run/current-system/sw/bin/sudo" && !strings.HasPrefix(path, "/nix/store/") {
-			return path
-		}
-	}
-	if info, err := os.Stat(sudoWrapper); err == nil && !info.IsDir() && info.Mode().Perm()&0o111 != 0 {
+	path, _ := exec.LookPath(name)
+	if shouldUseSudoWrapper(path) && isExecutableFile(sudoWrapper) {
 		return sudoWrapper
 	}
 	return name
+}
+
+func shouldUseSudoWrapper(path string) bool {
+	return path == "" || path == "/run/current-system/sw/bin/sudo" || strings.HasPrefix(path, "/nix/store/")
+}
+
+func isExecutableFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir() && info.Mode().Perm()&0o111 != 0
 }
 
 func (r Runner) commandLog(name string, args []string) string {
