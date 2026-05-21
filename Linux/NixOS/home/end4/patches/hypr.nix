@@ -56,10 +56,14 @@ let
         ${luaEnvLines}
         EOF
             cat ${dotfilesSource}/dots/.config/hypr/hyprland/env.lua >> $out/hyprland/env.lua
-            strict_patch_line "$out/hyprland/env.lua" \
-              'hl.env("XDG_DATA_DIRS", home_dir .. "/.local/share/flatpak/exports/share:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share:$XDG_DATA_DIRS")' \
-              '/^hl\.env("XDG_DATA_DIRS",/d' \
-              'NixOS session environment owns XDG_DATA_DIRS'
+            optional_patch_line "$out/hyprland/env.lua" \
+              'local xdg_data_dirs_old = os.getenv("XDG_DATA_DIRS") or ""' \
+              '/^local xdg_data_dirs_old = os.getenv("XDG_DATA_DIRS") or ""$/d'
+            if ! grep -Eq '^hl\.env\("XDG_DATA_DIRS",' "$out/hyprland/env.lua"; then
+              echo "missing XDG_DATA_DIRS patch target (NixOS session environment owns XDG_DATA_DIRS): $out/hyprland/env.lua" >&2
+              exit 1
+            fi
+            sed -i '/^hl\.env("XDG_DATA_DIRS",/d' "$out/hyprland/env.lua"
 
             substituteInPlace "$out/hyprland/variables.lua" \
               --replace-fail 'hl.env("qsConfig", "ii")' 'hl.env("qsConfig", ${luaString runtimeEnv.sessionVariables.qsConfig})'

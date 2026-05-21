@@ -135,7 +135,7 @@ _:
         cd /etc/nixos
         or return $status
 
-        /run/current-system/sw/bin/nix flake update $argv
+        /run/wrappers/bin/sudo /run/current-system/sw/bin/nix flake update $argv
         set -l update_status $status
         if test $update_status -ne 0
             cd "$old_pwd"

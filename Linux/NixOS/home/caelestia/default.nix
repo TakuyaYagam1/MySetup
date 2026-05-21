@@ -33,6 +33,7 @@ in
   config = {
     programs.caelestia = {
       enable = true;
+      package = mysetupPkgs.caelestia-shell or pkgs.caelestia-shell;
 
       systemd = {
         enable = false;

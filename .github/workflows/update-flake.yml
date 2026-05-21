@@ -3,7 +3,7 @@ name: Update flake inputs
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 0 * * 0"
+    - cron: "0 6 * * 1"
 
 permissions:
   contents: write
@@ -45,8 +45,11 @@ jobs:
       - name: Update flake inputs
         run: nix flake update
 
-      - name: Evaluate flake (no build)
-        run: nix flake check --no-build
+      - name: Build patched end4 Hypr config
+        run: nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.xdg.configFile."hypr/end4".source'
+
+      - name: Build patched Caelestia shell
+        run: nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.programs.caelestia.package'
 
       - name: Build mysetup package
         run: nix build .#mysetup --print-build-logs

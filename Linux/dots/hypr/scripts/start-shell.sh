@@ -221,10 +221,10 @@ start_profile_shell() {
       dedupe_shell "caelestia" "$caelestia_handle" stop_caelestia || true
       dedupe_shell "caelestia resizer" "$caelestia_resizer_handle" stop_caelestia_resizer || true
 
-      if command -v caelestia >/dev/null 2>&1; then
-        start_with_retry "caelestia" "$caelestia_handle" caelestia shell -d || return 1
-      elif command -v caelestia-shell >/dev/null 2>&1; then
+      if command -v caelestia-shell >/dev/null 2>&1; then
         start_with_retry "caelestia-shell" "$caelestia_handle" caelestia-shell -d || return 1
+      elif command -v caelestia >/dev/null 2>&1; then
+        start_with_retry "caelestia" "$caelestia_handle" caelestia shell -d || return 1
       else
         log "caelestia command not found"
         return 1
