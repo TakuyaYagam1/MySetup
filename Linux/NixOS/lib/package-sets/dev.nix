@@ -41,6 +41,7 @@ let
     oapi-codegen
     go-mockery
     go-migrate
+    liquibase
     protobuf
     protoc-gen-go
     protoc-gen-go-grpc

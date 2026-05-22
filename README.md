@@ -52,7 +52,7 @@ into `/nix/store`, the wrapped installer points `MYSETUP_REPO_ROOT` at that
 immutable source, then stages it to `/etc/nixos`):
 
 ```bash
-nix run 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup'
+nix run 'github:TakuyaYagam1/MySetup'
 ```
 
 Or with a local clone (useful when iterating on the config):
@@ -60,7 +60,35 @@ Or with a local clone (useful when iterating on the config):
 ```bash
 git clone https://github.com/TakuyaYagam1/MySetup.git
 cd MySetup
-nix run "path:$PWD?dir=Linux/NixOS#mysetup"
+nix run "path:$PWD"
+```
+
+The repository root flake also exposes reusable shell modules for external
+NixOS flakes. Pin a release tag for immutable installs, or use a moving branch
+such as `stable` for latest-release updates via `nix flake update`:
+
+```nix
+inputs.mysetup = {
+  url = "github:TakuyaYagam1/MySetup/stable";
+  inputs.nixpkgs.follows = "nixpkgs";
+};
+```
+
+Then import the shell module in your NixOS host:
+
+```nix
+modules = [
+  inputs.mysetup.nixosModules.shells
+
+  {
+    system.stateVersion = "25.11";
+    mysetup.user = {
+      username = "alice";
+      fullName = "Alice";
+      homeDirectory = "/home/alice";
+    };
+  }
+];
 ```
 
 The installer will ask you about:

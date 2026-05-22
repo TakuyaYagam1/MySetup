@@ -37,6 +37,7 @@ in
       insomnia
       dbeaver-bin
       sqlit-tui
+      ngrok
       pkgs-stable.pgbadger
       warp-terminal
       termius
@@ -69,6 +70,7 @@ in
       gemini-cli
       claude-code
       codex
+      ollama
       opencode
       opencode-claude-auth
       opencode-desktop

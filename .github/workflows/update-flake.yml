@@ -8,10 +8,6 @@ on:
 permissions:
   contents: write
 
-defaults:
-  run:
-    working-directory: Linux/NixOS
-
 jobs:
   update-flake:
     runs-on: ubuntu-latest
@@ -45,23 +41,43 @@ jobs:
       - name: Update flake inputs
         run: nix flake update
 
+      - name: Update NixOS flake inputs
+        working-directory: Linux/NixOS
+        run: nix flake update
+
+      - name: Check public flake
+        run: nix flake check --no-build
+
+      - name: Build public shell module check
+        run: nix build --no-link --print-build-logs .#checks.x86_64-linux.shells-module
+
+      - name: Build public mysetup package
+        run: nix build .#mysetup --print-build-logs
+
+      - name: Smoke-test public mysetup binary
+        run: ./result/bin/mysetup --help
+
       - name: Build patched end4 Hypr config
+        working-directory: Linux/NixOS
         run: nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.xdg.configFile."hypr/end4".source'
 
       - name: Build patched Caelestia shell
+        working-directory: Linux/NixOS
         run: nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.programs.caelestia.package'
 
-      - name: Build mysetup package
+      - name: Build NixOS mysetup package
+        working-directory: Linux/NixOS
         run: nix build .#mysetup --print-build-logs
 
-      - name: Smoke-test mysetup binary
+      - name: Smoke-test NixOS mysetup binary
+        working-directory: Linux/NixOS
         run: ./result/bin/mysetup --help
 
       - name: Check for changes
         id: check
         working-directory: ${{ github.workspace }}
         run: |
-          if git diff --exit-code Linux/NixOS/flake.lock > /dev/null; then
+          if git diff --exit-code flake.lock Linux/NixOS/flake.lock > /dev/null; then
             echo "modified=false" >> "$GITHUB_OUTPUT"
           else
             echo "modified=true" >> "$GITHUB_OUTPUT"
@@ -72,6 +88,8 @@ jobs:
         uses: EndBug/add-and-commit@v10
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          add: Linux/NixOS/flake.lock
+          add: |
+            flake.lock
+            Linux/NixOS/flake.lock
           default_author: github_actions
-          message: "chore(nix): update flake.lock"
+          message: "chore(nix): update flake locks"

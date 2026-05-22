@@ -15,7 +15,7 @@ The single command below opens the TUI installer, lets you pick a preset, and
 applies everything:
 
 ```bash
-nix run "path:$PWD?dir=Linux/NixOS#mysetup"
+nix run "path:$PWD"
 ```
 
 Run this from the cloned repository root. The detailed forms (GitHub-direct,
@@ -26,16 +26,17 @@ pinned commit/branch, refresh) are documented in the next section.
 Run from the repository root:
 
 ```bash
-nix run "path:$PWD?dir=Linux/NixOS#mysetup"
+nix run "path:$PWD"
 ```
 
-Use the repository-root `path:...?dir=Linux/NixOS` form for local runs so the
-flake source still includes sibling `Linux/dots` and `Linux/installer`.
+Use the repository root flake for local runs. It exposes the installer as the
+default app and keeps the public flake inputs limited to the reusable shell
+stack.
 
 Or run directly from GitHub without cloning first:
 
 ```bash
-nix run 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup'
+nix run 'github:TakuyaYagam1/MySetup'
 ```
 
 This is still the normal full apply path. Nix fetches the repository source into
@@ -47,17 +48,17 @@ Nix caches the resolved source for ~1 hour (`tarball-ttl` default). If you just
 pushed a commit and want the new HEAD right now, force a re-fetch:
 
 ```bash
-nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup'
+nix run --refresh 'github:TakuyaYagam1/MySetup'
 ```
 
 For reproducible installs, pin a commit, branch, or tag:
 
 ```bash
 # Specific commit (full SHA):
-nix run 'github:TakuyaYagam1/MySetup/<commit>?dir=Linux/NixOS#mysetup'
+nix run 'github:TakuyaYagam1/MySetup/<commit>'
 
 # Specific branch (e.g. develop):
-nix run 'github:TakuyaYagam1/MySetup/develop?dir=Linux/NixOS#mysetup'
+nix run 'github:TakuyaYagam1/MySetup/develop'
 ```
 
 Fresh install through `/mnt` is not supported in v1. Run this on an already
@@ -138,7 +139,7 @@ For non-interactive CLI apply, pass secrets through files so they do not leak
 through shell history:
 
 ```bash
-nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply \
+nix run "path:$PWD" -- apply \
   --user-password-file /path/to/user-password
 ```
 
