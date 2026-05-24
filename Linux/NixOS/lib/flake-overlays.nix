@@ -28,6 +28,12 @@ in
   inherit flakePackagesOverlay;
   inherit (shellOverlays) valkeyNoCheckOverlay;
 
+  omnirouterFromMySetupOverlay = _final: prev: {
+    omnirouter =
+      inputs.mysetup.packages.${system}.omnirouter
+        or (prev.callPackage ../packages/omnirouter.nix { });
+  };
+
   pipxTestCompatibilityOverlay = _final: prev: {
     pipx = prev.pipx.overridePythonAttrs (old: {
       disabledTests = (old.disabledTests or [ ]) ++ [

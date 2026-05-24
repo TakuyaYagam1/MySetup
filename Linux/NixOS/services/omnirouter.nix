@@ -14,7 +14,7 @@ in
     package = lib.mkOption {
       type = lib.types.package;
       description = "Binary package for OmniRouter";
-      default = pkgs.callPackage ../packages/omnirouter.nix { };
+      default = pkgs.omnirouter;
     };
 
     extraArgs = lib.mkOption {

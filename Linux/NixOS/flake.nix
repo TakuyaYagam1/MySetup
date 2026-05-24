@@ -3,6 +3,7 @@
 
   inputs = {
     # Core
+    mysetup.url = "github:TakuyaYagam1/MySetup";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.11";
     nixpkgs-bleeding.url = "github:NixOS/nixpkgs/nixos-unstable-small";

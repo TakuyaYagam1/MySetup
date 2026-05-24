@@ -204,6 +204,7 @@
         };
 
       mysetupPackageFor = system: (installerOutputsFor system).packages.mysetup;
+      omnirouterPackageFor = system: (installerOutputsFor system).packages.omnirouter;
       mysetupAppFor = system: {
         type = "app";
         program = "${mysetupPackageFor system}/bin/mysetup";
@@ -252,6 +253,7 @@
 
       packages = forSystems (system: {
         mysetup = mysetupPackageFor system;
+        omnirouter = omnirouterPackageFor system;
         default = self.packages.${system}.mysetup;
       });
 
