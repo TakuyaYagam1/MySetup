@@ -21,12 +21,15 @@ with pkgs-stable;
   gospider
   goshs
   gowitness
+  grpcurl
   hakrawler
   httprobe
+  httpie
   httpx
   httrack
   hurl
   joomscan
+  jwt-cli
   katana
   laudanum
   lbd
@@ -49,6 +52,7 @@ with pkgs-stable;
   wafw00f
   wapiti
   waybackurls
+  websocat
   weevely
   websploit
   wfuzz

@@ -14,6 +14,7 @@
       nixpkgs.overlays = [
         overlays.flakePackagesOverlay
         overlays.valkeyNoCheckOverlay
+        overlays.pipxTestCompatibilityOverlay
       ]
       ++ lib.optional enableQtBleeding overlays.qtBleedingOverlay;
     };

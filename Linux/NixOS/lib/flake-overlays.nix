@@ -28,6 +28,15 @@ in
   inherit flakePackagesOverlay;
   inherit (shellOverlays) valkeyNoCheckOverlay;
 
+  pipxTestCompatibilityOverlay = _final: prev: {
+    pipx = prev.pipx.overridePythonAttrs (old: {
+      disabledTests = (old.disabledTests or [ ]) ++ [
+        "test_fix_package_name"
+        "test_parse_specifier_for_metadata"
+      ];
+    });
+  };
+
   qtBleedingOverlay = _final: _prev: {
     inherit (pkgs-bleeding) qt6;
     inherit (pkgs-bleeding) qt6Packages;

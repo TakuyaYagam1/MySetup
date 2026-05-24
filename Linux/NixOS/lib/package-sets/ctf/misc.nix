@@ -14,22 +14,34 @@ with pkgs-stable;
   above
   aria2
   axel
+  bat
   cabextract
   cherrytree
   chromium
   cryptsetup
+  curl
+  fd
+  fzf
   gemini-cli
+  git
   gtkhash
   joplin
+  jq
   macchanger
+  p7zip
   qemu
   rake
+  ripgrep
+  rlwrap
   sqlitebrowser
+  tmux
   tzdata
   unar
   unblobPatched
+  unzip
   wgetpaste
   zim
+  zip
   zsh
   zsh-autosuggestions
   zsh-syntax-highlighting

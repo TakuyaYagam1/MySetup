@@ -4,6 +4,7 @@ with pkgs-stable;
 [
   afflib
   autopsy
+  bkcrack
   bulk_extractor
   chainsaw
   chntpw
@@ -16,6 +17,7 @@ with pkgs-stable;
   ext3grep
   ext4magic
   extundelete
+  exiftool
   fatcat
   foremost
   galleta
@@ -23,7 +25,9 @@ with pkgs-stable;
   gparted
   guymager
   hashdeep
+  hexedit
   hivex
+  imagemagick
   libewf
   libpst
   mac-robber
@@ -34,10 +38,16 @@ with pkgs-stable;
   myrescue
   netsniff-ng
   ngrep
+  oletools
   p0f
+  p7zip
   pasco
+  pdfgrep
   pdf-parser
   pdfid
+  pngcheck
+  poppler-utils
+  qpdf
   recoverdm
   recoverjpeg
   regripper
@@ -55,8 +65,13 @@ with pkgs-stable;
   tshark
   undbx
   unhide
+  unzip
   vboot-utils
+  vbindiff
   volatility3
   wireshark
+  xxd
+  zbar
   zerofree
+  zip
 ]
