@@ -79,6 +79,7 @@ buildNpmPackage' rec {
 
     mkdir -p $out/share/omnirouter
     cp -a . $out/share/omnirouter/
+    rm -f $out/share/omnirouter/.env
 
     mkdir -p $out/bin
     cat > $out/bin/omnirouter <<EOF
@@ -92,6 +93,17 @@ buildNpmPackage' rec {
     EOF
 
     chmod +x $out/bin/omnirouter
+
+    cat > $out/bin/omniroute <<EOF
+    #!/bin/sh
+    cd $out/share/omnirouter
+    export DATA_DIR="\''${DATA_DIR:-\''${HOME:-/var/lib/omnirouter}}"
+    export NODE_ENV=production
+    export OMNIROUTE_NO_UPDATE_NOTIFIER="\''${OMNIROUTE_NO_UPDATE_NOTIFIER:-1}"
+    exec ${lib.getExe nodejs} bin/omniroute.mjs "\$@"
+    EOF
+
+    chmod +x $out/bin/omniroute
 
     runHook postInstall
   '';
