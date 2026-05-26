@@ -270,9 +270,9 @@ The installer applies changes defensively:
 2. Writes generated `host-vars.nix`, `configuration.nix`, and `home.nix`
    templates when they do not already exist.
 3. Preserves host-local `hardware-configuration.nix`, `flake.lock`,
-   `hashed-password.nix`, `configuration.nix`, `home.nix`, and `secrets/`.
-   Existing thin wrapper flakes are preserved; legacy full mirror flakes are
-   replaced with the generated thin wrapper.
+   `hashed-password.nix`, `configuration.nix`, `home.nix`, `private/`, and
+   `secrets/`. Existing thin wrapper flakes are preserved; legacy full mirror
+   flakes are replaced with the generated thin wrapper.
 4. Copies or generates `hashed-password.nix` for the staging build.
 5. Runs `nix flake lock` for the staging wrapper when using the default thin
    layout.
@@ -308,12 +308,15 @@ The default installed layout is intentionally small:
 ├── configuration.nix      # system-level overrides
 ├── home.nix               # Home Manager overrides
 ├── hashed-password.nix    # generated when password is reset
+├── private/               # optional local-only Nix modules and payloads
 ├── secrets/               # optional system sops-nix secrets
 └── mysetup/state.json     # written after successful activation
 ```
 
 Add NixOS packages, services, and system overrides to `configuration.nix`.
 Add user packages and Home Manager overrides to `home.nix`.
+Use `private/` for explicit local imports that must not live in the public
+repository, for example `imports = [ ./private/my-local-module.nix ];`.
 
 ## Commands
 

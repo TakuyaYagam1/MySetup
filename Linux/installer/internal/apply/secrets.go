@@ -51,7 +51,19 @@ func copyExistingThinHostLocal(ctx context.Context, runner run.CommandRunner, st
 	if thinFlake {
 		preservedFiles = append([]string{"flake.lock"}, preservedFiles...)
 	}
-	for _, name := range preservedFiles {
+	if err := copyExistingThinHostLocalFiles(dest, staging, preservedFiles); err != nil {
+		return err
+	}
+
+	if err := copyExistingThinHostLocalDir(ctx, runner, dest, staging, "private"); err != nil {
+		return err
+	}
+
+	return copyExistingThinSecrets(ctx, runner, dest, staging)
+}
+
+func copyExistingThinHostLocalFiles(dest, staging string, names []string) error {
+	for _, name := range names {
 		source := filepath.Join(dest, name)
 		if _, err := os.Stat(source); err == nil {
 			if err := copyFile(source, filepath.Join(staging, name)); err != nil {
@@ -61,7 +73,10 @@ func copyExistingThinHostLocal(ctx context.Context, runner run.CommandRunner, st
 			return err
 		}
 	}
+	return nil
+}
 
+func copyExistingThinSecrets(ctx context.Context, runner run.CommandRunner, dest, staging string) error {
 	for _, secretsDir := range existingSecretsDirs(dest) {
 		if info, err := os.Stat(secretsDir); err == nil {
 			if !info.IsDir() {
@@ -76,9 +91,33 @@ func copyExistingThinHostLocal(ctx context.Context, runner run.CommandRunner, st
 				return fmt.Errorf("stage secrets: %w", err)
 			}
 			return nil
-		} else if err != nil && !os.IsNotExist(err) {
+		} else if !os.IsNotExist(err) {
 			return err
 		}
+	}
+	return nil
+}
+
+func copyExistingThinHostLocalDir(ctx context.Context, runner run.CommandRunner, dest, staging, name string) error {
+	source := filepath.Join(dest, name)
+	info, err := os.Stat(source)
+	if err != nil {
+		if os.IsPermission(err) {
+			if err := sudoCopyHostLocalTree(ctx, runner, source, filepath.Join(staging, name)); err != nil {
+				return fmt.Errorf("stage %s/: %w", name, err)
+			}
+			return nil
+		}
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s path is not a directory: %s", name, source)
+	}
+	if err := copyHostLocalTree(ctx, runner, source, filepath.Join(staging, name)); err != nil {
+		return fmt.Errorf("stage %s/: %w", name, err)
 	}
 	return nil
 }

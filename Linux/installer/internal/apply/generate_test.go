@@ -536,6 +536,8 @@ func TestPrepareThinHostLocalPreservesOverridesLockAndSecrets(t *testing.T) {
 		filepath.Join(dest, "flake.lock"):                 "existing-lock\n",
 		filepath.Join(dest, "configuration.nix"):          "{ config, ... }: { }\n",
 		filepath.Join(dest, "home.nix"):                   "{ pkgs, ... }: { }\n",
+		filepath.Join(dest, "private", "ida-pro.nix"):     "{ pkgs, ... }: { }\n",
+		filepath.Join(dest, "private", "ida.run"):         "binary payload\n",
 		filepath.Join(dest, "secrets", "secrets.yaml"):    "secret: ENC\n",
 	} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -556,6 +558,8 @@ func TestPrepareThinHostLocalPreservesOverridesLockAndSecrets(t *testing.T) {
 		filepath.Join(staging, "flake.lock"):                 "existing-lock\n",
 		filepath.Join(staging, "configuration.nix"):          "{ config, ... }: { }\n",
 		filepath.Join(staging, "home.nix"):                   "{ pkgs, ... }: { }\n",
+		filepath.Join(staging, "private", "ida-pro.nix"):     "{ pkgs, ... }: { }\n",
+		filepath.Join(staging, "private", "ida.run"):         "binary payload\n",
 		filepath.Join(staging, "secrets", "secrets.yaml"):    "secret: ENC\n",
 	} {
 		data, err := os.ReadFile(path)
@@ -565,6 +569,27 @@ func TestPrepareThinHostLocalPreservesOverridesLockAndSecrets(t *testing.T) {
 		if string(data) != want {
 			t.Fatalf("unexpected content for %s: %q", path, string(data))
 		}
+	}
+}
+
+func TestPrepareThinHostLocalRejectsPrivateFile(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	for path, content := range map[string]string{
+		filepath.Join(dest, "hardware-configuration.nix"): "hardware\n",
+		filepath.Join(dest, "private"):                    "not a directory\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin)
+	if err == nil || !strings.Contains(err.Error(), "private path is not a directory") {
+		t.Fatalf("expected private file target error, got %v", err)
 	}
 }
 
