@@ -129,6 +129,14 @@ func TestThinTemplatesExposeSystemAndHomeOverrides(t *testing.T) {
 	if !strings.Contains(ConfigurationNix(), "environment.systemPackages") {
 		t.Fatalf("configuration.nix template must expose system packages\n%s", ConfigurationNix())
 	}
+	if !strings.Contains(ConfigurationNix(), "./private") {
+		t.Fatalf("configuration.nix template must import private defaults\n%s", ConfigurationNix())
+	}
+	for _, want := range []string{"./ida-pro.nix", "./ida-mcp.nix", "./ida-plugins.nix"} {
+		if !strings.Contains(PrivateDefaultNix(), want) {
+			t.Fatalf("private/default.nix template missing %q\n%s", want, PrivateDefaultNix())
+		}
+	}
 	if !strings.Contains(HomeNix(), "home.packages") {
 		t.Fatalf("home.nix template must expose home packages\n%s", HomeNix())
 	}
@@ -515,10 +523,23 @@ func TestStageThinConfigurationWritesWrapperAndTemplates(t *testing.T) {
 		"host-vars.nix",
 		"configuration.nix",
 		"home.nix",
+		"private",
+		"private/default.nix",
 	} {
-		if _, err := os.Stat(filepath.Join(staging, rel)); err != nil {
+		info, err := os.Stat(filepath.Join(staging, rel))
+		if err != nil {
 			t.Fatalf("thin staging missing %s: %v", rel, err)
 		}
+		if rel == "private" && !info.IsDir() {
+			t.Fatalf("thin staging private should be a directory")
+		}
+	}
+	privateDefault, err := os.ReadFile(filepath.Join(staging, "private", "default.nix"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(privateDefault), "./ida-pro.nix") {
+		t.Fatalf("thin staging private/default.nix missing IDA example imports\n%s", privateDefault)
 	}
 	for _, rel := range []string{"flake.lock", "dots", "installer", "hosts/NixOS/host-vars.nix"} {
 		if _, err := os.Stat(filepath.Join(staging, rel)); !os.IsNotExist(err) {
@@ -558,6 +579,7 @@ func TestPrepareThinHostLocalPreservesOverridesLockAndSecrets(t *testing.T) {
 		filepath.Join(staging, "flake.lock"):                 "existing-lock\n",
 		filepath.Join(staging, "configuration.nix"):          "{ config, ... }: { }\n",
 		filepath.Join(staging, "home.nix"):                   "{ pkgs, ... }: { }\n",
+		filepath.Join(staging, "private", "default.nix"):     PrivateDefaultNix(),
 		filepath.Join(staging, "private", "ida-pro.nix"):     "{ pkgs, ... }: { }\n",
 		filepath.Join(staging, "private", "ida.run"):         "binary payload\n",
 		filepath.Join(staging, "secrets", "secrets.yaml"):    "secret: ENC\n",
@@ -569,6 +591,35 @@ func TestPrepareThinHostLocalPreservesOverridesLockAndSecrets(t *testing.T) {
 		if string(data) != want {
 			t.Fatalf("unexpected content for %s: %q", path, string(data))
 		}
+	}
+}
+
+func TestPrepareThinHostLocalPreservesPrivateDefault(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	for path, content := range map[string]string{
+		filepath.Join(dest, "hardware-configuration.nix"): "hardware\n",
+		filepath.Join(dest, "private", "default.nix"):     "{ ... }: { imports = [ ./custom.nix ]; }\n",
+		filepath.Join(dest, "private", "custom.nix"):      "{ ... }: { }\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(staging, "private", "default.nix"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(data), "{ ... }: { imports = [ ./custom.nix ]; }\n"; got != want {
+		t.Fatalf("private/default.nix should be preserved, got %q", got)
 	}
 }
 

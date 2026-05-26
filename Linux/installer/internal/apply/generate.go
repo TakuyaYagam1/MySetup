@@ -30,8 +30,28 @@ func ConfigurationNix() string {
 { pkgs, ... }:
 
 {
+  imports = [
+    ./private
+  ];
+
   environment.systemPackages = with pkgs; [
     # Add system packages here.
+  ];
+}
+`
+}
+
+func PrivateDefaultNix() string {
+	return `# Host-local private NixOS modules. This file is preserved by MySetup.
+# Put local-only modules and payloads in this directory, then uncomment or add
+# explicit imports below.
+{ ... }:
+
+{
+  imports = [
+    # ./ida-pro.nix
+    # ./ida-mcp.nix
+    # ./ida-plugins.nix
   ];
 }
 `

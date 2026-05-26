@@ -308,7 +308,8 @@ The default installed layout is intentionally small:
 ├── configuration.nix      # system-level overrides
 ├── home.nix               # Home Manager overrides
 ├── hashed-password.nix    # generated when password is reset
-├── private/               # optional local-only Nix modules and payloads
+├── private/
+│   └── default.nix         # local-only Nix module imports
 ├── secrets/               # optional system sops-nix secrets
 └── mysetup/state.json     # written after successful activation
 ```
@@ -316,7 +317,9 @@ The default installed layout is intentionally small:
 Add NixOS packages, services, and system overrides to `configuration.nix`.
 Add user packages and Home Manager overrides to `home.nix`.
 Use `private/` for explicit local imports that must not live in the public
-repository, for example `imports = [ ./private/my-local-module.nix ];`.
+repository. Fresh installs import `./private` from `configuration.nix`; add
+local modules to `private/default.nix`, which includes commented examples for
+`ida-pro.nix`, `ida-mcp.nix`, and `ida-plugins.nix`.
 
 ## Commands
 

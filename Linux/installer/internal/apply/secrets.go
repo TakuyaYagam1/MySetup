@@ -58,6 +58,9 @@ func copyExistingThinHostLocal(ctx context.Context, runner run.CommandRunner, st
 	if err := copyExistingThinHostLocalDir(ctx, runner, dest, staging, "private"); err != nil {
 		return err
 	}
+	if err := writePrivateDefaultTemplate(staging); err != nil {
+		return err
+	}
 
 	return copyExistingThinSecrets(ctx, runner, dest, staging)
 }

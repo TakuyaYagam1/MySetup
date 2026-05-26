@@ -183,6 +183,23 @@ func writeThinTemplates(staging string, state config.State) error {
 			return fmt.Errorf("write %s: %w", rel, err)
 		}
 	}
+	return writePrivateDefaultTemplate(staging)
+}
+
+func writePrivateDefaultTemplate(staging string) error {
+	rel := filepath.Join("private", "default.nix")
+	path := filepath.Join(staging, rel)
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := prepareGeneratedFile(path); err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, []byte(PrivateDefaultNix()), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", rel, err)
+	}
 	return nil
 }
 
