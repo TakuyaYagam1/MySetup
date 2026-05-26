@@ -53,15 +53,35 @@ func TestVariablesWallpaperEnableMissing(t *testing.T) {
 	}
 }
 
-func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
+func TestHostVarsPathFallsBackToLegacyLayout(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "hosts/NixOS"), 0o755); err != nil {
+	legacy := filepath.Join(dir, "hosts", "NixOS", "host-vars.nix")
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(legacy, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := hostVarsPath(dir); got != legacy {
+		t.Fatalf("expected legacy host-vars path, got %q", got)
+	}
+
+	root := filepath.Join(dir, "host-vars.nix")
+	if err := os.WriteFile(root, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := hostVarsPath(dir); got != root {
+		t.Fatalf("expected root host-vars path to win, got %q", got)
+	}
+}
+
+func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
+	dir := t.TempDir()
 	for _, path := range []string{
 		"flake.nix",
-		"hosts/NixOS/host-vars.nix",
-		"hosts/NixOS/hardware-configuration.nix",
+		"host-vars.nix",
+		"hardware-configuration.nix",
+		"configuration.nix",
 	} {
 		fullPath := filepath.Join(dir, filepath.FromSlash(path))
 		if err := os.WriteFile(fullPath, []byte("{}"), 0o644); err != nil {
@@ -155,13 +175,11 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 
 func TestReportUsesEnd4ProfileChecks(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "hosts/NixOS"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	for _, path := range []string{
 		"flake.nix",
-		"hosts/NixOS/host-vars.nix",
-		"hosts/NixOS/hardware-configuration.nix",
+		"host-vars.nix",
+		"hardware-configuration.nix",
+		"configuration.nix",
 	} {
 		fullPath := filepath.Join(dir, filepath.FromSlash(path))
 		if err := os.WriteFile(fullPath, []byte("{}"), 0o644); err != nil {

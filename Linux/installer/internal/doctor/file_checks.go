@@ -13,6 +13,20 @@ func check(out *reportWriter, label, path string) {
 	out.printf("WARN %s missing: %s\n", label, path)
 }
 
+func checkAny(out *reportWriter, label string, paths ...string) {
+	for _, path := range paths {
+		if _, err := os.Stat(path); err == nil {
+			out.printf("OK   %s: %s\n", label, path)
+			return
+		}
+	}
+	if len(paths) == 0 {
+		out.printf("WARN %s missing\n", label)
+		return
+	}
+	out.printf("WARN %s missing: %s\n", label, paths[0])
+}
+
 func checkDirectory(out *reportWriter, label, path string) {
 	info, err := os.Stat(path)
 	if err != nil {

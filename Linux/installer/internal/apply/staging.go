@@ -11,7 +11,14 @@ import (
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
 )
 
-func stageConfiguration(ctx context.Context, runner run.CommandRunner, src paths.Sources, staging string, state config.State) error {
+func stageConfiguration(ctx context.Context, runner run.CommandRunner, src paths.Sources, staging string, state config.State, layout Layout) error {
+	if layout == LayoutThin {
+		return stageThinConfiguration(src, staging, state)
+	}
+	return stageFullConfiguration(ctx, runner, src, staging, state)
+}
+
+func stageFullConfiguration(ctx context.Context, runner run.CommandRunner, src paths.Sources, staging string, state config.State) error {
 	if err := copyNixOS(ctx, runner, src.NixOS, staging, false); err != nil {
 		return err
 	}
@@ -22,6 +29,20 @@ func stageConfiguration(ctx context.Context, runner run.CommandRunner, src paths
 		return err
 	}
 	return writeGenerated(staging, state)
+}
+
+func stageThinConfiguration(src paths.Sources, staging string, state config.State) error {
+	if err := ensureStagingWritable(staging); err != nil {
+		return err
+	}
+	if err := writeGenerated(staging, state, LayoutThin); err != nil {
+		return err
+	}
+	if err := writeThinTemplates(staging, state); err != nil {
+		return err
+	}
+	_ = src
+	return nil
 }
 
 func ensureStagingWritable(staging string) error {
@@ -84,8 +105,8 @@ func copyNixOS(ctx context.Context, runner run.CommandRunner, src, dst string, d
 	return runner.Command(ctx, "rsync", args...)
 }
 
-func copyHostHardware(staging, dest string) error {
-	target := filepath.Join(staging, "hosts", "NixOS", "hardware-configuration.nix")
+func copyHostHardware(staging, dest string, layout Layout) error {
+	target := filepath.Join(staging, hardwareRel(layout))
 	for _, source := range []string{
 		filepath.Join(dest, "hardware-configuration.nix"),
 		filepath.Join(dest, "hosts", "NixOS", "hardware-configuration.nix"),
@@ -114,16 +135,47 @@ func copyFile(source, target string) error {
 	return os.WriteFile(target, data, info.Mode().Perm())
 }
 
-func writeGenerated(staging string, state config.State) error {
+func writeGenerated(staging string, state config.State, layout ...Layout) error {
+	targetLayout := LayoutFull
+	if len(layout) > 0 {
+		targetLayout = layout[0]
+	}
 	hostVars, err := HostVarsNix(state)
 	if err != nil {
 		return err
 	}
 	files := map[string]string{
-		"hosts/NixOS/host-vars.nix": hostVars,
+		hostVarsRel(targetLayout): hostVars,
 	}
 	for rel, content := range files {
 		path := filepath.Join(staging, rel)
+		if err := prepareGeneratedFile(path); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", rel, err)
+		}
+	}
+	return nil
+}
+
+func writeThinTemplates(staging string, state config.State) error {
+	flake, err := FlakeNix(state)
+	if err != nil {
+		return err
+	}
+	files := map[string]string{
+		"flake.nix":         flake,
+		"configuration.nix": ConfigurationNix(),
+		"home.nix":          HomeNix(),
+	}
+	for rel, content := range files {
+		path := filepath.Join(staging, rel)
+		if _, err := os.Stat(path); err == nil {
+			continue
+		} else if !os.IsNotExist(err) {
+			return err
+		}
 		if err := prepareGeneratedFile(path); err != nil {
 			return err
 		}

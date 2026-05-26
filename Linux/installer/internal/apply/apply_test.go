@@ -116,8 +116,11 @@ func TestRunDryRunSkipSwitchHonoursInjectedRunner(t *testing.T) {
 	}
 
 	commands := commandSummary(fake.calls)
-	if !strings.Contains(commands, "rsync") {
-		t.Errorf("expected rsync calls; got:\n%s", commands)
+	if strings.Contains(commands, "rsync") {
+		t.Errorf("thin --no-switch should not mirror sources before dry-build; got:\n%s", commands)
+	}
+	if !strings.Contains(commands, "nix --extra-experimental-features nix-command flakes flake lock") {
+		t.Errorf("expected thin layout to lock wrapper flake before dry-build; got:\n%s", commands)
 	}
 	if !strings.Contains(commands, "nixos-rebuild dry-build") {
 		t.Errorf("expected nixos-rebuild dry-build call; got:\n%s", commands)

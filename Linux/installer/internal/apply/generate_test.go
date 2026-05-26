@@ -102,6 +102,38 @@ func TestHostVarsNixContainsWallpaperFlag(t *testing.T) {
 	}
 }
 
+func TestFlakeNixUsesThinMySetupWrapper(t *testing.T) {
+	state := config.Default()
+	state.Host.Hostname = "workstation"
+
+	out, err := FlakeNix(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`mysetup.url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";`,
+		`hostname = "workstation";`,
+		`mysetup.lib.mkMySetupHost`,
+		`hostVars = ./host-vars.nix;`,
+		`hardware = ./hardware-configuration.nix;`,
+		`extraModules = [ ./configuration.nix ];`,
+		`if builtins.pathExists ./home.nix then [ ./home.nix ] else [ ];`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("thin flake missing %q\n%s", want, out)
+		}
+	}
+}
+
+func TestThinTemplatesExposeSystemAndHomeOverrides(t *testing.T) {
+	if !strings.Contains(ConfigurationNix(), "environment.systemPackages") {
+		t.Fatalf("configuration.nix template must expose system packages\n%s", ConfigurationNix())
+	}
+	if !strings.Contains(HomeNix(), "home.packages") {
+		t.Fatalf("home.nix template must expose home packages\n%s", HomeNix())
+	}
+}
+
 func TestHomeWallpaperActivationHonorsDryRun(t *testing.T) {
 	data, err := os.ReadFile("../../../NixOS/home/home.nix")
 	if err != nil {
@@ -172,12 +204,25 @@ func TestHostDefaultKeepsIDAPackagesOutOfDefaultImports(t *testing.T) {
 }
 
 func TestSyncToEtcPreservesLocalHashedPassword(t *testing.T) {
-	args := strings.Join(syncToEtcArgs("/tmp/staging", "/etc/nixos"), " ")
+	args := strings.Join(syncToEtcArgs("/tmp/staging", "/etc/nixos", LayoutFull), " ")
 	if !strings.Contains(args, "--exclude=hosts/NixOS/hashed-password.nix") {
 		t.Fatalf("syncToEtc must preserve host-local hashed-password.nix, got args: %s", args)
 	}
 	if strings.Contains(args, "--exclude=flake.lock") {
 		t.Fatalf("syncToEtc must sync flake.lock so switch uses the same lock graph as dry-build, got args: %s", args)
+	}
+}
+
+func TestThinSyncDoesNotDeleteLegacyMirrorFiles(t *testing.T) {
+	args := strings.Join(syncToEtcArgs("/tmp/staging", "/etc/nixos", LayoutThin), " ")
+	if strings.Contains(args, "--delete") {
+		t.Fatalf("thin sync must not delete existing full-mirror files on migration, got args: %s", args)
+	}
+	if strings.Contains(args, "hosts/NixOS/hashed-password.nix") {
+		t.Fatalf("thin sync should use root-level host-local paths, got args: %s", args)
+	}
+	if !strings.Contains(args, "--exclude=/hashed-password.nix") {
+		t.Fatalf("thin sync must preserve hashed-password.nix ownership, got args: %s", args)
 	}
 }
 
@@ -361,7 +406,7 @@ func TestStageConfigurationIncludesDotsAndInstaller(t *testing.T) {
 		NixOS:     nixos,
 		Dots:      dots,
 		Installer: installer,
-	}, staging, config.Default()); err != nil {
+	}, staging, config.Default(), LayoutFull); err != nil {
 		t.Fatal(err)
 	}
 
@@ -432,7 +477,7 @@ func TestStageConfigurationKeepsStagingWritableAfterReadonlyNixOSRoot(t *testing
 		NixOS:     nixos,
 		Dots:      dots,
 		Installer: installer,
-	}, staging, config.Default())
+	}, staging, config.Default(), LayoutFull)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -444,6 +489,251 @@ func TestStageConfigurationKeepsStagingWritableAfterReadonlyNixOSRoot(t *testing
 		if _, err := os.Stat(filepath.Join(staging, rel)); err != nil {
 			t.Fatalf("staging missing %s after readonly NixOS copy: %v", rel, err)
 		}
+	}
+}
+
+func TestStageThinConfigurationWritesWrapperAndTemplates(t *testing.T) {
+	repo := t.TempDir()
+	nixos := filepath.Join(repo, "Linux", "NixOS")
+	if err := os.MkdirAll(nixos, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	state := config.Default()
+	state.Host.Hostname = "ThinHost"
+	staging := t.TempDir()
+	if err := stageConfiguration(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, paths.Sources{
+		RepoRoot:  repo,
+		NixOS:     nixos,
+		Dots:      filepath.Join(repo, "Linux", "dots"),
+		Installer: filepath.Join(repo, "Linux", "installer"),
+	}, staging, state, LayoutThin); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, rel := range []string{
+		"flake.nix",
+		"host-vars.nix",
+		"configuration.nix",
+		"home.nix",
+	} {
+		if _, err := os.Stat(filepath.Join(staging, rel)); err != nil {
+			t.Fatalf("thin staging missing %s: %v", rel, err)
+		}
+	}
+	for _, rel := range []string{"flake.lock", "dots", "installer", "hosts/NixOS/host-vars.nix"} {
+		if _, err := os.Stat(filepath.Join(staging, rel)); !os.IsNotExist(err) {
+			t.Fatalf("thin staging should not include %s, stat err: %v", rel, err)
+		}
+	}
+}
+
+func TestPrepareThinHostLocalPreservesOverridesLockAndSecrets(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	for path, content := range map[string]string{
+		filepath.Join(dest, "hardware-configuration.nix"): "hardware\n",
+		filepath.Join(dest, "flake.nix"):                  "{ outputs = { mysetup, ... }: { nixosConfigurations.NixOS = mysetup.lib.mkMySetupHost { }; }; }\n",
+		filepath.Join(dest, "flake.lock"):                 "existing-lock\n",
+		filepath.Join(dest, "configuration.nix"):          "{ config, ... }: { }\n",
+		filepath.Join(dest, "home.nix"):                   "{ pkgs, ... }: { }\n",
+		filepath.Join(dest, "secrets", "secrets.yaml"):    "secret: ENC\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin); err != nil {
+		t.Fatal(err)
+	}
+
+	for path, want := range map[string]string{
+		filepath.Join(staging, "hardware-configuration.nix"): "hardware\n",
+		filepath.Join(staging, "flake.nix"):                  "{ outputs = { mysetup, ... }: { nixosConfigurations.NixOS = mysetup.lib.mkMySetupHost { }; }; }\n",
+		filepath.Join(staging, "flake.lock"):                 "existing-lock\n",
+		filepath.Join(staging, "configuration.nix"):          "{ config, ... }: { }\n",
+		filepath.Join(staging, "home.nix"):                   "{ pkgs, ... }: { }\n",
+		filepath.Join(staging, "secrets", "secrets.yaml"):    "secret: ENC\n",
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != want {
+			t.Fatalf("unexpected content for %s: %q", path, string(data))
+		}
+	}
+}
+
+func TestPrepareThinHostLocalReplacesLegacyFullFlake(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	for path, content := range map[string]string{
+		filepath.Join(staging, "flake.nix"):                    "generated thin wrapper\n",
+		filepath.Join(dest, "flake.nix"):                       "{ description = \"NixOS + Caelestia\"; }\n",
+		filepath.Join(dest, "flake.lock"):                      "legacy full lock\n",
+		filepath.Join(dest, "hardware-configuration.nix"):      "hardware\n",
+		filepath.Join(dest, "hosts", "NixOS", "host-vars.nix"): "{ }\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(staging, "flake.nix"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "generated thin wrapper\n" {
+		t.Fatalf("legacy full flake should not overwrite generated thin wrapper, got:\n%s", data)
+	}
+	if _, err := os.Stat(filepath.Join(staging, "flake.lock")); !os.IsNotExist(err) {
+		t.Fatalf("legacy full flake.lock should not be copied into thin staging, stat err: %v", err)
+	}
+}
+
+func TestPrepareThinHostLocalStagesLegacySecretsWhenRootMissing(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	for path, content := range map[string]string{
+		filepath.Join(dest, "hardware-configuration.nix"):                "hardware\n",
+		filepath.Join(dest, "hosts", "NixOS", "secrets", "secrets.yaml"): "secret: legacy\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(staging, "secrets", "secrets.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "secret: legacy\n" {
+		t.Fatalf("expected legacy secrets to be staged for thin migration, got %q", data)
+	}
+}
+
+func TestCopyThinSecretsFallsBackToSudoRsync(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	secrets := filepath.Join(dest, "secrets")
+	if err := os.MkdirAll(secrets, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := &fakeRunner{
+		failOn: func(name string, _ []string) error {
+			if name == "rsync" {
+				return os.ErrPermission
+			}
+			return nil
+		},
+	}
+	if err := copyExistingThinHostLocal(context.Background(), fake, staging, dest); err != nil {
+		t.Fatal(err)
+	}
+
+	commands := commandSummary(fake.calls)
+	if !strings.Contains(commands, "rsync -a --delete --checksum") {
+		t.Fatalf("expected normal rsync attempt, got:\n%s", commands)
+	}
+	if !strings.Contains(commands, "sudo rsync -a --delete --checksum --chown") {
+		t.Fatalf("expected sudo rsync fallback, got:\n%s", commands)
+	}
+}
+
+func TestWriteStagedSecretsMigratesMissingThinSecrets(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	source := filepath.Join(staging, "secrets", "secrets.yaml")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("secret: staged\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := &fakeRunner{}
+	if err := writeStagedSecrets(context.Background(), fake, staging, dest, LayoutThin); err != nil {
+		t.Fatal(err)
+	}
+
+	commands := commandSummary(fake.calls)
+	for _, want := range []string{
+		"sudo mkdir -p " + filepath.Join(dest, "secrets"),
+		"sudo rsync -a --delete --checksum --chown root:root",
+		filepath.Join(staging, "secrets") + "/",
+		filepath.Join(dest, "secrets") + "/",
+	} {
+		if !strings.Contains(commands, want) {
+			t.Fatalf("expected secrets migration command %q, got:\n%s", want, commands)
+		}
+	}
+}
+
+func TestWriteStagedSecretsPreservesExistingThinSecrets(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	for path, content := range map[string]string{
+		filepath.Join(staging, "secrets", "secrets.yaml"): "secret: staged\n",
+		filepath.Join(dest, "secrets", "secrets.yaml"):    "secret: existing\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	fake := &fakeRunner{}
+	if err := writeStagedSecrets(context.Background(), fake, staging, dest, LayoutThin); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("existing root secrets should be preserved, got:\n%s", commandSummary(fake.calls))
+	}
+}
+
+func TestWriteStagedSecretsRejectsFileTarget(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	for path, content := range map[string]string{
+		filepath.Join(staging, "secrets", "secrets.yaml"): "secret: staged\n",
+		filepath.Join(dest, "secrets"):                    "not a directory\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	fake := &fakeRunner{}
+	err := writeStagedSecrets(context.Background(), fake, staging, dest, LayoutThin)
+	if err == nil || !strings.Contains(err.Error(), "target secrets path is not a directory") {
+		t.Fatalf("expected file target error, got %v", err)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("file target should fail before sudo writes, got:\n%s", commandSummary(fake.calls))
 	}
 }
 
@@ -496,6 +786,25 @@ func TestFlakeMySetupWrapperCanRunFromRemoteSource(t *testing.T) {
 	}
 }
 
+func TestInnerNixOSFlakeUsesSelfForOmniRouterOverlay(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/flake.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"inputsForModules = inputs // {",
+		"mysetup = self;",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("NixOS flake must expose the current flake revision to overlays, missing %q\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, `mysetup.url = "github:TakuyaYagam1/MySetup";`) {
+		t.Fatalf("NixOS flake must not pin a nested MySetup input for OmniRouter updates\n%s", text)
+	}
+}
+
 func TestPrepareStagingHostLocalCopiesHardwareAndPreservesStagedLock(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
@@ -509,7 +818,7 @@ func TestPrepareStagingHostLocalCopiesHardwareAndPreservesStagedLock(t *testing.
 		t.Fatal(err)
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutFull); err != nil {
 		t.Fatal(err)
 	}
 	for path, want := range map[string]string{
@@ -540,12 +849,12 @@ func TestPrepareStagingHostLocalDryRunDoesNotHashPassword(t *testing.T) {
 	t.Setenv("PATH", bin)
 
 	runner := run.Runner{DryRun: true, Stdout: io.Discard, Stderr: io.Discard}
-	err := prepareStagingHostLocal(context.Background(), runner, staging, dest, config.Secrets{UserPassword: "secret"})
+	err := prepareStagingHostLocal(context.Background(), runner, staging, dest, config.Secrets{UserPassword: "secret"}, LayoutThin)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(staging, "hosts", "NixOS", "hashed-password.nix"))
+	data, err := os.ReadFile(filepath.Join(staging, "hashed-password.nix"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -560,7 +869,7 @@ func TestPrepareStagingHostLocalCopiesPermissionDeniedHashWithSudo(t *testing.T)
 	if err := os.WriteFile(filepath.Join(dest, "hardware-configuration.nix"), []byte("hardware\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	hash := filepath.Join(dest, "hosts", "NixOS", "hashed-password.nix")
+	hash := filepath.Join(dest, "hashed-password.nix")
 	if err := os.MkdirAll(filepath.Dir(hash), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -573,7 +882,7 @@ func TestPrepareStagingHostLocalCopiesPermissionDeniedHashWithSudo(t *testing.T)
 
 	var out bytes.Buffer
 	runner := run.Runner{DryRun: true, Stdout: &out, Stderr: &out}
-	if err := prepareStagingHostLocal(context.Background(), runner, staging, dest, config.Secrets{}); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), runner, staging, dest, config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 
@@ -583,7 +892,7 @@ func TestPrepareStagingHostLocalCopiesPermissionDeniedHashWithSudo(t *testing.T)
 		"-o",
 		"-g",
 		hash,
-		filepath.Join(staging, "hosts", "NixOS", "hashed-password.nix"),
+		filepath.Join(staging, "hashed-password.nix"),
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("permission denied hash should be staged with sudo install, missing %q\n%s", want, got)
@@ -594,7 +903,7 @@ func TestPrepareStagingHostLocalCopiesPermissionDeniedHashWithSudo(t *testing.T)
 func TestWriteStagedHashedPasswordInstallsStagingArtifact(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
-	source := filepath.Join(staging, "hosts", "NixOS", "hashed-password.nix")
+	source := filepath.Join(staging, "hashed-password.nix")
 	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -609,7 +918,7 @@ printf '%s\n' "$*"
 
 	var out bytes.Buffer
 	runner := run.Runner{Stdout: &out, Stderr: &out}
-	err := writeStagedHashedPassword(context.Background(), runner, staging, dest, config.Secrets{UserPassword: "secret"})
+	err := writeStagedHashedPassword(context.Background(), runner, staging, dest, config.Secrets{UserPassword: "secret"}, LayoutThin)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -619,6 +928,73 @@ printf '%s\n' "$*"
 	}
 	if strings.Contains(got, "mkpasswd") {
 		t.Fatalf("write phase must not hash password again, got:\n%s", got)
+	}
+}
+
+func TestWriteStagedHashedPasswordMigratesMissingThinHash(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	source := filepath.Join(staging, "hashed-password.nix")
+	if err := os.WriteFile(source, []byte(HashedPasswordNix("existing-hash")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	writeExecutable(t, filepath.Join(bin, "sudo"), `#!/bin/sh
+printf '%s\n' "$*"
+`)
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+
+	var out bytes.Buffer
+	runner := run.Runner{Stdout: &out, Stderr: &out}
+	err := writeStagedHashedPassword(context.Background(), runner, staging, dest, config.Secrets{}, LayoutThin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.Contains(got, source) || !strings.Contains(got, filepath.Join(dest, "hashed-password.nix")) {
+		t.Fatalf("expected missing root hash to be installed, got:\n%s", got)
+	}
+}
+
+func TestWriteStagedHashedPasswordPreservesExistingThinHash(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	if err := os.WriteFile(filepath.Join(staging, "hashed-password.nix"), []byte(HashedPasswordNix("staged")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dest, "hashed-password.nix"), []byte(HashedPasswordNix("existing")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	runner := run.Runner{Stdout: &out, Stderr: &out}
+	err := writeStagedHashedPassword(context.Background(), runner, staging, dest, config.Secrets{}, LayoutThin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "" {
+		t.Fatalf("existing hash should be preserved when no new password is provided, got:\n%s", out.String())
+	}
+}
+
+func TestWriteStagedHashedPasswordRejectsDirectoryTarget(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	if err := os.WriteFile(filepath.Join(staging, "hashed-password.nix"), []byte(HashedPasswordNix("staged")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dest, "hashed-password.nix"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	runner := run.Runner{Stdout: &out, Stderr: &out}
+	err := writeStagedHashedPassword(context.Background(), runner, staging, dest, config.Secrets{}, LayoutThin)
+	if err == nil || !strings.Contains(err.Error(), "target hashed-password.nix is not a regular file") {
+		t.Fatalf("expected non-regular hash target error, got %v", err)
+	}
+	if out.String() != "" {
+		t.Fatalf("non-regular hash target should fail before sudo writes, got:\n%s", out.String())
 	}
 }
 

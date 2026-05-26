@@ -14,7 +14,7 @@ type systemWriteResult struct {
 	BackupPath string
 }
 
-func writeSystemConfiguration(ctx context.Context, runner run.CommandRunner, staging string, opts Options) (systemWriteResult, error) {
+func writeSystemConfiguration(ctx context.Context, runner run.CommandRunner, staging string, opts Options, layout Layout) (systemWriteResult, error) {
 	var result systemWriteResult
 	dest := opts.Paths.NixOSDest
 	backupPath, err := backupExisting(ctx, runner, dest)
@@ -22,23 +22,46 @@ func writeSystemConfiguration(ctx context.Context, runner run.CommandRunner, sta
 		return result, err
 	}
 	result.BackupPath = backupPath
-	if err := preserveHardware(ctx, runner, dest); err != nil {
+	if layout == LayoutFull {
+		if err := preserveHardware(ctx, runner, dest); err != nil {
+			return result, err
+		}
+	}
+	if err := syncToEtc(ctx, runner, staging, dest, layout); err != nil {
 		return result, err
 	}
-	if err := syncToEtc(ctx, runner, staging, dest); err != nil {
+	if err := writeStagedSecrets(ctx, runner, staging, dest, layout); err != nil {
 		return result, err
 	}
-	if err := writeStagedHashedPassword(ctx, runner, staging, dest, opts.Secrets); err != nil {
+	if err := writeStagedHashedPassword(ctx, runner, staging, dest, opts.Secrets, layout); err != nil {
 		return result, err
 	}
 	return result, nil
 }
 
-func syncToEtc(ctx context.Context, runner run.CommandRunner, staging, dest string) error {
-	return runner.Command(ctx, "sudo", syncToEtcArgs(staging, dest)...)
+func syncToEtc(ctx context.Context, runner run.CommandRunner, staging, dest string, layout Layout) error {
+	return runner.Command(ctx, "sudo", syncToEtcArgs(staging, dest, layout)...)
 }
 
-func syncToEtcArgs(staging, dest string) []string {
+func syncToEtcArgs(staging, dest string, layout ...Layout) []string {
+	targetLayout := LayoutThin
+	if len(layout) > 0 {
+		targetLayout = layout[0]
+	}
+	if targetLayout == LayoutFull {
+		return syncToEtcFullArgs(staging, dest)
+	}
+	return []string{
+		"rsync", "-a", "--checksum",
+		"--exclude=/mysetup/",
+		"--exclude=/secrets/",
+		"--exclude=/hashed-password.nix",
+		staging + "/",
+		dest + "/",
+	}
+}
+
+func syncToEtcFullArgs(staging, dest string) []string {
 	return []string{
 		"rsync", "-a", "--delete", "--checksum",
 		"--exclude=/mysetup/",
@@ -51,6 +74,21 @@ func syncToEtcArgs(staging, dest string) []string {
 		staging + "/",
 		dest + "/",
 	}
+}
+
+func lockStagingFlake(ctx context.Context, runner run.CommandRunner, staging string, layout Layout) error {
+	if layout != LayoutThin {
+		return nil
+	}
+	return runner.Command(
+		ctx,
+		"nix",
+		"--extra-experimental-features",
+		"nix-command flakes",
+		"flake",
+		"lock",
+		staging,
+	)
 }
 
 func preserveHardware(ctx context.Context, runner run.CommandRunner, dest string) error {

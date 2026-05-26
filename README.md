@@ -47,9 +47,9 @@ entrypoints (`hyprland.lua` plus Lua modules) instead of legacy hyprlang
 > **Read [Linux/README.md](Linux/README.md) first** - contains pre-installation requirements,
 > path configuration, regional notes, and troubleshooting.
 
-No-clone install (recommended for fresh boxes - Nix fetches the flake source
-into `/nix/store`, the wrapped installer points `MYSETUP_REPO_ROOT` at that
-immutable source, then stages it to `/etc/nixos`):
+No-clone install (recommended for fresh boxes - Nix fetches the installer into
+`/nix/store`; the installed `/etc/nixos` stays thin and tracks the reusable
+MySetup NixOS flake):
 
 ```bash
 nix run 'github:TakuyaYagam1/MySetup'
@@ -63,9 +63,10 @@ cd MySetup
 nix run "path:$PWD"
 ```
 
-The repository root flake also exposes reusable shell modules for external
-NixOS flakes. Pin a release tag for immutable installs, or use a moving branch
-such as `stable` for latest-release updates via `nix flake update`:
+The repository root flake also exposes reusable shell modules and the full host
+constructor for external NixOS flakes. Pin a release tag for immutable installs,
+or use a moving branch such as `stable` for latest-release updates via
+`nix flake update`:
 
 ```nix
 inputs.mysetup = {
@@ -90,6 +91,11 @@ modules = [
   }
 ];
 ```
+
+For a full MySetup host wrapper, use `mysetup.lib.mkMySetupHost` from the
+`Linux/NixOS` flake or the root re-export. The installer generates this shape
+automatically in `/etc/nixos/flake.nix`; it is the supported public API for the
+complete workstation stack.
 
 The installer will ask you about:
 

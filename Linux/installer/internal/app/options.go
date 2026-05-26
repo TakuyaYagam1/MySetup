@@ -6,4 +6,5 @@ type Options struct {
 	paths.Options
 	DryRun bool
 	Yes    bool
+	Layout string
 }

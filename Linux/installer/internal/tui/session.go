@@ -21,6 +21,7 @@ var errBackToSections = errors.New("back to section selector")
 type Options struct {
 	Paths  paths.Options
 	DryRun bool
+	Layout apply.Layout
 }
 
 type session struct {
@@ -28,6 +29,7 @@ type session struct {
 	secrets  config.Secrets
 	paths    paths.Options
 	dryRun   bool
+	layout   apply.Layout
 	selected int
 }
 
@@ -55,6 +57,7 @@ func Run(ctx context.Context, opts Options) error {
 		state:  state,
 		paths:  opts.Paths,
 		dryRun: opts.DryRun,
+		layout: opts.Layout,
 	}
 
 	for {
@@ -168,6 +171,7 @@ func runApply(ctx context.Context, s *session) error {
 		Secrets:   s.secrets,
 		DryRun:    s.dryRun,
 		AssumeYes: false,
+		Layout:    s.layout,
 	})
 }
 

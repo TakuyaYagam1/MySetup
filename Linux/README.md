@@ -39,10 +39,10 @@ Or run directly from GitHub without cloning first:
 nix run 'github:TakuyaYagam1/MySetup'
 ```
 
-This is still the normal full apply path. Nix fetches the repository source into
+This is the normal thin apply path. Nix fetches the repository source into
 `/nix/store`, the wrapped installer points `MYSETUP_REPO_ROOT` at that immutable
-source, then the installer stages `NixOS`, `dots`, and `installer` into `/tmp`
-before applying them to `/etc/nixos`.
+source, then the installer writes a small `/etc/nixos` wrapper that tracks
+`github:TakuyaYagam1/MySetup?dir=Linux/NixOS`.
 
 Nix caches the resolved source for ~1 hour (`tarball-ttl` default). If you just
 pushed a commit and want the new HEAD right now, force a re-fetch:
@@ -95,13 +95,13 @@ Plain passwords are never stored in state or draft JSON.
 Managed secret files:
 
 ```text
-/etc/nixos/hosts/NixOS/hashed-password.nix
+/etc/nixos/hashed-password.nix
 ```
 
-Optional sops-nix modules are split by scope:
+Optional sops-nix files are split by scope:
 
-- `Linux/NixOS/hosts/NixOS/secrets/sops.nix`: system secrets from
-  `hosts/NixOS/secrets/secrets.yaml`, decrypted through the host SSH key.
+- `/etc/nixos/secrets/secrets.yaml`: system secrets, decrypted through the host
+  SSH key.
 - `Linux/NixOS/home/secrets/default.nix`: user secrets from
   `home/secrets/secrets.yaml`, decrypted through the user's age key.
 
@@ -111,12 +111,13 @@ System secret bootstrap:
 nix-shell -p sops ssh-to-age age
 ssh-to-age -private-key -i /etc/ssh/ssh_host_ed25519_key > /tmp/hostkey.txt
 # or: sudo ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub
-sops hosts/NixOS/secrets/secrets.yaml
+sops /etc/nixos/secrets/secrets.yaml
 ```
 
-Put the public age key into `hosts/NixOS/secrets/.sops.yaml`, then import
-`hosts/NixOS/secrets/sops.nix` from `hosts/NixOS/default.nix` when system-level
-sops secrets are needed.
+Put the public age key into `/etc/nixos/secrets/.sops.yaml`. In the default thin
+layout, `mkMySetupHost` automatically wires `/etc/nixos/secrets/secrets.yaml`
+into sops-nix when that file exists. The legacy full layout still supports
+`hosts/NixOS/secrets/sops.nix`.
 
 User secret bootstrap:
 
@@ -265,20 +266,27 @@ Ownership contract:
 
 The installer applies changes defensively:
 
-1. Creates a temporary staging copy of `Linux/NixOS`, `Linux/dots`, and
-   `Linux/installer`.
-2. Preserves host-local `hardware-configuration.nix`.
-3. Copies or generates `hosts/NixOS/hashed-password.nix` for the staging build.
-4. Runs `nixos-rebuild dry-build` against the staging flake before touching
+1. Creates a temporary staging wrapper flake for `/etc/nixos`.
+2. Writes generated `host-vars.nix`, `configuration.nix`, and `home.nix`
+   templates when they do not already exist.
+3. Preserves host-local `hardware-configuration.nix`, `flake.lock`,
+   `hashed-password.nix`, `configuration.nix`, `home.nix`, and `secrets/`.
+   Existing thin wrapper flakes are preserved; legacy full mirror flakes are
+   replaced with the generated thin wrapper.
+4. Copies or generates `hashed-password.nix` for the staging build.
+5. Runs `nix flake lock` for the staging wrapper when using the default thin
+   layout.
+6. Runs `nixos-rebuild dry-build` against the staging flake before touching
    `/etc/nixos`.
-5. Backs up `/etc/nixos` to a unique `/etc/nixos.bak.<timestamp>.<pid>.<n>`.
-6. Syncs the staging tree to `/etc/nixos`, including `flake.lock` so switch uses
-   the same lock graph as dry-build.
-7. Mirrors `Linux/dots/` from the staged repository copy into
-   `/etc/nixos/dots/` so the flake can reference dotfiles by path.
-8. Applies selected user dotfiles and reloads Hypr when a session is running.
-9. Asks before `nixos-rebuild switch` in TUI mode.
-10. Writes `/etc/nixos/mysetup/state.json` only after switch succeeds.
+7. Backs up `/etc/nixos` to a unique `/etc/nixos.bak.<timestamp>.<pid>.<n>`.
+8. Syncs the thin staging tree to `/etc/nixos` without deleting legacy mirror
+   files.
+9. Applies selected user dotfiles and reloads Hypr when a session is running.
+10. Asks before `nixos-rebuild switch` in TUI mode.
+11. Writes `/etc/nixos/mysetup/state.json` only after switch succeeds.
+
+Use `--layout full` to keep the old full-mirror behavior for debugging or
+migration fallback.
 
 Rollback is intentionally scoped to `/etc/nixos`. If user dotfile sync fails
 after partial writes under `~/.config`, run `mysetup doctor` and re-apply or
@@ -289,6 +297,24 @@ toplevel directly from the cloned checkout can fail until host-local files are
 present; use the installer or build from `/etc/nixos` for real activation
 checks.
 
+The default installed layout is intentionally small:
+
+```text
+/etc/nixos/
+├── flake.nix
+├── flake.lock
+├── host-vars.nix
+├── hardware-configuration.nix
+├── configuration.nix      # system-level overrides
+├── home.nix               # Home Manager overrides
+├── hashed-password.nix    # generated when password is reset
+├── secrets/               # optional system sops-nix secrets
+└── mysetup/state.json     # written after successful activation
+```
+
+Add NixOS packages, services, and system overrides to `configuration.nix`.
+Add user packages and Home Manager overrides to `home.nix`.
+
 ## Commands
 
 ```bash
@@ -297,6 +323,7 @@ nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- tui
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- doctor
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- print-state
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --no-switch
+nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --layout full --no-switch
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- cleanup
 ```
 
@@ -329,6 +356,9 @@ Useful checks after changing installer or shell integration:
 Linux/NixOS/
 ├── flake.nix
 ├── flake.lock
+├── modules/
+│   ├── mysetup-options.nix        # `mysetup.*` NixOS options
+│   └── mysetup-stack.nix          # reusable workstation stack
 ├── hosts/NixOS/
 │   ├── default.nix
 │   ├── host-vars.nix
@@ -339,8 +369,6 @@ Linux/NixOS/
 │   │                              # overlays, modules, presets, ports,
 │   │                              # mysetupLib helpers
 │   └── package-sets/              # per-preset package set definitions
-├── modules/
-│   └── mysetup-options.nix        # `mysetup.*` NixOS options
 ├── profiles/                      # base / desktop / developer / features
 │                                  # import layers (composed in hosts/NixOS)
 ├── home/                          # home-manager root + shell profiles

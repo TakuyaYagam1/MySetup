@@ -37,9 +37,20 @@ func Report(ctx context.Context, opts Options) (string, error) {
 	out := &reportWriter{}
 	out.println("== MySetup doctor ==")
 	check(out, "state", opts.Paths.StatePath)
-	check(out, "hardware config", filepath.Join(opts.Paths.NixOSDest, "hosts/NixOS/hardware-configuration.nix"))
+	checkAny(
+		out,
+		"hardware config",
+		filepath.Join(opts.Paths.NixOSDest, "hardware-configuration.nix"),
+		filepath.Join(opts.Paths.NixOSDest, "hosts/NixOS/hardware-configuration.nix"),
+	)
 	check(out, "flake", filepath.Join(opts.Paths.NixOSDest, "flake.nix"))
-	check(out, "host vars", filepath.Join(opts.Paths.NixOSDest, "hosts/NixOS/host-vars.nix"))
+	checkAny(
+		out,
+		"host vars",
+		filepath.Join(opts.Paths.NixOSDest, "host-vars.nix"),
+		filepath.Join(opts.Paths.NixOSDest, "hosts/NixOS/host-vars.nix"),
+	)
+	check(out, "configuration", filepath.Join(opts.Paths.NixOSDest, "configuration.nix"))
 	checkShellRuntime(out, opts)
 	checkWallpapers(out, opts)
 	if zenutil.FindProfile(opts.State.User.HomeDirectory) == "" {

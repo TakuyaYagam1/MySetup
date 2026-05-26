@@ -21,8 +21,21 @@ type secretAvailability struct {
 
 func detectExistingSecrets(opts paths.Options) secretAvailability {
 	return secretAvailability{
-		UserPassword: detectSecretPath(userPasswordHashPath(opts)),
+		UserPassword: detectSecretPaths(userPasswordHashPaths(opts)),
 	}
+}
+
+func detectSecretPaths(paths []string) secretPresence {
+	result := secretPresenceMissing
+	for _, path := range paths {
+		switch detectSecretPath(path) {
+		case secretPresenceExists:
+			return secretPresenceExists
+		case secretPresenceUnknown:
+			result = secretPresenceUnknown
+		}
+	}
+	return result
 }
 
 func detectSecretPath(path string) secretPresence {
@@ -38,7 +51,14 @@ func detectSecretPath(path string) secretPresence {
 }
 
 func userPasswordHashPath(opts paths.Options) string {
-	return filepath.Join(opts.NixOSDest, "hosts", "NixOS", "hashed-password.nix")
+	return filepath.Join(opts.NixOSDest, "hashed-password.nix")
+}
+
+func userPasswordHashPaths(opts paths.Options) []string {
+	return []string{
+		userPasswordHashPath(opts),
+		filepath.Join(opts.NixOSDest, "hosts", "NixOS", "hashed-password.nix"),
+	}
 }
 
 func secretStatus(value string, existing secretPresence, emptyStatus string) string {

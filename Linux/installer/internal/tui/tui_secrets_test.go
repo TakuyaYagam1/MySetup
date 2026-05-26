@@ -61,16 +61,29 @@ func TestPasswordsSectionShowsExistingSecretStatus(t *testing.T) {
 
 func TestDetectExistingSecrets(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "hosts", "NixOS"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "hosts", "NixOS", "hashed-password.nix"), []byte("hash"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "hashed-password.nix"), []byte("hash"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	got := detectExistingSecrets(paths.Options{NixOSDest: dir})
 	if got.UserPassword != secretPresenceExists {
 		t.Fatalf("expected existing Linux password hash, got %q", got.UserPassword)
+	}
+}
+
+func TestDetectExistingSecretsAcceptsLegacyHashPath(t *testing.T) {
+	dir := t.TempDir()
+	legacy := filepath.Join(dir, "hosts", "NixOS", "hashed-password.nix")
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacy, []byte("hash"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got := detectExistingSecrets(paths.Options{NixOSDest: dir})
+	if got.UserPassword != secretPresenceExists {
+		t.Fatalf("expected legacy Linux password hash to be accepted, got %q", got.UserPassword)
 	}
 }
 

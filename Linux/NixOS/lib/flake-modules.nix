@@ -8,6 +8,8 @@
 }:
 
 {
+  mysetupModule = import ../modules/mysetup-stack.nix;
+
   overlaysModule =
     { lib, ... }:
     {

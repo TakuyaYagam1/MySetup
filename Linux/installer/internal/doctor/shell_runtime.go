@@ -18,7 +18,6 @@ func checkShellRuntime(out *reportWriter, opts Options) {
 	checkShellLauncher(out, hyprRuntimePath(home, "shell-profile.lua"))
 	check(out, "shell selector config", filepath.Join(home, ".config/quickshell/mysetup-shell-selector/shell.qml"))
 	checkHyprScripts(out, filepath.Join(home, ".config/hypr/scripts"))
-	checkHyprScripts(out, filepath.Join(opts.Paths.NixOSDest, "dots/hypr/scripts"))
 
 	switch profile {
 	case "end4":

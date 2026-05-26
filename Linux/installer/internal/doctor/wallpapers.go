@@ -8,7 +8,7 @@ import (
 
 func checkWallpapers(out *reportWriter, opts Options) {
 	wallpaperDir := filepath.Join(opts.State.User.HomeDirectory, "Pictures/Wallpapers")
-	hostVars := filepath.Join(opts.Paths.NixOSDest, "hosts/NixOS/host-vars.nix")
+	hostVars := hostVarsPath(opts.Paths.NixOSDest)
 	if opts.State.Dots.Wallpapers {
 		check(out, "wallpapers", wallpaperDir)
 		flag := variablesWallpaperEnable(hostVars)
@@ -27,6 +27,14 @@ func checkWallpapers(out *reportWriter, opts Options) {
 	if *flag {
 		out.printf("WARN wallpapers disabled in state but enabled in host vars: %s\n", hostVars)
 	}
+}
+
+func hostVarsPath(nixosDest string) string {
+	root := filepath.Join(nixosDest, "host-vars.nix")
+	if _, err := os.Stat(root); err == nil {
+		return root
+	}
+	return filepath.Join(nixosDest, "hosts/NixOS/host-vars.nix")
 }
 
 func variablesWallpaperEnable(path string) *bool {

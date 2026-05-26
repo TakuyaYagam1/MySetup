@@ -57,6 +57,7 @@ func NewRootCommand() *cobra.Command {
 			return tui.Run(cmd.Context(), tui.Options{
 				Paths:  opts.Options,
 				DryRun: opts.DryRun,
+				Layout: apply.Layout(opts.Layout),
 			})
 		},
 	}
@@ -67,6 +68,7 @@ func NewRootCommand() *cobra.Command {
 	root.PersistentFlags().StringVar(&opts.DraftPath, "draft", opts.DraftPath, "user draft state file")
 	root.PersistentFlags().BoolVar(&opts.DryRun, "dry-run", false, "print actions without changing files")
 	root.PersistentFlags().BoolVar(&opts.Yes, "yes", false, "skip confirmation prompts where safe")
+	root.PersistentFlags().StringVar(&opts.Layout, "layout", "thin", "installed /etc/nixos layout: thin or full")
 
 	root.AddCommand(tuiCommand(&opts))
 	root.AddCommand(applyCommand(&opts))
@@ -107,6 +109,7 @@ func tuiCommand(opts *Options) *cobra.Command {
 			return tui.Run(cmd.Context(), tui.Options{
 				Paths:  opts.Options,
 				DryRun: opts.DryRun,
+				Layout: apply.Layout(opts.Layout),
 			})
 		},
 	}
@@ -135,6 +138,7 @@ func applyCommand(opts *Options) *cobra.Command {
 				DryRun:     opts.DryRun,
 				AssumeYes:  opts.Yes,
 				SkipSwitch: noSwitch,
+				Layout:     apply.Layout(opts.Layout),
 			})
 		},
 	}

@@ -3,7 +3,6 @@
 
   inputs = {
     # Core
-    mysetup.url = "github:TakuyaYagam1/MySetup";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.11";
     nixpkgs-bleeding.url = "github:NixOS/nixpkgs/nixos-unstable-small";
@@ -85,6 +84,7 @@
 
   outputs =
     {
+      self,
       nixpkgs,
       nixpkgs-stable,
       nixpkgs-bleeding,
@@ -101,57 +101,89 @@
       # Toggle to true when shells need Qt newer than nixos-unstable provides.
       enableQtBleeding = false;
 
-      pkgs-stable = import nixpkgs-stable {
-        localSystem = system;
-        config.allowUnfree = true;
-        config.permittedInsecurePackages = [
-          "python3.12-pypdf2-3.0.1"
-        ];
-      };
-
-      pkgs-bleeding = import nixpkgs-bleeding {
-        localSystem = system;
-        config.allowUnfree = true;
-      };
-
-      overlays = import ./lib/flake-overlays.nix {
-        inherit inputs pkgs-bleeding system;
+      inputsForModules = inputs // {
+        mysetup = self;
       };
 
       mysetupLib = import ./lib/mysetup.nix {
         inherit (nixpkgs) lib;
       };
 
+      mkSystemContext =
+        system:
+        let
+          pkgs-stable = import nixpkgs-stable {
+            localSystem = system;
+            config.allowUnfree = true;
+            config.permittedInsecurePackages = [
+              "python3.12-pypdf2-3.0.1"
+            ];
+          };
+
+          pkgs-bleeding = import nixpkgs-bleeding {
+            localSystem = system;
+            config.allowUnfree = true;
+          };
+
+          overlays = import ./lib/flake-overlays.nix {
+            inputs = inputsForModules;
+            inherit pkgs-bleeding system;
+          };
+
+          flakeModules = import ./lib/flake-modules.nix {
+            inherit
+              enableQtBleeding
+              mysetupLib
+              overlays
+              pkgs-bleeding
+              pkgs-stable
+              ;
+            inputs = inputsForModules;
+          };
+        in
+        {
+          inherit
+            flakeModules
+            overlays
+            pkgs-bleeding
+            pkgs-stable
+            ;
+        };
+
+      defaultContext = mkSystemContext system;
+
+      mkMySetupHost = import ./lib/mk-host.nix {
+        inherit
+          enableQtBleeding
+          home-manager
+          mysetupLib
+          nixpkgs
+          nixpkgs-bleeding
+          nixpkgs-stable
+          zapret-discord-youtube
+          ;
+        inputs = inputsForModules;
+      };
+
       flakeOutputs = import ./lib/flake-packages.nix {
         inherit layout nixpkgs system;
       };
 
-      flakeModules = import ./lib/flake-modules.nix {
-        inherit
-          enableQtBleeding
-          inputs
-          mysetupLib
-          overlays
-          pkgs-bleeding
-          pkgs-stable
-          ;
-      };
-
       hosts = import ./lib/hosts.nix {
-        inherit
-          flakeModules
-          home-manager
-          inputs
-          mysetupLib
-          nixpkgs
-          pkgs-bleeding
-          pkgs-stable
-          system
-          zapret-discord-youtube
-          ;
+        inherit mkMySetupHost system;
       };
     in
     {
+      lib = {
+        inherit mkMySetupHost;
+        mysetup = mysetupLib;
+      };
+
+      nixosModules = rec {
+        mysetup = defaultContext.flakeModules.mysetupModule;
+        default = mysetup;
+      };
+
       packages.${system} = flakeOutputs.packages;
       checks.${system} = flakeOutputs.checks;
       apps.${system} = flakeOutputs.apps;

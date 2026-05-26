@@ -17,6 +17,71 @@ func HostVarsNix(s config.State) (string, error) {
 	return out.String(), nil
 }
 
+func FlakeNix(s config.State) (string, error) {
+	var out bytes.Buffer
+	if err := flakeTemplate.Execute(&out, s); err != nil {
+		return "", fmt.Errorf("render flake.nix: %w", err)
+	}
+	return out.String(), nil
+}
+
+func ConfigurationNix() string {
+	return `# Host-local NixOS overrides. This file is preserved by MySetup.
+{ pkgs, ... }:
+
+{
+  environment.systemPackages = with pkgs; [
+    # Add system packages here.
+  ];
+}
+`
+}
+
+func HomeNix() string {
+	return `# Host-local Home Manager overrides. This file is preserved by MySetup.
+{ pkgs, ... }:
+
+{
+  home.packages = with pkgs; [
+    # Add user packages here.
+  ];
+}
+`
+}
+
+var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncMap{
+	"nixString": nixString,
+}).Parse(`{
+  description = "Host-local MySetup NixOS wrapper";
+
+  inputs = {
+    mysetup.url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";
+  };
+
+  outputs = { mysetup, ... }:
+    let
+      system = "x86_64-linux";
+      hostname = {{ nixString .Host.Hostname }};
+    in
+    {
+      nixosConfigurations.${hostname} = mysetup.lib.mkMySetupHost {
+        inherit system hostname;
+
+        hostVars = ./host-vars.nix;
+        hardware = ./hardware-configuration.nix;
+        hashedPassword =
+          if builtins.pathExists ./hashed-password.nix then ./hashed-password.nix else null;
+        secretsDir =
+          if builtins.pathExists ./secrets then ./secrets else null;
+
+        extraModules = [ ./configuration.nix ];
+        homeExtraModules =
+          if builtins.pathExists ./home.nix then [ ./home.nix ] else [ ];
+      };
+    };
+}
+`))
+
 var hostVarsTemplate = template.Must(template.New("host-vars.nix").Funcs(template.FuncMap{
 	"nixBool":        nixBool,
 	"nixString":      nixString,
