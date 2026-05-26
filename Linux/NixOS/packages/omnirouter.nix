@@ -84,8 +84,11 @@ buildNpmPackage' rec {
     cat > $out/bin/omnirouter <<EOF
     #!/bin/sh
     cd $out/share/omnirouter
+    export DATA_DIR="\''${DATA_DIR:-\''${HOME:-/var/lib/omnirouter}}"
+    export APP_LOG_FILE_PATH="\''${APP_LOG_FILE_PATH:-\''${DATA_DIR}/logs/application/app.log}"
     export NODE_ENV=production
-    exec ${lib.getExe nodejs} scripts/run-next.mjs start "\$@"
+    export OMNIROUTE_NO_UPDATE_NOTIFIER="\''${OMNIROUTE_NO_UPDATE_NOTIFIER:-1}"
+    exec ${lib.getExe nodejs} scripts/dev/run-next.mjs start "\$@"
     EOF
 
     chmod +x $out/bin/omnirouter

@@ -42,6 +42,9 @@ in
 
         Environment = [
           "HOME=/var/lib/omnirouter"
+          "DATA_DIR=/var/lib/omnirouter"
+          "APP_LOG_FILE_PATH=/var/lib/omnirouter/logs/application/app.log"
+          "OMNIROUTE_NO_UPDATE_NOTIFIER=1"
         ];
 
         DynamicUser = true;
