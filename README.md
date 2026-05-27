@@ -47,12 +47,13 @@ entrypoints (`hyprland.lua` plus Lua modules) instead of legacy hyprlang
 > **Read [Linux/README.md](Linux/README.md) first** - contains pre-installation requirements,
 > path configuration, regional notes, and troubleshooting.
 
-No-clone install (recommended for fresh boxes - Nix fetches the installer into
+No-clone install or reconfigure (recommended - Nix fetches the installer into
 `/nix/store`; the installed `/etc/nixos` stays thin and tracks the reusable
-MySetup NixOS flake):
+MySetup NixOS flake). Use `--refresh` when you want the latest pushed commit
+instead of Nix's cached GitHub source:
 
 ```bash
-nix run 'github:TakuyaYagam1/MySetup'
+nix run --refresh 'github:TakuyaYagam1/MySetup'
 ```
 
 Or with a local clone (useful when iterating on the config):
@@ -61,6 +62,40 @@ Or with a local clone (useful when iterating on the config):
 git clone https://github.com/TakuyaYagam1/MySetup.git
 cd MySetup
 nix run "path:$PWD"
+```
+
+The direct NixOS installer app is equivalent and exposes the CLI subcommands
+explicitly:
+
+```bash
+# Apply the default thin /etc/nixos layout.
+nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- apply
+
+# Validate the staged system build without writing /etc/nixos or switching.
+nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- apply --no-switch
+
+# Keep the legacy full mirror layout while migrating or debugging.
+nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- apply --layout full
+
+# Inspect or repair an installed host.
+nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- doctor
+```
+
+After install, normal updates happen from `/etc/nixos`:
+
+```bash
+nixos-update
+```
+
+That command runs `nix flake update` in `/etc/nixos` and then switches the
+system, so the `mysetup` input receives CI-tested package/service changes
+without copying the full repository into `/etc/nixos`.
+
+Useful post-apply checks:
+
+```bash
+systemctl cat omnirouter.service | rg 'ExecStartPre|omnirouter-ensure-server-env'
+sudo systemctl status omnirouter.service
 ```
 
 The repository root flake also exposes reusable shell modules and the full host

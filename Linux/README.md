@@ -274,8 +274,9 @@ The installer applies changes defensively:
    `secrets/`. Existing thin wrapper flakes are preserved; legacy full mirror
    flakes are replaced with the generated thin wrapper.
 4. Copies or generates `hashed-password.nix` for the staging build.
-5. Runs `nix flake lock` for the staging wrapper when using the default thin
-   layout.
+5. Runs `nix flake update mysetup --flake <staging>` for the staging wrapper
+   when using the default thin layout, so the installed host receives the latest
+   shared MySetup stack before dry-build.
 6. Runs `nixos-rebuild dry-build` against the staging flake before touching
    `/etc/nixos`.
 7. Backs up `/etc/nixos` to a unique `/etc/nixos.bak.<timestamp>.<pid>.<n>`.
