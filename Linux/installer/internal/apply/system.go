@@ -86,7 +86,9 @@ func lockStagingFlake(ctx context.Context, runner run.CommandRunner, staging str
 		"--extra-experimental-features",
 		"nix-command flakes",
 		"flake",
-		"lock",
+		"update",
+		"mysetup",
+		"--flake",
 		staging,
 	)
 }
