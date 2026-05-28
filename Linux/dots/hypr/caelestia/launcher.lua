@@ -1,8 +1,6 @@
 local mysetup = require("lib.mysetup")
 
 mysetup.bind_dispatch("SUPER + SUPER_L", "global caelestia:launcher")
--- Cancel the launcher without swallowing the user's existing Super-based binds.
-mysetup.bind_dispatch("SUPER + catchall", "global caelestia:launcherInterrupt", { non_consuming = true })
 mysetup.bind_dispatch("SUPER + mouse:272", "global caelestia:launcherInterrupt", { non_consuming = true })
 mysetup.bind_dispatch("SUPER + mouse:273", "global caelestia:launcherInterrupt", { non_consuming = true })
 mysetup.bind_dispatch("SUPER + mouse:274", "global caelestia:launcherInterrupt", { non_consuming = true })
