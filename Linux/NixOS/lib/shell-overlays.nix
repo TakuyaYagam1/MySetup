@@ -50,7 +50,9 @@ let
         const bindScript = 'hl.unbind("Caps_Lock"); '
             + 'hl.unbind("Num_Lock"); '
             + 'hl.bind("Caps_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true }); '
-            + 'hl.bind("Num_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true })';
+            + 'hl.bind("Caps_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, release = true }); '
+            + 'hl.bind("Num_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true }); '
+            + 'hl.bind("Num_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, release = true })';
 
         Quickshell.execDetached([
             "hyprctl",
