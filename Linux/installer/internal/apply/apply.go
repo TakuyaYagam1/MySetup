@@ -26,6 +26,13 @@ type Options struct {
 	Runner run.CommandRunner
 }
 
+func activatedState(state config.State) config.State {
+	activated := state
+	// Neovim runtime cleanup is an emergency one-shot action, not a sticky preference.
+	activated.Dots.NeovimCleanState = false
+	return activated
+}
+
 func Run(ctx context.Context, opts Options) error {
 	if err := config.Validate(opts.State); err != nil {
 		return err
@@ -93,5 +100,5 @@ func Run(ctx context.Context, opts Options) error {
 		fmt.Println("state not written because system was not activated")
 		return nil
 	}
-	return writeState(ctx, runner, opts.Paths.StatePath, opts.State)
+	return writeState(ctx, runner, opts.Paths.StatePath, activatedState(opts.State))
 }

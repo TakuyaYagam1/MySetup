@@ -165,14 +165,18 @@ func runApply(ctx context.Context, s *session) error {
 	if !confirm {
 		return nil
 	}
-	return apply.Run(ctx, apply.Options{
+	if err := apply.Run(ctx, apply.Options{
 		Paths:     s.paths,
 		State:     s.state,
 		Secrets:   s.secrets,
 		DryRun:    s.dryRun,
 		AssumeYes: false,
 		Layout:    s.layout,
-	})
+	}); err != nil {
+		return err
+	}
+	s.state.Dots.NeovimCleanState = false
+	return nil
 }
 
 func showDoctor(ctx context.Context, s *session) error {

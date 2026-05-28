@@ -28,7 +28,7 @@ func editDots(s *session) error {
 			Value(&s.state.Dots.Neovim),
 		huh.NewConfirm().
 			Title("Clean Neovim runtime data").
-			Description("Off by default. Enable only when plugins/parsers misbehave: wipes ~/.local/share/nvim, ~/.local/state/nvim and ~/.cache/nvim so Mason/Lazy re-downloads everything.").
+			Description("Off by default. Enable only when plugins/parsers misbehave: wipes ~/.local/share/nvim, ~/.local/state/nvim and ~/.cache/nvim so Mason/Lazy re-downloads everything. This resets to off after a successful apply.").
 			Value(&s.state.Dots.NeovimCleanState),
 		huh.NewConfirm().
 			Title("Seed v2rayN sing-box").

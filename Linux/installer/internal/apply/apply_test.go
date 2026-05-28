@@ -151,6 +151,24 @@ func TestSwitchSystemSkipsWhenSkipSwitchSet(t *testing.T) {
 	}
 }
 
+func TestActivatedStateClearsOneShotNeovimCleanup(t *testing.T) {
+	t.Parallel()
+	state := validState()
+	state.Dots.NeovimCleanState = true
+
+	got := activatedState(state)
+
+	if !state.Dots.NeovimCleanState {
+		t.Fatal("activatedState must not mutate the input state")
+	}
+	if got.Dots.NeovimCleanState {
+		t.Fatal("activatedState should clear one-shot neovim cleanup before persisting state")
+	}
+	if !got.Dots.Neovim {
+		t.Fatal("activatedState should preserve unrelated dot toggles")
+	}
+}
+
 func TestSwitchSystemAssumeYesIssuesSwitch(t *testing.T) {
 	t.Parallel()
 	fake := &fakeRunner{}

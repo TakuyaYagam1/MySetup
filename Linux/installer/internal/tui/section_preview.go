@@ -112,7 +112,7 @@ func previewDots(s config.State) []string {
 		previewSetting("Zen Catppuccin chrome", "Installs the Zen Browser Catppuccin chrome theme.", formatBool(s.Dots.ZenTheme)),
 		previewSetting("Sine profile files", "Best-effort Zen Sine files install from pinned URLs.", formatBool(s.Dots.Sine)),
 		previewSetting("Neovim config", "Backs up/syncs the repo Neovim config.", formatBool(s.Dots.Neovim)),
-		previewSetting("Clean Neovim state", "Removes generated ~/.local/share/nvim, ~/.local/state/nvim and ~/.cache/nvim after syncing config.", formatBool(s.Dots.NeovimCleanState)),
+		previewSetting("Clean Neovim state", "One-shot wipe of ~/.local/share/nvim, ~/.local/state/nvim and ~/.cache/nvim after syncing config.", formatBool(s.Dots.NeovimCleanState)),
 		previewSetting("v2rayN sing-box", "Copies sing-box support into v2rayN when detected.", formatBool(s.Dots.V2rayN)),
 	)
 }
