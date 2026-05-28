@@ -55,9 +55,12 @@ mysetup_pid_matches() {
 mysetup_pid_has_env_regex() {
   local pid="$1"
   local regex="$2"
+  local env_file
 
   [ -n "$pid" ] || return 1
-  tr '\0' '\n' <"/proc/$pid/environ" 2>/dev/null | grep -qE "$regex"
+  env_file="/proc/$pid/environ"
+  [ -r "$env_file" ] || return 1
+  { tr '\0' '\n' <"$env_file"; } 2>/dev/null | grep -qE "$regex"
 }
 
 mysetup_quickshell_pids() {
