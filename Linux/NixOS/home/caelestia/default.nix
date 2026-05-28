@@ -82,7 +82,11 @@ in
         '';
       };
 
-      packages = [ (mysetupPkgs.quickshell or pkgs.quickshell) ];
+      packages = [
+        (mysetupPkgs.quickshell or pkgs.quickshell)
+        # caelestia-shell uses xmllint to resolve XKB layout descriptions.
+        pkgs.libxml2
+      ];
     };
   };
 }

@@ -45,6 +45,41 @@ let
     package:
     package.overrideAttrs (oldAttrs: {
       patches = (oldAttrs.patches or [ ]) ++ [ caelestiaShellHyprLuaPatch ];
+      postPatch = (oldAttrs.postPatch or "") + ''
+        hypr_reload_replacement="$(cat <<'EOF'
+        const bindScript = 'hl.unbind("Caps_Lock"); '
+            + 'hl.unbind("Num_Lock"); '
+            + 'hl.bind("Caps_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true }); '
+            + 'hl.bind("Num_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true })';
+
+        Quickshell.execDetached([
+            "hyprctl",
+            "eval",
+            bindScript
+        ]);
+        EOF
+        )"
+
+        substituteInPlace services/Hypr.qml \
+          --replace-fail \
+            'extras.batchMessage(["keyword bindlni ,Caps_Lock,global,caelestia:refreshDevices", "keyword bindlni ,Num_Lock,global,caelestia:refreshDevices"]);' \
+            "$hypr_reload_replacement"
+
+        substituteInPlace modules/bar/popouts/Content.qml \
+          --replace-fail \
+            'sourceComponent: trayMenuComp' \
+            'sourceComponent: trayMenu.modelData?.menu ? trayMenuComp : null'
+
+        substituteInPlace modules/bar/popouts/Content.qml \
+          --replace-fail \
+            'if (root.popouts.hasCurrent && trayMenu.shouldBeActive) {' \
+            'if (root.popouts.hasCurrent && trayMenu.shouldBeActive && trayMenu.modelData?.menu) {'
+
+        substituteInPlace modules/bar/popouts/TrayMenu.qml \
+          --replace-fail \
+            'model: menuOpener.children' \
+            'model: menuOpener.children.filter(child => !!child)'
+      '';
     });
 
   shellPackagesFor =
