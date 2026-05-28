@@ -5,14 +5,14 @@ on:
     paths:
       - "Linux/**"
       - ".github/dependabot.yml"
-      - ".github/workflows/linting.yml"
+      - ".github/workflows/**"
   push:
     branches:
       - main
     paths:
       - "Linux/**"
       - ".github/dependabot.yml"
-      - ".github/workflows/linting.yml"
+      - ".github/workflows/**"
 
 jobs:
   linting:
@@ -40,6 +40,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends fish shellcheck jq
+
+      - name: Lint GitHub Actions workflows
+        run: nix run nixpkgs#actionlint -- .github/workflows/*.yml
 
       - name: Run linting + tests
         run: make -C Linux all
