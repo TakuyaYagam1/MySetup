@@ -11,7 +11,6 @@ mysetup.bind_exec(v.kbTerminal, "app2unit -- " .. v.terminal, { description = "O
 mysetup.bind_exec(v.kbZen, "app2unit -- " .. v.zen, { description = "Open Zen" })
 mysetup.bind_exec(v.kbCursor, "app2unit -- " .. v.cursor, { description = "Open Cursor" })
 mysetup.bind_exec(v.kbVscode, "app2unit -- " .. v.vscode, { description = "Open VS Code" })
-mysetup.bind_exec(v.kbGoland, "app2unit -- " .. v.goland, { description = "Open GoLand" })
 mysetup.bind_exec(v.kbDatagrip, "app2unit -- " .. v.datagrip, { description = "Open DataGrip" })
 mysetup.bind_exec(v.kbAntigravity, "app2unit -- " .. v.antigravity, { description = "Open Antigravity" })
 mysetup.bind_exec(v.kbAmneziaVPN, "app2unit -- " .. v.amneziaVPN, { description = "Open AmneziaVPN" })

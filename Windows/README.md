@@ -49,7 +49,7 @@ edit per machine.
 
 A keybind whose app is not installed is a harmless no-op: `launch.ps1` exits
 quietly (hidden window), the rest of the config keeps working. So unused
-launchers (e.g. GoLand, Antigravity, v2rayN) can stay in `whkdrc`.
+launchers (e.g. Antigravity, v2rayN) can stay in `whkdrc`.
 
 ## Installation
 
@@ -154,7 +154,6 @@ launchers (e.g. GoLand, Antigravity, v2rayN) can stay in `whkdrc`.
 | `Alt + Shift + F` | Zen Browser |
 | `Alt + Shift + C` | Cursor |
 | `Alt + Shift + V` | VS Code |
-| `Alt + Shift + G` | GoLand |
 | `Alt + Shift + D` | DataGrip |
 | `Alt + Shift + A` | Antigravity |
 | `Alt + E` | File Explorer |

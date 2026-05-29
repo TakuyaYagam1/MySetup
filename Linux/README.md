@@ -152,7 +152,7 @@ Secret files must be regular files, non-symlinks, and not group/world readable.
 - Git identity: `user.name` and `user.email` for Home Manager Git config.
 - Region: timezone, locale, console keymap, weather location, Russia mode
   (`mysetup.features.russiaMode` - when `true`, drops JetBrains products
-  such as `jetbrains.datagrip` / `jetbrains.goland` from the home package set).
+  such as `jetbrains.datagrip` from the home package set).
 - Display: monitor name, mode, position, scale, Hypr keyboard layouts/toggle.
 - Package preset: `personal`, `developer`, `desktop`, or `minimal`.
 - Feature flags: GPU type, Secure Boot, CTF tools, OmniRouter.

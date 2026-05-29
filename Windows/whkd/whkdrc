@@ -98,9 +98,6 @@ alt + shift + t : powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Byp
 # Discord  (Linux: $kbVesktop = Super+Shift, B -> vesktop)
 alt + shift + b : powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%USERPROFILE%\.config\launch.ps1" Discord
 
-# GoLand  (Linux: $kbGoland = Super+Shift, G)
-alt + shift + g : powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%USERPROFILE%\.config\launch.ps1" GoLand
-
 # Antigravity  (Linux: $kbAntigravity = Super+Shift, A)
 alt + shift + a : powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%USERPROFILE%\.config\launch.ps1" Antigravity
 

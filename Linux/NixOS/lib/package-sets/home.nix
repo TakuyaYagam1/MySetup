@@ -79,9 +79,6 @@ in
       android-tools
       scrcpy
     ])
-    ++ lib.optionals (!russiaMode) [
-      pkgs.jetbrains.goland
-    ];
   games = with pkgs-stable; [
     lutris
     heroic
