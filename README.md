@@ -117,7 +117,7 @@ modules = [
   inputs.mysetup.nixosModules.shells
 
   {
-    system.stateVersion = "25.11";
+    system.stateVersion = "26.05";
     mysetup.user = {
       username = "alice";
       fullName = "Alice";

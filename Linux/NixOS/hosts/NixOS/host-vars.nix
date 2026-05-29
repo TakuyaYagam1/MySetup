@@ -1,7 +1,7 @@
 {
   host = {
     hostname = "NixOS";
-    stateVersion = "25.11";
+    stateVersion = "26.05";
     configDirectory = "/etc/nixos";
     autoGarbageCollector = true;
     autoOptimiseStore = true;

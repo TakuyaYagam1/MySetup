@@ -4,7 +4,7 @@
   inputs = {
     # Core
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.11";
+    nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-26.05";
     nixpkgs-bleeding.url = "github:NixOS/nixpkgs/nixos-unstable-small";
     home-manager = {
       url = "github:nix-community/home-manager";
@@ -60,7 +60,13 @@
       repo = "Burpsuite-Professional";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    templ.url = "github:a-h/templ";
+    templ = {
+      url = "github:a-h/templ";
+      inputs = {
+        nixpkgs.follows = "nixpkgs-stable";
+        nixpkgs-unstable.follows = "nixpkgs";
+      };
+    };
 
     # System & security
     lanzaboote = {

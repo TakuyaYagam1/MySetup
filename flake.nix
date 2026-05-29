@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.11";
+    nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-26.05";
     nixpkgs-bleeding.url = "github:NixOS/nixpkgs/nixos-unstable-small";
 
     home-manager = {
@@ -61,7 +61,13 @@
       repo = "Burpsuite-Professional";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    templ.url = "github:a-h/templ";
+    templ = {
+      url = "github:a-h/templ";
+      inputs = {
+        nixpkgs.follows = "nixpkgs-stable";
+        nixpkgs-unstable.follows = "nixpkgs";
+      };
+    };
 
     lanzaboote = {
       url = "github:nix-community/lanzaboote";
@@ -271,7 +277,7 @@
               (
                 { ... }:
                 {
-                  system.stateVersion = "25.11";
+                  system.stateVersion = "26.05";
                   mysetup.user = {
                     username = "alice";
                     fullName = "Alice";

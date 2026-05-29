@@ -3,6 +3,7 @@
   lib,
   mysetupLib,
   pkgs,
+  pkgs-stable ? pkgs,
   ...
 }:
 
@@ -12,25 +13,12 @@ let
   cfgDir = cfg.host.configDirectory;
   desktopOrMore = presets.desktopOrMore cfg;
   personal = presets.personal cfg;
-  amnezia-vpn-x11 = pkgs.symlinkJoin {
-    name = "amnezia-vpn-xwayland";
-    paths = [ pkgs.amnezia-vpn ];
-    buildInputs = [ pkgs.makeWrapper ];
-    postBuild = ''
-      wrapProgram $out/bin/AmneziaVPN \
-        --set QT_QPA_PLATFORM xcb
-
-      if [ -f $out/share/applications/AmneziaVPN.desktop ]; then
-        sed -i 's|^Exec=.*|Exec='$out'/bin/AmneziaVPN|g' $out/share/applications/AmneziaVPN.desktop
-      fi
-    '';
-  };
 in
 {
   programs = {
     amnezia-vpn = lib.mkIf personal {
       enable = true;
-      package = amnezia-vpn-x11;
+      package = pkgs-stable.amnezia-vpn-bin;
     };
 
     dconf.enable = true;

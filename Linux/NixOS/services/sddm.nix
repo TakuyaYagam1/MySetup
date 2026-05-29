@@ -23,6 +23,12 @@ in
       cursorPackage
     ];
 
+    systemd.services.display-manager.environment = {
+      XCURSOR_THEME = cursorTheme;
+      XCURSOR_SIZE = cursorSize;
+      XCURSOR_PATH = "${cursorPackage}/share/icons:/run/current-system/sw/share/icons";
+    };
+
     services.displayManager = {
       defaultSession = "hyprland";
 
