@@ -98,6 +98,8 @@ func syncHyprDotfiles(ctx context.Context, runner run.CommandRunner, src, dst st
 		"--exclude", "/shell-profile.lua",
 		"--exclude", "/shell-launcher.lua",
 		"--exclude", "/shell-keybinds.lua",
+		"--exclude", "/mysetup/hyprland.lua",
+		"--exclude", "/mysetup/local.lua",
 		"--exclude", "/runtime/",
 		"--exclude", "/end4/",
 		src+"/", dst+"/")

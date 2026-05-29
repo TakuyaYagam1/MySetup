@@ -83,6 +83,8 @@ func TestSyncHyprExcludesHomeManagerEnd4Profile(t *testing.T) {
 		"--exclude /hyprland.lua",
 		"--exclude /hyprlock.conf",
 		"--exclude /hypridle.conf",
+		"--exclude /mysetup/hyprland.lua",
+		"--exclude /mysetup/local.lua",
 		"--exclude /runtime/",
 		"--exclude /end4/",
 	} {
