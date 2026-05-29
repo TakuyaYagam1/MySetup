@@ -50,7 +50,10 @@ with pkgs-stable;
   sslstrip
   unfurl
   wafw00f
-  wapiti
+  # Temporarily disabled on 26.05: wapiti-arsenic 28.5 requires
+  # packaging < 26, while nixpkgs currently provides packaging 26.1.
+  # Wait for the nixpkgs/wapiti dependency metadata fix before re-enabling.
+  # wapiti
   waybackurls
   websocat
   weevely
