@@ -3,12 +3,13 @@
   lib,
   pkgs,
   pkgs-stable,
+  inputs,
   ...
 }:
 
 let
   packageSets = import ../lib/package-sets.nix {
-    inherit lib pkgs pkgs-stable;
+    inherit lib pkgs pkgs-stable inputs;
   };
 in
 {

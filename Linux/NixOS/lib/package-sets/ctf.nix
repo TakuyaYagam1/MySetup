@@ -1,4 +1,8 @@
-{ pkgs-stable }:
+{
+  pkgs-stable,
+  inputs ? null,
+  system ? pkgs-stable.stdenv.hostPlatform.system,
+}:
 
 let
   importCategory = name: import (./ctf + "/${name}.nix") { inherit pkgs-stable; };
@@ -15,5 +19,5 @@ in
   ctfPwn = importCategory "pwn";
   ctfReverse = importCategory "reverse";
   ctfStego = importCategory "stego";
-  ctfWeb = importCategory "web";
+  ctfWeb = import ./ctf/web.nix { inherit pkgs-stable inputs system; };
 }

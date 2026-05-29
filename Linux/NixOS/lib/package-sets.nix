@@ -2,6 +2,8 @@
   lib,
   pkgs,
   pkgs-stable ? pkgs,
+  inputs ? null,
+  system ? pkgs.stdenv.hostPlatform.system,
 }:
 
 let
@@ -21,7 +23,7 @@ let
     inherit pkgs-stable;
   };
   ctfSets = import ./package-sets/ctf.nix {
-    inherit pkgs-stable;
+    inherit pkgs-stable inputs system;
   };
 in
 {

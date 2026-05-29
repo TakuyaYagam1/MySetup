@@ -38,7 +38,75 @@ let
     +        Hyprland.dispatch(request);
          }
 
-         function cycleSpecialWorkspace(direction: string): void {
+        function cycleSpecialWorkspace(direction: string): void {
+  '';
+
+  hyprReloadReplacement = builtins.toFile "caelestia-shell-hypr-reload.qml" ''
+    const bindScript = 'hl.unbind("Caps_Lock"); '
+        + 'hl.unbind("Num_Lock"); '
+        + 'hl.bind("Caps_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true }); '
+        + 'hl.bind("Caps_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, release = true }); '
+        + 'hl.bind("Num_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true }); '
+        + 'hl.bind("Num_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, release = true })';
+
+    Quickshell.execDetached([
+        "hyprctl",
+        "eval",
+        bindScript
+    ]);
+  '';
+
+  hyprRefreshHelperReplacement = builtins.toFile "caelestia-shell-refresh-helper.qml" ''
+    signal configReloaded
+
+    property int refreshDevicesRetryCount: 0
+
+    function refreshDevicesWithRetry(): void {
+        extras.refreshDevices();
+        refreshDevicesRetryCount = 0;
+        refreshDevicesRetry.restart();
+    }
+  '';
+
+  hyprRefreshHandlerReplacement = builtins.toFile "caelestia-shell-refresh-handler.qml" ''
+        function refreshDevices(): void {
+            root.refreshDevicesWithRetry();
+        }
+  '';
+
+  hyprRefreshHandlerPattern = builtins.toFile "caelestia-shell-refresh-handler-pattern.qml" (
+    "        function refreshDevices(): void {\n"
+    + "            extras.refreshDevices();\n"
+    + "        }\n"
+  );
+
+  hyprRefreshShortcutReplacement = builtins.toFile "caelestia-shell-refresh-shortcut.qml" ''
+        onPressed: root.refreshDevicesWithRetry()
+        onReleased: root.refreshDevicesWithRetry()
+  '';
+
+  hyprRefreshShortcutPattern = builtins.toFile "caelestia-shell-refresh-shortcut-pattern.qml" (
+    "        onPressed: extras.refreshDevices()\n"
+    + "        onReleased: extras.refreshDevices()\n"
+  );
+
+  hyprRefreshTimerReplacement = builtins.toFile "caelestia-shell-refresh-timer.qml" ''
+    Timer {
+        id: refreshDevicesRetry
+        interval: 80
+        repeat: true
+        onTriggered: {
+            extras.refreshDevices();
+            root.refreshDevicesRetryCount += 1;
+
+            if (root.refreshDevicesRetryCount >= 3) {
+                stop();
+                root.refreshDevicesRetryCount = 0;
+            }
+        }
+    }
+
+    FileView {
   '';
 
   patchCaelestiaShell =
@@ -46,26 +114,30 @@ let
     package.overrideAttrs (oldAttrs: {
       patches = (oldAttrs.patches or [ ]) ++ [ caelestiaShellHyprLuaPatch ];
       postPatch = (oldAttrs.postPatch or "") + ''
-        hypr_reload_replacement="$(cat <<'EOF'
-        const bindScript = 'hl.unbind("Caps_Lock"); '
-            + 'hl.unbind("Num_Lock"); '
-            + 'hl.bind("Caps_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true }); '
-            + 'hl.bind("Caps_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, release = true }); '
-            + 'hl.bind("Num_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true }); '
-            + 'hl.bind("Num_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, release = true })';
-
-        Quickshell.execDetached([
-            "hyprctl",
-            "eval",
-            bindScript
-        ]);
-        EOF
-        )"
-
         substituteInPlace services/Hypr.qml \
           --replace-fail \
             'extras.batchMessage(["keyword bindlni ,Caps_Lock,global,caelestia:refreshDevices", "keyword bindlni ,Num_Lock,global,caelestia:refreshDevices"]);' \
-            "$hypr_reload_replacement"
+            "$(cat ${hyprReloadReplacement})"
+
+        substituteInPlace services/Hypr.qml \
+          --replace-fail \
+            'signal configReloaded' \
+            "$(cat ${hyprRefreshHelperReplacement})"
+
+        substituteInPlace services/Hypr.qml \
+          --replace-fail \
+            "$(cat ${hyprRefreshHandlerPattern})" \
+            "$(cat ${hyprRefreshHandlerReplacement})"
+
+        substituteInPlace services/Hypr.qml \
+          --replace-fail \
+            "$(cat ${hyprRefreshShortcutPattern})" \
+            "$(cat ${hyprRefreshShortcutReplacement})"
+
+        substituteInPlace services/Hypr.qml \
+          --replace-fail \
+            '    FileView {' \
+            "$(cat ${hyprRefreshTimerReplacement})"
 
         substituteInPlace modules/bar/popouts/Content.qml \
           --replace-fail \
@@ -77,10 +149,6 @@ let
             'if (root.popouts.hasCurrent && trayMenu.shouldBeActive) {' \
             'if (root.popouts.hasCurrent && trayMenu.shouldBeActive && trayMenu.modelData?.menu) {'
 
-        substituteInPlace modules/bar/popouts/TrayMenu.qml \
-          --replace-fail \
-            'model: menuOpener.children' \
-            'model: menuOpener.children.filter(child => !!child)'
       '';
     });
 
