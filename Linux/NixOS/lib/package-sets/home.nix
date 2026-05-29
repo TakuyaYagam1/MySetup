@@ -61,24 +61,23 @@ in
     anytype
   ];
 
-  dev =
-    (with pkgs; [
-      vscode
-      code-cursor
-      qtcreator
-      antigravity
-      gemini-cli
-      claude-code
-      codex
-      ollama
-      opencode
-      opencode-claude-auth
-      opencode-desktop
-      flutter
-      android-studio-full
-      android-tools
-      scrcpy
-    ])
+  dev = with pkgs; [
+    vscode
+    code-cursor
+    qtcreator
+    antigravity
+    gemini-cli
+    claude-code
+    codex
+    ollama
+    opencode
+    opencode-claude-auth
+    opencode-desktop
+    flutter
+    android-studio-full
+    android-tools
+    scrcpy
+  ];
   games = with pkgs-stable; [
     lutris
     heroic
