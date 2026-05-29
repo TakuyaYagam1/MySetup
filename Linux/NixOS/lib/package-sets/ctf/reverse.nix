@@ -3,7 +3,10 @@
 let
   reversePython = pkgs-stable.python3.withPackages (
     ps: with ps; [
-      angr
+      # Temporarily disabled on 26.05: angr is 9.2.193, but nixpkgs still
+      # provides some required angr components as 9.2.154 (pyvex/cle/archinfo).
+      # Wait for the Python package set to become consistent before re-enabling.
+      # angr
       capstone
       keystone-engine
       lief
