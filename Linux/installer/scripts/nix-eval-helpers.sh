@@ -44,7 +44,7 @@ eval_hm_simple() {
               ({ ... }: {
                 home.username = \"user\";
                 home.homeDirectory = \"/tmp/mysetup-home\";
-                home.stateVersion = \"25.11\";
+                home.stateVersion = \"26.05\";
               })
               (nixosDir + \"/home/shells/default.nix\")
             ];

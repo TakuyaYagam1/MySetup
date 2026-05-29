@@ -112,7 +112,7 @@ func validateUserFields(state State, errs *FieldErrors) {
 		errs.Hostname = "hostname must be a single RFC1123 label"
 	}
 	if !versionRe.MatchString(state.Host.StateVersion) {
-		errs.StateVersion = "state version must look like 25.11"
+		errs.StateVersion = "state version must look like 26.05"
 	}
 	if state.User.FullName == "" {
 		errs.FullName = "full name cannot be empty"

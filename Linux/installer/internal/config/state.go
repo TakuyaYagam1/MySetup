@@ -127,7 +127,7 @@ func Default() State {
 		SchemaVersion: SchemaVersion,
 		Host: Host{
 			Hostname:     "NixOS",
-			StateVersion: "25.11",
+			StateVersion: "26.05",
 		},
 		User: User{
 			Username:      currentUser(),
