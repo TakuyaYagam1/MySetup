@@ -103,6 +103,6 @@ in
     })
     winetricks
     protontricks
-    wineWowPackages.stable
+    wineWow64Packages.stable
   ];
 }
