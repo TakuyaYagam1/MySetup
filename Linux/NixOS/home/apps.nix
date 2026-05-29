@@ -51,18 +51,6 @@ in
       };
     }
     // lib.optionalAttrs ctfTools {
-      burpsuitepro = {
-        name = "BurpSuite Professional";
-        comment = "An integrated platform for performing security testing of web applications";
-        exec = "/run/current-system/sw/bin/burpsuitepro";
-        icon = "burpsuitepro";
-        terminal = false;
-        categories = [
-          "Development"
-          "Security"
-          "System"
-        ];
-      };
       "org.zim_wiki.Zim" = {
         name = "Zim Desktop Wiki";
         comment = "Edit text files \"wiki style\"";

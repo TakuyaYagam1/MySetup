@@ -1,9 +1,24 @@
 { pkgs-stable, inputs, system }:
 
+let
+  burpsuitepro = inputs.burpsuitepro.packages.${system}.default;
+  burpsuiteproWithDesktop = pkgs-stable.symlinkJoin {
+    name = "burpsuitepro";
+    paths = [ burpsuitepro ];
+    postBuild = ''
+      desktop=$out/share/applications/burpsuitepro.desktop
+      rm -f "$desktop"
+      install -Dm0644 ${burpsuitepro}/share/applications/burpsuitepro.desktop "$desktop"
+      substituteInPlace "$desktop" \
+        --replace-fail "Exec=burpsuitepro" "Exec=/run/current-system/sw/bin/burpsuitepro"
+    '';
+  };
+in
+
 with pkgs-stable;
 [
   arjun
-  inputs.burpsuitepro.packages.${system}.default
+  burpsuiteproWithDesktop
   cadaver
   commix
   crlfuzz
