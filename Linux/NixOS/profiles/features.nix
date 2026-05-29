@@ -17,8 +17,6 @@ in
     ../services/zapret.nix
     ../services/omnirouter.nix
     ../services/observability.nix
-    ../packages/ghidra-mcp.nix
-    ../packages/burp-mcp.nix
   ];
 
   config = lib.mkIf config.mysetup.features.ctfTools {

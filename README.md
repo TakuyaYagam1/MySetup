@@ -180,6 +180,12 @@ top of their work - these dots would not exist without them:
 - [caelestia-dots/shell](https://github.com/caelestia-dots/shell) -
   Caelestia QuickShell, used as the default runtime profile and as the
   base for the Caelestia Hypr/dots layer.
+- [PortSwigger/mcp-server](https://github.com/PortSwigger/mcp-server) -
+  official Burp Suite MCP extension. MySetup does not package it; install it
+  from upstream when you need Burp MCP access.
+- [LaurieWired/GhidraMCP](https://github.com/LaurieWired/GhidraMCP) -
+  Ghidra MCP bridge. MySetup does not package it; install it from upstream
+  when you need Ghidra MCP access.
 
 Additional thanks to [@outfoxxed](https://github.com/outfoxxed) for
 [QuickShell](https://github.com/outfoxxed/quickshell), which all three shell
