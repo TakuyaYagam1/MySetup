@@ -1,9 +1,9 @@
-{ pkgs-stable }:
+{ pkgs-stable, inputs, system }:
 
 with pkgs-stable;
 [
   arjun
-  burpsuite
+  inputs.burpsuitepro.packages.${system}.default
   cadaver
   commix
   crlfuzz

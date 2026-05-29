@@ -7,6 +7,9 @@
 
 let
   meowrchSddmTheme = pkgs.callPackage ../packages/sddm-meowrch-theme.nix { };
+  cursorPackage = pkgs.bibata-cursors;
+  cursorTheme = "Bibata-Modern-Classic";
+  cursorSize = "24";
 in
 {
   config = mysetupLib.mkIfPresetOrMore "desktop" config.mysetup {
@@ -15,7 +18,10 @@ in
 
     services.gnome.gnome-keyring.enable = true;
     security.pam.services.sddm.enableGnomeKeyring = true;
-    environment.systemPackages = [ pkgs.libsecret ];
+    environment.systemPackages = [
+      pkgs.libsecret
+      cursorPackage
+    ];
 
     services.displayManager = {
       defaultSession = "hyprland";
@@ -28,10 +34,13 @@ in
         settings.Theme = {
           ThemeDir = "${meowrchSddmTheme}/share/sddm/themes";
           Current = "meowrch-sddm-theme";
+          CursorTheme = cursorTheme;
+          CursorSize = cursorSize;
           FacesDir = "/etc/sddm/faces";
         };
         extraPackages = with pkgs; [
           meowrchSddmTheme
+          cursorPackage
           kdePackages.qtmultimedia
           gst_all_1.gstreamer
           gst_all_1.gst-plugins-base
