@@ -35,6 +35,9 @@ in
       sddm = {
         enable = true;
         wayland.enable = true;
+        # Weston intermittently loses the hardware cursor on this AMD Wayland greeter.
+        # KWin avoids that cursor-plane path while keeping SDDM on Wayland.
+        wayland.compositor = "kwin";
         package = pkgs.kdePackages.sddm;
         theme = "meowrch-sddm-theme";
         settings.Theme = {
