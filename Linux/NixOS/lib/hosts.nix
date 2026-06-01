@@ -10,14 +10,12 @@ let
   hardwarePath = ../hosts/NixOS/hardware-configuration.nix;
   hashedPasswordPath = ../hosts/NixOS/hashed-password.nix;
   hasHardware = builtins.pathExists hardwarePath;
-  ciHardwareFallback =
-    { ... }:
-    {
-      fileSystems."/" = {
-        device = "none";
-        fsType = "tmpfs";
-      };
+  ciHardwareFallback = _: {
+    fileSystems."/" = {
+      device = "none";
+      fsType = "tmpfs";
     };
+  };
 in
 {
   nixosConfigurations.${hostname} = mkMySetupHost {
