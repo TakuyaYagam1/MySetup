@@ -134,18 +134,50 @@ jobs:
         run: rm -f result result-*
 
       - name: Create pull request
+        id: cpr
         if: steps.compare.outputs.should_update == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
-          commit-message: "chore: update omnirouter"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(nix): update omnirouter"
           branch: "update-omnirouter"
           delete-branch: true
           add-paths: |
             Linux/NixOS/packages/omnirouter.nix
-          title: "Update OmniRouter to v${{ steps.release.outputs.version }}"
+          title: "chore(nix): update omnirouter to v${{ steps.release.outputs.version }}"
           body: |
+            ## What
+
             Updates local `omnirouter` package to `v${{ steps.release.outputs.version }}`.
 
             Updated hashes:
             - source: `${{ steps.src.outputs.hash }}`
             - npmDepsHash: `${{ steps.npm.outputs.hash }}`
+
+            ## Why
+
+            Keeps the packaged OmniRouter release current.
+
+            ## Testing
+
+            - `nix build --no-write-lock-file "$FLAKE#omnirouter"`
+
+      - name: Approve pull request
+        continue-on-error: true
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+        run: |
+          gh pr review "$PR_NUMBER" --approve --body "Auto-approved after scheduled OmniRouter update build passed."
+
+      - name: Merge pull request
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+        run: |
+          if gh pr merge "$PR_NUMBER" --squash --delete-branch; then
+            exit 0
+          fi
+          gh pr merge "$PR_NUMBER" --auto --squash --delete-branch

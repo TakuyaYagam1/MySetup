@@ -54,6 +54,8 @@ buildNpmPackage' rec {
     NEXT_TELEMETRY_DISABLED = "1";
     npm_config_arch = stdenv.hostPlatform.parsed.cpu.name;
     SHARP_IGNORE_GLOBAL_LIBVIPS = "0";
+    # CPU binaries are bundled; skip optional CUDA downloads from NuGet.
+    ONNXRUNTIME_NODE_INSTALL = "skip";
   };
 
   doCheck = false;

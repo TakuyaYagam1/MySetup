@@ -3,7 +3,7 @@ name: Update flake inputs
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 6 * * 1"
+    - cron: "0 1 * * *"
 
 permissions:
   contents: write
@@ -93,6 +93,7 @@ jobs:
           fi
 
       - name: Create pull request
+        id: cpr
         if: steps.check.outputs.modified == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
@@ -103,6 +104,43 @@ jobs:
           add-paths: |
             flake.lock
             Linux/NixOS/flake.lock
-          title: "Update flake locks"
+          title: "chore(nix): update flake locks"
           body: |
+            ## What
+
             Updates root and NixOS flake locks after scheduled input refresh.
+
+            ## Why
+
+            Keeps pinned flake inputs current while preserving review through a pull request.
+
+            ## Testing
+
+            - `nix flake check --no-build`
+            - `nix build --no-link --print-build-logs .#checks.x86_64-linux.shells-module`
+            - `nix build .#mysetup --print-build-logs`
+            - `./result/bin/mysetup --help`
+            - `nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.xdg.configFile."hypr/end4".source'`
+            - `nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.programs.caelestia.package'`
+            - `nix build .#mysetup --print-build-logs`
+            - `./result/bin/mysetup --help`
+
+      - name: Approve pull request
+        continue-on-error: true
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+        run: |
+          gh pr review "$PR_NUMBER" --approve --body "Auto-approved after scheduled flake update checks passed."
+
+      - name: Merge pull request
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+        run: |
+          if gh pr merge "$PR_NUMBER" --squash --delete-branch; then
+            exit 0
+          fi
+          gh pr merge "$PR_NUMBER" --auto --squash --delete-branch

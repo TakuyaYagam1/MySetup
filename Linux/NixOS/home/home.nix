@@ -100,8 +100,8 @@ in
   # Caelestia ships its own bar - block any upstream waybar enable.
   programs.waybar.enable = lib.mkForce false;
 
-  # Silence HM 26.05 warning: keep gtk4 inheriting the gtk theme.
-  gtk.gtk4.theme = config.gtk.theme;
+  # Keep GTK4 inheriting the GTK theme unless Stylix defines it explicitly.
+  gtk.gtk4.theme = lib.mkDefault config.gtk.theme;
 
   # When HM uses the system package set, Stylix must not install package overlays
   # inside the HM evaluation as well.

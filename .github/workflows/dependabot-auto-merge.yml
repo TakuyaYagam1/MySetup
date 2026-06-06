@@ -1,0 +1,45 @@
+name: Dependabot auto-merge
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+
+    steps:
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Approve patch and minor updates
+        continue-on-error: true
+        if: ${{ !github.event.pull_request.draft && (steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor') }}
+        run: gh pr review --approve "$PR_URL" --body "Auto-approved Dependabot $UPDATE_TYPE update."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+
+      - name: Merge patch and minor updates
+        if: ${{ !github.event.pull_request.draft && (steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor') }}
+        run: |
+          if gh pr merge --squash --delete-branch "$PR_URL"; then
+            exit 0
+          fi
+          gh pr merge --auto --squash --delete-branch "$PR_URL"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
