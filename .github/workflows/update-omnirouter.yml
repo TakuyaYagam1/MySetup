@@ -162,15 +162,6 @@ jobs:
 
             - `nix build --no-write-lock-file "$FLAKE#omnirouter"`
 
-      - name: Approve pull request
-        continue-on-error: true
-        if: steps.cpr.outputs.pull-request-number != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
-        run: |
-          gh pr review "$PR_NUMBER" --approve --body "Auto-approved after scheduled OmniRouter update build passed."
-
       - name: Merge pull request
         if: steps.cpr.outputs.pull-request-number != ''
         env:
