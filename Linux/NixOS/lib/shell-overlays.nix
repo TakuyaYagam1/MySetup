@@ -6,12 +6,26 @@ let
     index a5ef2cd..5662859 100644
     --- a/services/Hypr.qml
     +++ b/services/Hypr.qml
-    @@ -41,8 +41,31 @@ Singleton {
+    @@ -41,8 +41,80 @@ Singleton {
 
          signal configReloaded
 
     +    function luaString(value: string): string {
     +        return JSON.stringify(value ?? "");
+    +    }
+    +
+    +    function luaWindow(value: string): string {
+    +        const trimmed = (value ?? "").trim();
+    +
+    +        if (trimmed.startsWith("address:")) {
+    +            return trimmed;
+    +        }
+    +
+    +        if (trimmed.startsWith("0x")) {
+    +            return `address:''${trimmed}`;
+    +        }
+    +
+    +        return trimmed;
     +    }
     +
          function dispatch(request: string): void {
@@ -33,6 +47,41 @@ let
     +        if (dispatcher === "togglespecialworkspace") {
     +            Hyprland.dispatch(`hl.dsp.workspace.toggle_special(''${luaString(args)})`);
     +            return;
+    +        }
+    +
+    +        if (dispatcher === "movetoworkspace") {
+    +            const parts = args.split(",");
+    +            const workspace = (parts[0] ?? "").trim();
+    +            const window = luaWindow(parts.slice(1).join(",").trim());
+    +
+    +            if (window !== "") {
+    +                Hyprland.dispatch(`hl.dsp.window.move({ workspace = ''${luaString(workspace)}, follow = false, window = ''${luaString(window)} })`);
+    +                return;
+    +            }
+    +
+    +            Hyprland.dispatch(`hl.dsp.window.move({ workspace = ''${luaString(workspace)} })`);
+    +            return;
+    +        }
+    +
+    +        if (dispatcher === "togglefloating") {
+    +            const window = luaWindow(args);
+    +
+    +            if (window !== "") {
+    +                Hyprland.dispatch(`hl.dsp.window.float({ action = "toggle", window = ''${luaString(window)} })`);
+    +                return;
+    +            }
+    +
+    +            Hyprland.dispatch('hl.dsp.window.float({ action = "toggle" })');
+    +            return;
+    +        }
+    +
+    +        if (dispatcher === "killwindow") {
+    +            const window = luaWindow(args);
+    +
+    +            if (window !== "") {
+    +                Hyprland.dispatch(`hl.dsp.window.close(''${luaString(window)})`);
+    +                return;
+    +            }
     +        }
     +
     +        Hyprland.dispatch(request);
