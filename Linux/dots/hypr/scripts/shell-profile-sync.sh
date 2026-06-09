@@ -341,7 +341,10 @@ validate_profile_ready() {
     noctalia)
       require_file "shell launcher profile" "$dir/noctalia/launcher.lua" || return 1
       require_file "shell keybind profile" "$dir/noctalia/keybinds.lua" || return 1
-      require_command noctalia-shell || return 1
+      if ! mysetup_noctalia_command >/dev/null; then
+        log "noctalia command not found for profile=$profile"
+        return 1
+      fi
       ;;
     end4)
       ensure_end4_profile_link || return 1
