@@ -3,6 +3,7 @@
   homeLibs,
   inputs,
   lib,
+  options,
   pkgs,
   ...
 }:
@@ -31,6 +32,21 @@ let
 
   noctaliaConfigDir = "$HOME/.config/noctalia";
 
+  noctaliaProgramOption = if options.programs ? noctalia then "noctalia" else "noctalia-shell";
+
+  noctaliaProgramConfig = {
+    enable = true;
+    package = noctaliaShellPackage;
+    systemd.enable = false;
+    settings = lib.mkForce { };
+  }
+  // (
+    if noctaliaProgramOption == "noctalia" then
+      { customPalettes = lib.mkForce { }; }
+    else
+      { colors = lib.mkForce { }; }
+  );
+
   seedColorSchemeFiles = lib.concatMapStringsSep "\n" (
     file:
     let
@@ -56,13 +72,7 @@ let
   ) colorSchemeFiles;
 in
 {
-  programs.noctalia-shell = {
-    enable = true;
-    package = noctaliaShellPackage;
-    systemd.enable = false;
-    settings = lib.mkForce { };
-    colors = lib.mkForce { };
-  };
+  programs.${noctaliaProgramOption} = noctaliaProgramConfig;
 
   # The upstream Stylix target writes this as a Nix store symlink, but Noctalia
   # uses it as mutable runtime state for selected wallpapers.
