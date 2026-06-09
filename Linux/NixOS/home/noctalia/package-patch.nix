@@ -5,12 +5,15 @@ let
 in
 inputs.noctalia-shell.packages.${system}.default.overrideAttrs (oldAttrs: {
   postPatch = (oldAttrs.postPatch or "") + ''
+    if [ -f Modules/Tooltip/Tooltip.qml ]; then
       # Tooltip: clamp width in grid mode so multi-monitor tooltips stay on-screen.
       grep -q '^  property int maxWidth: 340$' Modules/Tooltip/Tooltip.qml
       sed -i '/^  property int maxWidth: 340$/a\  readonly property int effectiveMaxWidth: isGridMode ? Math.max(1, screenWidth - (margin * 2)) : maxWidth' Modules/Tooltip/Tooltip.qml
       substituteInPlace Modules/Tooltip/Tooltip.qml \
         --replace-fail 'Math.ceil(Math.min(contentWidth + ((padding + extraPad) * 2), maxWidth))' 'Math.ceil(Math.min(contentWidth + ((padding + extraPad) * 2), effectiveMaxWidth))'
+    fi
 
+    if [ -f Modules/LockScreen/LockScreenPanel.qml ]; then
       # LockScreen: derive panel/button dimensions from Style.uiScaleRatio so HiDPI
       # displays render the password field, session buttons, and panel at usable size.
       grep -q '^  readonly property bool weatherReady: Settings.data.location.weatherEnabled && (LocationService.data.weather !== null)$' Modules/LockScreen/LockScreenPanel.qml
@@ -27,5 +30,6 @@ inputs.noctalia-shell.packages.${system}.default.overrideAttrs (oldAttrs: {
         --replace-fail '        Layout.preferredHeight: 65' '        Layout.preferredHeight: root.lockTopRowHeight' \
         --replace-fail '          Layout.preferredHeight: 48' '          Layout.preferredHeight: root.lockPasswordHeight' \
         --replace-fail '        Layout.preferredHeight: Settings.data.general.compactLockScreen ? 36 : 48' '        Layout.preferredHeight: root.lockSessionButtonHeight'
+    fi
   '';
 })
