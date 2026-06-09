@@ -125,11 +125,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1780985435,
-        "narHash": "sha256-v3nXiiqfQI+6UNVRMlbN+E6vcgZqVLA1GldilDnHXDs=",
+        "lastModified": 1781005462,
+        "narHash": "sha256-GL2Kx3OxC5TgY59EmaH1V6wFvhHOMzGPOGlFHd53Go0=",
         "owner": "caelestia-dots",
         "repo": "shell",
-        "rev": "63b522648ea52650937b62f748b65dfb8ba4562d",
+        "rev": "362c1ec670ff91a023186bced4e7a2704d29891d",
         "type": "github"
       },
       "original": {
@@ -495,17 +495,17 @@
     "m3shapes": {
       "flake": false,
       "locked": {
-        "lastModified": 1777812556,
-        "narHash": "sha256-E5nqOucRQBWKuT31AMekmfgMywRdHgSbU86R7t4BKKA=",
+        "lastModified": 1781001698,
+        "narHash": "sha256-yJ7IFqIbFBhSB5iXQK1/z/l1V8SRhiK2CK+hTVvwW2o=",
         "owner": "soramanew",
         "repo": "m3shapes",
-        "rev": "356825d31f16052a782735cce264331cba0cb71b",
+        "rev": "eb93964ab8583ae21c3a0bb9897f96ef9a1b5377",
         "type": "github"
       },
       "original": {
         "owner": "soramanew",
         "repo": "m3shapes",
-        "rev": "356825d31f16052a782735cce264331cba0cb71b",
+        "rev": "eb93964ab8583ae21c3a0bb9897f96ef9a1b5377",
         "type": "github"
       }
     },
