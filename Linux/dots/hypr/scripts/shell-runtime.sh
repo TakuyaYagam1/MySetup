@@ -19,7 +19,7 @@ mysetup_default_shell_profile="caelestia"
 
 mysetup_selector_pattern='((^|[ /])(qs|quickshell)([[:space:]].*)?-c[[:space:]]mysetup-shell-selector([[:space:]]|$))|quickshell/mysetup-shell-selector([/[:space:]]|$)'
 mysetup_end4_pattern='((^|[ /])(qs-end4|qs|quickshell)([[:space:]].*)?-c[[:space:]]ii([[:space:]]|$))|quickshell/ii([/[:space:]]|$)'
-mysetup_noctalia_pattern='(^|[ /])noctalia([[:space:]]|$)|noctalia-shell|share/noctalia-shell'
+mysetup_noctalia_pattern='noctalia-shell|share/noctalia-shell'
 mysetup_caelestia_pattern='share/caelestia-shell|caelestia-shell|(^|[ /])caelestia[[:space:]]+shell([[:space:]]|$)'
 mysetup_noctalia_env_pattern='^QS_CONFIG_PATH=.*/share/noctalia-shell$'
 mysetup_end4_env_pattern='^qsConfig=.*/quickshell/ii$|^ILLOGICAL_IMPULSE_DOTFILES_SOURCE='
