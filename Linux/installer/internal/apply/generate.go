@@ -26,8 +26,7 @@ func FlakeNix(s config.State) (string, error) {
 }
 
 func ConfigurationNix() string {
-	return `# Host-local NixOS overrides. This file is preserved by MySetup.
-{ pkgs, ... }:
+	return `{ pkgs, ... }:
 
 {
   imports = [

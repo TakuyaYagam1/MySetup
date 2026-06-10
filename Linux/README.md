@@ -63,6 +63,12 @@ nix run 'github:TakuyaYagam1/MySetup/develop'
 
 Fresh install through `/mnt` is not supported in v1. Run this on an already
 booted NixOS system with an existing `/etc/nixos/hardware-configuration.nix`.
+On first adoption from a stock NixOS/KDE install, MySetup replaces the active
+`/etc/nixos/configuration.nix` with a clean host-local override file. The old
+tree is kept in the `/etc/nixos.bak.<timestamp>.<pid>.<n>` backup made before
+writing `/etc/nixos`. VPN/proxy tools such as Amnezia are only a network
+workaround before running MySetup; they are not required in the bootstrap
+`configuration.nix`.
 
 Nix may ask whether to allow the flake app to use additional substituters. That
 is expected for this config; the installer and checks use these binary caches:
@@ -269,10 +275,11 @@ The installer applies changes defensively:
 1. Creates a temporary staging wrapper flake for `/etc/nixos`.
 2. Writes generated `host-vars.nix`, `configuration.nix`, and `home.nix`
    templates when they do not already exist.
-3. Preserves host-local `hardware-configuration.nix`, `flake.lock`,
-   `hashed-password.nix`, `configuration.nix`, `home.nix`, `private/`, and
-   `secrets/`. Existing thin wrapper flakes are preserved; legacy full mirror
-   flakes are replaced with the generated thin wrapper.
+3. Preserves host-local `hardware-configuration.nix`, `hashed-password.nix`,
+   `private/`, and `secrets/`. Existing MySetup thin wrapper flakes also keep
+   `flake.lock`, `configuration.nix`, and `home.nix`; stock NixOS or legacy
+   non-thin configs are replaced with the generated thin wrapper and clean
+   override templates.
 4. Copies or generates `hashed-password.nix` for the staging build.
 5. Runs `nix flake update mysetup --flake <staging>` for the staging wrapper
    when using the default thin layout, so the installed host receives the latest
@@ -529,6 +536,11 @@ run `mysetup doctor` and check the relevant log.
   multiple Wayland shells, Qt/QML, desktop apps, optional CTF stacks. Make
   sure the listed binary caches are accepted (see Install / Reconfigure) -
   without them everything compiles from source.
+- **First `switch` fails after writing `/etc/nixos` with dbus/systemd activation
+  errors.** Reboot into the new generation boundary, then run
+  `sudo nixos-rebuild switch --flake /etc/nixos#NixOS`. The dry-build already
+  passed; this usually means the live system could not restart part of the
+  desktop/session stack cleanly.
 - **`sudo nixos-rebuild switch` works locally but `mysetup apply` fails.**
   The installer wraps switch with stricter checks (dry-build, password
   hash, dots mirror). Run `nix run "path:$PWD?dir=Linux/NixOS#mysetup" --

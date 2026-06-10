@@ -47,9 +47,9 @@ func copyExistingThinHostLocal(ctx context.Context, runner run.CommandRunner, st
 		return err
 	}
 
-	preservedFiles := []string{"configuration.nix", "home.nix"}
+	preservedFiles := []string{}
 	if thinFlake {
-		preservedFiles = append([]string{"flake.lock"}, preservedFiles...)
+		preservedFiles = []string{"flake.lock", "configuration.nix", "home.nix"}
 	}
 	if err := copyExistingThinHostLocalFiles(dest, staging, preservedFiles); err != nil {
 		return err

@@ -129,6 +129,10 @@ func TestThinTemplatesExposeSystemAndHomeOverrides(t *testing.T) {
 	if !strings.Contains(ConfigurationNix(), "environment.systemPackages") {
 		t.Fatalf("configuration.nix template must expose system packages\n%s", ConfigurationNix())
 	}
+	if strings.Contains(ConfigurationNix(), "Edit this configuration file") ||
+		strings.Contains(ConfigurationNix(), "services.desktopManager.plasma6") {
+		t.Fatalf("configuration.nix template must stay a clean MySetup override\n%s", ConfigurationNix())
+	}
 	if !strings.Contains(ConfigurationNix(), "./private") {
 		t.Fatalf("configuration.nix template must import private defaults\n%s", ConfigurationNix())
 	}
@@ -594,6 +598,50 @@ func TestPrepareThinHostLocalPreservesOverridesLockAndSecrets(t *testing.T) {
 	}
 }
 
+func TestPrepareThinHostLocalOverwritesFreshNixOSOverrides(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	for path, content := range map[string]string{
+		filepath.Join(staging, "configuration.nix"):       ConfigurationNix(),
+		filepath.Join(staging, "home.nix"):                HomeNix(),
+		filepath.Join(dest, "hardware-configuration.nix"): "hardware\n",
+		filepath.Join(dest, "configuration.nix"): `# Edit this configuration file to define what should be installed on
+{ pkgs, ... }:
+
+{
+  imports = [ ./hardware-configuration.nix ];
+  boot.loader.systemd-boot.enable = true;
+  services.desktopManager.plasma6.enable = true;
+}
+`,
+		filepath.Join(dest, "home.nix"): "{ pkgs, ... }: { home.packages = [ pkgs.kate ]; }\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin); err != nil {
+		t.Fatal(err)
+	}
+
+	for path, want := range map[string]string{
+		filepath.Join(staging, "configuration.nix"): ConfigurationNix(),
+		filepath.Join(staging, "home.nix"):          HomeNix(),
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != want {
+			t.Fatalf("fresh NixOS adoption must keep generated %s, got:\n%s", filepath.Base(path), data)
+		}
+	}
+}
+
 func TestPrepareThinHostLocalPreservesPrivateDefault(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
@@ -649,9 +697,13 @@ func TestPrepareThinHostLocalReplacesLegacyFullFlake(t *testing.T) {
 	dest := t.TempDir()
 	for path, content := range map[string]string{
 		filepath.Join(staging, "flake.nix"):                    "generated thin wrapper\n",
+		filepath.Join(staging, "configuration.nix"):            ConfigurationNix(),
+		filepath.Join(staging, "home.nix"):                     HomeNix(),
 		filepath.Join(dest, "flake.nix"):                       "{ description = \"NixOS + Caelestia\"; }\n",
 		filepath.Join(dest, "flake.lock"):                      "legacy full lock\n",
 		filepath.Join(dest, "hardware-configuration.nix"):      "hardware\n",
+		filepath.Join(dest, "configuration.nix"):               "{ pkgs, ... }: { services.desktopManager.plasma6.enable = true; }\n",
+		filepath.Join(dest, "home.nix"):                        "{ pkgs, ... }: { home.packages = [ pkgs.kate ]; }\n",
 		filepath.Join(dest, "hosts", "NixOS", "host-vars.nix"): "{ }\n",
 	} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -675,6 +727,18 @@ func TestPrepareThinHostLocalReplacesLegacyFullFlake(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(staging, "flake.lock")); !os.IsNotExist(err) {
 		t.Fatalf("legacy full flake.lock should not be copied into thin staging, stat err: %v", err)
+	}
+	for path, want := range map[string]string{
+		filepath.Join(staging, "configuration.nix"): ConfigurationNix(),
+		filepath.Join(staging, "home.nix"):          HomeNix(),
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != want {
+			t.Fatalf("legacy non-thin overrides should not overwrite generated %s, got:\n%s", filepath.Base(path), data)
+		}
 	}
 }
 

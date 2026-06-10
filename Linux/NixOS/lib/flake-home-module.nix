@@ -12,6 +12,7 @@
     useGlobalPkgs = true;
     useUserPackages = true;
     backupFileExtension = "backup";
+    overwriteBackup = true;
     users.${config.mysetup.user.username} = import ../home/home.nix;
     extraSpecialArgs = {
       inherit

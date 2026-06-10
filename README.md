@@ -56,6 +56,20 @@ instead of Nix's cached GitHub source:
 nix run --refresh 'github:TakuyaYagam1/MySetup'
 ```
 
+Fresh NixOS/KDE bootstrap note: on the first adoption, MySetup replaces the
+active `/etc/nixos/configuration.nix` with a clean host-local override file and
+backs up the previous `/etc/nixos` to `/etc/nixos.bak.<timestamp>...`. Your
+hardware config, password hash, `private/`, and `secrets/` stay preserved. If
+the first live `switch` fails because dbus/systemd could not fully reactivate,
+reboot and run:
+
+```bash
+sudo nixos-rebuild switch --flake /etc/nixos#NixOS
+```
+
+VPN/proxy tools such as Amnezia are only a network workaround before running
+MySetup; they are not required in the bootstrap `configuration.nix`.
+
 Or with a local clone (useful when iterating on the config):
 
 ```bash

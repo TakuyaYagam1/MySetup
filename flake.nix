@@ -243,6 +243,7 @@
             useGlobalPkgs = lib.mkDefault true;
             useUserPackages = lib.mkDefault true;
             backupFileExtension = lib.mkDefault "backup";
+            overwriteBackup = lib.mkDefault true;
             users.${config.mysetup.user.username} = shellHomeModule;
             extraSpecialArgs = {
               inherit inputs mysetupLib;
