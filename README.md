@@ -153,7 +153,7 @@ The installer will ask you about:
 - Display and keyboard layout
 - Secure Boot (Lanzaboote)
 - GPU type (AMD / Intel / NVIDIA)
-- Region (Russia - disables DataGrip, enables Zapret by default)
+- Locale and timezone
 - Zapret DPI bypass config
 - CTF tools
 - User dotfiles (Hypr, Zen Browser theme, Neovim, wallpapers)

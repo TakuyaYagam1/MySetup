@@ -11,9 +11,7 @@ let
   packageSets = import ../../lib/package-sets.nix {
     inherit lib pkgs pkgs-stable;
   };
-  home = packageSets.home {
-    inherit (mysetup.features) russiaMode;
-  };
+  home = packageSets.home { };
 in
 {
   config = lib.mkMerge [

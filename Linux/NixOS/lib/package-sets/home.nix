@@ -2,7 +2,6 @@
   lib,
   pkgs,
   pkgs-stable ? pkgs,
-  russiaMode ? false,
 }:
 
 let
@@ -31,20 +30,17 @@ let
   });
 in
 {
-  apiTools =
-    (with pkgs; [
-      yaak
-      insomnia
-      dbeaver-bin
-      sqlit-tui
-      ngrok
-      pkgs-stable.pgbadger
-      warp-terminal
-      termius
-    ])
-    ++ lib.optionals (!russiaMode) [
-      pkgs.jetbrains.datagrip
-    ];
+  apiTools = with pkgs; [
+    yaak
+    insomnia
+    dbeaver-bin
+    sqlit-tui
+    ngrok
+    pkgs-stable.pgbadger
+    warp-terminal
+    termius
+    jetbrains.datagrip
+  ];
   containers = with pkgs-stable; [
     podman-desktop
   ];

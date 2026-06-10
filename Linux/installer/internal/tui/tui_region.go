@@ -1,9 +1,5 @@
 package tui
 
-import (
-	"github.com/charmbracelet/huh"
-)
-
 func editRegion(s *session) error {
 	return newForm(
 		newBottomFilterSelect().
@@ -23,7 +19,7 @@ func editRegion(s *session) error {
 			Value(&s.state.Locale.DefaultLocale),
 		newBottomFilterSelect().
 			Title("Extra locale").
-			Description("Additional generated locale, usually ru_RU.UTF-8 for Russian input/tools.").
+			Description("Additional generated locale for regional input/tools.").
 			Options(localeOptions(s.state.Locale.ExtraLocale)...).
 			Height(12).
 			Value(&s.state.Locale.ExtraLocale),
@@ -37,9 +33,5 @@ func editRegion(s *session) error {
 			Title("Weather location").
 			Description("City name used by shell/weather widgets if enabled.").
 			Value(&s.state.Locale.WeatherLocation),
-		huh.NewConfirm().
-			Title("Russia mode").
-			Description("Enables region-specific defaults in this config. VPN/proxy services are separate.").
-			Value(&s.state.Features.RussiaMode),
 	).Run()
 }

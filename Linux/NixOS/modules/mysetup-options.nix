@@ -78,11 +78,11 @@ let
       };
       features = mkOption {
         type = types.submodule {
+          freeformType = types.attrsOf types.bool;
           options = {
             secureBoot = boolOption false;
             ctfTools = boolOption false;
             omnirouter = boolOption false;
-            russiaMode = boolOption false;
             observability = boolOption false;
           };
         };

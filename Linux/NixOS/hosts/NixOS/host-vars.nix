@@ -38,7 +38,6 @@
     secureBoot = false;
     ctfTools = false;
     omnirouter = false;
-    russiaMode = false;
     observability = false;
   };
 

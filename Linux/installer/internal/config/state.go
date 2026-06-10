@@ -102,7 +102,6 @@ type Features struct {
 	SecureBoot    bool `json:"secureBoot"`
 	CTFTools      bool `json:"ctfTools"`
 	OmniRouter    bool `json:"omniRouter"`
-	RussiaMode    bool `json:"russiaMode"`
 	Observability bool `json:"observability"`
 }
 type Zapret struct {

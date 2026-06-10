@@ -145,7 +145,6 @@ var hostVarsTemplate = template.Must(template.New("host-vars.nix").Funcs(templat
     secureBoot = {{ nixBool .Features.SecureBoot }};
     ctfTools = {{ nixBool .Features.CTFTools }};
     omnirouter = {{ nixBool .Features.OmniRouter }};
-    russiaMode = {{ nixBool .Features.RussiaMode }};
     observability = {{ nixBool .Features.Observability }};
   };
 

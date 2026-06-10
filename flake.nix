@@ -184,7 +184,6 @@
               secureBoot = lib.mkDefault false;
               ctfTools = lib.mkDefault false;
               omnirouter = lib.mkDefault false;
-              russiaMode = lib.mkDefault false;
               observability = lib.mkDefault false;
             };
             zapret = {

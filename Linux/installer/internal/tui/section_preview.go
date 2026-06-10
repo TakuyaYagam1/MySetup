@@ -61,7 +61,6 @@ func previewRegion(s config.State) []string {
 		previewSetting("Extra locale", "Additional generated locale for regional tools/input.", s.Locale.ExtraLocale),
 		previewSetting("Console keymap", "TTY keyboard map only. Default is us; Hypr graphical layouts are configured in Display.", s.Locale.ConsoleKeyMap),
 		previewSetting("Weather location", "City name used by shell/weather widgets.", s.Locale.WeatherLocation),
-		previewSetting("Russia mode", "Region-specific defaults in this config.", formatBool(s.Features.RussiaMode)),
 	)
 }
 
