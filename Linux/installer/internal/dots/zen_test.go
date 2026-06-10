@@ -176,3 +176,48 @@ func TestSetupZenThemeDoesNotBackupManagedChrome(t *testing.T) {
 		t.Fatalf("managed Zen chrome should remain in place: %v", err)
 	}
 }
+
+func TestEnsureZenCustomCSSPrefCreatesUserJS(t *testing.T) {
+	profile := t.TempDir()
+
+	if err := ensureZenCustomCSSPref(context.Background(), run.Runner{}, profile, "tester"); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(profile, "user.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(data); got != zenCustomCSSPrefLine+"\n" {
+		t.Fatalf("unexpected user.js content:\n%s", got)
+	}
+}
+
+func TestEnsureZenCustomCSSPrefReplacesDisabledValue(t *testing.T) {
+	profile := t.TempDir()
+	userJS := filepath.Join(profile, "user.js")
+	if err := os.WriteFile(userJS, []byte(`user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", false);
+user_pref("other.pref", true);
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ensureZenCustomCSSPref(context.Background(), run.Runner{}, profile, "tester"); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(userJS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	if strings.Count(got, zenCustomCSSPref) != 1 {
+		t.Fatalf("expected one custom CSS pref, got:\n%s", got)
+	}
+	if !strings.Contains(got, zenCustomCSSPrefLine) {
+		t.Fatalf("expected enabled custom CSS pref, got:\n%s", got)
+	}
+	if !strings.Contains(got, `user_pref("other.pref", true);`) {
+		t.Fatalf("expected unrelated prefs to be preserved, got:\n%s", got)
+	}
+}
