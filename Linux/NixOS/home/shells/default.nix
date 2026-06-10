@@ -92,7 +92,7 @@ let
   );
 
   backupTargets = lib.concatMapStringsSep " \\\n" (
-    path: ''"${config.xdg.configHome}/${path}.hm-backup"''
+    path: ''"${config.xdg.configHome}/${path}.backup"''
   ) managedHyprPaths;
 
   legacyHyprlandRuntimePaths = [

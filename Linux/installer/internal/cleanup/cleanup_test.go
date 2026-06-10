@@ -24,7 +24,7 @@ func TestRunDryRunPrintsCleanupCommands(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".config/nvim"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(home, ".config/nvim/init.lua.hm-backup"), []byte("-- backup\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(home, ".config/nvim/init.lua.backup"), []byte("-- backup\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -34,7 +34,7 @@ func TestRunDryRunPrintsCleanupCommands(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"rm -rf", "preview-*", ".cache/noctalia", "*.hm-backup"} {
+	for _, want := range []string{"rm -rf", "preview-*", ".cache/noctalia", "*.backup"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected cleanup output to contain %q\n%s", want, out)
 		}
@@ -50,7 +50,7 @@ func TestReportForHomeListsCleanupCandidates(t *testing.T) {
 		filepath.Join(home, ".cache/noctalia"),
 		filepath.Join(home, ".cache/nvim/treesitter"),
 		filepath.Join(home, ".local/share/nvim/treesitter"),
-		filepath.Join(home, ".config/**/*.hm-backup"),
+		filepath.Join(home, ".config/**/*.backup"),
 	} {
 		if !strings.Contains(report, want) {
 			t.Fatalf("expected cleanup report to contain %q, got:\n%s", want, report)

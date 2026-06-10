@@ -242,7 +242,7 @@
           home-manager = {
             useGlobalPkgs = lib.mkDefault true;
             useUserPackages = lib.mkDefault true;
-            backupFileExtension = lib.mkDefault "hm-backup";
+            backupFileExtension = lib.mkDefault "backup";
             users.${config.mysetup.user.username} = shellHomeModule;
             extraSpecialArgs = {
               inherit inputs mysetupLib;

@@ -11,7 +11,7 @@
   home-manager = {
     useGlobalPkgs = true;
     useUserPackages = true;
-    backupFileExtension = "hm-backup";
+    backupFileExtension = "backup";
     users.${config.mysetup.user.username} = import ../home/home.nix;
     extraSpecialArgs = {
       inherit

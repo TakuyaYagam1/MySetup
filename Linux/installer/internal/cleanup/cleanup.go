@@ -92,7 +92,7 @@ func candidates(home string) []string {
 		filepath.Join(home, ".cache/noctalia"),
 		filepath.Join(home, ".cache/nvim/treesitter"),
 		filepath.Join(home, ".local/share/nvim/treesitter"),
-		filepath.Join(home, ".config/**/*.hm-backup"),
+		filepath.Join(home, ".config/**/*.backup"),
 	}
 }
 
@@ -126,7 +126,7 @@ func removeHomeManagerBackups(ctx context.Context, runner run.CommandRunner, con
 		}
 		return err
 	}
-	return runner.Command(ctx, "find", configDir, "-type", "f", "-name", "*.hm-backup", "-delete")
+	return runner.Command(ctx, "find", configDir, "-type", "f", "-name", "*.backup", "-delete")
 }
 
 func repairActiveEnd4ProfileLink(ctx context.Context, runner run.CommandRunner, home string) error {
