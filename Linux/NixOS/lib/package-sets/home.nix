@@ -92,7 +92,6 @@ in
     qalculate-gtk
     bulky
     nemo
-    xneur
     app2unit
     cmatrix
     tmux
