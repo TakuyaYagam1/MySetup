@@ -9,7 +9,12 @@
 
 let
   packageSets = import ../lib/package-sets.nix {
-    inherit lib pkgs pkgs-stable inputs;
+    inherit
+      lib
+      pkgs
+      pkgs-stable
+      inputs
+      ;
   };
 in
 {
@@ -21,5 +26,6 @@ in
 
   config = lib.mkIf config.mysetup.features.ctfTools {
     environment.systemPackages = lib.flatten (lib.attrValues packageSets.ctf);
+    programs.wireshark.enable = true;
   };
 }
