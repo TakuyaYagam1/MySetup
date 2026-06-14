@@ -125,11 +125,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1781408632,
-        "narHash": "sha256-kYVf3Jye4UhyBrtubYcSrmVyFv9uqOY2JvjmElFiZHE=",
+        "lastModified": 1781437895,
+        "narHash": "sha256-KGN7Ql7xb/1RF/xP4LInOrRHNUvjAWaL92ABNN8mFrY=",
         "owner": "caelestia-dots",
         "repo": "shell",
-        "rev": "f86c359cd90530bacc800e94e35ffbebecd3f58f",
+        "rev": "7f358235aab727289c50f7e69b96ae7237efc358",
         "type": "github"
       },
       "original": {
@@ -198,11 +198,11 @@
     "end4-dotfiles": {
       "flake": false,
       "locked": {
-        "lastModified": 1780642237,
-        "narHash": "sha256-ZwmstYWzoKIiQFaYDwOxH/I1ZuQ10ZwYWc5J8crJjWA=",
+        "lastModified": 1781429375,
+        "narHash": "sha256-UxCPWLQYFlPEyqqOJ+Xxv+SvYTo0JRA9d3DFqPtNCmg=",
         "ref": "refs/heads/main",
-        "rev": "d192a25faa11cf1d56c839c344c9ef8dd6c2c69d",
-        "revCount": 6279,
+        "rev": "c04b0bbc8143a2b2166c1f699f7583cb28ff78fe",
+        "revCount": 6281,
         "submodules": true,
         "type": "git",
         "url": "https://github.com/end-4/dots-hyprland"
@@ -340,24 +340,6 @@
     "flake-utils_2": {
       "inputs": {
         "systems": "systems_2"
-      },
-      "locked": {
-        "lastModified": 1731533236,
-        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
-        "owner": "numtide",
-        "repo": "flake-utils",
-        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
-        "type": "github"
-      },
-      "original": {
-        "owner": "numtide",
-        "repo": "flake-utils",
-        "type": "github"
-      }
-    },
-    "flake-utils_3": {
-      "inputs": {
-        "systems": "systems_5"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -919,21 +901,6 @@
         "type": "github"
       }
     },
-    "systems_5": {
-      "locked": {
-        "lastModified": 1681028828,
-        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
-        "owner": "nix-systems",
-        "repo": "default",
-        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-systems",
-        "repo": "default",
-        "type": "github"
-      }
-    },
     "templ": {
       "inputs": {
         "gitignore": "gitignore_2",
@@ -1069,18 +1036,17 @@
     },
     "zapret-discord-youtube": {
       "inputs": {
-        "flake-utils": "flake-utils_3",
         "nixpkgs": [
           "nixpkgs"
         ],
         "zapret-flowseal": "zapret-flowseal"
       },
       "locked": {
-        "lastModified": 1781374119,
-        "narHash": "sha256-o+uqKpz3wpZXfIBbGtNK1RalofkwSfquAIJ+blivKhE=",
+        "lastModified": 1781467060,
+        "narHash": "sha256-X0MHMv5NKHHCx6J++NHWGs8As+hD0F76NWp13yhALos=",
         "owner": "kartavkun",
         "repo": "zapret-discord-youtube",
-        "rev": "a1276521110883373018433d07828148c2566665",
+        "rev": "9c3d3ac6ea275123bb5bc837600f76eed3d03fd7",
         "type": "github"
       },
       "original": {
@@ -1092,11 +1058,11 @@
     "zapret-flowseal": {
       "flake": false,
       "locked": {
-        "lastModified": 1781370424,
-        "narHash": "sha256-yielFc5L8bQ4XdXgsfiJUypSt2Fp+uCOzmEW7P4i8S8=",
+        "lastModified": 1781459117,
+        "narHash": "sha256-j3aqltyJ2TZHG9oMabOjzhgUwLYAPQ0weLouVtqxxd0=",
         "owner": "Flowseal",
         "repo": "zapret-discord-youtube",
-        "rev": "d7e154a3516d87d0e083cd88d4fd21b28466d916",
+        "rev": "0b923f9b5c62dd43c37c26f310f73cbe2c947431",
         "type": "github"
       },
       "original": {
