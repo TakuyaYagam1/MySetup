@@ -11,9 +11,17 @@ import (
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
 )
 
-func stageConfiguration(ctx context.Context, runner run.CommandRunner, src paths.Sources, staging string, state config.State, layout Layout) error {
+func stageConfiguration(
+	ctx context.Context,
+	runner run.CommandRunner,
+	src paths.Sources,
+	staging string,
+	state config.State,
+	layout Layout,
+	lockMode LockMode,
+) error {
 	if layout == LayoutThin {
-		return stageThinConfiguration(src, staging, state)
+		return stageThinConfiguration(src, staging, state, lockMode)
 	}
 	return stageFullConfiguration(ctx, runner, src, staging, state)
 }
@@ -31,14 +39,14 @@ func stageFullConfiguration(ctx context.Context, runner run.CommandRunner, src p
 	return writeGenerated(staging, state)
 }
 
-func stageThinConfiguration(src paths.Sources, staging string, state config.State) error {
+func stageThinConfiguration(src paths.Sources, staging string, state config.State, lockMode LockMode) error {
 	if err := ensureStagingWritable(staging); err != nil {
 		return err
 	}
 	if err := writeGenerated(staging, state, LayoutThin); err != nil {
 		return err
 	}
-	if err := writeThinTemplates(staging, state); err != nil {
+	if err := writeThinTemplates(staging, state, lockMode); err != nil {
 		return err
 	}
 	_ = src
@@ -159,8 +167,12 @@ func writeGenerated(staging string, state config.State, layout ...Layout) error 
 	return nil
 }
 
-func writeThinTemplates(staging string, state config.State) error {
-	flake, err := FlakeNix(state)
+func writeThinTemplates(staging string, state config.State, lockMode ...LockMode) error {
+	targetLockMode := LockModeIndependent
+	if len(lockMode) > 0 {
+		targetLockMode = lockMode[0]
+	}
+	flake, err := FlakeNix(state, targetLockMode)
 	if err != nil {
 		return err
 	}

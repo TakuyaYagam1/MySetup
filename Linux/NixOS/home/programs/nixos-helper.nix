@@ -35,8 +35,13 @@ let
         (cd "$CFG" && sudo nixos-rebuild boot --flake ".#$HOST" "''${EXTRA[@]}")
       }
 
+      lock_cmd() {
+        (cd "$CFG" && sudo nix flake update "''${EXTRA[@]}")
+      }
+
       update() {
-        (cd "$CFG" && nix flake update "''${EXTRA[@]}")
+        lock_cmd
+        (cd "$CFG" && sudo nixos-rebuild switch --flake ".#$HOST")
       }
 
       gc() {
@@ -66,6 +71,7 @@ let
           "󰑓 rebuild" \
           "󰐊 test" \
           "󰚰 update" \
+          " lock" \
           " gc" \
           "󰍜 boot" \
           " listgen" \
@@ -76,6 +82,7 @@ let
           *rebuild*) rebuild ;;
           *test*)    test_cmd ;;
           *update*)  update ;;
+          *lock*)    lock_cmd ;;
           *gc*)      gc ;;
           *boot*)    boot_cmd ;;
           *listgen*) listgen ;;
@@ -87,6 +94,7 @@ let
         rebuild) rebuild ;;
         test)    test_cmd ;;
         update)  update ;;
+        lock)    lock_cmd ;;
         gc)      gc ;;
         boot)    boot_cmd ;;
         listgen) listgen ;;

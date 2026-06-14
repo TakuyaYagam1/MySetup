@@ -19,9 +19,10 @@ import (
 var errBackToSections = errors.New("back to section selector")
 
 type Options struct {
-	Paths  paths.Options
-	DryRun bool
-	Layout apply.Layout
+	Paths    paths.Options
+	DryRun   bool
+	Layout   apply.Layout
+	LockMode apply.LockMode
 }
 
 type session struct {
@@ -30,6 +31,7 @@ type session struct {
 	paths    paths.Options
 	dryRun   bool
 	layout   apply.Layout
+	lockMode apply.LockMode
 	selected int
 }
 
@@ -54,10 +56,11 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 	s := &session{
-		state:  state,
-		paths:  opts.Paths,
-		dryRun: opts.DryRun,
-		layout: opts.Layout,
+		state:    state,
+		paths:    opts.Paths,
+		dryRun:   opts.DryRun,
+		layout:   opts.Layout,
+		lockMode: opts.LockMode,
 	}
 
 	for {
@@ -172,6 +175,7 @@ func runApply(ctx context.Context, s *session) error {
 		DryRun:    s.dryRun,
 		AssumeYes: false,
 		Layout:    s.layout,
+		LockMode:  s.lockMode,
 	}); err != nil {
 		return err
 	}

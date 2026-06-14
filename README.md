@@ -82,7 +82,7 @@ The direct NixOS installer app is equivalent and exposes the CLI subcommands
 explicitly:
 
 ```bash
-# Apply the default thin /etc/nixos layout.
+# Apply the default thin /etc/nixos layout with host-owned dependency locks.
 nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- apply
 
 # Validate the staged system build without writing /etc/nixos or switching.
@@ -90,6 +90,10 @@ nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- apply
 
 # Keep the legacy full mirror layout while migrating or debugging.
 nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- apply --layout full
+
+# Compatibility mode: only update the MySetup input and use MySetup's tested
+# transitive flake.lock for nixpkgs/home-manager/stylix/etc.
+nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- apply --lock-mode managed
 
 # Inspect or repair an installed host.
 nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- doctor
@@ -102,8 +106,10 @@ nixos-update
 ```
 
 That command runs `nix flake update` in `/etc/nixos` and then switches the
-system, so the `mysetup` input receives CI-tested package/service changes
-without copying the full repository into `/etc/nixos`.
+system. The default thin wrapper owns the important external inputs in
+`/etc/nixos/flake.lock`, so users can advance nixpkgs, Home Manager, Stylix,
+Quickshell, and related flake inputs locally without copying the full
+repository into `/etc/nixos`.
 
 Useful post-apply checks:
 

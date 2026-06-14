@@ -119,14 +119,44 @@ func TestRunDryRunSkipSwitchHonoursInjectedRunner(t *testing.T) {
 	if strings.Contains(commands, "rsync") {
 		t.Errorf("thin --no-switch should not mirror sources before dry-build; got:\n%s", commands)
 	}
-	if !strings.Contains(commands, "nix --extra-experimental-features nix-command flakes flake update mysetup --flake") {
-		t.Errorf("expected thin layout to update mysetup input before dry-build; got:\n%s", commands)
+	if !strings.Contains(commands, "nix --extra-experimental-features nix-command flakes flake update --flake") {
+		t.Errorf("expected independent thin layout to update the full local lock before dry-build; got:\n%s", commands)
+	}
+	if strings.Contains(commands, "flake update mysetup --flake") {
+		t.Errorf("independent lock mode must not update only mysetup; got:\n%s", commands)
 	}
 	if !strings.Contains(commands, "nixos-rebuild dry-build") {
 		t.Errorf("expected nixos-rebuild dry-build call; got:\n%s", commands)
 	}
 	if strings.Contains(commands, "nixos-rebuild switch") {
 		t.Errorf("SkipSwitch must skip activation; got:\n%s", commands)
+	}
+}
+
+func TestRunManagedThinLockUpdatesOnlyMySetup(t *testing.T) {
+	repo, dest := fakeRepo(t)
+	fake := &fakeRunner{dryRun: true}
+
+	opts := Options{
+		Paths: paths.Options{
+			RepoRoot:  repo,
+			NixOSDest: dest,
+			StatePath: filepath.Join(t.TempDir(), "state.json"),
+		},
+		State:      validState(),
+		DryRun:     true,
+		SkipSwitch: true,
+		LockMode:   LockModeManaged,
+		Runner:     fake,
+	}
+
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run() returned %v", err)
+	}
+
+	commands := commandSummary(fake.calls)
+	if !strings.Contains(commands, "nix --extra-experimental-features nix-command flakes flake update mysetup --flake") {
+		t.Errorf("expected managed thin layout to update only mysetup before dry-build; got:\n%s", commands)
 	}
 }
 

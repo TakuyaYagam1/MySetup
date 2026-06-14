@@ -76,21 +76,21 @@ func syncToEtcFullArgs(staging, dest string) []string {
 	}
 }
 
-func lockStagingFlake(ctx context.Context, runner run.CommandRunner, staging string, layout Layout) error {
+func lockStagingFlake(ctx context.Context, runner run.CommandRunner, staging string, layout Layout, lockMode LockMode) error {
 	if layout != LayoutThin {
 		return nil
 	}
-	return runner.Command(
-		ctx,
-		"nix",
+	args := []string{
 		"--extra-experimental-features",
 		"nix-command flakes",
 		"flake",
 		"update",
-		"mysetup",
-		"--flake",
-		staging,
-	)
+	}
+	if lockMode == LockModeManaged {
+		args = append(args, "mysetup")
+	}
+	args = append(args, "--flake", staging)
+	return runner.Command(ctx, "nix", args...)
 }
 
 func preserveHardware(ctx context.Context, runner run.CommandRunner, dest string) error {

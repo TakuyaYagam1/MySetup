@@ -9,6 +9,13 @@ const (
 	LayoutFull Layout = "full"
 )
 
+type LockMode string
+
+const (
+	LockModeIndependent LockMode = "independent"
+	LockModeManaged     LockMode = "managed"
+)
+
 func normalizeLayout(layout Layout) (Layout, error) {
 	switch layout {
 	case "", LayoutThin:
@@ -17,6 +24,17 @@ func normalizeLayout(layout Layout) (Layout, error) {
 		return LayoutFull, nil
 	default:
 		return "", fmt.Errorf("unknown install layout %q; expected %q or %q", layout, LayoutThin, LayoutFull)
+	}
+}
+
+func normalizeLockMode(lockMode LockMode) (LockMode, error) {
+	switch lockMode {
+	case "", LockModeIndependent:
+		return LockModeIndependent, nil
+	case LockModeManaged:
+		return LockModeManaged, nil
+	default:
+		return "", fmt.Errorf("unknown lock mode %q; expected %q or %q", lockMode, LockModeIndependent, LockModeManaged)
 	}
 }
 

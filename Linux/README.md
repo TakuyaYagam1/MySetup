@@ -274,14 +274,16 @@ The installer applies changes defensively:
 2. Writes generated `host-vars.nix`, `configuration.nix`, and `home.nix`
    templates when they do not already exist.
 3. Preserves host-local `hardware-configuration.nix`, `hashed-password.nix`,
-   `private/`, and `secrets/`. Existing MySetup thin wrapper flakes also keep
-   `flake.lock`, `configuration.nix`, and `home.nix`; stock NixOS or legacy
-   non-thin configs are replaced with the generated thin wrapper and clean
-   override templates.
+   `private/`, and `secrets/`. Existing MySetup thin installs also keep
+   `flake.lock`, `configuration.nix`, and `home.nix`; generated wrapper
+   `flake.nix` files may be regenerated to pick up the selected lock mode.
+   Stock NixOS or legacy non-thin configs are replaced with the generated thin
+   wrapper and clean override templates.
 4. Copies or generates `hashed-password.nix` for the staging build.
-5. Runs `nix flake update mysetup --flake <staging>` for the staging wrapper
-   when using the default thin layout, so the installed host receives the latest
-   shared MySetup stack before dry-build.
+5. Runs `nix flake update --flake <staging>` for the default thin wrapper, so
+   the installed host owns the important external input revisions in
+   `/etc/nixos/flake.lock`. Use `--lock-mode managed` to keep the compatibility
+   behavior of updating only `mysetup` and using MySetup's transitive lock.
 6. Runs `nixos-rebuild dry-build` against the staging flake before touching
    `/etc/nixos`.
 7. Backs up `/etc/nixos` to a unique `/etc/nixos.bak.<timestamp>.<pid>.<n>`.
@@ -292,7 +294,9 @@ The installer applies changes defensively:
 11. Writes `/etc/nixos/mysetup/state.json` only after switch succeeds.
 
 Use `--layout full` to keep the old full-mirror behavior for debugging or
-migration fallback.
+migration fallback. Use `--lock-mode managed` with the thin layout when you want
+the host to track only the MySetup commit while reusing MySetup's tested
+transitive dependency lock.
 
 Rollback is intentionally scoped to `/etc/nixos`. If user dotfile sync fails
 after partial writes under `~/.config`, run `mysetup doctor` and re-apply or
@@ -335,6 +339,7 @@ nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- tui
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- doctor
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- print-state
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --no-switch
+nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --lock-mode managed --no-switch
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --layout full --no-switch
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- cleanup
 ```
@@ -553,6 +558,15 @@ cd /etc/nixos
 sudo nix flake update
 sudo nixos-rebuild switch --flake .#NixOS
 ```
+
+Default thin installs use an independent host lock: `/etc/nixos/flake.lock`
+owns nixpkgs, Home Manager, Stylix, Quickshell, shell flakes, and the MySetup
+source revision. Managed thin installs update only the `mysetup` input and reuse
+the transitive lock shipped by MySetup.
+
+Existing generated thin wrappers migrate to the independent lock shape on the
+next `mysetup apply`; a plain `nix flake update` only changes `flake.lock`, not
+the wrapper `flake.nix` structure.
 
 Garbage collection:
 

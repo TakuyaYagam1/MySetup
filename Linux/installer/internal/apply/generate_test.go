@@ -102,16 +102,25 @@ func TestHostVarsNixContainsWallpaperFlag(t *testing.T) {
 	}
 }
 
-func TestFlakeNixUsesThinMySetupWrapper(t *testing.T) {
+func TestFlakeNixUsesIndependentThinMySetupWrapper(t *testing.T) {
 	state := config.Default()
 	state.Host.Hostname = "workstation"
 
-	out, err := FlakeNix(state)
+	out, err := FlakeNix(state, LockModeIndependent)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`mysetup.url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";`,
+		`# lock mode: independent`,
+		`nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";`,
+		`home-manager = {`,
+		`quickshell = {`,
+		`mysetup = {`,
+		`url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";`,
+		`inputs.nixpkgs.follows = "nixpkgs";`,
+		`inputs.home-manager.follows = "home-manager";`,
+		`inputs.quickshell.follows = "quickshell";`,
+		`inputs.stylix.follows = "stylix";`,
 		`hostname = "workstation";`,
 		`mysetup.lib.mkMySetupHost`,
 		`hostVars = ./host-vars.nix;`,
@@ -121,6 +130,34 @@ func TestFlakeNixUsesThinMySetupWrapper(t *testing.T) {
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("thin flake missing %q\n%s", want, out)
+		}
+	}
+}
+
+func TestFlakeNixSupportsManagedThinMySetupWrapper(t *testing.T) {
+	state := config.Default()
+	state.Host.Hostname = "workstation"
+
+	out, err := FlakeNix(state, LockModeManaged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`# lock mode: managed`,
+		`mysetup.url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";`,
+		`hostname = "workstation";`,
+		`mysetup.lib.mkMySetupHost`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("managed thin flake missing %q\n%s", want, out)
+		}
+	}
+	for _, forbidden := range []string{
+		`inputs.nixpkgs.follows = "nixpkgs";`,
+		`nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";`,
+	} {
+		if strings.Contains(out, forbidden) {
+			t.Fatalf("managed thin flake must not expose host-owned input %q\n%s", forbidden, out)
 		}
 	}
 }
@@ -418,7 +455,7 @@ func TestStageConfigurationIncludesDotsAndInstaller(t *testing.T) {
 		NixOS:     nixos,
 		Dots:      dots,
 		Installer: installer,
-	}, staging, config.Default(), LayoutFull); err != nil {
+	}, staging, config.Default(), LayoutFull, LockModeIndependent); err != nil {
 		t.Fatal(err)
 	}
 
@@ -489,7 +526,7 @@ func TestStageConfigurationKeepsStagingWritableAfterReadonlyNixOSRoot(t *testing
 		NixOS:     nixos,
 		Dots:      dots,
 		Installer: installer,
-	}, staging, config.Default(), LayoutFull)
+	}, staging, config.Default(), LayoutFull, LockModeIndependent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -518,7 +555,7 @@ func TestStageThinConfigurationWritesWrapperAndTemplates(t *testing.T) {
 		NixOS:     nixos,
 		Dots:      filepath.Join(repo, "Linux", "dots"),
 		Installer: filepath.Join(repo, "Linux", "installer"),
-	}, staging, state, LayoutThin); err != nil {
+	}, staging, state, LayoutThin, LockModeIndependent); err != nil {
 		t.Fatal(err)
 	}
 
@@ -587,6 +624,69 @@ func TestPrepareThinHostLocalPreservesOverridesLockAndSecrets(t *testing.T) {
 		filepath.Join(staging, "private", "ida-pro.nix"):     "{ pkgs, ... }: { }\n",
 		filepath.Join(staging, "private", "ida.run"):         "binary payload\n",
 		filepath.Join(staging, "secrets", "secrets.yaml"):    "secret: ENC\n",
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != want {
+			t.Fatalf("unexpected content for %s: %q", path, string(data))
+		}
+	}
+}
+
+func TestPrepareThinHostLocalRegeneratesGeneratedThinWrapper(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	for path, content := range map[string]string{
+		filepath.Join(staging, "flake.nix"):               "new generated wrapper\n",
+		filepath.Join(dest, "hardware-configuration.nix"): "hardware\n",
+		filepath.Join(dest, "flake.nix"): `{
+  description = "Host-local MySetup NixOS wrapper";
+
+  inputs = {
+    mysetup.url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";
+  };
+
+  outputs = { mysetup, ... }:
+    let
+      system = "x86_64-linux";
+      hostname = "NixOS";
+    in
+    {
+      nixosConfigurations.${hostname} = mysetup.lib.mkMySetupHost {
+        inherit system hostname;
+
+        hostVars = ./host-vars.nix;
+        hardware = ./hardware-configuration.nix;
+        extraModules = [ ./configuration.nix ];
+        homeExtraModules =
+          if builtins.pathExists ./home.nix then [ ./home.nix ] else [ ];
+      };
+    };
+}
+`,
+		filepath.Join(dest, "flake.lock"):        "existing-lock\n",
+		filepath.Join(dest, "configuration.nix"): "{ config, ... }: { }\n",
+		filepath.Join(dest, "home.nix"):          "{ pkgs, ... }: { }\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin); err != nil {
+		t.Fatal(err)
+	}
+
+	for path, want := range map[string]string{
+		filepath.Join(staging, "flake.nix"):         "new generated wrapper\n",
+		filepath.Join(staging, "flake.lock"):        "existing-lock\n",
+		filepath.Join(staging, "configuration.nix"): "{ config, ... }: { }\n",
+		filepath.Join(staging, "home.nix"):          "{ pkgs, ... }: { }\n",
 	} {
 		data, err := os.ReadFile(path)
 		if err != nil {

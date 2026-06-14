@@ -55,9 +55,10 @@ func NewRootCommand() *cobra.Command {
 		Version: resolveVersion(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return tui.Run(cmd.Context(), tui.Options{
-				Paths:  opts.Options,
-				DryRun: opts.DryRun,
-				Layout: apply.Layout(opts.Layout),
+				Paths:    opts.Options,
+				DryRun:   opts.DryRun,
+				Layout:   apply.Layout(opts.Layout),
+				LockMode: apply.LockMode(opts.LockMode),
 			})
 		},
 	}
@@ -69,6 +70,7 @@ func NewRootCommand() *cobra.Command {
 	root.PersistentFlags().BoolVar(&opts.DryRun, "dry-run", false, "print actions without changing files")
 	root.PersistentFlags().BoolVar(&opts.Yes, "yes", false, "skip confirmation prompts where safe")
 	root.PersistentFlags().StringVar(&opts.Layout, "layout", "thin", "installed /etc/nixos layout: thin or full")
+	root.PersistentFlags().StringVar(&opts.LockMode, "lock-mode", string(apply.LockModeIndependent), "thin flake lock ownership: independent or managed")
 
 	root.AddCommand(tuiCommand(&opts))
 	root.AddCommand(applyCommand(&opts))
@@ -107,9 +109,10 @@ func tuiCommand(opts *Options) *cobra.Command {
 		Short: "Open the interactive installer",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return tui.Run(cmd.Context(), tui.Options{
-				Paths:  opts.Options,
-				DryRun: opts.DryRun,
-				Layout: apply.Layout(opts.Layout),
+				Paths:    opts.Options,
+				DryRun:   opts.DryRun,
+				Layout:   apply.Layout(opts.Layout),
+				LockMode: apply.LockMode(opts.LockMode),
 			})
 		},
 	}
@@ -139,6 +142,7 @@ func applyCommand(opts *Options) *cobra.Command {
 				AssumeYes:  opts.Yes,
 				SkipSwitch: noSwitch,
 				Layout:     apply.Layout(opts.Layout),
+				LockMode:   apply.LockMode(opts.LockMode),
 			})
 		},
 	}

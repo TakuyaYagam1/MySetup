@@ -87,7 +87,7 @@ func TestApplyPreviewDescribesTransactionalOrder(t *testing.T) {
 	preview := strings.Join(sectionPreview(model), "\n")
 	for _, want := range []string{
 		"## Stage config",
-		"NixOS, dots, installer",
+		"temporary flake containing host hardware",
 		"## Dry-build",
 		"before touching /etc/nixos",
 		"## Mirror /etc/nixos",

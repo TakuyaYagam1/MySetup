@@ -140,7 +140,7 @@ func previewDoctor() []string {
 
 func previewApply() []string {
 	return previewSettings(
-		previewSettingWithLabel("Stage config", "Builds a temporary mirror containing NixOS, dots, installer, host hardware, flake.lock and generated variables.", "order", "1"),
+		previewSettingWithLabel("Stage config", "Builds a temporary flake containing host hardware, local overrides, flake.lock and generated variables.", "order", "1"),
 		previewSettingWithLabel("Dry-build", "Runs nixos-rebuild dry-build against the staging flake before touching /etc/nixos.", "order", "2"),
 		previewSettingWithLabel("Mirror /etc/nixos", "After dry-build success, backs up /etc/nixos and syncs the staging mirror.", "order", "3"),
 		previewSettingWithLabel("Apply dots", "Applies selected user dots in the same session and reloads Hypr when available.", "order", "4"),
