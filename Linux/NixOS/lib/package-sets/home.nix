@@ -34,6 +34,7 @@
   dev = with pkgs; [
     vscode
     code-cursor
+    zed-editor-fhs
     qtcreator
     antigravity
     gemini-cli
