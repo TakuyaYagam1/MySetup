@@ -42,6 +42,10 @@ in
 
       spiceUSBRedirection.enable = true;
 
+      virtualbox.host = {
+        enable = true;
+      };
+
       docker = {
         enable = true;
         daemon.settings = {

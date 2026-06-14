@@ -18,6 +18,7 @@ let
     "docker"
     "libvirtd"
     "adbusers"
+    "vboxusers"
   ];
   ctfGroups = [
     "wireshark"
