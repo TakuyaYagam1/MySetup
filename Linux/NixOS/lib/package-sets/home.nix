@@ -30,7 +30,6 @@
     obsidian
     anytype
   ];
-
   dev = with pkgs; [
     vscode
     code-cursor
