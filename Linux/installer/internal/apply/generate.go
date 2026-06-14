@@ -84,7 +84,6 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
 {{ if eq .LockMode "independent" }}
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-26.05";
-    nixpkgs-bleeding.url = "github:NixOS/nixpkgs/nixos-unstable-small";
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -171,7 +170,6 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.nixpkgs-stable.follows = "nixpkgs-stable";
-      inputs.nixpkgs-bleeding.follows = "nixpkgs-bleeding";
       inputs.home-manager.follows = "home-manager";
       inputs.caelestia-shell.follows = "caelestia-shell";
       inputs.caelestia-cli.follows = "caelestia-cli";

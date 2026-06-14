@@ -1,10 +1,8 @@
 {
-  enableQtBleeding,
   home-manager,
   inputs,
   mysetupLib,
   nixpkgs,
-  nixpkgs-bleeding,
   nixpkgs-stable,
   zapret-discord-youtube,
 }:
@@ -27,27 +25,17 @@ let
   pkgs-stable = import nixpkgs-stable {
     localSystem = system;
     config.allowUnfree = true;
-    config.permittedInsecurePackages = [
-      "python3.12-pypdf2-3.0.1"
-    ];
-  };
-
-  pkgs-bleeding = import nixpkgs-bleeding {
-    localSystem = system;
-    config.allowUnfree = true;
   };
 
   overlays = import ./flake-overlays.nix {
-    inherit inputs pkgs-bleeding system;
+    inherit inputs system;
   };
 
   flakeModules = import ./flake-modules.nix {
     inherit
-      enableQtBleeding
       inputs
       mysetupLib
       overlays
-      pkgs-bleeding
       pkgs-stable
       ;
   };
@@ -90,7 +78,6 @@ nixpkgs.lib.nixosSystem {
     inherit
       inputs
       mysetupLib
-      pkgs-bleeding
       pkgs-stable
       ;
   };

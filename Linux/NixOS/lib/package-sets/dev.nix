@@ -22,32 +22,22 @@ let
   goTools = with pkgs; [
     go
     gopls
-    gotools
-    go-tools
-    go-outline
-    gopkgs
     delve
     air
-    gomodifytags
-    impl
-    gotests
     golangci-lint
     gofumpt
     govulncheck
     grpcurl
     mockgen
-    go-swagger
     go-swag
     oapi-codegen
     go-mockery
     go-migrate
-    liquibase
     protobuf
     protoc-gen-go
     protoc-gen-go-grpc
     buf
     sqlc
-    swagger-codegen
   ];
   jsTools = with pkgs; [
     nodejs
@@ -56,7 +46,16 @@ let
     bun
     playwright
   ];
-  jvmTools = with pkgs; [ jdk ];
+  jvmTools = with pkgs; [
+    jdk
+    maven
+    gradle
+    jdt-language-server
+    google-java-format
+    checkstyle
+    pmd
+    liquibase
+  ];
   iacTools = with pkgs; [
     terraform
     tflint

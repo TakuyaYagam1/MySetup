@@ -1,7 +1,6 @@
 {
   inputs,
   mysetupLib,
-  pkgs-bleeding,
   pkgs-stable,
 }:
 
@@ -18,7 +17,6 @@
       inherit
         inputs
         mysetupLib
-        pkgs-bleeding
         pkgs-stable
         ;
       inherit (config) mysetup;

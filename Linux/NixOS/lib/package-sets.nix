@@ -13,9 +13,6 @@ let
   devSets = import ./package-sets/dev.nix {
     inherit pkgs;
   };
-  pythonSets = import ./package-sets/python.nix {
-    inherit pkgs;
-  };
   runtimeSets = import ./package-sets/runtime.nix {
     inherit lib pkgs;
   };
@@ -36,7 +33,6 @@ in
   };
   development = {
     tools = devSets.devTools;
-    python = pythonSets.pythonDev;
   };
   runtime = {
     inherit (runtimeSets) waylandCore waylandTools;
@@ -62,5 +58,5 @@ in
     stego = ctfSets.ctfStego;
     web = ctfSets.ctfWeb;
   };
-  home = args: import ./package-sets/home.nix ({ inherit lib pkgs pkgs-stable; } // args);
+  home = args: import ./package-sets/home.nix ({ inherit pkgs pkgs-stable; } // args);
 }

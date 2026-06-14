@@ -390,8 +390,6 @@ Linux/NixOS/
 │                                  # import layers (composed in hosts/NixOS)
 ├── home/                          # home-manager root + shell profiles
 │   ├── home.nix
-│   ├── apps.nix
-│   ├── dev-packages.nix
 │   ├── theming.nix
 │   ├── avatar.jpg
 │   ├── lib/                       # dotfile sync + shell selector helpers

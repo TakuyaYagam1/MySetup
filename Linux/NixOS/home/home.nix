@@ -27,8 +27,6 @@ let
     inputs.stylix.homeModules.stylix
     ../themes/active.nix
     ./theming.nix
-    ./apps.nix
-    ./dev-packages.nix
     ./programs/git.nix
     ./programs/fish.nix
     ./programs/foot.nix

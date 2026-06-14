@@ -5,7 +5,6 @@
     # Core
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-26.05";
-    nixpkgs-bleeding.url = "github:NixOS/nixpkgs/nixos-unstable-small";
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -99,7 +98,6 @@
       self,
       nixpkgs,
       nixpkgs-stable,
-      nixpkgs-bleeding,
       home-manager,
       zapret-discord-youtube,
       ...
@@ -109,9 +107,6 @@
       layout = import ./lib/layout.nix {
         nixosRoot = ./.;
       };
-
-      # Toggle to true when shells need Qt newer than nixos-unstable provides.
-      enableQtBleeding = false;
 
       inputsForModules = inputs // {
         mysetup = self;
@@ -132,22 +127,15 @@
             ];
           };
 
-          pkgs-bleeding = import nixpkgs-bleeding {
-            localSystem = system;
-            config.allowUnfree = true;
-          };
-
           overlays = import ./lib/flake-overlays.nix {
             inputs = inputsForModules;
-            inherit pkgs-bleeding system;
+            inherit system;
           };
 
           flakeModules = import ./lib/flake-modules.nix {
             inherit
-              enableQtBleeding
               mysetupLib
               overlays
-              pkgs-bleeding
               pkgs-stable
               ;
             inputs = inputsForModules;
@@ -157,7 +145,6 @@
           inherit
             flakeModules
             overlays
-            pkgs-bleeding
             pkgs-stable
             ;
         };
@@ -166,11 +153,9 @@
 
       mkMySetupHost = import ./lib/mk-host.nix {
         inherit
-          enableQtBleeding
           home-manager
           mysetupLib
           nixpkgs
-          nixpkgs-bleeding
           nixpkgs-stable
           zapret-discord-youtube
           ;

@@ -1,6 +1,5 @@
 {
   inputs,
-  pkgs-bleeding,
   system,
 }:
 
@@ -30,8 +29,7 @@ in
 
   omnirouterFromMySetupOverlay = _final: prev: {
     omnirouter =
-      inputs.mysetup.packages.${system}.omnirouter
-        or (prev.callPackage ../packages/omnirouter.nix { });
+      inputs.mysetup.packages.${system}.omnirouter or (prev.callPackage ../packages/omnirouter.nix { });
   };
 
   pipxTestCompatibilityOverlay = _final: prev: {
@@ -41,11 +39,5 @@ in
         "test_parse_specifier_for_metadata"
       ];
     });
-  };
-
-  qtBleedingOverlay = _final: _prev: {
-    inherit (pkgs-bleeding) qt6;
-    inherit (pkgs-bleeding) qt6Packages;
-    inherit (pkgs-bleeding) kdePackages;
   };
 }

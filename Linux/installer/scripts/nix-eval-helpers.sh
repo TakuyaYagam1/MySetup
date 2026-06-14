@@ -56,7 +56,7 @@ eval_hm_simple() {
 
 # eval_hm_full <preset|""> <attribute>
 # Evaluates the full home/home.nix module with mysetup, mysetupLib and the
-# stable/bleeding pkgs sets wired through extraSpecialArgs. When <preset> is
+# stable package set wired through extraSpecialArgs. When <preset> is
 # non-empty, the host-vars defaults are overridden so the chosen preset is
 # selected; otherwise the host-vars defaults are used as-is.
 eval_hm_full() {
@@ -77,10 +77,6 @@ eval_hm_full() {
             config.allowUnfree = true;
             config.permittedInsecurePackages = [ \"python3.12-pypdf2-3.0.1\" ];
           };
-          pkgsBleeding = import flake.inputs.nixpkgs-bleeding {
-            localSystem = system;
-            config.allowUnfree = true;
-          };
           baseMysetup = import (nixosDir + \"/hosts/NixOS/host-vars.nix\");
           mysetup =
             if presetOverride == \"\"
@@ -95,7 +91,6 @@ eval_hm_full() {
               inputs = flake.inputs;
               inherit mysetupLib mysetup;
               pkgs-stable = pkgsStable;
-              pkgs-bleeding = pkgsBleeding;
             };
           };
         in ${attr}

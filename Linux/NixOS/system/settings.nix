@@ -14,6 +14,14 @@
       ];
 
       # Optional private netrc for GitHub API auth during flake input updates.
+      # Keep the file outside git, owned by root:root and chmod 0600.
+      # Expected entries:
+      #   machine github.com
+      #     login <github-username>
+      #     password <github-token>
+      #   machine api.github.com
+      #     login <github-username>
+      #     password <github-token>
       netrc-file = "/etc/nix/netrc";
       download-buffer-size = 268435456;
 
