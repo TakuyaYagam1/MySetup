@@ -12,14 +12,16 @@ let
 in
 {
   config = mysetupLib.mkIfPresetOrMore "developer" config.mysetup {
-    environment.systemPackages = with pkgs; [
-      virt-manager
-      virt-viewer
-      virtio-win
-      spice-vdagent
-    ];
-    environment.etc."vm/virtio-win".source = pkgs.virtio-win;
-    environment.etc."vm/virtio-win.iso".source = virtioWinIso;
+    environment = {
+      systemPackages = with pkgs; [
+        virt-manager
+        virt-viewer
+        virtio-win
+        spice-vdagent
+      ];
+      etc."vm/virtio-win".source = pkgs.virtio-win;
+      etc."vm/virtio-win.iso".source = virtioWinIso;
+    };
 
     programs.virt-manager.enable = true;
 
@@ -70,15 +72,25 @@ in
         RemainAfterExit = true;
       };
       script = ''
-        if ! virsh -c qemu:///system net-info default >/dev/null 2>&1; then
-          virsh -c qemu:///system net-define /var/lib/libvirt/qemu/networks/default.xml
+        virsh_qemu() {
+          virsh -c qemu:///system "$@"
+        }
+
+        network_active() {
+          virsh_qemu net-info default | grep -Eq '^Active:[[:space:]]+yes$'
+        }
+
+        if ! virsh_qemu net-info default >/dev/null 2>&1; then
+          virsh_qemu net-define /var/lib/libvirt/qemu/networks/default.xml
         fi
 
-        virsh -c qemu:///system net-autostart default
+        virsh_qemu net-autostart default
 
-        if ! virsh -c qemu:///system net-list --name --state-running | grep -qx default; then
-          virsh -c qemu:///system net-start default
+        if ! network_active; then
+          virsh_qemu net-start default || true
         fi
+
+        network_active
       '';
     };
   };
