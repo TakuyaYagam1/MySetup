@@ -3,17 +3,21 @@
 with pkgs-stable;
 [
   altdns
+  alterx
   amass
   apache-users
   arp-scan
   arping
+  asnmap
   assetfinder
   atftp
   bettercap
   bloodhound
+  cdncheck
   certgraph
   chisel
   cloudbrute
+  cloudflared
   cntlm
   coercer
   darkstat
@@ -26,6 +30,7 @@ with pkgs-stable;
   dnsmap
   dnsrecon
   dnstracer
+  dnsvalidator
   dnsx
   driftnet
   dsniff
@@ -51,6 +56,7 @@ with pkgs-stable;
   ldapdomaindump
   ldeep
   ligolo-ng
+  mapcidr
   masscan
   massdns
   mimikatz
@@ -87,6 +93,7 @@ with pkgs-stable;
   rustscan
   s3scanner
   samba
+  shuffledns
   sipp
   sipsak
   sipvicious
@@ -98,14 +105,17 @@ with pkgs-stable;
   socat
   sshuttle
   starkiller
+  subjack
   subfinder
   swaks
   tcpreplay
   tftp-hpa
   thc-ipv6
+  tlsx
   tor
   traceroute
   udptunnel
+  uncover
   vlan
   vopono
   vpnc
@@ -114,4 +124,6 @@ with pkgs-stable;
   witnessme
   wstunnel
   yersinia
+  zgrab2
+  zmap
 ]

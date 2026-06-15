@@ -20,11 +20,19 @@ with pkgs-stable;
   chromium
   cryptsetup
   curl
+  cyberchef
+  dasel
   fd
+  fq
   fzf
   gemini-cli
   git
+  gron
   gtkhash
+  htmlq
+  jc
+  jless
+  jo
   joplin
   jq
   macchanger
@@ -32,6 +40,7 @@ with pkgs-stable;
   qemu
   rake
   ripgrep
+  ripgrep-all
   rlwrap
   sqlitebrowser
   tmux
@@ -40,6 +49,9 @@ with pkgs-stable;
   unblobPatched
   unzip
   wgetpaste
+  xmlstarlet
+  xq
+  yq-go
   zim
   zip
   zsh

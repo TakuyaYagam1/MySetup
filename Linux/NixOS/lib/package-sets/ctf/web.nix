@@ -9,6 +9,7 @@ with pkgs-stable;
   arjun
   inputs.burpsuitepro.packages.${system}.default
   cadaver
+  cariddi
   commix
   crlfuzz
   dalfox
@@ -20,29 +21,40 @@ with pkgs-stable;
   feroxbuster
   ffuf
   gau
+  git-dumper
+  gitjacker
   gobuster
   gophish
   gospider
   goshs
   gowitness
+  graphqlmap
   grpcurl
+  grpcui
   hakrawler
   httprobe
   httpie
   httpx
   httrack
   hurl
+  interactsh
   joomscan
   jwt-cli
+  jwt-hack
   katana
+  kiterunner
   laudanum
   lbd
   mitmproxy
+  myjwt
   nikto
   nuclei
+  nuclei-templates
+  oath-toolkit
   photon
   proxify
   python3Packages.dirsearch
+  qsreplace
   siege
   slowhttptest
   sqlmap
@@ -52,12 +64,15 @@ with pkgs-stable;
   sslscan
   sslsplit
   sslstrip
+  testssl
   unfurl
+  uro
   wafw00f
   # Temporarily disabled on 26.05: wapiti-arsenic 28.5 requires
   # packaging < 26, while nixpkgs currently provides packaging 26.1.
   # Wait for the nixpkgs/wapiti dependency metadata fix before re-enabling.
   # wapiti
+  waymore
   waybackurls
   websocat
   weevely

@@ -1,27 +1,13 @@
-# All ignored files needed in Linux/
-# Uncomment files in Linux/NixOS/profiles/developer.nix to use them
-#
-# Nix modules (create from repo history or manually):
-#   - Linux/NixOS/packages/ida-pro.nix
-#   - Linux/NixOS/packages/ida-mcp.nix
-#   - Linux/NixOS/packages/ida-plugins.nix
+# keep private IDA modules and local installer files outside the public repo
 #
 # Setup after nixos-rebuild switch:
-#   1. nix-store --add-fixed sha256 Linux/ida-pro_93_x64linux.run
-#   2. sudo nixos-rebuild switch --flake /etc/nixos
-#   3. install-ida-mcp-plugin   # installs ida-pro-mcp + copies IDA plugin to ~/.idapro/plugins/
-#   4. install-ida-plugins       # clones findcrypt-yara, LazyIDA, keypatch, FLARE, HexRaysCodeXplorer, patching
-#   5. Start IDA, load a binary
-#   6. ida-mcp-server            # starts MCP on http://127.0.0.1:13337/mcp
-#   7. Claude Code MCP auto-configured in ~/.claude.json by install-ida-mcp-plugin:
-#      "mcpServers": { "ida-pro-mcp": { "type": "http", "url": "http://127.0.0.1:13337/mcp" } }
+#   1. copy 4 files in /etc/nixos/private: 3 idas and 1 gen
+#   2. nix-store --add-fixed sha256 ~/MySetup/Linux/NixOS/packages/ida/ida-pro_94_x64linux.run
+#   2.1 nix hash file ~/MySetup/Linux/NixOS/packages/ida/ida-pro_94_x64linux.run
+#   2.2 update hash in ida-pro.nix
+#   3. nixos-update
 
-
-Linux/IDA Pro 9.3 KeyGen.py
-Linux/ida-pro_93_x64linux.run
-Linux/hrtng-3.8.88.7z
-Linux/kg_patch.rar
-Linux/misc.rar
+Linux/NixOS/packages/ida/
 Linux/NixOS/packages/ida-pro.nix
 Linux/NixOS/packages/ida-mcp.nix
 Linux/NixOS/packages/ida-plugins.nix

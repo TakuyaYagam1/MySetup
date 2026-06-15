@@ -91,6 +91,23 @@ let
     pmd
     liquibase
   ];
+  rubyTools =
+    with pkgs;
+    [
+      ruby
+      bundler
+      rubocop
+      ruby-lsp
+      solargraph
+      rubyfmt
+      brakeman
+      bundler-audit
+    ]
+    ++ (with pkgs.rubyPackages; [
+      pry
+      rspec
+      standard
+    ]);
   iacTools = with pkgs; [
     terraform
     tflint
@@ -131,6 +148,7 @@ in
     ++ jsTools
     ++ rustTools
     ++ jvmTools
+    ++ rubyTools
     ++ iacTools
     ++ containerTools
     ++ generalTools;
