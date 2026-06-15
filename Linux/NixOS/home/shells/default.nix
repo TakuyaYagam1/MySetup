@@ -15,6 +15,78 @@ let
   hyprDir = "${config.xdg.configHome}/hypr";
   hyprRuntimeDir = "${config.xdg.stateHome}/mysetup/hypr-runtime";
   activeShellState = "${config.xdg.stateHome}/mysetup/active-shell";
+  vmPassthroughWatcher = pkgs.writeShellApplication {
+    name = "mysetup-vm-passthrough-watcher";
+    runtimeInputs = with pkgs; [
+      coreutils
+      hyprland
+      jq
+    ];
+    text = ''
+      state=0
+      vm_submap="virtual-machine"
+
+      normalize() {
+        tr '[:upper:]' '[:lower:]'
+      }
+
+      get_hypr_instance() {
+        if [ -n "''${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+          return 0
+        fi
+
+        HYPRLAND_INSTANCE_SIGNATURE="$(hyprctl instances -j 2>/dev/null | jq -r '.[0].instance // empty')"
+        export HYPRLAND_INSTANCE_SIGNATURE
+        [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ]
+      }
+
+      is_vm_window() {
+        class="$(printf '%s' "$1" | normalize)"
+        initial_class="$(printf '%s' "$2" | normalize)"
+        title="$(printf '%s' "$3" | normalize)"
+        initial_title="$(printf '%s' "$4" | normalize)"
+
+        case "|$class|$initial_class|" in
+          *"|virtualbox machine|"* | *"virt-manager"* | *"remote-viewer"* | *"virt-viewer"* | *"qemu"*)
+            return 0
+            ;;
+        esac
+
+        case "$title|$initial_title" in
+          *" - oracle virtualbox"* | *"qemu/kvm"* | *"spice"* )
+            return 0
+            ;;
+        esac
+
+        return 1
+      }
+
+      while true; do
+        if ! get_hypr_instance; then
+          sleep 2
+          continue
+        fi
+
+        active="$(hyprctl activewindow -j 2>/dev/null || true)"
+        class="$(printf '%s' "$active" | jq -r '.class // ""' 2>/dev/null || true)"
+        initial_class="$(printf '%s' "$active" | jq -r '.initialClass // ""' 2>/dev/null || true)"
+        title="$(printf '%s' "$active" | jq -r '.title // ""' 2>/dev/null || true)"
+        initial_title="$(printf '%s' "$active" | jq -r '.initialTitle // ""' 2>/dev/null || true)"
+
+        if is_vm_window "$class" "$initial_class" "$title" "$initial_title"; then
+          if [ "$state" != 1 ]; then
+            hyprctl dispatch submap "$vm_submap" >/dev/null 2>&1 || true
+            state=1
+          fi
+        elif [ "$state" = 1 ]; then
+          hyprctl dispatch submap reset >/dev/null 2>&1 || true
+          state=0
+        fi
+
+        sleep 0.35
+      done
+    '';
+  };
   stableEntrypoints = dotfilesLib.hyprRuntimeFiles;
   inherit (dotfilesLib) hyprScripts;
   # end4 is installed as one patched tree at hypr/end4. Adding nested
@@ -66,6 +138,10 @@ let
     "hypr/shell-workspace-keybinds.lua" = {
       force = true;
       source = dotsRoot + "/hypr/shell-workspace-keybinds.lua";
+    };
+    "hypr/vm-keybinds.lua" = {
+      force = true;
+      source = dotsRoot + "/hypr/vm-keybinds.lua";
     };
   };
 
@@ -123,6 +199,24 @@ in
         source = shellSelectorSource;
       };
     };
+
+  home.packages = [ vmPassthroughWatcher ];
+
+  systemd.user.services.vm-passthrough-watcher = {
+    Unit = {
+      Description = "Toggle Hyprland VM passthrough mode for focused VM windows";
+      After = [ "graphical-session.target" ];
+      PartOf = [ "graphical-session.target" ];
+    };
+
+    Service = {
+      ExecStart = "${vmPassthroughWatcher}/bin/mysetup-vm-passthrough-watcher";
+      Restart = "on-failure";
+      RestartSec = "2s";
+    };
+
+    Install.WantedBy = [ "graphical-session.target" ];
+  };
 
   home.activation = {
     pruneLegacyHyprlandRuntime = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
