@@ -10,7 +10,18 @@ let
     templ
     gcc
     libgcc
+    clang
+    clang-tools
+    lld
+    mold
     lldb
+    gdb
+    valgrind
+    cppcheck
+    bear
+    meson
+    conan
+    vcpkg
   ];
   pythonTools = with pkgs; [
     python3
@@ -41,10 +52,34 @@ let
   ];
   jsTools = with pkgs; [
     nodejs
+    corepack
+    pnpm
     yarn
     typescript
+    typescript-language-server
+    vscode-langservers-extracted
+    tailwindcss-language-server
+    yaml-language-server
     bun
+    deno
+    eslint_d
+    prettierd
+    biome
     playwright
+  ];
+  rustTools = with pkgs; [
+    rustc
+    cargo
+    rustfmt
+    clippy
+    rust-analyzer
+    cargo-nextest
+    cargo-edit
+    cargo-watch
+    cargo-audit
+    cargo-deny
+    cargo-expand
+    sccache
   ];
   jvmTools = with pkgs; [
     jdk
@@ -94,6 +129,7 @@ in
     ++ pythonTools
     ++ goTools
     ++ jsTools
+    ++ rustTools
     ++ jvmTools
     ++ iacTools
     ++ containerTools
