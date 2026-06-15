@@ -11,7 +11,7 @@
 let
   dotfilesLib = homeLibs.dotfiles;
   trans = homeLibs.transparency;
-  noctaliaShellPackage = import ./package-patch.nix { inherit inputs pkgs; };
+  noctaliaShellPackage = inputs.noctalia-shell.packages.${pkgs.stdenv.hostPlatform.system}.default;
   settingsJson = ./config/settings.json;
   colorsJson = ./config/colors.json;
   pluginsJson = ./config/plugins.json;
