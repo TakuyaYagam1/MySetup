@@ -1,6 +1,4 @@
-# Caelestia-style dark palette: exports `config.theme.*` (UX knobs) and
-# `config.stylix.*` (base16 + fonts + cursor) consumed across the config.
-# Switch palettes by editing themes/active.nix.
+# Global desktop palette, fonts, cursor, and wallpaper source for Stylix.
 {
   lib,
   pkgs,
@@ -12,7 +10,6 @@
   options.theme = lib.mkOption {
     type = lib.types.attrs;
     default = {
-      # Window chrome
       rounding = 18;
       gaps-in = 6;
       gaps-out = 12;
@@ -20,9 +17,7 @@
       active-opacity = 0.97;
       inactive-opacity = 0.92;
       blur = true;
-      # Animation pacing
-      animation-speed = "fast"; # "fast" | "medium" | "slow"
-      # Terminal gimmick (none|neofetch|pfetch|fastfetch)
+      animation-speed = "fast";
       fetch = "fastfetch";
       textColorOnWallpaper = config.lib.stylix.colors.base00;
     };
@@ -61,7 +56,6 @@
     };
 
     polarity = "dark";
-
     image = ../Wallpapers/1.jpg;
 
     # Stylix handles GTK/Qt; Caelestia manages its own scheme via smartScheme.

@@ -17,6 +17,7 @@ in
     dbus.enable = true;
     gvfs.enable = desktopOrMore;
     tumbler.enable = desktopOrMore;
+    udisks2.enable = desktopOrMore;
     sing-box.enable = personal;
     omnirouter.enable = cfg.features.omnirouter;
   };

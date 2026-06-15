@@ -25,18 +25,23 @@ let
   ];
   coreImports = [
     inputs.stylix.homeModules.stylix
-    ../themes/active.nix
+    ./stylix.nix
     ./theming.nix
     ./programs/git.nix
     ./programs/fish.nix
+    ./programs/shell-tools.nix
     ./programs/foot.nix
     ./programs/btop.nix
     ./programs/starship.nix
     ./programs/cava.nix
     ./programs/fastfetch.nix
+    ./programs/mimeapps.nix
+    ./programs/nightshift.nix
+    ./programs/nix-index.nix
     ./programs/nixos-helper.nix
     ./programs/thunar.nix
     ./programs/uwsm.nix
+    ./programs/yazi.nix
     ./programs/vesktop.nix
     ./programs/packages.nix
   ];

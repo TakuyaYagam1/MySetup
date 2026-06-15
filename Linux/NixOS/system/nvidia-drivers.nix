@@ -1,4 +1,9 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 {
   config = lib.mkIf ((config.mysetup.hardware.gpu or "amd") == "nvidia") {
@@ -12,6 +17,12 @@
       nvidiaSettings = true;
       package = config.boot.kernelPackages.nvidiaPackages.stable;
     };
+
+    hardware.graphics.extraPackages = with pkgs; [
+      egl-wayland
+      libva
+      libva-vdpau-driver
+    ];
 
     boot = {
       kernelParams = [
@@ -39,6 +50,14 @@
       __GLX_VENDOR_LIBRARY_NAME = "nvidia";
       WLR_NO_HARDWARE_CURSORS = "1";
       LIBVA_DRIVER_NAME = "nvidia";
+      NVD_BACKEND = "direct";
+      MOZ_ENABLE_WAYLAND = "1";
     };
+
+    environment.systemPackages = with pkgs; [
+      libva-utils
+      mesa-demos
+      vulkan-tools
+    ];
   };
 }

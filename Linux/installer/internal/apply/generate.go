@@ -157,6 +157,10 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nix-index-database = {
+      url = "github:nix-community/nix-index-database";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     zapret-discord-youtube = {
       url = "github:kartavkun/zapret-discord-youtube";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -186,6 +190,7 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       inputs.nixos-hardware.follows = "nixos-hardware";
       inputs.nix-snapd.follows = "nix-snapd";
       inputs.sops-nix.follows = "sops-nix";
+      inputs.nix-index-database.follows = "nix-index-database";
       inputs.zapret-discord-youtube.follows = "zapret-discord-youtube";
       inputs.stylix.follows = "stylix";
     };

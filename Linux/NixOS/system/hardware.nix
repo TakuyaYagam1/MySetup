@@ -7,6 +7,20 @@
 
 let
   gpu = config.mysetup.hardware.gpu or "amd";
+  commonGraphicsPackages = with pkgs; [
+    libvdpau-va-gl
+    mesa
+    vulkan-loader
+    vulkan-validation-layers
+  ];
+  amdGraphicsPackages = with pkgs; [
+    libva-vdpau-driver
+    rocmPackages.clr.icd
+  ];
+  intelGraphicsPackages = with pkgs; [
+    intel-media-driver
+    intel-vaapi-driver
+  ];
 in
 
 {
@@ -16,12 +30,10 @@ in
     graphics = {
       enable = true;
       enable32Bit = true;
-      extraPackages = with pkgs; [
-        intel-media-driver
-        intel-vaapi-driver
-        libvdpau-va-gl
-        mesa
-      ];
+      extraPackages =
+        commonGraphicsPackages
+        ++ lib.optionals (gpu == "amd") amdGraphicsPackages
+        ++ lib.optionals (gpu == "intel") intelGraphicsPackages;
     };
 
     cpu.intel.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;

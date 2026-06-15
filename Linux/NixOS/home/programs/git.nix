@@ -71,8 +71,16 @@
     lazygit = {
       enable = true;
       settings = {
+        disableStartupPopups = true;
+        notARepository = "skip";
+        promptToReturnFromSubprocess = false;
+        update.method = "never";
         gui = {
           showIcons = true;
+          showBottomLine = false;
+          showCommandLog = false;
+          showListFooter = false;
+          showRandomTip = false;
           nerdFontsVersion = "3";
           theme = {
             activeBorderColor = [

@@ -27,6 +27,9 @@
     libreoffice-qt6-fresh
     wpsoffice
     onlyoffice-desktopeditors
+    zathura
+    loupe
+    mpv
     obsidian
     anytype
   ];

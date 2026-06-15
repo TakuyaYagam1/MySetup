@@ -200,6 +200,9 @@ top of their work - these dots would not exist without them:
 - [caelestia-dots/shell](https://github.com/caelestia-dots/shell) -
   Caelestia QuickShell, used as the default runtime profile and as the
   base for the Caelestia Hypr/dots layer.
+- [anotherhadi/nixy](https://github.com/anotherhadi/nixy) - reference NixOS
+  workstation config used for ideas around Home Manager modules, MIME defaults,
+  Yazi/Night Shift ergonomics, and Nix utility wiring.
 - [PortSwigger/mcp-server](https://github.com/PortSwigger/mcp-server) -
   official Burp Suite MCP extension. MySetup does not package it; install it
   from upstream when you need Burp MCP access.

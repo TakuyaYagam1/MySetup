@@ -31,18 +31,41 @@
   xdg.configFile."Thunar/uca.xml".text = ''
     <?xml version="1.0" encoding="UTF-8"?>
     <actions>
-    <action>
-    	<icon>utilities-terminal</icon>
-    	<name>Open Terminal Here</name>
-    	<submenu></submenu>
-    	<unique-id>1710575157271461-1</unique-id>
-    	<command>foot -D %f</command>
-    	<description>Open the current directory in foot</description>
-    	<range></range>
-    	<patterns>*</patterns>
-    	<startup-notify/>
-    	<directories/>
-    </action>
+      <action>
+        <icon>utilities-terminal</icon>
+        <name>Open Terminal Here</name>
+        <submenu></submenu>
+        <unique-id>1710575157271461-1</unique-id>
+        <command>foot -D %f</command>
+        <description>Open the current directory in foot</description>
+        <range></range>
+        <patterns>*</patterns>
+        <startup-notify/>
+        <directories/>
+      </action>
+      <action>
+        <icon>package-x-generic</icon>
+        <name>Extract Here</name>
+        <submenu></submenu>
+        <unique-id>1710575157271461-2</unique-id>
+        <command>xarchiver -x . %F</command>
+        <description>Extract selected archives into the current directory</description>
+        <range>*</range>
+        <patterns>*.7z;*.apk;*.bz2;*.docx;*.gz;*.odt;*.rar;*.tar;*.tar.bz2;*.tar.gz;*.tar.xz;*.tb2;*.tbz;*.tbz2;*.tgz;*.txz;*.xz;*.zip;</patterns>
+        <other-files/>
+      </action>
+      <action>
+        <icon>package-x-generic</icon>
+        <name>Compress Here (tar.gz)</name>
+        <submenu></submenu>
+        <unique-id>1710575157271461-3</unique-id>
+        <command>tar -czvf %n.tar.gz %N</command>
+        <description>Create a compressed tar.gz archive from selected files</description>
+        <range>*</range>
+        <patterns>*</patterns>
+        <directories/>
+        <other-files/>
+      </action>
     </actions>
   '';
 }

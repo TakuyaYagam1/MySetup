@@ -20,6 +20,7 @@
       tumbler
       ffmpegthumbnailer
       poppler-utils
+      xarchiver
     ];
   };
 }

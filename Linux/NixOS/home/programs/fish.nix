@@ -72,9 +72,6 @@ _:
     };
 
     interactiveShellInit = ''
-      command -v direnv >/dev/null 2>&1 && direnv hook fish | source
-      command -v zoxide >/dev/null 2>&1 && zoxide init fish --cmd cd | source
-
       if test -f ~/.local/state/caelestia/sequences.txt
           cat ~/.local/state/caelestia/sequences.txt
       end

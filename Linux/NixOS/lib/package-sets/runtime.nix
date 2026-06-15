@@ -16,11 +16,15 @@ let
       grim
       slurp
       swappy
+      hyprshot
       hyprlock
       hypridle
       hyprpaper
+      imv
       playerctl
       uwsm
+      wayland-utils
+      wlr-randr
       ydotool
     ])
     ++ hyprlandQtUtils;
