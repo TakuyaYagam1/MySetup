@@ -20,6 +20,9 @@ let
     text = ''
       mkdir -p "${sharePath}"
 
+      VBoxManage setextradata global GUI/ShowMiniToolBar false
+      VBoxManage setextradata global GUI/Fullscreen/LegacyMode true
+
       VBoxManage sharedfolder remove global --name "${shareName}" >/dev/null 2>&1 || true
       VBoxManage sharedfolder add global \
         --name "${shareName}" \
