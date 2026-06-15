@@ -41,6 +41,7 @@ let
     ./programs/nixos-helper.nix
     ./programs/thunar.nix
     ./programs/uwsm.nix
+    ./programs/virtualbox.nix
     ./programs/yazi.nix
     ./programs/vesktop.nix
     ./programs/packages.nix
