@@ -42,6 +42,7 @@ let
     mockgen
     go-swag
     oapi-codegen
+    ogen
     go-mockery
     go-migrate
     protobuf
