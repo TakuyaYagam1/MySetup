@@ -275,6 +275,17 @@ var hostVarsTemplate = template.Must(template.New("host-vars.nix").Funcs(templat
     config = {{ nixString .Zapret.Config }};
   };
 
+  nix = {
+    gcRetention = "14d";
+    maxJobs = 1;
+    cores = 2;
+    swapSizeMiB = 32 * 1024;
+    zram = {
+      enable = true;
+      memoryPercent = 50;
+    };
+  };
+
   hypr = {
     keyboardLayouts = {{ nixString .Locale.KeyboardLayouts }};
     keyboardToggle = {{ nixString .Locale.KeyboardToggle }};

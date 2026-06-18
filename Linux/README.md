@@ -82,6 +82,26 @@ The first full build can still be large because this config includes multiple
 Wayland shells, Qt/QML packages, desktop apps, and optional CTF/development
 stacks.
 
+MySetup defaults to conservative local build settings so 8 GB RAM and lower machines
+do not get killed by OOM during rebuilds: `max-jobs = 1`, `cores = 2`, zram swap is
+enabled, and the existing `/var/lib/swapfile` remains a disk fallback. On Btrfs,
+NixOS creates the managed swapfile with `btrfs filesystem mkswapfile`, so manual
+CoW workarounds are not needed for that declarative swapfile.
+
+For the very first remote installer launch, pass the same limits before the app
+separator because the installer cannot control the resources used to build
+itself:
+
+```bash
+nix run --refresh --option max-jobs 1 --option cores 2 \
+  'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- \
+  apply --lock-mode managed
+```
+
+Faster machines can override the defaults in `host-vars.nix`, for example
+`mysetup.nix.maxJobs = "auto";` and `mysetup.nix.cores = 0;`, or a bounded pair
+such as `maxJobs = 4; cores = 4;`.
+
 ## State And Secrets
 
 The installer writes machine-local state to:

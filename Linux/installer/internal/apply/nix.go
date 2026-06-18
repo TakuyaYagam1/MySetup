@@ -16,6 +16,11 @@ var (
 	nixCacheTrustedKeys  = strings.Join(defaults.ExtraTrustedPublicKeys, " ")
 )
 
+const (
+	safeBuildMaxJobs = "1"
+	safeBuildCores   = "2"
+)
+
 func dryBuildSystem(ctx context.Context, runner run.CommandRunner, flakePath, hostname string) error {
 	target := fmt.Sprintf("%s#%s", flakePath, hostname)
 	if err := runner.Command(ctx, "sudo", nixosRebuildArgs("dry-build", target)...); err != nil {
@@ -60,6 +65,8 @@ func nixosRebuildArgs(action, target string) []string {
 		"nixos-rebuild",
 		action,
 		"--flake", target,
+		"--option", "max-jobs", safeBuildMaxJobs,
+		"--option", "cores", safeBuildCores,
 		"--option", "extra-substituters", nixCacheSubstituters,
 		"--option", "extra-trusted-public-keys", nixCacheTrustedKeys,
 	}

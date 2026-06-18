@@ -46,6 +46,17 @@
     config = "general (FAKE_TLS_AUTO_ALT3)";
   };
 
+  nix = {
+    gcRetention = "14d";
+    maxJobs = 1;
+    cores = 2;
+    swapSizeMiB = 32 * 1024;
+    zram = {
+      enable = true;
+      memoryPercent = 50;
+    };
+  };
+
   hypr = {
     keyboardLayouts = "us,ru";
     keyboardToggle = "grp:alt_shift_toggle";

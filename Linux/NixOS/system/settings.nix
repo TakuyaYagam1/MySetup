@@ -47,7 +47,8 @@
       ];
 
       sandbox = true;
-      max-jobs = "auto";
+      max-jobs = config.mysetup.nix.maxJobs;
+      cores = config.mysetup.nix.cores;
       auto-optimise-store = config.mysetup.host.autoOptimiseStore;
       warn-dirty = false;
     };

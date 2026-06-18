@@ -97,10 +97,41 @@ let
       };
       nix = mkOption {
         type = types.submodule {
-          options.gcRetention = mkOption {
-            type = types.str;
-            default = "14d";
-            description = "Retention window passed to nix-collect-garbage --delete-older-than.";
+          options = {
+            gcRetention = mkOption {
+              type = types.str;
+              default = "14d";
+              description = "Retention window passed to nix-collect-garbage --delete-older-than.";
+            };
+            maxJobs = mkOption {
+              type = types.either types.int (types.enum [ "auto" ]);
+              default = 1;
+              description = "Maximum number of Nix derivations to build in parallel.";
+            };
+            cores = mkOption {
+              type = types.int;
+              default = 2;
+              description = "Maximum cores exposed to each individual Nix build.";
+            };
+            swapSizeMiB = mkOption {
+              type = types.nullOr types.ints.positive;
+              default = 32 * 1024;
+              description = "Declarative disk swapfile size in MiB; null disables the managed swapfile.";
+            };
+            zram = mkOption {
+              type = types.submodule {
+                options = {
+                  enable = boolOption true;
+                  memoryPercent = mkOption {
+                    type = types.ints.positive;
+                    default = 50;
+                    description = "Maximum compressed zram swap size as a percentage of physical RAM.";
+                  };
+                };
+              };
+              default = { };
+              description = "Compressed RAM swap settings used before falling back to disk swap.";
+            };
           };
         };
         default = { };

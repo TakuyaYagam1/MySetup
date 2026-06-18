@@ -7,6 +7,7 @@
 
 let
   gpu = config.mysetup.hardware.gpu or "amd";
+  nixCfg = config.mysetup.nix;
   commonGraphicsPackages = with pkgs; [
     libvdpau-va-gl
     mesa
@@ -64,10 +65,18 @@ in
     "${pkgs.blueman}/bin/blueman-applet"
   ];
 
-  swapDevices = [
+  zramSwap = {
+    enable = nixCfg.zram.enable;
+    algorithm = "zstd";
+    memoryPercent = nixCfg.zram.memoryPercent;
+    priority = 100;
+  };
+
+  swapDevices = lib.optionals (nixCfg.swapSizeMiB != null) [
     {
       device = "/var/lib/swapfile";
-      size = 32 * 1024;
+      size = nixCfg.swapSizeMiB;
+      priority = 10;
     }
   ];
 }

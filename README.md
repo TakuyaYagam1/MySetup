@@ -95,6 +95,11 @@ nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- apply
 # transitive flake.lock for nixpkgs/home-manager/stylix/etc.
 nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- apply --lock-mode managed
 
+# Low-RAM bootstrap: keep the first installer run from oversubscribing CPU/RAM.
+nix run --refresh --option max-jobs 1 --option cores 2 \
+  'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- \
+  apply --lock-mode managed
+
 # Inspect or repair an installed host.
 nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- doctor
 ```

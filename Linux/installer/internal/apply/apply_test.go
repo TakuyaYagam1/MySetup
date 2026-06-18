@@ -259,6 +259,14 @@ func TestDryBuildSystemInvokesNixosRebuild(t *testing.T) {
 	if !strings.HasPrefix(strings.Join(got.args, " "), wantPrefix) {
 		t.Errorf("args = %q; want prefix %q", strings.Join(got.args, " "), wantPrefix)
 	}
+	for _, want := range []string{
+		"--option max-jobs 1",
+		"--option cores 2",
+	} {
+		if !strings.Contains(strings.Join(got.args, " "), want) {
+			t.Errorf("args = %q; missing %q", strings.Join(got.args, " "), want)
+		}
+	}
 }
 
 func TestHandlePreSwitchErrorWithoutBackupReturnsCause(t *testing.T) {

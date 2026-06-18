@@ -34,6 +34,11 @@ func TestHostVarsNixContainsFeatureFlags(t *testing.T) {
 		`preset = "personal";`,
 		`ctfTools = true;`,
 		`enable = true;`,
+		`nix = {`,
+		`maxJobs = 1;`,
+		`cores = 2;`,
+		`swapSizeMiB = 32 * 1024;`,
+		`memoryPercent = 50;`,
 		`consoleKeyMap = "us";`,
 		`keyboardToggle = "grp:alt_shift_toggle";`,
 		`display = {`,
@@ -387,6 +392,9 @@ for arg do
 done
 mkdir -p "$last"
 cp -a "$prev"/. "$last"/
+`)
+	writeExecutable(t, filepath.Join(bin, "nix"), `#!/bin/sh
+exit 0
 `)
 	writeExecutable(t, filepath.Join(bin, "sudo"), `#!/bin/sh
 if [ "$1" = "nixos-rebuild" ]; then
