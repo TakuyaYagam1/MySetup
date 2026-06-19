@@ -21,16 +21,16 @@ let
 in
 buildNpmPackage' rec {
   pname = "omnirouter";
-  version = "3.8.15";
+  version = "3.8.28";
 
   src = fetchFromGitHub {
     owner = "diegosouzapw";
     repo = "OmniRoute";
-    rev = "v3.8.15";
-    hash = "sha256-5fHA5yzP5BguPcMBSu9pozyM+8Oyy1illxUlVfPLJrg=";
+    rev = "v3.8.28";
+    hash = "sha256-BRvpbhhLTYj2rKw+nZloaXkpu3ySs5sWZo9425xvAPs=";
   };
 
-  npmDepsHash = "sha256-s+Ga1QmDOKIosvUA61RhA2gBA4fL5O73kc73LSifxpA=";
+  npmDepsHash = "sha256-Q1KLR3NkeFBB+tQzBazy+XWyIfpG8Magv+rdeqISNxw=";
 
   nativeBuildInputs = [
     python311
@@ -56,7 +56,10 @@ buildNpmPackage' rec {
     SHARP_IGNORE_GLOBAL_LIBVIPS = "0";
     # CPU binaries are bundled; skip optional CUDA downloads from NuGet.
     ONNXRUNTIME_NODE_INSTALL = "skip";
+    ONNXRUNTIME_NODE_INSTALL_CUDA = "skip";
   };
+
+  npmRebuildFlags = [ "--ignore-scripts" ];
 
   doCheck = false;
 
