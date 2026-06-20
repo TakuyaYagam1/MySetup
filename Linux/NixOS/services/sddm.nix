@@ -6,7 +6,7 @@
 }:
 
 let
-  meowrchSddmTheme = pkgs.callPackage ../packages/sddm-meowrch-theme.nix { };
+  meowrchSddmTheme = pkgs.callPackage ../pkgs/sddm-meowrch-theme.nix { };
   cursorPackage = pkgs.bibata-cursors;
   cursorTheme = "Bibata-Modern-Classic";
   cursorSize = "24";

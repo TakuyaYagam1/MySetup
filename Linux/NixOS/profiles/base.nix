@@ -17,7 +17,7 @@ _:
     ../services/desktop-session.nix
     ../programs/fish.nix
     ../programs/system-tools.nix
-    ../packages/system-packages.nix
+    ../system/packages.nix
     ../users/user.nix
   ];
 }

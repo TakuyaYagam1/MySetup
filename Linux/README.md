@@ -422,14 +422,14 @@ Linux/NixOS/
 │   ├── secrets/                   # optional sops-nix user secrets
 │   └── shells/
 │       └── quickshell/mysetup-shell-selector/  # Super+Shift+W picker
-├── packages/                      # fonts, dev-tools,
-│                                  # zen-browser, sddm-meowrch-theme, …
+├── pkgs/                          # pure derivations
+│                                  # (omnirouter, sddm-meowrch-theme)
 ├── programs/                      # system-wide program modules
-│                                  # (fish, hyprland, gaming, thunar, …)
+│                                  # (dev-tools, fish, hyprland, thunar, …)
 ├── services/                      # databases, observability, sddm,
 │                                  # virtualization, zapret, omnirouter, …
-├── system/                        # hardware, kernel, locale, networking,
-│   │                              # nvidia, power, security, settings
+├── system/                        # fonts, hardware, kernel, locale,
+│   │                              # networking, nvidia, packages, settings
 │   └── boot/                      # grub, plymouth, secure boot
 ├── themes/                        # active theme switch + grub/plymouth/sddm
 ├── users/                         # user + android-sdk modules
@@ -473,7 +473,7 @@ files. They are not duplicates - they configure two different layers:
 
 | Layer | Scope | Owns | Example |
 | --- | --- | --- | --- |
-| NixOS module (`programs/<x>.nix`, `services/<x>.nix`, `packages/<x>.nix`) | system-wide, applied by root via `nixos-rebuild` | package install in `/etc`, polkit/dbus/systemd, mime database, kernel/udev | `programs/thunar.nix`: `programs.thunar.enable`, `environment.systemPackages = [ tumbler ffmpegthumbnailer ]` |
+| NixOS module (`programs/<x>.nix`, `services/<x>.nix`, `system/<x>.nix`) | system-wide, applied by root via `nixos-rebuild` | package install in `/etc`, polkit/dbus/systemd, mime database, kernel/udev | `programs/thunar.nix`: `programs.thunar.enable`, `environment.systemPackages = [ tumbler ffmpegthumbnailer ]` |
 | Home-Manager module (`home/programs/<x>.nix`) | per-user, applied by your user via `home-manager activate` | `~/.config` dotfiles, xfconf/gsettings, GTK theme, user-only `home.activation` hooks | `home/programs/thunar.nix`: `xfconf.settings.thunar.*`, `xdg.configFile."Thunar/uca.xml"`, restart of user thumbnail daemons |
 
 These two scopes run in **different processes with different privileges** and

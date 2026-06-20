@@ -60,7 +60,7 @@ let
   };
 
   packages = {
-    omnirouter = flakePkgs.callPackage ../packages/omnirouter.nix { };
+    omnirouter = flakePkgs.callPackage ../pkgs/omnirouter.nix { };
     inherit mysetup;
     default = mysetup;
   };

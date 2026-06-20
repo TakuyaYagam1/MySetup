@@ -29,7 +29,7 @@ in
 
   omnirouterFromMySetupOverlay = _final: prev: {
     omnirouter =
-      inputs.mysetup.packages.${system}.omnirouter or (prev.callPackage ../packages/omnirouter.nix { });
+      inputs.mysetup.packages.${system}.omnirouter or (prev.callPackage ../pkgs/omnirouter.nix { });
   };
 
   pipxTestCompatibilityOverlay = _final: prev: {

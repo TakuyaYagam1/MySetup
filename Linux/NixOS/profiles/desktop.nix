@@ -8,7 +8,7 @@ _:
     ../programs/thunar.nix
     ../programs/gaming.nix
     ../programs/xdg-portal.nix
-    ../packages/fonts.nix
-    ../packages/zen-browser.nix
+    ../system/fonts.nix
+    ../programs/zen-browser.nix
   ];
 }
