@@ -33,10 +33,11 @@ Use the repository root flake for local runs. It exposes the installer as the
 default app and keeps the public flake inputs limited to the reusable shell
 stack.
 
-Or run directly from GitHub without cloning first:
+Or run directly from GitHub without cloning first. This opens the interactive
+TUI and uses the stable `main` branch by default:
 
 ```bash
-nix run 'github:TakuyaYagam1/MySetup'
+nix run --refresh 'github:TakuyaYagam1/MySetup'
 ```
 
 This is the normal thin apply path. Nix fetches the repository source into
@@ -44,15 +45,24 @@ This is the normal thin apply path. Nix fetches the repository source into
 source, then the installer writes a small `/etc/nixos` wrapper that tracks
 `github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS` by default.
 
+To test the latest fixes before they are merged to `main`, run the TUI from the
+`dev` branch and select `General -> MySetup channel -> development` before
+applying:
+
+```bash
+nix run --refresh 'github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS#mysetup' -- tui
+```
+
 The TUI `General` section includes `MySetup channel`. Keep `stable` to track the
 `main` branch after install, or select `development` to generate a wrapper that
 tracks `github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS`.
 
 Nix caches the resolved source for ~1 hour (`tarball-ttl` default). If you just
-pushed a commit and want the new HEAD right now, force a re-fetch:
+pushed a commit and want the new HEAD right now, keep `--refresh` in the command.
+For a cached stable TUI launch, `--refresh` is optional:
 
 ```bash
-nix run --refresh 'github:TakuyaYagam1/MySetup'
+nix run 'github:TakuyaYagam1/MySetup'
 ```
 
 For reproducible installs, pin a commit, branch, or tag:
@@ -94,7 +104,7 @@ CoW workarounds are not needed for that declarative swapfile.
 
 For the very first remote installer launch, pass the same limits before the app
 separator because the installer cannot control the resources used to build
-itself:
+itself. This is a non-interactive apply path and will not open the TUI:
 
 ```bash
 nix run --refresh --option max-jobs 1 --option cores 2 \
@@ -360,14 +370,27 @@ local modules to `private/default.nix`, which includes commented examples for
 ## Commands
 
 ```bash
+# Local checkout: open the interactive TUI.
 nix run "path:$PWD?dir=Linux/NixOS#mysetup"
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- tui
+
+# Remote stable/main: open the interactive TUI.
+nix run --refresh 'github:TakuyaYagam1/MySetup'
+
+# Remote latest/dev: open the interactive TUI, then select the development channel.
+nix run --refresh 'github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS#mysetup' -- tui
+
+# Read-only inspection commands.
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- doctor
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- print-state
+
+# Non-interactive apply commands. These use saved state and do not open the TUI.
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --no-switch
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --source-channel development --no-switch
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --lock-mode managed --no-switch
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --layout full --no-switch
+
+# Managed cleanup.
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- cleanup
 ```
 

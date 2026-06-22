@@ -38,14 +38,14 @@ func editRegion(s *session) error {
 			Value(&s.state.Locale.ConsoleKeyMap),
 		newBottomFilterSelect().
 			Title("Primary Hypr/XKB keyboard layout").
-			Description("First graphical layout from xkeyboard-config. English UK is gb, not console uk.").
+			Description("First graphical layout from xkeyboard-config.").
 			Options(xkbLayoutOptions([]string{primaryLayout})...).
 			Height(12).
 			Value(&primaryLayout).
 			Validate(config.ValidateXKBLayout),
-		huh.NewMultiSelect[string]().
+		newBottomFilterMultiSelect().
 			Title("Additional Hypr/XKB keyboard layouts").
-			Description("Optional secondary graphical layouts. Use Space to toggle.").
+			Description("Optional secondary graphical layouts. Use / to search and Space to toggle.").
 			Options(xkbLayoutOptions(additionalLayouts)...).
 			Height(12).
 			Value(&additionalLayouts).

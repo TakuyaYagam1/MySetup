@@ -47,17 +47,17 @@ func (s *bottomFilterSelect) Zoom() bool { return false }
 func (s *bottomFilterSelect) KeyBinds() []key.Binding {
 	if s.filtering {
 		return []key.Binding{
-			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑/↓", "results")),
+			key.NewBinding(key.WithKeys("up", "down", "ctrl+p", "ctrl+n"), key.WithHelp("↑/↓", "results")),
 			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "keep search")),
 			key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "clear search")),
 		}
 	}
 	return []key.Binding{
-		key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑/↓", "choose")),
+		key.NewBinding(key.WithKeys("up", "down", "k", "j"), key.WithHelp("↑/↓/j/k", "choose")),
 		key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
-		key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next field")),
-		key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "next field")),
-		key.NewBinding(key.WithKeys("ctrl+x", "shift+enter"), key.WithHelp("ctrl+x", "save section")),
+		key.NewBinding(key.WithKeys("tab", "enter"), key.WithHelp("tab/enter", "next field")),
+		key.NewBinding(key.WithKeys("shift+tab", "shift+enter"), key.WithHelp("shift+tab", "back field")),
+		key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save section")),
 	}
 }
 

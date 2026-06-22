@@ -49,11 +49,19 @@ entrypoints (`hyprland.lua` plus Lua modules) instead of legacy hyprlang
 
 No-clone install or reconfigure (recommended - Nix fetches the installer into
 `/nix/store`; the installed `/etc/nixos` stays thin and tracks the reusable
-MySetup NixOS flake). Use `--refresh` when you want the latest pushed commit
-instead of Nix's cached GitHub source:
+MySetup NixOS flake). This opens the interactive TUI and uses the stable
+`main` branch by default:
 
 ```bash
 nix run --refresh 'github:TakuyaYagam1/MySetup'
+```
+
+If you want the latest fixes before they are merged to `main`, run the TUI from
+the `dev` branch and select `General -> MySetup channel -> development` before
+applying:
+
+```bash
+nix run --refresh 'github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS#mysetup' -- tui
 ```
 
 In the TUI `General` section, `MySetup channel` controls what the installed
@@ -83,14 +91,14 @@ cd MySetup
 nix run "path:$PWD"
 ```
 
-The direct NixOS installer app is equivalent and exposes the CLI subcommands
-explicitly:
+The direct NixOS installer app also exposes CLI subcommands. These commands are
+non-interactive; `apply` uses the saved state and does not open the TUI:
 
 ```bash
 # Apply the default thin /etc/nixos layout with host-owned dependency locks.
 nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- apply
 
-# Apply from the development channel and keep /etc/nixos tracking dev.
+# Apply from the development channel without opening the TUI.
 nix run --refresh 'github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS#mysetup' -- \
   apply --source-channel development
 

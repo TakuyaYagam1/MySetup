@@ -28,7 +28,7 @@ var keys = struct {
 	up:    key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 	down:  key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
 	enter: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
-	quit:  key.NewBinding(key.WithKeys("q", "esc", "ctrl+c"), key.WithHelp("q", "quit")),
+	quit:  key.NewBinding(key.WithKeys("esc", "ctrl+c"), key.WithHelp("esc", "quit")),
 }
 
 func summary(s config.State, secrets config.Secrets, existingSecrets secretAvailability, statePath string) string {
