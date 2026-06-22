@@ -35,6 +35,7 @@ let
     postInstall = ''
       wrapProgram $out/bin/mysetup \
         --set MYSETUP_REPO_ROOT ${mysetupRuntimeSource}/NixOS \
+        --set MYSETUP_XKB_RULES_DIR ${flakePkgs.xkeyboard_config}/share/X11/xkb/rules \
         --prefix PATH : ${
           flakePkgs.lib.makeBinPath (
             with flakePkgs;

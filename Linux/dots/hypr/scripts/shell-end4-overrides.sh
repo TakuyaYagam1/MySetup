@@ -10,8 +10,13 @@ hypr_config_value() {
 
   value="$(awk -F= -v key="$key" '
     $1 ~ "^[[:space:]]*" key "[[:space:]]*$" {
-      gsub(/[[:space:]\",]/, "", $2)
-      print $2
+      value = $2
+      sub(/^[[:space:]]*/, "", value)
+      sub(/[[:space:]]*,[[:space:]]*$/, "", value)
+      sub(/^"/, "", value)
+      sub(/"$/, "", value)
+      gsub(/[[:space:]]*,[[:space:]]*/, ",", value)
+      print value
       exit
     }
   ' "$file" 2>/dev/null || true)"
@@ -57,4 +62,5 @@ apply_end4_hypr_runtime_overrides() {
   fi
   hyprctl keyword input:kb_layout "$layouts" >/dev/null 2>&1 || log "failed to apply end4 kb_layout=$layouts"
   hyprctl keyword input:kb_options "$options" >/dev/null 2>&1 || log "failed to apply end4 kb_options=$options"
+  hyprctl switchxkblayout all 0 >/dev/null 2>&1 || log "failed to reset end4 xkb layout index"
 }

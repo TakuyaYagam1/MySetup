@@ -1,12 +1,15 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 )
+
+var errTestValidation = errors.New("test validation")
 
 func TestInstallerFormKeyMapInputUsesTabForFieldNavigation(t *testing.T) {
 	keymap := installerFormKeyMap()
@@ -43,6 +46,76 @@ func TestInstallerFormKeyMapSelectKeepsArrowsForOptionsAndTabForFields(t *testin
 	assertHasKey(t, keymap.Select.SetFilter.Keys(), "enter")
 	if keymap.Select.Filter.Enabled() {
 		t.Fatal("standard huh selects should not open the top-position filter; large lists use bottomFilterSelect")
+	}
+}
+
+func TestInstallerFormKeyMapMultiSelectUsesSpaceForToggleAndTabForFields(t *testing.T) {
+	keymap := installerFormKeyMap()
+	assertHasKey(t, keymap.MultiSelect.Up.Keys(), "up")
+	assertHasKey(t, keymap.MultiSelect.Down.Keys(), "down")
+	assertHasKey(t, keymap.MultiSelect.Toggle.Keys(), " ")
+	assertHasKey(t, keymap.MultiSelect.Next.Keys(), "tab")
+	assertHasKey(t, keymap.MultiSelect.Prev.Keys(), "shift+tab")
+	assertMissingKey(t, keymap.MultiSelect.Next.Keys(), "enter")
+	assertHasKey(t, keymap.MultiSelect.Submit.Keys(), "ctrl+x")
+	assertHasKey(t, keymap.MultiSelect.Submit.Keys(), "shift+enter")
+}
+
+func TestBottomFilterSelectReportsValidationErrors(t *testing.T) {
+	value := "bad"
+	field := newBottomFilterSelect().
+		Options(huh.NewOption("good", "good")).
+		Value(&value).
+		Validate(func(value string) error {
+			if value != "good" {
+				return errTestValidation
+			}
+			return nil
+		})
+	if err := field.Error(); err == nil {
+		t.Fatal("expected bottom filter select validation error")
+	}
+	value = "good"
+	if err := field.Error(); err != nil {
+		t.Fatalf("expected bottom filter select to validate: %v", err)
+	}
+}
+
+func TestBottomFilterSelectValidationBlocksFormSubmit(t *testing.T) {
+	value := "bad"
+	field := newBottomFilterSelect().
+		Options(huh.NewOption("good", "good")).
+		Value(&value).
+		Validate(func(value string) error {
+			if value != "good" {
+				return errTestValidation
+			}
+			return nil
+		})
+	form := newForm(field)
+	form.form.SubmitCmd = tea.Quit
+	model := submitOnEnterModel{form: form.form, fields: form.fields}
+	if initCmd := model.Init(); initCmd != nil {
+		_, _ = model.Update(initCmd())
+	}
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyCtrlX})
+	if cmd != nil {
+		t.Fatal("expected invalid bottom filter select to block submit command")
+	}
+	got := updated.(submitOnEnterModel)
+	if got.form.State != huh.StateNormal {
+		t.Fatalf("expected invalid form to stay normal, got state %v", got.form.State)
+	}
+
+	value = "good"
+	updated, cmd = got.Update(tea.KeyMsg{Type: tea.KeyCtrlX})
+	if cmd == nil {
+		t.Fatal("expected valid bottom filter select to submit")
+	}
+	got = updated.(submitOnEnterModel)
+	if got.form.State != huh.StateCompleted {
+		t.Fatalf("expected valid form to complete, got state %v", got.form.State)
 	}
 }
 

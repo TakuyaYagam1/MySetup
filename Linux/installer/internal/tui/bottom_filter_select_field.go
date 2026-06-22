@@ -20,7 +20,12 @@ func (s *bottomFilterSelect) Blur() tea.Cmd {
 	return nil
 }
 
-func (s *bottomFilterSelect) Error() error { return nil }
+func (s *bottomFilterSelect) Error() error {
+	if s.validate == nil {
+		return nil
+	}
+	return s.validate(s.currentValue())
+}
 
 func (s *bottomFilterSelect) Run() error {
 	program := tea.NewProgram(s)

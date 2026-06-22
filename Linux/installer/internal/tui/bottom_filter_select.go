@@ -22,6 +22,7 @@ type bottomFilterSelect struct {
 	height      int
 	theme       *huh.Theme
 	onChange    func(string)
+	validate    func(string) error
 }
 
 func newBottomFilterSelect() *bottomFilterSelect {
@@ -63,6 +64,11 @@ func (s *bottomFilterSelect) Value(value *string) *bottomFilterSelect {
 
 func (s *bottomFilterSelect) OnChange(onChange func(string)) *bottomFilterSelect {
 	s.onChange = onChange
+	return s
+}
+
+func (s *bottomFilterSelect) Validate(validate func(string) error) *bottomFilterSelect {
+	s.validate = validate
 	return s
 }
 

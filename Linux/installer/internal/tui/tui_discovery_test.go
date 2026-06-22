@@ -112,6 +112,29 @@ func TestDiscoverConsoleKeymapsFromDir(t *testing.T) {
 	}
 }
 
+func TestXKBLayoutOptionsPreserveCurrentValuesFirst(t *testing.T) {
+	options := xkbLayoutOptions([]string{"gb", "customx"})
+	if len(options) < 2 {
+		t.Fatalf("expected XKB layout options, got %#v", options)
+	}
+	if options[0].Value != "gb" || !strings.Contains(options[0].Key, "English (UK)") {
+		t.Fatalf("expected current gb option with official label first, got %#v", options[0])
+	}
+	if options[1].Value != "customx" || !strings.Contains(options[1].Key, "unknown current layout") {
+		t.Fatalf("expected custom current layout second, got %#v", options[1])
+	}
+}
+
+func TestPrimaryKeyboardLayoutsStayFirst(t *testing.T) {
+	primary, additional := splitPrimaryKeyboardLayouts("us,ru")
+	if primary != "us" {
+		t.Fatalf("expected us as primary, got %q", primary)
+	}
+	if got := joinPrimaryKeyboardLayouts("gb", additional); got != "gb,ru" {
+		t.Fatalf("expected explicit primary layout to stay first, got %q", got)
+	}
+}
+
 func TestWeatherLocationFromTimeZone(t *testing.T) {
 	cases := map[string]string{
 		"Europe/Amsterdam":               "Amsterdam",

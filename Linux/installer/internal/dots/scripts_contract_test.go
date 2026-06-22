@@ -383,6 +383,50 @@ func TestEnd4HyprPatchDisablesUpstreamShellLifecycle(t *testing.T) {
 	}
 }
 
+func TestEnd4RuntimeOverrideParserPreservesKeyboardLayoutCommas(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash is not installed")
+	}
+	sourceData, err := os.ReadFile("../../../dots/hypr/scripts/shell-end4-overrides.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(sourceData), `hyprctl switchxkblayout all 0`) {
+		t.Fatalf("end4 runtime override must reset active XKB layout to the first configured layout\n%s", string(sourceData))
+	}
+
+	configPath := filepath.Join(t.TempDir(), "general.lua")
+	if err := os.WriteFile(configPath, []byte(`
+hl.config({
+    input = {
+        kb_layout = "us, ru",
+        kb_options = "grp:alt_shift_toggle",
+    },
+})
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	script, err := filepath.Abs("../../../dots/hypr/scripts/shell-end4-overrides.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", "-c", `
+set -eu
+. "$1"
+hypr_config_value "$2" kb_layout fallback
+printf '\n'
+hypr_config_value "$2" kb_options fallback
+`, "bash", script, configPath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("hypr_config_value failed: %v\n%s", err, string(output))
+	}
+	if got, want := strings.TrimSpace(string(output)), "us,ru\ngrp:alt_shift_toggle"; got != want {
+		t.Fatalf("unexpected parsed end4 keyboard values: got %q want %q", got, want)
+	}
+}
+
 func TestEnd4QuickshellPatchUsesNixOSLogo(t *testing.T) {
 	data, err := os.ReadFile("../../../NixOS/home/end4/patches/quickshell.nix")
 	if err != nil {
@@ -529,6 +573,22 @@ func TestObservabilityGrafanaUsesPersistentSecretFile(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("observability Grafana config missing persistent secret contract %q\n%s", want, text)
+		}
+	}
+}
+
+func TestInstallerPackageProvidesXKeyboardRules(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/lib/flake-packages.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		`--set MYSETUP_XKB_RULES_DIR ${flakePkgs.xkeyboard_config}/share/X11/xkb/rules`,
+		`xkeyboard_config`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("mysetup package missing XKB rules runtime contract %q\n%s", want, text)
 		}
 	}
 }

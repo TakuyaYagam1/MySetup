@@ -143,8 +143,10 @@ func validateLocaleFields(state State, errs *FieldErrors) {
 	}
 	if !layoutsRe.MatchString(state.Locale.KeyboardLayouts) {
 		errs.Keyboard = "keyboard layouts must be comma-separated XKB layout names such as us,ru"
+	} else if err := ValidateXKBLayoutSelection(SplitKeyboardLayouts(state.Locale.KeyboardLayouts)); err != nil {
+		errs.Keyboard = err.Error()
 	}
-	if !IsKeyboardToggle(state.Locale.KeyboardToggle) {
+	if errs.Keyboard == "" && !IsKeyboardToggle(state.Locale.KeyboardToggle) {
 		errs.Keyboard = "keyboard toggle must be one of the supported XKB toggle options"
 	}
 }
