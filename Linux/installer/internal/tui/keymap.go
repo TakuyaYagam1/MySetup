@@ -12,7 +12,7 @@ func installerFormKeyMap() *huh.KeyMap {
 	keymap.Input.Submit = key.NewBinding(key.WithKeys("ctrl+x", "shift+enter"), key.WithHelp("ctrl+x", "save section"))
 	keymap.Confirm.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back field"))
 	keymap.Confirm.Next = key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next field"))
-	keymap.Confirm.Submit = key.NewBinding(key.WithKeys("ctrl+x", "shift+enter"), key.WithHelp("ctrl+x", "save section"))
+	keymap.Confirm.Submit = key.NewBinding(key.WithKeys("enter", "ctrl+x", "shift+enter"), key.WithHelp("enter", "choose"))
 	keymap.Select.Prev = key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back field"))
 	keymap.Select.Next = key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next field"))
 	keymap.Select.Submit = key.NewBinding(key.WithKeys("ctrl+x", "shift+enter"), key.WithHelp("ctrl+x", "save section"))

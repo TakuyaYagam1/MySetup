@@ -74,6 +74,9 @@ func (m submitOnEnterModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch keyMsg.String() {
 		case "enter":
+			if m.focusedFieldIsConfirm() {
+				return m.updateForm(msg)
+			}
 			return m, m.nextFieldCircular()
 		case "tab":
 			return m, m.nextFieldCircular()
@@ -133,6 +136,11 @@ func (m submitOnEnterModel) focusedFieldFiltering() bool {
 func (m submitOnEnterModel) focusedFieldHasFilter() bool {
 	field, ok := m.form.GetFocusedField().(interface{ HasFilter() bool })
 	return ok && field.HasFilter()
+}
+
+func (m submitOnEnterModel) focusedFieldIsConfirm() bool {
+	_, ok := m.form.GetFocusedField().(*huh.Confirm)
+	return ok
 }
 
 func (m submitOnEnterModel) nextFieldCircular() tea.Cmd {
