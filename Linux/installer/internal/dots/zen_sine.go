@@ -17,6 +17,13 @@ const (
 	zenCustomCSSPrefLine = `user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);`
 )
 
+var sineChromePreservePaths = []string{
+	"/JS/",
+	"/locales/",
+	"/sine-mods/",
+	"/utils/",
+}
+
 func setupZen(ctx context.Context, runner run.CommandRunner, dotsSrc, home, username string, cfg config.Dots) error {
 	profile := zenutil.FindProfile(home)
 	if profile == "" {
@@ -68,7 +75,12 @@ func setupZenTheme(ctx context.Context, runner run.CommandRunner, dotsSrc, chrom
 	if err := ensureUserWritableTree(ctx, runner, chrome, username); err != nil {
 		return err
 	}
-	if err := runner.Command(ctx, "rsync", "-a", "--delete", src+"/", chrome+"/"); err != nil {
+	args := []string{"-a", "--delete"}
+	for _, rel := range sineChromePreservePaths {
+		args = append(args, "--exclude", rel)
+	}
+	args = append(args, src+"/", chrome+"/")
+	if err := runner.Command(ctx, "rsync", args...); err != nil {
 		return err
 	}
 	if err := ensureUserWritableTree(ctx, runner, chrome, username); err != nil {
