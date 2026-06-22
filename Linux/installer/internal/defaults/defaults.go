@@ -10,8 +10,7 @@ package defaults
 const ShaCryptRounds = 656000
 
 // StagingTempPattern is the os.MkdirTemp pattern for the apply staging tree.
-// Includes the project name so leftover dirs (after a kill -9) are easy to spot
-// in /tmp.
+// Includes the project name so leftover dirs after a kill -9 are easy to spot.
 const StagingTempPattern = "mysetup-nixos-*"
 
 // ExtraSubstituters lists the binary cache hosts that nixos-rebuild trusts in

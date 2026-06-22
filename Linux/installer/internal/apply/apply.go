@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/defaults"
@@ -80,7 +83,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	printApplyHeader(src, opts.Paths.NixOSDest, modes)
 
-	staging, err := os.MkdirTemp("", defaults.StagingTempPattern)
+	staging, err := createStagingDir()
 	if err != nil {
 		return fmt.Errorf("create staging: %w", err)
 	}
@@ -126,4 +129,38 @@ func Run(ctx context.Context, opts Options) error {
 		return nil
 	}
 	return writeState(ctx, runner, opts.Paths.StatePath, activatedState(opts.State))
+}
+
+func createStagingDir() (string, error) {
+	base := stagingBaseDir()
+	if err := os.MkdirAll(base, 0o700); err != nil {
+		return "", err
+	}
+	return os.MkdirTemp(base, defaults.StagingTempPattern)
+}
+
+func stagingBaseDir() string {
+	if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" && !isUnderPath(cacheDir, os.TempDir()) {
+		return filepath.Join(cacheDir, "mysetup", "staging")
+	}
+	if homeDir, err := os.UserHomeDir(); err == nil && homeDir != "" && !isUnderPath(homeDir, os.TempDir()) {
+		return filepath.Join(homeDir, ".cache", "mysetup", "staging")
+	}
+	return filepath.Join("/var/tmp", "mysetup-"+strconv.Itoa(os.Getuid()), "staging")
+}
+
+func isUnderPath(path, parent string) bool {
+	cleanPath, err := filepath.Abs(path)
+	if err != nil {
+		cleanPath = filepath.Clean(path)
+	}
+	cleanParent, err := filepath.Abs(parent)
+	if err != nil {
+		cleanParent = filepath.Clean(parent)
+	}
+	rel, err := filepath.Rel(cleanParent, cleanPath)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !filepath.IsAbs(rel) && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
