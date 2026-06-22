@@ -18,6 +18,7 @@ jobs:
       pull-requests: write
     env:
       FLAKE: ./Linux/NixOS
+      OMNIROUTER_NIX: Linux/NixOS/pkgs/omnirouter.nix
       GITHUB_TOKEN: ${{ github.token }}
 
     steps:
@@ -33,7 +34,7 @@ jobs:
       - name: Read current version
         id: current
         run: |
-          current="$(grep -oP 'version = "\K[^"]+' Linux/NixOS/packages/omnirouter.nix | head -1)"
+          current="$(grep -oP 'version = "\K[^"]+' "$OMNIROUTER_NIX" | head -1)"
           echo "version=$current" >> "$GITHUB_OUTPUT"
 
       - name: Resolve latest release
@@ -100,10 +101,10 @@ jobs:
       - name: Patch version and source hash
         if: steps.compare.outputs.should_update == 'true'
         run: |
-          sed -i 's/version = "[^"]*"/version = "${{ steps.release.outputs.version }}"/' Linux/NixOS/packages/omnirouter.nix
-          sed -i 's/rev = "v[^"]*"/rev = "v${{ steps.release.outputs.version }}"/' Linux/NixOS/packages/omnirouter.nix
-          sed -i 's|hash = "sha256-[^"]*"|hash = "${{ steps.src.outputs.hash }}"|' Linux/NixOS/packages/omnirouter.nix
-          sed -i 's|npmDepsHash = "sha256-[^"]*"|npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="|' Linux/NixOS/packages/omnirouter.nix
+          sed -i 's/version = "[^"]*"/version = "${{ steps.release.outputs.version }}"/' "$OMNIROUTER_NIX"
+          sed -i 's/rev = "v[^"]*"/rev = "v${{ steps.release.outputs.version }}"/' "$OMNIROUTER_NIX"
+          sed -i 's|hash = "sha256-[^"]*"|hash = "${{ steps.src.outputs.hash }}"|' "$OMNIROUTER_NIX"
+          sed -i 's|npmDepsHash = "sha256-[^"]*"|npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="|' "$OMNIROUTER_NIX"
 
       - name: Compute npmDepsHash
         id: npm
@@ -122,7 +123,7 @@ jobs:
           fi
 
           echo "hash=$got" >> "$GITHUB_OUTPUT"
-          sed -i 's|npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="|npmDepsHash = "'"$got"'"|' Linux/NixOS/packages/omnirouter.nix
+          sed -i 's|npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="|npmDepsHash = "'"$got"'"|' "$OMNIROUTER_NIX"
 
       - name: Verify build
         if: steps.compare.outputs.should_update == 'true'
@@ -143,7 +144,7 @@ jobs:
           branch: "update-omnirouter"
           delete-branch: true
           add-paths: |
-            Linux/NixOS/packages/omnirouter.nix
+            Linux/NixOS/pkgs/omnirouter.nix
           title: "chore(nix): update omnirouter to v${{ steps.release.outputs.version }}"
           body: |
             ## What
