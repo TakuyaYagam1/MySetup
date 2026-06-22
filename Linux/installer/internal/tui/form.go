@@ -26,7 +26,7 @@ func (f *installerForm) Run() error {
 	f.form.SubmitCmd = tea.Quit
 	f.form.CancelCmd = tea.Interrupt
 	model := submitOnEnterModel{form: f.form, fields: f.fields}
-	final, err := tea.NewProgram(model, tea.WithOutput(os.Stderr), tea.WithReportFocus()).Run()
+	final, err := tea.NewProgram(model, tea.WithOutput(os.Stderr), tea.WithReportFocus(), tea.WithAltScreen()).Run()
 	if err != nil {
 		if errors.Is(err, tea.ErrInterrupted) {
 			return huh.ErrUserAborted
