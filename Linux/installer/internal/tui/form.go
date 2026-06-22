@@ -18,7 +18,8 @@ type installerForm struct {
 func newForm(fields ...huh.Field) *installerForm {
 	form := huh.NewForm(huh.NewGroup(fields...)).
 		WithTheme(theme()).
-		WithKeyMap(installerFormKeyMap())
+		WithKeyMap(installerFormKeyMap()).
+		WithShowHelp(false)
 	return &installerForm{form: form, fields: fields}
 }
 
@@ -60,7 +61,7 @@ func (m submitOnEnterModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if size, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = size.Width
 		m.height = size.Height
-		return m.updateForm(msg)
+		return m.updateForm(tea.WindowSizeMsg{Width: size.Width, Height: m.bodyHeight()})
 	}
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		if keyMsg.String() == "ctrl+s" {
@@ -110,16 +111,22 @@ func (m submitOnEnterModel) View() string {
 		return lipgloss.JoinVertical(lipgloss.Left, body, "", footerStyle.Render("  "+footer))
 	}
 
-	bodyHeight := maxInt(0, m.height-1)
+	bodyHeight := m.bodyHeight()
 	renderedBody := lipgloss.NewStyle().
 		Width(m.width).
 		Height(bodyHeight).
+		MaxHeight(bodyHeight).
 		Render(body)
-	renderedFooter := footerStyle.Width(m.width).Render("  " + footer)
+	renderedFooter := footerStyle.Width(m.width).Height(1).MaxHeight(1).Render("  " + footer)
 	return screenStyle.
 		Width(m.width).
 		Height(m.height).
+		MaxHeight(m.height).
 		Render(lipgloss.JoinVertical(lipgloss.Left, renderedBody, renderedFooter))
+}
+
+func (m submitOnEnterModel) bodyHeight() int {
+	return maxInt(0, m.height-1)
 }
 
 func formFooterText(m submitOnEnterModel) string {

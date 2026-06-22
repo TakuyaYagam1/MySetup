@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 )
 
 var errTestValidation = errors.New("test validation")
@@ -369,6 +370,115 @@ func TestSingleFieldFormFooterShowsReturnKeys(t *testing.T) {
 	view := model.View()
 	if !strings.Contains(view, "Tab/Enter: return") {
 		t.Fatalf("expected single-field footer to show return keys, got:\n%s", view)
+	}
+}
+
+func TestWindowSizedBottomFilterFormKeepsFocusedFieldHeaderVisible(t *testing.T) {
+	timeZone := "Europe/Moscow"
+	locale := "en_US.UTF-8"
+	extraLocale := "ru_RU.UTF-8"
+	consoleKeymap := "us"
+	form := newForm(
+		newBottomFilterSelect().
+			Title("Timezone").
+			Description("Nix time.timeZone value.").
+			Options(
+				huh.NewOption("Europe/Malta", "Europe/Malta"),
+				huh.NewOption("Europe/Mariehamn", "Europe/Mariehamn"),
+				huh.NewOption("Europe/Minsk", "Europe/Minsk"),
+				huh.NewOption("Europe/Monaco", "Europe/Monaco"),
+				huh.NewOption("Europe/Moscow", "Europe/Moscow"),
+				huh.NewOption("Europe/Nicosia", "Europe/Nicosia"),
+				huh.NewOption("Europe/Oslo", "Europe/Oslo"),
+				huh.NewOption("Europe/Paris", "Europe/Paris"),
+			).
+			Height(14).
+			Value(&timeZone),
+		newBottomFilterSelect().
+			Title("Default locale").
+			Description("Primary glibc locale.").
+			Options(
+				huh.NewOption("de_DE.UTF-8", "de_DE.UTF-8"),
+				huh.NewOption("en_GB.UTF-8", "en_GB.UTF-8"),
+				huh.NewOption("en_US.UTF-8", "en_US.UTF-8"),
+				huh.NewOption("es_ES.UTF-8", "es_ES.UTF-8"),
+			).
+			Height(12).
+			Value(&locale),
+		newBottomFilterSelect().
+			Title("Extra locale").
+			Description("Additional generated locale.").
+			Options(
+				huh.NewOption("ja_JP.UTF-8", "ja_JP.UTF-8"),
+				huh.NewOption("nl_NL.UTF-8", "nl_NL.UTF-8"),
+				huh.NewOption("ru_RU.UTF-8", "ru_RU.UTF-8"),
+				huh.NewOption("uk_UA.UTF-8", "uk_UA.UTF-8"),
+			).
+			Height(12).
+			Value(&extraLocale),
+		newBottomFilterSelect().
+			Title("Console keymap").
+			Description("TTY keyboard map only.").
+			Options(
+				huh.NewOption("de", "de"),
+				huh.NewOption("fr", "fr"),
+				huh.NewOption("ru", "ru"),
+				huh.NewOption("us", "us"),
+				huh.NewOption("uk", "uk"),
+			).
+			Height(12).
+			Value(&consoleKeymap),
+	)
+	model := submitOnEnterModel{form: form.form, fields: form.fields}
+	if initCmd := model.Init(); initCmd != nil {
+		_, _ = model.Update(initCmd())
+	}
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	model = updated.(submitOnEnterModel)
+	if view := model.View(); !strings.Contains(view, "Timezone") || !strings.Contains(view, "Nix time.timeZone value.") {
+		t.Fatalf("expected focused first field header to stay visible, got:\n%s", view)
+	} else {
+		assertWindowSizedFormView(t, view, 30, "Timezone")
+	}
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyTab})
+	model = updateFormWithCmd(t, updated.(submitOnEnterModel), cmd)
+	if view := model.View(); !strings.Contains(view, "Default locale") || !strings.Contains(view, "Primary glibc locale.") {
+		t.Fatalf("expected focused next field header to stay visible, got:\n%s", view)
+	} else {
+		assertWindowSizedFormView(t, view, 30, "Default locale")
+	}
+
+	updated, cmd = model.Update(tea.KeyMsg{Type: tea.KeyTab})
+	model = updateFormWithCmd(t, updated.(submitOnEnterModel), cmd)
+	if view := model.View(); !strings.Contains(view, "Extra locale") || !strings.Contains(view, "Additional generated locale.") {
+		t.Fatalf("expected focused third field header to stay visible, got:\n%s", view)
+	} else {
+		assertWindowSizedFormView(t, view, 30, "Extra locale")
+	}
+}
+
+func assertWindowSizedFormView(t *testing.T, view string, height int, firstVisibleText string) {
+	t.Helper()
+	if got := lipgloss.Height(view); got != height {
+		t.Fatalf("expected form view height to fit the terminal (%d), got %d:\n%s", height, got, view)
+	}
+	lines := strings.Split(view, "\n")
+	if len(lines) > height {
+		lines = lines[len(lines)-height:]
+	}
+	firstContentLine := ""
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			firstContentLine = line
+			break
+		}
+	}
+	if !strings.Contains(firstContentLine, firstVisibleText) {
+		t.Fatalf("expected first visible form content line to contain %q, got:\n%s", firstVisibleText, view)
+	}
+	if strings.Contains(view, "save section") {
+		t.Fatalf("expected custom footer to replace huh help footer, got:\n%s", view)
 	}
 }
 
