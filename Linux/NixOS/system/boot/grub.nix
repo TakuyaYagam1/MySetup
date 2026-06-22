@@ -34,7 +34,7 @@ in
         device = "nodev";
         useOSProber = true;
         configurationLimit = 10;
-        gfxmodeEfi = "2560x1600";
+        gfxmodeEfi = "auto";
         theme = meowrchGrubTheme;
       };
     };

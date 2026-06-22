@@ -10,18 +10,18 @@ terminal-height: "100%"
 terminal-border: "0"
 
 + image {
-  left = 50%-300
-  top = 10%
-  width = 600
-  height = 600
+  left = 50%-72
+  top = 7%
+  width = 144
+  height = 144
   file = "logo.png"
 }
 
 + boot_menu {
-  left = 50%-240
-  top = 60%
-  width = 480
-  height = 320
+  left = 15%
+  top = 42%
+  width = 70%
+  height = 40%
   item_font = "Unifont Regular 16"
   item_color = "#CDD6F4"
   selected_item_color = "#CBA6F7"
@@ -36,7 +36,7 @@ terminal-border: "0"
 
 + label {
   left = 50%-192
-  top = 85%
+  top = 86%
   width = 384
   align = "center"
   id = "__timeout__"
@@ -44,4 +44,3 @@ terminal-border: "0"
   font = "Unifont Regular 16"
   color = "#CDD6F4"
 }
-
