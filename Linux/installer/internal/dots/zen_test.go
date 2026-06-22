@@ -177,6 +177,39 @@ func TestSetupZenThemeDoesNotBackupManagedChrome(t *testing.T) {
 	}
 }
 
+func TestSetupZenThemePreservesSineChromeFiles(t *testing.T) {
+	dotsSrc := t.TempDir()
+	src := filepath.Join(dotsSrc, "zen", "chrome")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "userChrome.css"), []byte("/* updated theme */\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	chrome := t.TempDir()
+	if err := os.WriteFile(filepath.Join(chrome, ".mysetup-managed.json"), []byte(managedMarkerWithSourceHash("zen-chrome", "old-source-hash")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	runner := run.Runner{DryRun: true, Stdout: &out, Stderr: &out}
+	if err := setupZenTheme(context.Background(), runner, dotsSrc, chrome, "tester"); err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.String()
+	for _, want := range []string{
+		"--exclude /JS/",
+		"--exclude /utils/",
+		"--exclude /sine-mods/",
+		"--exclude /locales/",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected Zen theme rsync to preserve Sine path %q, got:\n%s", want, got)
+		}
+	}
+}
+
 func TestEnsureZenCustomCSSPrefCreatesUserJS(t *testing.T) {
 	profile := t.TempDir()
 
