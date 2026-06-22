@@ -18,9 +18,20 @@ let
         else ${path}
         end
       )'';
+  jqBool = value: if value then "true" else "false";
+  mkBoolDefault = path: value: ''
+    if ${path} == null
+    then ${path} = ${jqBool value}
+    else .
+    end'';
 in
 {
-  inherit dotsRoot layout mkOpacityFallback;
+  inherit
+    dotsRoot
+    layout
+    mkBoolDefault
+    mkOpacityFallback
+    ;
 
   hyprRuntimeFiles = shellRuntimeManifest.runtimeFiles;
   inherit (shellRuntimeManifest) hyprScripts end4Scripts;

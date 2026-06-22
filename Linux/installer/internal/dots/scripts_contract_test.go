@@ -457,6 +457,60 @@ func TestCaelestiaActivationRepairsInvalidShellJson(t *testing.T) {
 	}
 }
 
+func TestCaelestiaActivationPreservesDisabledTransparency(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/home/caelestia/default.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+
+	if strings.Contains(text, `.appearance.transparency.enabled //= true`) {
+		t.Fatalf("caelestia transparency seed must not treat false as missing\n%s", text)
+	}
+	for _, want := range []string{
+		`${dotfilesLib.mkBoolDefault ".appearance.transparency.enabled" true} |`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("caelestia activation missing transparency false-preserving seed %q\n%s", want, text)
+		}
+	}
+}
+
+func TestEnd4ActivationPreservesDisabledTransparency(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/home/end4/seed/config.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+
+	if strings.Contains(text, `.appearance.transparency.enable //= true`) {
+		t.Fatalf("end4 transparency seed must not treat false as missing\n%s", text)
+	}
+	for _, want := range []string{
+		`${dotfilesLib.mkBoolDefault ".appearance.transparency.enable" true} |`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("end4 activation missing transparency false-preserving seed %q\n%s", want, text)
+		}
+	}
+}
+
+func TestShellSeedFiltersDoNotUseJQTrueFallback(t *testing.T) {
+	for _, path := range []string{
+		"../../../NixOS/home/caelestia/default.nix",
+		"../../../NixOS/home/end4/seed/config.nix",
+		"../../../NixOS/home/noctalia/default.nix",
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), `//= true`) {
+			t.Fatalf("seed filters must use mkBoolDefault for true boolean defaults, found //= true in %s\n%s", path, string(data))
+		}
+	}
+}
+
 func TestWsactionGroupModeShiftsFishArgv(t *testing.T) {
 	if _, err := exec.LookPath("fish"); err != nil {
 		t.Skip("fish is not installed")

@@ -22,12 +22,12 @@ in
   home.activation.end4SeedConfig = homeLibs.shellSeed.mkSeedActivation {
     dirs = [ "$HOME/.config/illogical-impulse" ];
     body = ''
-      seed_json_object "$HOME/.config/illogical-impulse/config.json" "${end4ConfigJson}" "${config.home.homeDirectory}" '
-          .appearance //= {} |
-          .appearance.transparency //= {} |
-          .appearance.transparency.enable //= true |
-          .appearance.transparency.automatic //= false |
-          .appearance.transparency.backgroundTransparency //= ${toString trans.shell} |
+          seed_json_object "$HOME/.config/illogical-impulse/config.json" "${end4ConfigJson}" "${config.home.homeDirectory}" '
+              .appearance //= {} |
+              .appearance.transparency //= {} |
+              ${dotfilesLib.mkBoolDefault ".appearance.transparency.enable" true} |
+              .appearance.transparency.automatic //= false |
+              .appearance.transparency.backgroundTransparency //= ${toString trans.shell} |
           ${
             dotfilesLib.mkOpacityFallback ".appearance.transparency.contentTransparency" {
               vendor = 0;

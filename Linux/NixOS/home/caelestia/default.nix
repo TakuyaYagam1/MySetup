@@ -58,7 +58,7 @@ in
                 .general.logo = "${config.caelestiaShellSettings.general.logo}" |
                 .appearance //= {} |
                 .appearance.transparency //= {} |
-                .appearance.transparency.enabled //= true |
+                ${dotfilesLib.mkBoolDefault ".appearance.transparency.enabled" true} |
                 ${dotfilesLib.mkOpacityDefault trans ".appearance.transparency.base"} |
                 .appearance.transparency.layers //= ${toString trans.content} |
                 .background //= {} |
