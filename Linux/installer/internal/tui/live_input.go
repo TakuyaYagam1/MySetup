@@ -141,7 +141,8 @@ func (i *liveInput) Zoom() bool { return false }
 func (i *liveInput) KeyBinds() []key.Binding {
 	return []key.Binding{
 		key.NewBinding(key.WithKeys("tab", "enter"), key.WithHelp("tab/enter", "next field")),
-		key.NewBinding(key.WithKeys("ctrl+x", "shift+enter"), key.WithHelp("ctrl+x", "save section")),
+		key.NewBinding(key.WithKeys("shift+tab", "shift+enter"), key.WithHelp("shift+tab", "back field")),
+		key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save section")),
 	}
 }
 

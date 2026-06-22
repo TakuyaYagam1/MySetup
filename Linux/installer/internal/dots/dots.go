@@ -48,7 +48,7 @@ func Apply(ctx context.Context, opts Options) error {
 		}
 	}
 	if opts.State.Dots.Neovim {
-		if err := syncNvim(ctx, runner, opts.Sources.Dots, configDir, opts.State.User.Username, opts.State.Dots.NeovimCleanState); err != nil {
+		if err := syncNvim(ctx, runner, opts.Sources.Dots, configDir, opts.State.User.Username); err != nil {
 			return err
 		}
 	}

@@ -281,10 +281,6 @@ func runDisplayForm(s *session, errors displayFormErrors) error {
 			Options(labeledStringOptions(config.GPUProfiles, gpuLabel)...).
 			Value(&s.state.Hardware.GPU),
 		huh.NewInput().
-			Title("Hypr keyboard layouts").
-			Description("Hyprland kb_layout value, for example us,ru.").
-			Value(&s.state.Locale.KeyboardLayouts),
-		huh.NewInput().
 			Title("Monitor name").
 			Description(fieldDescription("Output name from hyprctl monitors, for example eDP-1 or DP-1.", errors.monitorName)).
 			Value(&s.state.Display.MonitorName),
@@ -300,11 +296,6 @@ func runDisplayForm(s *session, errors displayFormErrors) error {
 			Title("Scale").
 			Description(fieldDescription("Monitor scale in Hyprland syntax, for example 1 or 1.25.", errors.monitorScale)).
 			Value(&s.state.Display.MonitorScale),
-		huh.NewSelect[string]().
-			Title("Keyboard toggle").
-			Description("Hyprland kb_options value for layout switching.").
-			Options(labeledStringOptions(config.KeyboardToggles, keyboardToggleLabel)...).
-			Value(&s.state.Locale.KeyboardToggle),
 	).Run()
 }
 

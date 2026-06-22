@@ -51,6 +51,7 @@ end4) via `source = $hypr/shell-common-keybinds.conf` and
 | `Super+Shift+F` | Zen Browser |
 | `Super+Shift+C` | Cursor IDE |
 | `Super+Shift+V` | VS Code |
+| `Super+Shift+Z` | Zed |
 | `Super+Shift+D` | DataGrip |
 | `Super+Shift+A` | Antigravity (Gemini CLI) |
 | `Super+Shift+Q` | AmneziaVPN |

@@ -19,12 +19,17 @@ func HostVarsNix(s config.State) (string, error) {
 
 type flakeTemplateData struct {
 	config.State
-	LockMode LockMode
+	LockMode   LockMode
+	MySetupURL string
 }
 
 func FlakeNix(s config.State, lockMode LockMode) (string, error) {
 	var out bytes.Buffer
-	if err := flakeTemplate.Execute(&out, flakeTemplateData{State: s, LockMode: lockMode}); err != nil {
+	if err := flakeTemplate.Execute(&out, flakeTemplateData{
+		State:      s,
+		LockMode:   lockMode,
+		MySetupURL: config.MySetupFlakeURL(s.Source.Channel),
+	}); err != nil {
 		return "", fmt.Errorf("render flake.nix: %w", err)
 	}
 	return out.String(), nil
@@ -171,7 +176,7 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
     };
 
     mysetup = {
-      url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";
+      url = {{ nixString .MySetupURL }};
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.nixpkgs-stable.follows = "nixpkgs-stable";
       inputs.home-manager.follows = "home-manager";
@@ -195,7 +200,7 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       inputs.stylix.follows = "stylix";
     };
 {{ else }}
-    mysetup.url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";
+    mysetup.url = {{ nixString .MySetupURL }};
 {{ end }}
   };
 

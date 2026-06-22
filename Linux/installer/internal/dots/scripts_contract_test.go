@@ -65,6 +65,7 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 		"restore-lock.sh caelestia",
 		"shell-selector.sh toggle",
 		`"app2unit -- " .. v.terminal`,
+		`"app2unit -- " .. v.zed`,
 		`mysetup.hypr .. "/scripts/screenshot.sh full"`,
 		"caelestia clipboard",
 	} {
@@ -86,6 +87,7 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 		"restore-lock.sh noctalia",
 		"shell-selector.sh toggle",
 		`"app2unit -- " .. v.terminal`,
+		`"app2unit -- " .. v.zed`,
 		`mysetup.hypr .. "/scripts/screenshot.sh full"`,
 	} {
 		if !strings.Contains(noctaliaProfile, want) {
@@ -383,6 +385,50 @@ func TestEnd4HyprPatchDisablesUpstreamShellLifecycle(t *testing.T) {
 	}
 }
 
+func TestEnd4RuntimeOverrideParserPreservesKeyboardLayoutCommas(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash is not installed")
+	}
+	sourceData, err := os.ReadFile("../../../dots/hypr/scripts/shell-end4-overrides.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(sourceData), `hyprctl switchxkblayout all 0`) {
+		t.Fatalf("end4 runtime override must reset active XKB layout to the first configured layout\n%s", string(sourceData))
+	}
+
+	configPath := filepath.Join(t.TempDir(), "general.lua")
+	if err := os.WriteFile(configPath, []byte(`
+hl.config({
+    input = {
+        kb_layout = "us, ru",
+        kb_options = "grp:alt_shift_toggle",
+    },
+})
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	script, err := filepath.Abs("../../../dots/hypr/scripts/shell-end4-overrides.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", "-c", `
+set -eu
+. "$1"
+hypr_config_value "$2" kb_layout fallback
+printf '\n'
+hypr_config_value "$2" kb_options fallback
+`, "bash", script, configPath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("hypr_config_value failed: %v\n%s", err, string(output))
+	}
+	if got, want := strings.TrimSpace(string(output)), "us,ru\ngrp:alt_shift_toggle"; got != want {
+		t.Fatalf("unexpected parsed end4 keyboard values: got %q want %q", got, want)
+	}
+}
+
 func TestEnd4QuickshellPatchUsesNixOSLogo(t *testing.T) {
 	data, err := os.ReadFile("../../../NixOS/home/end4/patches/quickshell.nix")
 	if err != nil {
@@ -453,6 +499,98 @@ func TestCaelestiaActivationRepairsInvalidShellJson(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("caelestia activation missing invalid shell.json repair guard %q\n%s", want, text)
+		}
+	}
+}
+
+func TestCaelestiaActivationPreservesDisabledTransparency(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/home/caelestia/default.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+
+	if strings.Contains(text, `.appearance.transparency.enabled //= true`) {
+		t.Fatalf("caelestia transparency seed must not treat false as missing\n%s", text)
+	}
+	for _, want := range []string{
+		`${dotfilesLib.mkBoolDefault ".appearance.transparency.enabled" true} |`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("caelestia activation missing transparency false-preserving seed %q\n%s", want, text)
+		}
+	}
+}
+
+func TestEnd4ActivationPreservesDisabledTransparency(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/home/end4/seed/config.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+
+	if strings.Contains(text, `.appearance.transparency.enable //= true`) {
+		t.Fatalf("end4 transparency seed must not treat false as missing\n%s", text)
+	}
+	for _, want := range []string{
+		`${dotfilesLib.mkBoolDefault ".appearance.transparency.enable" true} |`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("end4 activation missing transparency false-preserving seed %q\n%s", want, text)
+		}
+	}
+}
+
+func TestShellSeedFiltersDoNotUseJQTrueFallback(t *testing.T) {
+	for _, path := range []string{
+		"../../../NixOS/home/caelestia/default.nix",
+		"../../../NixOS/home/end4/seed/config.nix",
+		"../../../NixOS/home/noctalia/default.nix",
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), `//= true`) {
+			t.Fatalf("seed filters must use mkBoolDefault for true boolean defaults, found //= true in %s\n%s", path, string(data))
+		}
+	}
+}
+
+func TestObservabilityGrafanaUsesPersistentSecretFile(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/services/observability.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		`grafanaSecretKeyPath = "/var/lib/grafana/secret_key";`,
+		`pkgs.writeShellScript "mysetup-grafana-secret-key"`,
+		`${pkgs.openssl}/bin/openssl rand -hex 32 > "$secret_key"`,
+		`${pkgs.coreutils}/bin/chmod 0600 "$secret_key"`,
+		`security.secret_key = "$__file{${grafanaSecretKeyPath}}";`,
+		`before = [ "grafana.service" ];`,
+		`requiredBy = [ "grafana.service" ];`,
+		`Type = "oneshot";`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("observability Grafana config missing persistent secret contract %q\n%s", want, text)
+		}
+	}
+}
+
+func TestInstallerPackageProvidesXKeyboardRules(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/lib/flake-packages.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		`--set MYSETUP_XKB_RULES_DIR ${flakePkgs.xkeyboard_config}/share/X11/xkb/rules`,
+		`xkeyboard_config`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("mysetup package missing XKB rules runtime contract %q\n%s", want, text)
 		}
 	}
 }

@@ -16,6 +16,16 @@ func TestValidateGeneralFormReportsHostnameError(t *testing.T) {
 	}
 }
 
+func TestValidateGeneralFormReportsSourceChannelError(t *testing.T) {
+	state := config.Default()
+	state.Source.Channel = "nightly"
+
+	got := validateGeneralForm(state)
+	if got.sourceChannel == "" {
+		t.Fatal("expected source channel validation error")
+	}
+}
+
 func TestValidateUserFormReportsFieldErrors(t *testing.T) {
 	state := config.Default()
 	state.User.Username = "Bad User"

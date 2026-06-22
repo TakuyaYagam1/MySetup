@@ -58,6 +58,39 @@ func validState() config.State {
 	return state
 }
 
+func TestCreateStagingDirUsesUserCacheOutsideTmp(t *testing.T) {
+	tmp := t.TempDir()
+	cache := filepath.Join(t.TempDir(), "cache")
+	t.Setenv("TMPDIR", tmp)
+	t.Setenv("XDG_CACHE_HOME", cache)
+
+	staging, err := createStagingDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(staging)
+	})
+
+	wantPrefix := filepath.Join(cache, "mysetup", "staging") + string(filepath.Separator)
+	if !strings.HasPrefix(staging, wantPrefix) {
+		t.Fatalf("staging dir must use user cache, got %q want prefix %q", staging, wantPrefix)
+	}
+}
+
+func TestStagingBaseDirAvoidsTempBackedCacheAndHome(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(tmp, "cache"))
+	t.Setenv("HOME", filepath.Join(tmp, "home"))
+
+	got := stagingBaseDir()
+	wantPrefix := filepath.Join("/var/tmp", "mysetup-")
+	if !strings.HasPrefix(got, wantPrefix) {
+		t.Fatalf("temp-backed cache/home must fall back to /var/tmp, got %q", got)
+	}
+}
+
 // fakeRepo prepares the minimal directory structure paths.ResolveSources
 // expects. Returns the repo root and a destination dir already populated with
 // a stub hardware-configuration.nix so prepareStagingHostLocal does not abort.
@@ -178,24 +211,6 @@ func TestSwitchSystemSkipsWhenSkipSwitchSet(t *testing.T) {
 	}
 	if len(fake.calls) != 0 {
 		t.Errorf("fake recorded %d calls; want 0: %v", len(fake.calls), fake.calls)
-	}
-}
-
-func TestActivatedStateClearsOneShotNeovimCleanup(t *testing.T) {
-	t.Parallel()
-	state := validState()
-	state.Dots.NeovimCleanState = true
-
-	got := activatedState(state)
-
-	if !state.Dots.NeovimCleanState {
-		t.Fatal("activatedState must not mutate the input state")
-	}
-	if got.Dots.NeovimCleanState {
-		t.Fatal("activatedState should clear one-shot neovim cleanup before persisting state")
-	}
-	if !got.Dots.Neovim {
-		t.Fatal("activatedState should preserve unrelated dot toggles")
 	}
 }
 

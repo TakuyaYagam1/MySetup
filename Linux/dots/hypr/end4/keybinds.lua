@@ -12,6 +12,7 @@ for _, keys in ipairs({
 	"SUPER + Return",
 	"SUPER + E",
 	"SUPER + SHIFT + C",
+	"SUPER + SHIFT + Z",
 	"SUPER + SHIFT + A",
 	"SUPER + SHIFT + N",
 	"SUPER + SHIFT + T",

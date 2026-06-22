@@ -49,12 +49,25 @@ entrypoints (`hyprland.lua` plus Lua modules) instead of legacy hyprlang
 
 No-clone install or reconfigure (recommended - Nix fetches the installer into
 `/nix/store`; the installed `/etc/nixos` stays thin and tracks the reusable
-MySetup NixOS flake). Use `--refresh` when you want the latest pushed commit
-instead of Nix's cached GitHub source:
+MySetup NixOS flake). This opens the interactive TUI and uses the stable
+`main` branch by default:
 
 ```bash
 nix run --refresh 'github:TakuyaYagam1/MySetup'
 ```
+
+If you want the latest fixes before they are merged to `main`, run the TUI from
+the `dev` branch and select `General -> MySetup channel -> development` before
+applying:
+
+```bash
+nix run --refresh 'github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS#mysetup' -- tui
+```
+
+In the TUI `General` section, `MySetup channel` controls what the installed
+thin `/etc/nixos/flake.nix` follows after apply. `stable` tracks the `main`
+branch; `development` tracks the `dev` branch for testing fixes before they are
+merged.
 
 Fresh NixOS/KDE bootstrap note: on the first adoption, MySetup replaces the
 active `/etc/nixos/configuration.nix` with a clean host-local override file and
@@ -78,12 +91,16 @@ cd MySetup
 nix run "path:$PWD"
 ```
 
-The direct NixOS installer app is equivalent and exposes the CLI subcommands
-explicitly:
+The direct NixOS installer app also exposes CLI subcommands. These commands are
+non-interactive; `apply` uses the saved state and does not open the TUI:
 
 ```bash
 # Apply the default thin /etc/nixos layout with host-owned dependency locks.
 nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- apply
+
+# Apply from the development channel without opening the TUI.
+nix run --refresh 'github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS#mysetup' -- \
+  apply --source-channel development
 
 # Validate the staged system build without writing /etc/nixos or switching.
 nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- apply --no-switch
@@ -114,7 +131,8 @@ That command runs `nix flake update` in `/etc/nixos` and then switches the
 system. The default thin wrapper owns the important external inputs in
 `/etc/nixos/flake.lock`, so users can advance nixpkgs, Home Manager, Stylix,
 Quickshell, and related flake inputs locally without copying the full
-repository into `/etc/nixos`.
+repository into `/etc/nixos`. If `MySetup channel` is set to `development`,
+`nixos-update` updates the wrapper from the `dev` branch instead of `main`.
 
 Useful post-apply checks:
 
@@ -125,12 +143,12 @@ sudo systemctl status omnirouter.service
 
 The repository root flake also exposes reusable shell modules and the full host
 constructor for external NixOS flakes. Pin a release tag for immutable installs,
-or use a moving branch such as `stable` for latest-release updates via
-`nix flake update`:
+or use a moving branch such as `main` for stable updates or `dev` for
+pre-merge testing via `nix flake update`:
 
 ```nix
 inputs.mysetup = {
-  url = "github:TakuyaYagam1/MySetup/stable";
+  url = "github:TakuyaYagam1/MySetup/main";
   inputs.nixpkgs.follows = "nixpkgs";
 };
 ```
@@ -159,6 +177,7 @@ complete workstation stack.
 
 The installer will ask you about:
 
+- MySetup channel (stable/main or development/dev)
 - Username and password
 - Package preset (personal / developer / desktop / minimal)
 - Display and keyboard layout

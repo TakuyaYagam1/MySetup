@@ -75,6 +75,56 @@ func TestBottomFilterSelectRendersSearchBelowOptions(t *testing.T) {
 	}
 }
 
+func TestBottomFilterMultiSelectRendersSearchBelowOptions(t *testing.T) {
+	values := []string{"gb"}
+	field := newBottomFilterMultiSelect().
+		Title("Additional Hypr/XKB keyboard layouts").
+		Description("Use / to search and Space to toggle.").
+		Options(
+			huh.NewOption("English (UK)", "gb"),
+			huh.NewOption("Russian", "ru"),
+			huh.NewOption("German", "de"),
+		).
+		Height(10).
+		Value(&values)
+
+	view := field.View()
+	optionIndex := strings.Index(view, "English (UK)")
+	searchIndex := strings.Index(view, "Search: press / to filter")
+	if optionIndex < 0 || searchIndex < 0 {
+		t.Fatalf("expected options and bottom search prompt, got:\n%s", view)
+	}
+	if searchIndex < optionIndex {
+		t.Fatalf("expected search prompt below options, got:\n%s", view)
+	}
+}
+
+func TestBottomFilterMultiSelectUsesSpaceAsToggle(t *testing.T) {
+	values := []string{"gb"}
+	field := newBottomFilterMultiSelect().
+		Title("Additional Hypr/XKB keyboard layouts").
+		Options(
+			huh.NewOption("English (UK)", "gb"),
+			huh.NewOption("Russian", "ru"),
+		).
+		Value(&values)
+
+	_, _ = field.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	if got := strings.Join(values, ","); got != "gb" {
+		t.Fatalf("expected x to leave selection unchanged, got %q", got)
+	}
+
+	_, _ = field.Update(tea.KeyMsg{Type: tea.KeySpace})
+	if len(values) != 0 {
+		t.Fatalf("expected space to remove selected value, got %#v", values)
+	}
+
+	_, _ = field.Update(tea.KeyMsg{Type: tea.KeySpace})
+	if got := strings.Join(values, ","); got != "gb" {
+		t.Fatalf("expected second space to select value again, got %q", got)
+	}
+}
+
 func TestBottomFilterSelectEscapeClearsSearch(t *testing.T) {
 	value := "Europe/Moscow"
 	field := newBottomFilterSelect().

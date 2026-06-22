@@ -33,22 +33,36 @@ Use the repository root flake for local runs. It exposes the installer as the
 default app and keeps the public flake inputs limited to the reusable shell
 stack.
 
-Or run directly from GitHub without cloning first:
+Or run directly from GitHub without cloning first. This opens the interactive
+TUI and uses the stable `main` branch by default:
 
 ```bash
-nix run 'github:TakuyaYagam1/MySetup'
+nix run --refresh 'github:TakuyaYagam1/MySetup'
 ```
 
 This is the normal thin apply path. Nix fetches the repository source into
 `/nix/store`, the wrapped installer points `MYSETUP_REPO_ROOT` at that immutable
 source, then the installer writes a small `/etc/nixos` wrapper that tracks
-`github:TakuyaYagam1/MySetup?dir=Linux/NixOS`.
+`github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS` by default.
 
-Nix caches the resolved source for ~1 hour (`tarball-ttl` default). If you just
-pushed a commit and want the new HEAD right now, force a re-fetch:
+To test the latest fixes before they are merged to `main`, run the TUI from the
+`dev` branch and select `General -> MySetup channel -> development` before
+applying:
 
 ```bash
-nix run --refresh 'github:TakuyaYagam1/MySetup'
+nix run --refresh 'github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS#mysetup' -- tui
+```
+
+The TUI `General` section includes `MySetup channel`. Keep `stable` to track the
+`main` branch after install, or select `development` to generate a wrapper that
+tracks `github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS`.
+
+Nix caches the resolved source for ~1 hour (`tarball-ttl` default). If you just
+pushed a commit and want the new HEAD right now, keep `--refresh` in the command.
+For a cached stable TUI launch, `--refresh` is optional:
+
+```bash
+nix run 'github:TakuyaYagam1/MySetup'
 ```
 
 For reproducible installs, pin a commit, branch, or tag:
@@ -57,8 +71,8 @@ For reproducible installs, pin a commit, branch, or tag:
 # Specific commit (full SHA):
 nix run 'github:TakuyaYagam1/MySetup/<commit>'
 
-# Specific branch (e.g. develop):
-nix run 'github:TakuyaYagam1/MySetup/develop'
+# Specific branch (e.g. dev):
+nix run 'github:TakuyaYagam1/MySetup/dev'
 ```
 
 Fresh install through `/mnt` is not supported in v1. Run this on an already
@@ -90,7 +104,7 @@ CoW workarounds are not needed for that declarative swapfile.
 
 For the very first remote installer launch, pass the same limits before the app
 separator because the installer cannot control the resources used to build
-itself:
+itself. This is a non-interactive apply path and will not open the TUI:
 
 ```bash
 nix run --refresh --option max-jobs 1 --option cores 2 \
@@ -175,6 +189,8 @@ Secret files must be regular files, non-symlinks, and not group/world readable.
 ## What The Installer Handles
 
 - Host/user settings: hostname, username, full name, home directory.
+- MySetup channel: stable/main branch or development/dev branch for the
+  generated thin wrapper.
 - Git identity: `user.name` and `user.email` for Home Manager Git config.
 - Locale/region fields: timezone, locale, console keymap, weather location.
 - Display: monitor name, mode, position, scale, Hypr keyboard layouts/toggle.
@@ -354,13 +370,27 @@ local modules to `private/default.nix`, which includes commented examples for
 ## Commands
 
 ```bash
+# Local checkout: open the interactive TUI.
 nix run "path:$PWD?dir=Linux/NixOS#mysetup"
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- tui
+
+# Remote stable/main: open the interactive TUI.
+nix run --refresh 'github:TakuyaYagam1/MySetup'
+
+# Remote latest/dev: open the interactive TUI, then select the development channel.
+nix run --refresh 'github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS#mysetup' -- tui
+
+# Read-only inspection commands.
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- doctor
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- print-state
+
+# Non-interactive apply commands. These use saved state and do not open the TUI.
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --no-switch
+nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --source-channel development --no-switch
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --lock-mode managed --no-switch
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --layout full --no-switch
+
+# Managed cleanup.
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- cleanup
 ```
 
@@ -578,9 +608,10 @@ sudo nixos-rebuild switch --flake .#NixOS
 ```
 
 Default thin installs use an independent host lock: `/etc/nixos/flake.lock`
-owns nixpkgs, Home Manager, Stylix, Quickshell, shell flakes, and the MySetup
-source revision. Managed thin installs update only the `mysetup` input and reuse
-the transitive lock shipped by MySetup.
+owns nixpkgs, Home Manager, Stylix, Quickshell, shell flakes, and the selected
+MySetup source revision. The `stable` channel uses the `main` branch; the
+`development` channel uses `dev`. Managed thin installs update only the
+`mysetup` input and reuse the transitive lock shipped by MySetup.
 
 Existing generated thin wrappers migrate to the independent lock shape on the
 next `mysetup apply`; a plain `nix flake update` only changes `flake.lock`, not

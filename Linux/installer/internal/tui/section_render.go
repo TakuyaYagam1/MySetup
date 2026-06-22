@@ -88,7 +88,7 @@ func renderPreviewLine(width int, line string) string {
 }
 
 func renderFooter(width int) string {
-	return footerStyle.Width(width).Render("  ↑/↓ or k/j: move    Enter: open    q/Esc/Ctrl+C: quit")
+	return footerStyle.Width(width).Render("  ↑/↓ or j/k: move    Enter: open    Esc/Ctrl+C: quit")
 }
 
 func sidebarText(width int, text string) string {

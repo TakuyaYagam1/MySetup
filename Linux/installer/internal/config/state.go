@@ -9,11 +9,12 @@ import (
 	"strings"
 )
 
-const SchemaVersion = 5
+const SchemaVersion = 6
 
 type State struct {
 	SchemaVersion int      `json:"schemaVersion"`
 	Host          Host     `json:"host"`
+	Source        Source   `json:"source"`
 	User          User     `json:"user"`
 	Locale        Locale   `json:"locale"`
 	Git           Git      `json:"git"`
@@ -27,6 +28,9 @@ type State struct {
 type Host struct {
 	Hostname     string `json:"hostname"`
 	StateVersion string `json:"stateVersion"`
+}
+type Source struct {
+	Channel string `json:"channel"`
 }
 type User struct {
 	Username      string `json:"username"`
@@ -109,13 +113,12 @@ type Zapret struct {
 	Config string `json:"config"`
 }
 type Dots struct {
-	Hypr             bool `json:"hypr"`
-	ZenTheme         bool `json:"zenTheme"`
-	Sine             bool `json:"sine"`
-	Neovim           bool `json:"neovim"`
-	NeovimCleanState bool `json:"neovimCleanState"`
-	V2rayN           bool `json:"v2rayN"`
-	Wallpapers       bool `json:"wallpapers"`
+	Hypr       bool `json:"hypr"`
+	ZenTheme   bool `json:"zenTheme"`
+	Sine       bool `json:"sine"`
+	Neovim     bool `json:"neovim"`
+	V2rayN     bool `json:"v2rayN"`
+	Wallpapers bool `json:"wallpapers"`
 }
 type Secrets struct {
 	UserPassword string
@@ -127,6 +130,9 @@ func Default() State {
 		Host: Host{
 			Hostname:     "NixOS",
 			StateVersion: "26.05",
+		},
+		Source: Source{
+			Channel: SourceChannelStable,
 		},
 		User: User{
 			Username:      currentUser(),
@@ -163,13 +169,12 @@ func Default() State {
 			Config: "general (FAKE_TLS_AUTO_ALT3)",
 		},
 		Dots: Dots{
-			Hypr:             true,
-			ZenTheme:         true,
-			Sine:             true,
-			Neovim:           true,
-			NeovimCleanState: false,
-			V2rayN:           true,
-			Wallpapers:       true,
+			Hypr:       true,
+			ZenTheme:   true,
+			Sine:       true,
+			Neovim:     true,
+			V2rayN:     true,
+			Wallpapers: true,
 		},
 	}
 }
@@ -246,6 +251,7 @@ func Migrate(state State) State {
 	oldVersion := state.SchemaVersion
 	legacy := state.SchemaVersion == 0
 	state = migrateHost(state, def)
+	state = migrateSource(state, def)
 	state = migrateUser(state, def)
 	state = migrateLocale(state, def, oldVersion)
 	state = migrateIdentity(state, def)
@@ -262,6 +268,13 @@ func migrateHost(state State, def State) State {
 	}
 	if state.Host.StateVersion == "" {
 		state.Host.StateVersion = def.Host.StateVersion
+	}
+	return state
+}
+
+func migrateSource(state State, def State) State {
+	if state.Source.Channel == "" {
+		state.Source.Channel = def.Source.Channel
 	}
 	return state
 }

@@ -51,6 +51,40 @@ func TestValidateRejectsBadStateVersion(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsBadSourceChannel(t *testing.T) {
+	state := Default()
+	state.Source.Channel = "nightly"
+	if err := Validate(state); err == nil {
+		t.Fatal("expected invalid source channel error")
+	}
+}
+
+func TestMySetupFlakeURLChannels(t *testing.T) {
+	tests := map[string]string{
+		SourceChannelStable:      "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS",
+		SourceChannelDevelopment: "github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS",
+		"":                       "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS",
+	}
+	for channel, want := range tests {
+		if got := MySetupFlakeURL(channel); got != want {
+			t.Fatalf("MySetupFlakeURL(%q) = %q, want %q", channel, got, want)
+		}
+	}
+}
+
+func TestKnownMySetupFlakeURLsIncludeLegacyStableURL(t *testing.T) {
+	urls := KnownMySetupFlakeURLs()
+	for _, want := range []string{
+		"github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS",
+		"github:TakuyaYagam1/MySetup?dir=Linux/NixOS",
+		"github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS",
+	} {
+		if !containsString(urls, want) {
+			t.Fatalf("known MySetup URLs must include %q, got %#v", want, urls)
+		}
+	}
+}
+
 func TestValidateRejectsBadKeyboardSettings(t *testing.T) {
 	tests := map[string]func(*State){
 		"console keymap": func(state *State) {

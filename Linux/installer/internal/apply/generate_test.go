@@ -122,7 +122,7 @@ func TestFlakeNixUsesIndependentThinMySetupWrapper(t *testing.T) {
 		`nix-index-database = {`,
 		`quickshell = {`,
 		`mysetup = {`,
-		`url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";`,
+		`url = "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS";`,
 		`inputs.nixpkgs.follows = "nixpkgs";`,
 		`inputs.home-manager.follows = "home-manager";`,
 		`inputs.nix-index-database.follows = "nix-index-database";`,
@@ -151,7 +151,7 @@ func TestFlakeNixSupportsManagedThinMySetupWrapper(t *testing.T) {
 	}
 	for _, want := range []string{
 		`# lock mode: managed`,
-		`mysetup.url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";`,
+		`mysetup.url = "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS";`,
 		`hostname = "workstation";`,
 		`mysetup.lib.mkMySetupHost`,
 	} {
@@ -166,6 +166,27 @@ func TestFlakeNixSupportsManagedThinMySetupWrapper(t *testing.T) {
 		if strings.Contains(out, forbidden) {
 			t.Fatalf("managed thin flake must not expose host-owned input %q\n%s", forbidden, out)
 		}
+	}
+}
+
+func TestFlakeNixUsesDevelopmentMySetupChannel(t *testing.T) {
+	state := config.Default()
+	state.Source.Channel = config.SourceChannelDevelopment
+	state.Host.Hostname = "workstation"
+
+	for _, lockMode := range []LockMode{LockModeIndependent, LockModeManaged} {
+		t.Run(string(lockMode), func(t *testing.T) {
+			out, err := FlakeNix(state, lockMode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out, `github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS`) {
+				t.Fatalf("development channel must point at dev branch\n%s", out)
+			}
+			if strings.Contains(out, `github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS`) {
+				t.Fatalf("development channel must not keep stable MySetup URL\n%s", out)
+			}
+		})
 	}
 }
 
@@ -642,6 +663,37 @@ func TestPrepareThinHostLocalPreservesOverridesLockAndSecrets(t *testing.T) {
 		if string(data) != want {
 			t.Fatalf("unexpected content for %s: %q", path, string(data))
 		}
+	}
+}
+
+func TestGeneratedWrapperDetectionAcceptsDevelopmentURL(t *testing.T) {
+	text := `{
+  description = "Host-local MySetup NixOS wrapper";
+
+  inputs = {
+    mysetup.url = "github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS";
+  };
+
+  outputs = { mysetup, ... }:
+    let
+      hostname = "NixOS";
+    in
+    {
+      nixosConfigurations.${hostname} = mysetup.lib.mkMySetupHost {
+        hostVars = ./host-vars.nix;
+        hardware = ./hardware-configuration.nix;
+        extraModules = [ ./configuration.nix ];
+        homeExtraModules =
+          if builtins.pathExists ./home.nix then [ ./home.nix ] else [ ];
+      };
+    };
+}
+`
+	if !isThinWrapperFlake(text) {
+		t.Fatal("dev MySetup URL should be recognised as a thin wrapper flake")
+	}
+	if !isGeneratedMySetupWrapperFlake(text) {
+		t.Fatal("dev MySetup URL should be recognised as generated MySetup wrapper")
 	}
 }
 

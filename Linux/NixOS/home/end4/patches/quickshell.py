@@ -140,6 +140,7 @@ def patch_cheatsheet_keybinds(root: Path) -> None:
                             {"mods": ["Super", "Shift"], "key": "F", "comment": Translation.tr("Zen Browser")},
                             {"mods": ["Super", "Shift"], "key": "C", "comment": Translation.tr("Cursor")},
                             {"mods": ["Super", "Shift"], "key": "V", "comment": Translation.tr("VS Code")},
+                            {"mods": ["Super", "Shift"], "key": "Z", "comment": Translation.tr("Zed")},
                             {"mods": ["Ctrl", "Shift"], "key": "Escape", "comment": Translation.tr("btop")}
                         ]
                     }

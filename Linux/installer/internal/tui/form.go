@@ -18,7 +18,8 @@ type installerForm struct {
 func newForm(fields ...huh.Field) *installerForm {
 	form := huh.NewForm(huh.NewGroup(fields...)).
 		WithTheme(theme()).
-		WithKeyMap(installerFormKeyMap())
+		WithKeyMap(installerFormKeyMap()).
+		WithShowHelp(false)
 	return &installerForm{form: form, fields: fields}
 }
 
@@ -26,7 +27,7 @@ func (f *installerForm) Run() error {
 	f.form.SubmitCmd = tea.Quit
 	f.form.CancelCmd = tea.Interrupt
 	model := submitOnEnterModel{form: f.form, fields: f.fields}
-	final, err := tea.NewProgram(model, tea.WithOutput(os.Stderr), tea.WithReportFocus()).Run()
+	final, err := tea.NewProgram(model, tea.WithOutput(os.Stderr), tea.WithReportFocus(), tea.WithAltScreen()).Run()
 	if err != nil {
 		if errors.Is(err, tea.ErrInterrupted) {
 			return huh.ErrUserAborted
@@ -60,10 +61,10 @@ func (m submitOnEnterModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if size, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = size.Width
 		m.height = size.Height
-		return m.updateForm(msg)
+		return m.updateForm(tea.WindowSizeMsg{Width: size.Width, Height: m.bodyHeight()})
 	}
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		if keyMsg.String() == "ctrl+x" || keyMsg.String() == "shift+enter" {
+		if keyMsg.String() == "ctrl+s" {
 			return m, m.form.NextGroup()
 		}
 		if m.focusedFieldFiltering() {
@@ -73,11 +74,19 @@ func (m submitOnEnterModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateForm(msg)
 		}
 		switch keyMsg.String() {
+		case "y", "Y":
+			if m.focusedFieldIsConfirm() {
+				return m.setFocusedConfirmValue(true)
+			}
+		case "n", "N":
+			if m.focusedFieldIsConfirm() {
+				return m.setFocusedConfirmValue(false)
+			}
 		case "enter":
 			return m, m.nextFieldCircular()
 		case "tab":
 			return m, m.nextFieldCircular()
-		case "shift+tab":
+		case "shift+tab", "shift+enter":
 			return m, m.prevFieldCircular()
 		case "esc":
 			m.back = true
@@ -102,26 +111,34 @@ func (m submitOnEnterModel) View() string {
 		return lipgloss.JoinVertical(lipgloss.Left, body, "", footerStyle.Render("  "+footer))
 	}
 
-	bodyHeight := maxInt(0, m.height-1)
+	bodyHeight := m.bodyHeight()
 	renderedBody := lipgloss.NewStyle().
 		Width(m.width).
 		Height(bodyHeight).
+		MaxHeight(bodyHeight).
 		Render(body)
-	renderedFooter := footerStyle.Width(m.width).Render("  " + footer)
+	renderedFooter := footerStyle.Width(m.width).Height(1).MaxHeight(1).Render("  " + footer)
 	return screenStyle.
 		Width(m.width).
 		Height(m.height).
+		MaxHeight(m.height).
 		Render(lipgloss.JoinVertical(lipgloss.Left, renderedBody, renderedFooter))
+}
+
+func (m submitOnEnterModel) bodyHeight() int {
+	return maxInt(0, m.height-1)
 }
 
 func formFooterText(m submitOnEnterModel) string {
 	switch {
 	case m.focusedFieldFiltering():
-		return "type: filter    Enter: select    Esc: clear search    Tab: next field    Ctrl+X: save"
+		return "Search: type filter    Enter: keep search    Esc: clear search    Up/Down: results    Ctrl+S: save"
+	case m.focusedFieldIsConfirm():
+		return "y/n or arrows: choose    Tab/Enter: continue    Shift+Tab/Shift+Enter: previous    Ctrl+S: save    Esc: menu    Ctrl+C: quit"
 	case len(m.fields) <= 1:
-		return "Enter/Ctrl+X: return    Esc: back    Ctrl+C: quit"
+		return "Tab/Enter: return    Ctrl+S: save    Esc: menu    Ctrl+C: quit"
 	default:
-		return "Tab/Enter: next field    Shift+Tab: previous    Ctrl+X: save section    Esc: back without saving    Ctrl+C: quit"
+		return "Tab/Enter: next    Shift+Tab/Shift+Enter: previous    Ctrl+S: save    Esc: menu    Ctrl+C: quit"
 	}
 }
 
@@ -135,23 +152,83 @@ func (m submitOnEnterModel) focusedFieldHasFilter() bool {
 	return ok && field.HasFilter()
 }
 
+func (m submitOnEnterModel) focusedFieldIsConfirm() bool {
+	_, ok := m.form.GetFocusedField().(*huh.Confirm)
+	return ok
+}
+
+func (m submitOnEnterModel) setFocusedConfirmValue(value bool) (tea.Model, tea.Cmd) {
+	current, ok := m.focusedConfirmValue()
+	if !ok || current == value {
+		return m, nil
+	}
+	return m.updateForm(tea.KeyMsg{Type: tea.KeyRight})
+}
+
+func (m submitOnEnterModel) focusedConfirmValue() (bool, bool) {
+	confirm, ok := m.form.GetFocusedField().(*huh.Confirm)
+	if !ok {
+		return false, false
+	}
+	value, ok := confirm.GetValue().(bool)
+	return value, ok
+}
+
 func (m submitOnEnterModel) nextFieldCircular() tea.Cmd {
-	if len(m.fields) <= 1 {
+	navigable := m.navigableFieldIndexes()
+	if len(navigable) == 0 {
+		return nil
+	}
+	if len(navigable) == 1 {
 		return m.form.NextGroup()
 	}
 	current := m.focusedFieldIndex()
-	if current < 0 || current < len(m.fields)-1 {
+	position := indexOfInt(navigable, current)
+	if position < 0 {
+		return m.moveFocusForward(navigable[0])
+	}
+	if position < len(navigable)-1 {
 		return m.form.NextField()
 	}
-	return m.moveFocusBackward(len(m.fields) - 1)
+	return m.moveFocusBackward(position)
 }
 
 func (m submitOnEnterModel) prevFieldCircular() tea.Cmd {
+	navigable := m.navigableFieldIndexes()
+	if len(navigable) <= 1 {
+		return nil
+	}
 	current := m.focusedFieldIndex()
-	if current < 0 || current > 0 {
+	position := indexOfInt(navigable, current)
+	if position < 0 {
+		return m.moveFocusBackward(len(m.fields) - 1 - navigable[len(navigable)-1])
+	}
+	if position > 0 {
 		return m.form.PrevField()
 	}
-	return m.moveFocusForward(len(m.fields) - 1)
+	return m.moveFocusForward(len(navigable) - 1)
+}
+
+func (m submitOnEnterModel) navigableFieldIndexes() []int {
+	if len(m.fields) == 1 {
+		return []int{0}
+	}
+	indexes := make([]int, 0, len(m.fields))
+	for i, field := range m.fields {
+		if !field.Skip() {
+			indexes = append(indexes, i)
+		}
+	}
+	return indexes
+}
+
+func indexOfInt(values []int, target int) int {
+	for i, value := range values {
+		if value == target {
+			return i
+		}
+	}
+	return -1
 }
 
 func (m submitOnEnterModel) focusedFieldIndex() int {

@@ -28,11 +28,12 @@ var keys = struct {
 	up:    key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 	down:  key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
 	enter: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
-	quit:  key.NewBinding(key.WithKeys("q", "esc", "ctrl+c"), key.WithHelp("q", "quit")),
+	quit:  key.NewBinding(key.WithKeys("esc", "ctrl+c"), key.WithHelp("esc", "quit")),
 }
 
 func summary(s config.State, secrets config.Secrets, existingSecrets secretAvailability, statePath string) string {
 	return fmt.Sprintf(`Host: %s
+MySetup channel: %s
 User: %s (%s)
 Packages: %s
 GPU: %s
@@ -41,10 +42,11 @@ CTF Tools: %t
 OmniRouter: %t
 Observability: %t
 Zapret: %t %s
-Dots: hypr=%t zen=%t sine=%t nvim=%t nvimClean=%t v2rayN=%t wallpapers=%t
+Dots: hypr=%t zen=%t sine=%t nvim=%t v2rayN=%t wallpapers=%t
 Passwords: linux-user=%s
-State: %s`,
+State: %s%s`,
 		s.Host.Hostname,
+		sourceChannelLabel(s.Source.Channel),
 		s.User.Username,
 		s.User.HomeDirectory,
 		s.Packages.Preset,
@@ -59,12 +61,19 @@ State: %s`,
 		s.Dots.ZenTheme,
 		s.Dots.Sine,
 		s.Dots.Neovim,
-		s.Dots.NeovimCleanState,
 		s.Dots.V2rayN,
 		s.Dots.Wallpapers,
 		secretSummaryStatus(secrets.UserPassword, existingSecrets.UserPassword),
 		statePath,
+		observabilityAccessSummary(s.Features.Observability),
 	)
+}
+
+func observabilityAccessSummary(enabled bool) string {
+	if !enabled {
+		return ""
+	}
+	return "\nGrafana: http://127.0.0.1:3010 initial login admin/admin"
 }
 
 func chooseSection(

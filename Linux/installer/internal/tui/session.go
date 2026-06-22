@@ -179,7 +179,6 @@ func runApply(ctx context.Context, s *session) error {
 	}); err != nil {
 		return err
 	}
-	s.state.Dots.NeovimCleanState = false
 	return nil
 }
 
@@ -226,7 +225,7 @@ func showNote(title, description string) error {
 	return newForm(
 		huh.NewNote().
 			Title(title).
-			Description(description + "\nPress Enter or Ctrl+X to return."),
+			Description(description + "\nPress Enter or Ctrl+S to return."),
 	).Run()
 }
 

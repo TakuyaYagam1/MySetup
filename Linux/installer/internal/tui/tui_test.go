@@ -125,7 +125,7 @@ func TestRenderContentUsesSelectedSectionHeader(t *testing.T) {
 
 func TestSectionFooterShowsAvailableKeys(t *testing.T) {
 	footer := renderFooter(100)
-	for _, want := range []string{"↑/↓ or k/j: move", "Enter: open", "q/Esc/Ctrl+C: quit"} {
+	for _, want := range []string{"↑/↓ or j/k: move", "Enter: open", "Esc/Ctrl+C: quit"} {
 		if !strings.Contains(footer, want) {
 			t.Fatalf("expected section footer to contain %q, got %q", want, footer)
 		}

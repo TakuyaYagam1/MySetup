@@ -24,6 +24,7 @@ var (
 type FieldErrors struct {
 	Username      string
 	Hostname      string
+	SourceChannel string
 	StateVersion  string
 	FullName      string
 	HomeDirectory string
@@ -46,6 +47,7 @@ func (e FieldErrors) Messages() []string {
 	for _, message := range []string{
 		e.Username,
 		e.Hostname,
+		e.SourceChannel,
 		e.StateVersion,
 		e.FullName,
 		e.HomeDirectory,
@@ -143,13 +145,18 @@ func validateLocaleFields(state State, errs *FieldErrors) {
 	}
 	if !layoutsRe.MatchString(state.Locale.KeyboardLayouts) {
 		errs.Keyboard = "keyboard layouts must be comma-separated XKB layout names such as us,ru"
+	} else if err := ValidateXKBLayoutSelection(SplitKeyboardLayouts(state.Locale.KeyboardLayouts)); err != nil {
+		errs.Keyboard = err.Error()
 	}
-	if !IsKeyboardToggle(state.Locale.KeyboardToggle) {
+	if errs.Keyboard == "" && !IsKeyboardToggle(state.Locale.KeyboardToggle) {
 		errs.Keyboard = "keyboard toggle must be one of the supported XKB toggle options"
 	}
 }
 
 func validateEnumFields(state State, errs *FieldErrors) {
+	if !IsSourceChannel(state.Source.Channel) {
+		errs.SourceChannel = "source channel must be stable or development"
+	}
 	if !IsPackagePreset(state.Packages.Preset) {
 		errs.PackagePreset = "package preset must be minimal, desktop, developer, or personal"
 	}

@@ -120,6 +120,7 @@ func tuiCommand(opts *Options) *cobra.Command {
 
 func applyCommand(opts *Options) *cobra.Command {
 	var noSwitch bool
+	var sourceChannel string
 	var userPasswordFile string
 
 	cmd := &cobra.Command{
@@ -129,6 +130,12 @@ func applyCommand(opts *Options) *cobra.Command {
 			state, err := config.LoadExisting(opts.StatePath)
 			if err != nil {
 				return err
+			}
+			if sourceChannel != "" {
+				if !config.IsSourceChannel(sourceChannel) {
+					return fmt.Errorf("source channel must be stable or development")
+				}
+				state.Source.Channel = sourceChannel
 			}
 			secretValues, err := secrets.LoadFromFiles(userPasswordFile)
 			if err != nil {
@@ -147,6 +154,7 @@ func applyCommand(opts *Options) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&noSwitch, "no-switch", false, "stop after dry-build without switching or writing activated state")
+	cmd.Flags().StringVar(&sourceChannel, "source-channel", "", "override saved MySetup channel: stable or development")
 	cmd.Flags().StringVar(&userPasswordFile, "user-password-file", "", "read initial user password from file for hashed-password.nix")
 	return cmd
 }

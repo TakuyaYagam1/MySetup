@@ -112,6 +112,19 @@ func TestSummaryShowsExistingSecretsWithoutValues(t *testing.T) {
 	}
 }
 
+func TestSummaryShowsGrafanaAccessWhenObservabilityEnabled(t *testing.T) {
+	state := config.Default()
+	if strings.Contains(summary(state, config.Secrets{}, secretAvailability{}, "/etc/nixos/mysetup/state.json"), "Grafana:") {
+		t.Fatal("summary must not show Grafana access when observability is disabled")
+	}
+
+	state.Features.Observability = true
+	got := summary(state, config.Secrets{}, secretAvailability{}, "/etc/nixos/mysetup/state.json")
+	if !strings.Contains(got, "Grafana: http://127.0.0.1:3010 initial login admin/admin") {
+		t.Fatalf("expected summary to show Grafana access, got:\n%s", got)
+	}
+}
+
 func TestPasswordFormUsesDirectMaskedInputs(t *testing.T) {
 	source, err := os.ReadFile("secrets.go")
 	if err != nil {
