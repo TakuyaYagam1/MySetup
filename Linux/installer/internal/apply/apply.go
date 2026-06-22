@@ -35,13 +35,6 @@ type applyModes struct {
 	lockMode LockMode
 }
 
-func activatedState(state config.State) config.State {
-	activated := state
-	// Neovim runtime cleanup is an emergency one-shot action, not a sticky preference.
-	activated.Dots.NeovimCleanState = false
-	return activated
-}
-
 func normalizeApplyModes(layout Layout, lockMode LockMode) (applyModes, error) {
 	normalizedLayout, err := normalizeLayout(layout)
 	if err != nil {
@@ -128,7 +121,7 @@ func Run(ctx context.Context, opts Options) error {
 		fmt.Println("state not written because system was not activated")
 		return nil
 	}
-	return writeState(ctx, runner, opts.Paths.StatePath, activatedState(opts.State))
+	return writeState(ctx, runner, opts.Paths.StatePath, opts.State)
 }
 
 func createStagingDir() (string, error) {

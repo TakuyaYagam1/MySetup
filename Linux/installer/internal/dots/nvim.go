@@ -9,7 +9,7 @@ import (
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
 )
 
-func syncNvim(ctx context.Context, runner run.CommandRunner, dotsSrc, configDir, username string, cleanState bool) error {
+func syncNvim(ctx context.Context, runner run.CommandRunner, dotsSrc, configDir, username string) error {
 	src := filepath.Join(dotsSrc, "nvim")
 	if _, err := os.Stat(src); err != nil {
 		if os.IsNotExist(err) {
@@ -29,7 +29,7 @@ func syncNvim(ctx context.Context, runner run.CommandRunner, dotsSrc, configDir,
 		if err := writeMarkerWithOwnerAndSourceHash(ctx, runner, filepath.Join(dst, ".mysetup-managed.json"), "nvim", username, sourceHash); err != nil {
 			return err
 		}
-		fmt.Printf("Neovim config already exists in %s; skipping sync and runtime cleanup\n", dst)
+		fmt.Printf("Neovim config already exists in %s; skipping sync\n", dst)
 		return nil
 	}
 	if err := runner.Command(ctx, "mkdir", "-p", dst); err != nil {
@@ -47,18 +47,5 @@ func syncNvim(ctx context.Context, runner run.CommandRunner, dotsSrc, configDir,
 	if err := writeMarkerWithOwnerAndSourceHash(ctx, runner, filepath.Join(dst, ".mysetup-managed.json"), "nvim", username, sourceHash); err != nil {
 		return err
 	}
-	if cleanState {
-		return cleanNeovimState(ctx, runner, homeDirFromConfigDir(configDir))
-	}
 	return nil
-}
-
-func cleanNeovimState(ctx context.Context, runner run.CommandRunner, home string) error {
-	targets := []string{
-		filepath.Join(home, ".local", "share", "nvim"),
-		filepath.Join(home, ".local", "state", "nvim"),
-		filepath.Join(home, ".cache", "nvim"),
-	}
-	args := append([]string{"-rf", "--"}, targets...)
-	return runner.Command(ctx, "rm", args...)
 }

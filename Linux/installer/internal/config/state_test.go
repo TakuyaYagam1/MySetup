@@ -59,9 +59,6 @@ func TestLoadExistingMigratesStateWithoutSchema(t *testing.T) {
 	if got.Source.Channel != SourceChannelStable {
 		t.Fatalf("expected migrated source channel %q, got %q", SourceChannelStable, got.Source.Channel)
 	}
-	if got.Dots.NeovimCleanState {
-		t.Fatal("legacy state should land on the conservative neovim runtime default (off)")
-	}
 }
 
 func TestLoadExistingRejectsFutureSchema(t *testing.T) {
@@ -109,27 +106,6 @@ func TestDefaultFeatureAndDotsToggles(t *testing.T) {
 	}
 	if !state.Dots.Neovim {
 		t.Fatal("neovim sync should be enabled by default")
-	}
-	if state.Dots.NeovimCleanState {
-		t.Fatal("neovim runtime cleanup should be opt-in (off by default)")
-	}
-}
-
-func TestLoadExistingAcceptsCurrentSchema(t *testing.T) {
-	state := Default()
-	state.Dots.NeovimCleanState = true
-
-	path := filepath.Join(t.TempDir(), "state.json")
-	if err := Save(path, state); err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := LoadExisting(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !got.Dots.NeovimCleanState {
-		t.Fatal("expected schema-current state to preserve user-enabled neovim runtime cleanup")
 	}
 }
 

@@ -179,7 +179,6 @@ func runApply(ctx context.Context, s *session) error {
 	}); err != nil {
 		return err
 	}
-	s.state.Dots.NeovimCleanState = false
 	return nil
 }
 

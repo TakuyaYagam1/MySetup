@@ -113,13 +113,12 @@ type Zapret struct {
 	Config string `json:"config"`
 }
 type Dots struct {
-	Hypr             bool `json:"hypr"`
-	ZenTheme         bool `json:"zenTheme"`
-	Sine             bool `json:"sine"`
-	Neovim           bool `json:"neovim"`
-	NeovimCleanState bool `json:"neovimCleanState"`
-	V2rayN           bool `json:"v2rayN"`
-	Wallpapers       bool `json:"wallpapers"`
+	Hypr       bool `json:"hypr"`
+	ZenTheme   bool `json:"zenTheme"`
+	Sine       bool `json:"sine"`
+	Neovim     bool `json:"neovim"`
+	V2rayN     bool `json:"v2rayN"`
+	Wallpapers bool `json:"wallpapers"`
 }
 type Secrets struct {
 	UserPassword string
@@ -170,13 +169,12 @@ func Default() State {
 			Config: "general (FAKE_TLS_AUTO_ALT3)",
 		},
 		Dots: Dots{
-			Hypr:             true,
-			ZenTheme:         true,
-			Sine:             true,
-			Neovim:           true,
-			NeovimCleanState: false,
-			V2rayN:           true,
-			Wallpapers:       true,
+			Hypr:       true,
+			ZenTheme:   true,
+			Sine:       true,
+			Neovim:     true,
+			V2rayN:     true,
+			Wallpapers: true,
 		},
 	}
 }
