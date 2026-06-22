@@ -56,6 +56,9 @@ func TestLoadExistingMigratesStateWithoutSchema(t *testing.T) {
 	if got.Host.StateVersion != Default().Host.StateVersion {
 		t.Fatalf("expected default stateVersion to be filled, got %q", got.Host.StateVersion)
 	}
+	if got.Source.Channel != SourceChannelStable {
+		t.Fatalf("expected migrated source channel %q, got %q", SourceChannelStable, got.Source.Channel)
+	}
 	if got.Dots.NeovimCleanState {
 		t.Fatal("legacy state should land on the conservative neovim runtime default (off)")
 	}
@@ -83,6 +86,13 @@ func TestDefaultConsoleKeyMapIsUS(t *testing.T) {
 	}
 	if state.Locale.KeyboardLayouts != "us,ru" {
 		t.Fatalf("expected graphical Hypr layouts to keep ru support, got %q", state.Locale.KeyboardLayouts)
+	}
+}
+
+func TestDefaultSourceChannelIsStable(t *testing.T) {
+	state := Default()
+	if state.Source.Channel != SourceChannelStable {
+		t.Fatalf("expected default source channel %q, got %q", SourceChannelStable, state.Source.Channel)
 	}
 }
 

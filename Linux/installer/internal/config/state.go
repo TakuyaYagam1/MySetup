@@ -9,11 +9,12 @@ import (
 	"strings"
 )
 
-const SchemaVersion = 5
+const SchemaVersion = 6
 
 type State struct {
 	SchemaVersion int      `json:"schemaVersion"`
 	Host          Host     `json:"host"`
+	Source        Source   `json:"source"`
 	User          User     `json:"user"`
 	Locale        Locale   `json:"locale"`
 	Git           Git      `json:"git"`
@@ -27,6 +28,9 @@ type State struct {
 type Host struct {
 	Hostname     string `json:"hostname"`
 	StateVersion string `json:"stateVersion"`
+}
+type Source struct {
+	Channel string `json:"channel"`
 }
 type User struct {
 	Username      string `json:"username"`
@@ -127,6 +131,9 @@ func Default() State {
 		Host: Host{
 			Hostname:     "NixOS",
 			StateVersion: "26.05",
+		},
+		Source: Source{
+			Channel: SourceChannelStable,
 		},
 		User: User{
 			Username:      currentUser(),
@@ -246,6 +253,7 @@ func Migrate(state State) State {
 	oldVersion := state.SchemaVersion
 	legacy := state.SchemaVersion == 0
 	state = migrateHost(state, def)
+	state = migrateSource(state, def)
 	state = migrateUser(state, def)
 	state = migrateLocale(state, def, oldVersion)
 	state = migrateIdentity(state, def)
@@ -262,6 +270,13 @@ func migrateHost(state State, def State) State {
 	}
 	if state.Host.StateVersion == "" {
 		state.Host.StateVersion = def.Host.StateVersion
+	}
+	return state
+}
+
+func migrateSource(state State, def State) State {
+	if state.Source.Channel == "" {
+		state.Source.Channel = def.Source.Channel
 	}
 	return state
 }

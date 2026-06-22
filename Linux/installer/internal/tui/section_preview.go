@@ -41,6 +41,7 @@ func sectionPreview(m sectionModel) []string {
 func previewGeneral(s config.State) []string {
 	return previewSettings(
 		previewSetting("Hostname", "Flake target and networking host name.", s.Host.Hostname),
+		previewSetting("MySetup channel", "Branch followed by the installed /etc/nixos wrapper.", sourceChannelLabel(s.Source.Channel)),
 		previewSetting("State version", "NixOS compatibility baseline for this machine.", s.Host.StateVersion),
 	)
 }

@@ -24,6 +24,7 @@ var (
 type FieldErrors struct {
 	Username      string
 	Hostname      string
+	SourceChannel string
 	StateVersion  string
 	FullName      string
 	HomeDirectory string
@@ -46,6 +47,7 @@ func (e FieldErrors) Messages() []string {
 	for _, message := range []string{
 		e.Username,
 		e.Hostname,
+		e.SourceChannel,
 		e.StateVersion,
 		e.FullName,
 		e.HomeDirectory,
@@ -152,6 +154,9 @@ func validateLocaleFields(state State, errs *FieldErrors) {
 }
 
 func validateEnumFields(state State, errs *FieldErrors) {
+	if !IsSourceChannel(state.Source.Channel) {
+		errs.SourceChannel = "source channel must be stable or development"
+	}
 	if !IsPackagePreset(state.Packages.Preset) {
 		errs.PackagePreset = "package preset must be minimal, desktop, developer, or personal"
 	}

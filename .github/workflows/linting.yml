@@ -9,6 +9,7 @@ on:
   push:
     branches:
       - main
+      - dev
     paths:
       - "Linux/**"
       - ".github/dependabot.yml"

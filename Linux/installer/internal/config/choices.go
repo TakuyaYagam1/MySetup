@@ -1,5 +1,15 @@
 package config
 
+const (
+	SourceChannelStable      = "stable"
+	SourceChannelDevelopment = "development"
+)
+
+var SourceChannels = []string{
+	SourceChannelStable,
+	SourceChannelDevelopment,
+}
+
 var PackagePresets = []string{
 	"personal",
 	"minimal",
@@ -41,6 +51,25 @@ var ZapretConfigs = []string{
 	"general(ALT9)",
 	"general(ALT10)",
 	"general(ALT11)",
+}
+
+func IsSourceChannel(value string) bool {
+	return oneOf(value, SourceChannels...)
+}
+
+func MySetupFlakeURL(channel string) string {
+	if channel == SourceChannelDevelopment {
+		return "github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS"
+	}
+	return "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS"
+}
+
+func KnownMySetupFlakeURLs() []string {
+	return []string{
+		MySetupFlakeURL(SourceChannelStable),
+		"github:TakuyaYagam1/MySetup?dir=Linux/NixOS",
+		MySetupFlakeURL(SourceChannelDevelopment),
+	}
 }
 
 func IsPackagePreset(value string) bool {

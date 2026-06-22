@@ -33,6 +33,7 @@ var keys = struct {
 
 func summary(s config.State, secrets config.Secrets, existingSecrets secretAvailability, statePath string) string {
 	return fmt.Sprintf(`Host: %s
+MySetup channel: %s
 User: %s (%s)
 Packages: %s
 GPU: %s
@@ -45,6 +46,7 @@ Dots: hypr=%t zen=%t sine=%t nvim=%t nvimClean=%t v2rayN=%t wallpapers=%t
 Passwords: linux-user=%s
 State: %s%s`,
 		s.Host.Hostname,
+		sourceChannelLabel(s.Source.Channel),
 		s.User.Username,
 		s.User.HomeDirectory,
 		s.Packages.Preset,

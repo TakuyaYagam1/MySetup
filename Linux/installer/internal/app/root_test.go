@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
 )
 
 func TestApplyMissingStateFailsClosed(t *testing.T) {
@@ -65,6 +67,33 @@ func TestApplyRejectsPlainPasswordFlags(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown flag: --user-password") {
 		t.Fatalf("expected unknown flag error, got %v", err)
+	}
+}
+
+func TestApplySourceChannelFlagIsValidated(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := config.Save(path, config.Default()); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{
+		"--state", path,
+		"apply",
+		"--source-channel", "nightly",
+		"--dry-run",
+		"--no-switch",
+	})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected invalid source channel to fail")
+	}
+	if !strings.Contains(err.Error(), "source channel") {
+		t.Fatalf("expected source channel validation error, got %v", err)
 	}
 }
 

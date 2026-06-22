@@ -42,7 +42,11 @@ nix run 'github:TakuyaYagam1/MySetup'
 This is the normal thin apply path. Nix fetches the repository source into
 `/nix/store`, the wrapped installer points `MYSETUP_REPO_ROOT` at that immutable
 source, then the installer writes a small `/etc/nixos` wrapper that tracks
-`github:TakuyaYagam1/MySetup?dir=Linux/NixOS`.
+`github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS` by default.
+
+The TUI `General` section includes `MySetup channel`. Keep `stable` to track the
+`main` branch after install, or select `development` to generate a wrapper that
+tracks `github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS`.
 
 Nix caches the resolved source for ~1 hour (`tarball-ttl` default). If you just
 pushed a commit and want the new HEAD right now, force a re-fetch:
@@ -57,8 +61,8 @@ For reproducible installs, pin a commit, branch, or tag:
 # Specific commit (full SHA):
 nix run 'github:TakuyaYagam1/MySetup/<commit>'
 
-# Specific branch (e.g. develop):
-nix run 'github:TakuyaYagam1/MySetup/develop'
+# Specific branch (e.g. dev):
+nix run 'github:TakuyaYagam1/MySetup/dev'
 ```
 
 Fresh install through `/mnt` is not supported in v1. Run this on an already
@@ -175,6 +179,8 @@ Secret files must be regular files, non-symlinks, and not group/world readable.
 ## What The Installer Handles
 
 - Host/user settings: hostname, username, full name, home directory.
+- MySetup channel: stable/main branch or development/dev branch for the
+  generated thin wrapper.
 - Git identity: `user.name` and `user.email` for Home Manager Git config.
 - Locale/region fields: timezone, locale, console keymap, weather location.
 - Display: monitor name, mode, position, scale, Hypr keyboard layouts/toggle.
@@ -359,6 +365,7 @@ nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- tui
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- doctor
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- print-state
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --no-switch
+nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --source-channel development --no-switch
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --lock-mode managed --no-switch
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --layout full --no-switch
 nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- cleanup
@@ -578,9 +585,10 @@ sudo nixos-rebuild switch --flake .#NixOS
 ```
 
 Default thin installs use an independent host lock: `/etc/nixos/flake.lock`
-owns nixpkgs, Home Manager, Stylix, Quickshell, shell flakes, and the MySetup
-source revision. Managed thin installs update only the `mysetup` input and reuse
-the transitive lock shipped by MySetup.
+owns nixpkgs, Home Manager, Stylix, Quickshell, shell flakes, and the selected
+MySetup source revision. The `stable` channel uses the `main` branch; the
+`development` channel uses `dev`. Managed thin installs update only the
+`mysetup` input and reuse the transitive lock shipped by MySetup.
 
 Existing generated thin wrappers migrate to the independent lock shape on the
 next `mysetup apply`; a plain `nix flake update` only changes `flake.lock`, not
