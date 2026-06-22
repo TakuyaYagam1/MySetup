@@ -65,6 +65,7 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 		"restore-lock.sh caelestia",
 		"shell-selector.sh toggle",
 		`"app2unit -- " .. v.terminal`,
+		`"app2unit -- " .. v.zed`,
 		`mysetup.hypr .. "/scripts/screenshot.sh full"`,
 		"caelestia clipboard",
 	} {
@@ -86,6 +87,7 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 		"restore-lock.sh noctalia",
 		"shell-selector.sh toggle",
 		`"app2unit -- " .. v.terminal`,
+		`"app2unit -- " .. v.zed`,
 		`mysetup.hypr .. "/scripts/screenshot.sh full"`,
 	} {
 		if !strings.Contains(noctaliaProfile, want) {
