@@ -25,7 +25,7 @@ func serviceFields(s *session) []huh.Field {
 			Value(&s.state.Features.OmniRouter),
 		huh.NewConfirm().
 			Title("Enable Observability").
-			Description("Enables the localhost Grafana/Prometheus/Loki stack. Off by default.").
+			Description("Enables the localhost Grafana/Prometheus/Loki stack. Grafana starts at http://127.0.0.1:3010 with initial admin/admin login.").
 			Value(&s.state.Features.Observability),
 		huh.NewConfirm().
 			Title("Enable Zapret").

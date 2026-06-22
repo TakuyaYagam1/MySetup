@@ -511,6 +511,28 @@ func TestShellSeedFiltersDoNotUseJQTrueFallback(t *testing.T) {
 	}
 }
 
+func TestObservabilityGrafanaUsesPersistentSecretFile(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/services/observability.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		`grafanaSecretKeyPath = "/var/lib/grafana/secret_key";`,
+		`pkgs.writeShellScript "mysetup-grafana-secret-key"`,
+		`${pkgs.openssl}/bin/openssl rand -hex 32 > "$secret_key"`,
+		`${pkgs.coreutils}/bin/chmod 0600 "$secret_key"`,
+		`security.secret_key = "$__file{${grafanaSecretKeyPath}}";`,
+		`before = [ "grafana.service" ];`,
+		`requiredBy = [ "grafana.service" ];`,
+		`Type = "oneshot";`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("observability Grafana config missing persistent secret contract %q\n%s", want, text)
+		}
+	}
+}
+
 func TestWsactionGroupModeShiftsFishArgv(t *testing.T) {
 	if _, err := exec.LookPath("fish"); err != nil {
 		t.Skip("fish is not installed")

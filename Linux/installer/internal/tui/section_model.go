@@ -43,7 +43,7 @@ Observability: %t
 Zapret: %t %s
 Dots: hypr=%t zen=%t sine=%t nvim=%t nvimClean=%t v2rayN=%t wallpapers=%t
 Passwords: linux-user=%s
-State: %s`,
+State: %s%s`,
 		s.Host.Hostname,
 		s.User.Username,
 		s.User.HomeDirectory,
@@ -64,7 +64,15 @@ State: %s`,
 		s.Dots.Wallpapers,
 		secretSummaryStatus(secrets.UserPassword, existingSecrets.UserPassword),
 		statePath,
+		observabilityAccessSummary(s.Features.Observability),
 	)
+}
+
+func observabilityAccessSummary(enabled bool) string {
+	if !enabled {
+		return ""
+	}
+	return "\nGrafana: http://127.0.0.1:3010 initial login admin/admin"
 }
 
 func chooseSection(
