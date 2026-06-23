@@ -48,8 +48,8 @@
 
   nix = {
     gcRetention = "14d";
-    maxJobs = 1;
-    cores = 2;
+    maxJobs = 4;
+    cores = 4;
     swapSizeMiB = 32 * 1024;
     zram = {
       enable = true;
