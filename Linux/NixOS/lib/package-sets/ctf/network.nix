@@ -28,7 +28,6 @@ with pkgs-stable;
   dnschef
   dnsenum
   dnsmap
-  dnsrecon
   dnstracer
   dnsvalidator
   dnsx

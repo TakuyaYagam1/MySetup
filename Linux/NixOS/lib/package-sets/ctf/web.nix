@@ -68,10 +68,6 @@ with pkgs-stable;
   unfurl
   uro
   wafw00f
-  # Temporarily disabled on 26.05: wapiti-arsenic 28.5 requires
-  # packaging < 26, while nixpkgs currently provides packaging 26.1.
-  # Wait for the nixpkgs/wapiti dependency metadata fix before re-enabling.
-  # wapiti
   waymore
   waybackurls
   websocat

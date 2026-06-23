@@ -16,6 +16,5 @@ with pkgs-stable;
   recon-ng
   sherlock
   sn0int
-  theharvester
   trufflehog
 ]
