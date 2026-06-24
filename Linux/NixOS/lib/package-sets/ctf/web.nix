@@ -1,8 +1,4 @@
-{
-  pkgs-stable,
-  inputs ? null,
-  system ? pkgs-stable.stdenv.hostPlatform.system,
-}:
+{ pkgs-stable, ... }:
 
 with pkgs-stable;
 [
