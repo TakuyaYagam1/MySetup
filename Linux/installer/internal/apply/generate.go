@@ -135,12 +135,6 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       url = "github:nix-community/neovim-nightly-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    burpsuitepro = {
-      type = "github";
-      owner = "xiv3r";
-      repo = "Burpsuite-Professional";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     templ = {
       url = "github:a-h/templ";
       inputs = {
@@ -189,7 +183,6 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       inputs.claude-code.follows = "claude-code";
       inputs.codex.follows = "codex";
       inputs.neovim-nightly-overlay.follows = "neovim-nightly-overlay";
-      inputs.burpsuitepro.follows = "burpsuitepro";
       inputs.templ.follows = "templ";
       inputs.lanzaboote.follows = "lanzaboote";
       inputs.nixos-hardware.follows = "nixos-hardware";
