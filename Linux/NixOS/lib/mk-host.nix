@@ -22,14 +22,13 @@
 let
   inherit (nixpkgs) lib;
 
-  overlays = import ./flake-overlays.nix {
-    inherit inputs system;
-  };
-
   pkgs-stable = import nixpkgs-stable {
     localSystem = system;
     config.allowUnfree = true;
-    overlays = [ overlays.openblasI686NoCheckOverlay ];
+  };
+
+  overlays = import ./flake-overlays.nix {
+    inherit inputs system;
   };
 
   flakeModules = import ./flake-modules.nix {

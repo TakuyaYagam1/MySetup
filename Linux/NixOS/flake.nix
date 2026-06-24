@@ -123,18 +123,17 @@
       mkSystemContext =
         system:
         let
-          overlays = import ./lib/flake-overlays.nix {
-            inputs = inputsForModules;
-            inherit system;
-          };
-
           pkgs-stable = import nixpkgs-stable {
             localSystem = system;
             config.allowUnfree = true;
             config.permittedInsecurePackages = [
               "python3.12-pypdf2-3.0.1"
             ];
-            overlays = [ overlays.openblasI686NoCheckOverlay ];
+          };
+
+          overlays = import ./lib/flake-overlays.nix {
+            inputs = inputsForModules;
+            inherit system;
           };
 
           flakeModules = import ./lib/flake-modules.nix {
