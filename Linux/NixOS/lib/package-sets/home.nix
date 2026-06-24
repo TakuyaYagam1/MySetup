@@ -52,7 +52,8 @@
     scrcpy
   ];
   games = with pkgs-stable; [
-    lutris
+    # Temporarily disabled until nixpkgs fixes openblas on i686-linux.
+    # lutris
     heroic
   ];
   media = with pkgs; [
