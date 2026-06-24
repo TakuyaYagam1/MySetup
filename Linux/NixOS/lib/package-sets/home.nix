@@ -50,6 +50,7 @@
     android-studio-full
     android-tools
     scrcpy
+    jython
   ];
   games = with pkgs-stable; [
     # Temporarily disabled until nixpkgs fixes openblas on i686-linux.
