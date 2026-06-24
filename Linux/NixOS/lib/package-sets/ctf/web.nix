@@ -1,13 +1,13 @@
 {
   pkgs-stable,
-  inputs,
-  system,
+  inputs ? null,
+  system ? pkgs-stable.stdenv.hostPlatform.system,
 }:
 
 with pkgs-stable;
 [
   arjun
-  inputs.burpsuitepro.packages.${system}.default
+  (pkgs-stable.callPackage ../../../pkgs/burpsuitepro.nix { })
   cadaver
   cariddi
   commix

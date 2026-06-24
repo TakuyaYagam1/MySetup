@@ -16,6 +16,7 @@ let
         neovim = inputs.neovim-nightly-overlay.packages.${system}.default;
         inherit (inputs.templ.packages.${system}) templ;
         zen-browser = inputs.zen-browser.packages.${system}.default;
+        burpsuitepro = prev.callPackage ../pkgs/burpsuitepro.nix { };
       };
     in
     flakePackages

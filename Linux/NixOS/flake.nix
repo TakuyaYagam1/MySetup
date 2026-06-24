@@ -53,12 +53,6 @@
       url = "github:nix-community/neovim-nightly-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    burpsuitepro = {
-      type = "github";
-      owner = "xiv3r";
-      repo = "Burpsuite-Professional";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     templ = {
       url = "github:a-h/templ";
       inputs = {
