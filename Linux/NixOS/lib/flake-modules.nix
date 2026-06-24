@@ -14,6 +14,7 @@
       overlays.valkeyNoCheckOverlay
       overlays.omnirouterFromMySetupOverlay
       overlays.pipxTestCompatibilityOverlay
+      overlays.openblasI686NoCheckOverlay
     ];
   };
 
