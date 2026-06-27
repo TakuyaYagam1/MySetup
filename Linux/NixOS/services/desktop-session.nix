@@ -10,7 +10,6 @@ let
   inherit (mysetupLib) presets;
   cfg = config.mysetup;
   desktopOrMore = presets.desktopOrMore cfg;
-  personal = presets.personal cfg;
 in
 {
   services = {
