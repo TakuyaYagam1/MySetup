@@ -15,7 +15,7 @@
     termius
     jetbrains.datagrip
   ];
-  containers = with pkgs-stable; [
+  containers = with pkgs; [
     podman-desktop
   ];
   desktop = with pkgs; [
@@ -23,7 +23,7 @@
     google-chrome
     spotify
     telegram-desktop
-    pkgs-stable.vesktop
+    vesktop
     libreoffice-qt6-fresh
     wpsoffice
     onlyoffice-desktopeditors
@@ -52,7 +52,7 @@
     scrcpy
     jython
   ];
-  games = with pkgs-stable; [
+  games = with pkgs; [
     # Temporarily disabled until nixpkgs fixes openblas on i686-linux.
     # lutris
     heroic
