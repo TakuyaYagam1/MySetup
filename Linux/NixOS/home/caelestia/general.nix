@@ -36,10 +36,14 @@ _:
     idle = {
       lockBeforeSleep = true;
       inhibitWhenAudio = true;
+      inhibitWhenCharging = false;
       timeouts = [
         {
           timeout = 600;
           idleAction = "lock";
+          inhibitWhenAudio = false;
+          inhibitWhenCharging = false;
+          respectInhibitors = true;
         }
         {
           timeout = 1800;

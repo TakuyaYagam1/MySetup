@@ -34,6 +34,7 @@
   };
 
   caelestiaShellSettings.lock = {
+    enabled = true;
     recolourLogo = false;
     hideNotifs = true;
   };
