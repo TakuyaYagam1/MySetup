@@ -54,6 +54,7 @@ let
   jsTools = with pkgs; [
     nodejs
     corepack
+    pnpm
     yarn
     typescript
     typescript-language-server
