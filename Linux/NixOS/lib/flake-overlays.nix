@@ -14,7 +14,6 @@ let
         claude-code = inputs.claude-code.packages.${system}.default;
         codex = inputs.codex.packages.${system}.default;
         neovim = inputs.neovim-nightly-overlay.packages.${system}.default;
-        inherit (inputs.templ.packages.${system}) templ;
         zen-browser = inputs.zen-browser.packages.${system}.default;
         burpsuitepro = prev.callPackage ../pkgs/burpsuitepro.nix { };
       };

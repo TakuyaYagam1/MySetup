@@ -373,27 +373,6 @@
         "type": "github"
       }
     },
-    "gitignore_2": {
-      "inputs": {
-        "nixpkgs": [
-          "templ",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1762808025,
-        "narHash": "sha256-XmjITeZNMTQXGhhww6ed/Wacy2KzD6svioyCX7pkUu4=",
-        "owner": "hercules-ci",
-        "repo": "gitignore.nix",
-        "rev": "cb5e3fdca1de58ccbc3ef53de65bd372b48f567c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "hercules-ci",
-        "repo": "gitignore.nix",
-        "type": "github"
-      }
-    },
     "gnome-shell": {
       "flake": false,
       "locked": {
@@ -762,7 +741,6 @@
         "quickshell": "quickshell",
         "sops-nix": "sops-nix",
         "stylix": "stylix",
-        "templ": "templ",
         "zapret-discord-youtube": "zapret-discord-youtube",
         "zen-browser": "zen-browser"
       }
@@ -901,31 +879,6 @@
         "type": "github"
       }
     },
-    "templ": {
-      "inputs": {
-        "gitignore": "gitignore_2",
-        "nixpkgs": [
-          "nixpkgs-stable"
-        ],
-        "nixpkgs-unstable": [
-          "nixpkgs"
-        ],
-        "version": "version"
-      },
-      "locked": {
-        "lastModified": 1778534261,
-        "narHash": "sha256-jBk31rAttFMgBwXFC2vQY0+MNVu7Lj2po4+drtufsVY=",
-        "owner": "a-h",
-        "repo": "templ",
-        "rev": "f8e3a1b4efb329e94e4831e3ad494bbc2086b756",
-        "type": "github"
-      },
-      "original": {
-        "owner": "a-h",
-        "repo": "templ",
-        "type": "github"
-      }
-    },
     "tinted-kitty": {
       "flake": false,
       "locked": {
@@ -1009,28 +962,6 @@
       "original": {
         "owner": "numtide",
         "repo": "treefmt-nix",
-        "type": "github"
-      }
-    },
-    "version": {
-      "inputs": {
-        "nixpkgs": [
-          "templ",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1749991223,
-        "narHash": "sha256-K6OM2m+Bdkbq7MvTIwI1t0aPIwmkLUDeUfev5VHpiwg=",
-        "owner": "a-h",
-        "repo": "version",
-        "rev": "da721166410c6e7e2bea37cf3dee3948b5d0c83f",
-        "type": "github"
-      },
-      "original": {
-        "owner": "a-h",
-        "ref": "0.0.10",
-        "repo": "version",
         "type": "github"
       }
     },

@@ -54,13 +54,6 @@
       url = "github:nix-community/neovim-nightly-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    templ = {
-      url = "github:a-h/templ";
-      inputs = {
-        nixpkgs.follows = "nixpkgs-stable";
-        nixpkgs-unstable.follows = "nixpkgs";
-      };
-    };
 
     lanzaboote = {
       url = "github:nix-community/lanzaboote";
