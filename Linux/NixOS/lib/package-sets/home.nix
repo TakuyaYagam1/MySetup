@@ -53,8 +53,7 @@
     jython
   ];
   games = with pkgs; [
-    # Temporarily disabled until nixpkgs fixes openblas on i686-linux.
-    # lutris
+    lutris
     heroic
   ];
   media = with pkgs; [
