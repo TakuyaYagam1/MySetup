@@ -78,10 +78,5 @@
     allowUnfree = true;
     allowInsecurePredicate = _: true;
     android_sdk.accept_license = true;
-    permittedInsecurePackages = [
-      "electron-25.9.0"
-      "olm-3.2.16"
-      "python3.12-pypdf2-3.0.1"
-    ];
   };
 }

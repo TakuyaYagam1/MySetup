@@ -115,9 +115,6 @@
             config = {
               allowUnfree = true;
               allowInsecurePredicate = _: true;
-              permittedInsecurePackages = [
-                "python3.12-pypdf2-3.0.1"
-              ];
             };
           };
 
