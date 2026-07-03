@@ -7,7 +7,10 @@
 let
   flakePkgs = import nixpkgs {
     localSystem = system;
-    config.allowUnfree = true;
+    config = {
+      allowUnfree = true;
+      allowInsecurePredicate = _: true;
+    };
   };
 
   nixosSource = layout.nixos;

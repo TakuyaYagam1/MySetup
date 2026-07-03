@@ -112,10 +112,13 @@
         let
           pkgs-stable = import nixpkgs-stable {
             localSystem = system;
-            config.allowUnfree = true;
-            config.permittedInsecurePackages = [
-              "python3.12-pypdf2-3.0.1"
-            ];
+            config = {
+              allowUnfree = true;
+              allowInsecurePredicate = _: true;
+              permittedInsecurePackages = [
+                "python3.12-pypdf2-3.0.1"
+              ];
+            };
           };
 
           overlays = import ./lib/flake-overlays.nix {

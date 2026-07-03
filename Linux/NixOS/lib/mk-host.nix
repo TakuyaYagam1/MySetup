@@ -24,7 +24,10 @@ let
 
   pkgs-stable = import nixpkgs-stable {
     localSystem = system;
-    config.allowUnfree = true;
+    config = {
+      allowUnfree = true;
+      allowInsecurePredicate = _: true;
+    };
   };
 
   overlays = import ./flake-overlays.nix {
