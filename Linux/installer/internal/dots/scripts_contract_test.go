@@ -222,6 +222,7 @@ func TestShellSelectorScriptTracksFocusedMonitorAndActiveShell(t *testing.T) {
 		"wait_for_selector_spawn()",
 		"detect_shell_from_processes()",
 		"detect_shell_from_entrypoint()",
+		"mysetup_noctalia_running",
 		"quickshell/ii([/[:space:]]|$)",
 		"mysetup/hyprland.lua",
 		"hyprctl monitors -j",
@@ -269,6 +270,7 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 	}
 	text := string(data)
 	for _, helper := range []string{
+		"shell-runtime.sh",
 		"shell-process.sh",
 		"shell-profile-sync.sh",
 		"shell-runtime-env.sh",
@@ -289,6 +291,8 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		"shell-runtime-env.sh",
 		"shell-end4-overrides.sh",
 		"mysetup_pid_matches",
+		"mysetup_noctalia_pids()",
+		`pgrep -u "$mysetup_user_name" -x noctalia`,
 		"start-shell\\.sh",
 		"running_count()",
 		"dedupe_shell()",
@@ -327,6 +331,9 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 	}
 	if strings.Contains(text, `pkill -u "$user_name" -x hypridle`) {
 		t.Fatalf("start-shell script must only stop the managed end4 hypridle instance\n%s", text)
+	}
+	if strings.Contains(text, `(^|[ /])noctalia([[:space:]]|$)`) {
+		t.Fatalf("noctalia process detection must not match bare profile arguments\n%s", text)
 	}
 
 	prepareIndex := strings.Index(text, "if ! prepare_profile_or_fallback; then")

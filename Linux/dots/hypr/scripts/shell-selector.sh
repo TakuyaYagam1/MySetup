@@ -29,9 +29,7 @@ lock_owner_file="$lock_dir/owner"
 selector_name="mysetup-shell-selector"
 selector_pattern="$mysetup_selector_pattern"
 end4_pattern="$mysetup_end4_pattern"
-noctalia_pattern="$mysetup_noctalia_pattern"
 caelestia_pattern="$mysetup_caelestia_pattern"
-noctalia_env_pattern="$mysetup_noctalia_env_pattern"
 active_shell_state="$mysetup_active_shell_state"
 start_shell_script="$config_home/hypr/scripts/start-shell.sh"
 
@@ -44,19 +42,7 @@ log() {
 log "invoked action=${action:-empty} requested_profile=${requested_profile:-empty} monitor_override=${selector_monitor_override:-empty} pid=$$"
 
 noctalia_running() {
-  local pid
-
-  if pgrep -u "${USER:-$(id -un)}" -f "$noctalia_pattern" >/dev/null 2>&1; then
-    return 0
-  fi
-
-  for pid in $(mysetup_quickshell_pids); do
-    if mysetup_pid_has_env_regex "$pid" "$noctalia_env_pattern"; then
-      return 0
-    fi
-  done
-
-  return 1
+  mysetup_noctalia_running
 }
 
 acquire_lock() {
