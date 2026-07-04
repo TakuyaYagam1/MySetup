@@ -240,7 +240,7 @@ start_profile_shell() {
 
       local noctalia_cmd
       if noctalia_cmd="$(mysetup_noctalia_command)"; then
-        start_with_retry "noctalia" "$noctalia_handle" "$noctalia_cmd" -d || return 1
+        start_with_retry "noctalia" "$noctalia_handle" "$noctalia_cmd" --daemon || return 1
       else
         log "noctalia command not found"
         return 1

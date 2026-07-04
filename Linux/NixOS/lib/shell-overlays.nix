@@ -9,7 +9,7 @@ let
     {
       caelestia-cli = inputs.caelestia-cli.packages.${system}.default;
       caelestia-shell = inputs.caelestia-shell.packages.${system}.with-cli;
-      noctalia-shell = inputs.noctalia-shell.packages.${system}.default;
+      noctalia = inputs.noctalia.packages.${system}.default;
       quickshell = inputs.quickshell.packages.${system}.default;
     };
 

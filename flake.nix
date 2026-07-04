@@ -29,8 +29,8 @@
       url = "github:outfoxxed/quickshell";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    noctalia-shell = {
-      url = "github:noctalia-dev/noctalia-shell/v4.7.7";
+    noctalia = {
+      url = "github:noctalia-dev/noctalia/v5.0.0-beta1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     end4-dotfiles = {
@@ -122,7 +122,7 @@
 
           imports = [
             inputs.caelestia-shell.homeManagerModules.default
-            inputs.noctalia-shell.homeModules.default
+            inputs.noctalia.homeModules.default
             ./Linux/NixOS/home/shells
             ./Linux/NixOS/home/caelestia
             ./Linux/NixOS/home/noctalia

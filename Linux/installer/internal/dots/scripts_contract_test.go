@@ -21,7 +21,7 @@ func TestSharedHyprKeybindsDoNotContainShellSpecificBindings(t *testing.T) {
 		"caelestia emoji",
 		"caelestia record",
 		"caelestia resizer pip",
-		"noctalia-shell ipc call",
+		"noctalia msg",
 		"app2unit -- $terminal",
 		`mysetup.hypr .. "/scripts/screenshot.sh full"`,
 		"$hypr/scripts/record-toggle.sh",
@@ -83,7 +83,7 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"noctalia-shell ipc call",
+		"noctalia msg",
 		"restore-lock.sh noctalia",
 		"shell-selector.sh toggle",
 		`"app2unit -- " .. v.terminal`,
@@ -194,7 +194,7 @@ func TestNoctaliaLauncherScriptIsGuarded(t *testing.T) {
 		"mysetup-noctalia-launcher",
 		"noctalia-launcher\\.sh",
 		"acquire_lock",
-		"noctalia-shell ipc call launcher toggle",
+		"noctalia msg panel-toggle launcher",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("noctalia launcher wrapper missing %q\n%s", want, text)
@@ -358,7 +358,7 @@ func TestRestoreLockScriptStartsProfileBeforeLocking(t *testing.T) {
 		`"$script_dir/start-shell.sh" "$profile"`,
 		"wait_for_profile()",
 		`hyprctl dispatch 'hl.dsp.global("caelestia:lock")'`,
-		"noctalia-shell ipc call lockScreen lock",
+		"noctalia msg session lock",
 		`hyprlock -c "$mysetup_hypr_runtime_dir/hyprlock.conf"`,
 	} {
 		if !strings.Contains(text, want) {

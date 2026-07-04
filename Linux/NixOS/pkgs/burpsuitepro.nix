@@ -90,7 +90,9 @@ buildFHSEnv {
   meta = {
     description = "Web application security testing platform";
     homepage = "https://portswigger.net/burp/pro";
-    changelog = "https://portswigger.net/burp/releases/professional-community-${lib.replaceStrings [ "." ] [ "-" ] version}";
+    changelog = "https://portswigger.net/burp/releases/professional-community-${
+      lib.replaceStrings [ "." ] [ "-" ] version
+    }";
     sourceProvenance = with lib.sourceTypes; [ binaryBytecode ];
     license = lib.licenses.unfree;
     mainProgram = "burpsuitepro";

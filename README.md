@@ -189,7 +189,7 @@ The installer will ask you about:
 - User dotfiles (Hypr, Zen Browser theme, Neovim, wallpapers)
 
 Shell profile is no longer an install-time question. After the system is
-applied, switch between `caelestia-shell`, `noctalia-shell`, and `end-4`
+applied, switch between `caelestia-shell`, `noctalia`, and `end-4`
 (Illogical Impulse) at runtime via `Super+Shift+W` - see
 [Linux/README.md](Linux/README.md) for details.
 
@@ -216,7 +216,7 @@ top of their work - these dots would not exist without them:
 - [meowrch/meowrch](https://github.com/meowrch/meowrch) - original rice that
   inspired the SDDM theme, Plymouth/GRUB visuals, and the overall Hyprland
   aesthetic baked into this config.
-- [noctalia-dev/noctalia-shell](https://github.com/noctalia-dev/noctalia-shell) - QuickShell-based desktop
+- [noctalia-dev/noctalia](https://github.com/noctalia-dev/noctalia) - QuickShell-based desktop
   shell shipped as one of the runtime profiles.
 - [end-4/dots-hyprland](https://github.com/end-4/dots-hyprland) - the
   Illogical Impulse Hyprland/QuickShell dotfiles wired in as the `end4`

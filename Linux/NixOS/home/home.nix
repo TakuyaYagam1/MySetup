@@ -48,7 +48,7 @@ let
   ];
   shellImports = [
     inputs.caelestia-shell.homeManagerModules.default
-    inputs.noctalia-shell.homeModules.default
+    inputs.noctalia.homeModules.default
     ./shells
     ./caelestia
     ./noctalia

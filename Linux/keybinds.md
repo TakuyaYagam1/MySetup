@@ -237,8 +237,8 @@ Interrupt is wired for: catchall keys, all mouse buttons
 
 ## Noctalia
 
-Bindings specific to **noctalia-shell**, layered on top of Common.
-Wired through `noctalia-shell ipc call <topic> <method>`.
+Bindings specific to **noctalia**, layered on top of Common.
+Wired through `noctalia msg <command>`.
 
 > Source: `Linux/dots/hypr/noctalia/keybinds.conf`,
 > `Linux/dots/hypr/noctalia/launcher.conf`,
