@@ -6,35 +6,36 @@
 {
   apiTools = with pkgs; [
     yaak
-    insomnia
-    dbeaver-bin
     sqlit-tui
     ngrok
-    pkgs-stable.pgbadger
-    warp-terminal
-    termius
-    jetbrains.datagrip
   ];
-  containers = with pkgs; [
-    podman-desktop
-  ];
+  containers = [ ];
   desktop = with pkgs; [
     firefox
-    google-chrome
     spotify
     telegram-desktop
     vesktop
     libreoffice-qt6-fresh
-    wpsoffice
-    onlyoffice-desktopeditors
     zathura
     loupe
     mpv
     obsidian
-    anytype
   ];
   dev = with pkgs; [
     vscode
+  ];
+  personal = with pkgs; [
+    google-chrome
+    wpsoffice
+    onlyoffice-desktopeditors
+    anytype
+    insomnia
+    dbeaver-bin
+    pkgs-stable.pgbadger
+    warp-terminal
+    termius
+    jetbrains.datagrip
+    podman-desktop
     code-cursor
     zed-editor-fhs
     qtcreator

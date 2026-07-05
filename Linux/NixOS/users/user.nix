@@ -16,6 +16,8 @@ let
   ];
   developerGroups = [
     "docker"
+  ];
+  personalGroups = [
     "libvirtd"
     "adbusers"
     "vboxusers"
@@ -31,6 +33,7 @@ in
     extraGroups =
       baseGroups
       ++ lib.optionals (mysetupLib.presets.developerOrMore config.mysetup) developerGroups
+      ++ lib.optionals (mysetupLib.presets.personal config.mysetup) personalGroups
       ++ lib.optionals config.mysetup.features.ctfTools ctfGroups;
   };
 }

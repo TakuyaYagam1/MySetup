@@ -6,10 +6,13 @@
   ...
 }:
 
+let
+  cfg = config.mysetup;
+in
 {
-  config = mysetupLib.mkIfPresetOrMore "developer" config.mysetup {
-    services = {
-      postgresql = {
+  config = lib.mkMerge [
+    (mysetupLib.mkIfPresetOrMore "developer" cfg {
+      services.postgresql = {
         enable = true;
         package = pkgs.postgresql_17;
         settings = {
@@ -17,8 +20,10 @@
           port = mysetupLib.ports.postgresql;
         };
       };
+    })
 
-      mysql = {
+    (lib.mkIf (mysetupLib.presets.personal cfg) {
+      services.mysql = {
         enable = true;
         package = pkgs.mariadb;
         settings = {
@@ -28,6 +33,6 @@
           };
         };
       };
-    };
-  };
+    })
+  ];
 }

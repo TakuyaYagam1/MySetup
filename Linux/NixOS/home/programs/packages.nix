@@ -25,7 +25,7 @@ in
       home.packages = home.apiTools ++ home.containers ++ home.dev;
     })
     (lib.mkIf (mysetupLib.presets.personal mysetup) {
-      home.packages = home.games;
+      home.packages = home.personal ++ home.games;
     })
   ];
 }

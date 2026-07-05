@@ -10,7 +10,7 @@ func editPackages(s *session) error {
 	return newForm(
 		huh.NewSelect[string]().
 			Title("Package preset").
-			Description("Controls optional package layers. Personal keeps Takuya's full setup; Minimal/Desktop/Developer trim app groups.").
+			Description("Controls optional package layers. Developer is lean; Personal keeps Takuya's full app and tool set.").
 			Options(labeledStringOptions(config.PackagePresets, packagePresetLabel)...).
 			Value(&s.state.Packages.Preset),
 		huh.NewConfirm().
@@ -31,13 +31,13 @@ func editPackages(s *session) error {
 func packagePresetLabel(value string) string {
 	switch value {
 	case "personal":
-		return "Personal (Takuya's config)"
+		return "Personal (full Takuya setup)"
 	case "minimal":
 		return "Minimal"
 	case "desktop":
 		return "Desktop"
 	case "developer":
-		return "Developer"
+		return "Developer (lean)"
 	default:
 		return value
 	}

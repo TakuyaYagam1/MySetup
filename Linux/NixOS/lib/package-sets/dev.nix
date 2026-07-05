@@ -7,15 +7,17 @@ let
     pkg-config
     tree-sitter
     just
-    templ
     gcc
     libgcc
     clang
     clang-tools
     lld
+    gdb
+  ];
+  buildExtraTools = with pkgs; [
+    templ
     mold
     lldb
-    gdb
     valgrind
     cppcheck
     bear
@@ -34,11 +36,13 @@ let
     go
     gopls
     delve
-    air
     golangci-lint
     gofumpt
     govulncheck
     grpcurl
+  ];
+  goExtraTools = with pkgs; [
+    air
     mockgen
     go-swag
     oapi-codegen
@@ -55,12 +59,14 @@ let
     nodejs
     corepack
     pnpm
-    yarn
     typescript
     typescript-language-server
     vscode-langservers-extracted
-    tailwindcss-language-server
     yaml-language-server
+  ];
+  jsExtraTools = with pkgs; [
+    yarn
+    tailwindcss-language-server
     bun
     deno
     eslint_d
@@ -75,6 +81,8 @@ let
     clippy
     rust-analyzer
     cargo-nextest
+  ];
+  rustExtraTools = with pkgs; [
     cargo-edit
     cargo-watch
     cargo-audit
@@ -111,14 +119,18 @@ let
     ]);
   iacTools = with pkgs; [
     terraform
+  ];
+  iacExtraTools = with pkgs; [
     tflint
     terraform-docs
     ansible
   ];
   containerTools = with pkgs; [
     lazydocker
-    k9s
     kubectl
+  ];
+  containerExtraTools = with pkgs; [
+    k9s
     kind
     kubernetes-helm
     kustomize
@@ -133,9 +145,11 @@ let
     httpie
     yq-go
     lazygit
+    tldr
+  ];
+  generalExtraTools = with pkgs; [
     mercurial
     subversion
-    tldr
     opencv
     typst
     ghgrab
@@ -148,9 +162,17 @@ in
     ++ goTools
     ++ jsTools
     ++ rustTools
-    ++ jvmTools
-    ++ rubyTools
     ++ iacTools
     ++ containerTools
     ++ generalTools;
+  personalDevTools =
+    buildExtraTools
+    ++ goExtraTools
+    ++ jsExtraTools
+    ++ rustExtraTools
+    ++ jvmTools
+    ++ rubyTools
+    ++ iacExtraTools
+    ++ containerExtraTools
+    ++ generalExtraTools;
 }

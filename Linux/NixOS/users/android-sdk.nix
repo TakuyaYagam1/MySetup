@@ -5,7 +5,7 @@
 }:
 
 {
-  config = mysetupLib.mkIfPresetOrMore "developer" config.mysetup {
+  config = mysetupLib.mkIfPresetOrMore "personal" config.mysetup {
     system.userActivationScripts.android-adb-fix.text = ''
       ADB_DIR="$HOME/Android/Sdk/platform-tools"
       ADB_LINK="$ADB_DIR/adb"

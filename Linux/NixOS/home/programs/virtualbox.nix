@@ -8,7 +8,7 @@
 }:
 
 let
-  developerOrMore = mysetupLib.presets.developerOrMore mysetup;
+  personal = mysetupLib.presets.personal mysetup;
   shareName = "VMShare";
   sharePath = "${config.home.homeDirectory}/${shareName}";
   ensureVirtualBoxVMShare = pkgs.writeShellApplication {
@@ -32,7 +32,7 @@ let
   };
 in
 {
-  config = lib.mkIf developerOrMore {
+  config = lib.mkIf personal {
     home.packages = [ ensureVirtualBoxVMShare ];
 
     systemd.user.services.virtualbox-vmshare = {

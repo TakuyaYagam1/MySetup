@@ -113,7 +113,7 @@ func TestSectionPreviewPackagesExplainsPresetAndRiskyToggles(t *testing.T) {
 
 	preview := strings.Join(sectionPreview(model), "\n")
 	for _, want := range []string{
-		"Personal keeps the full Takuya package set",
+		"Developer keeps a lean workstation",
 		"CTF tools",
 		"Lanzaboote should stay disabled",
 	} {

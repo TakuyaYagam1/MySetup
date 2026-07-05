@@ -85,7 +85,7 @@ func previewDisplay(s config.State) []string {
 
 func previewPackages(s config.State) []string {
 	return previewSettings(
-		previewSetting("Package preset", "Personal keeps the full Takuya package set; other presets trim optional user layers.", s.Packages.Preset),
+		previewSetting("Package preset", "Developer keeps a lean workstation; Personal adds heavy apps, alternatives and private defaults.", s.Packages.Preset),
 		previewSetting("CTF tools", "Adds heavy reverse/pwn/web/forensics tooling.", formatBool(s.Features.CTFTools)),
 		previewSetting("Secure Boot", "Lanzaboote should stay disabled unless the machine is prepared.", formatBool(s.Features.SecureBoot)),
 	)

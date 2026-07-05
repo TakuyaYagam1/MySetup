@@ -33,6 +33,7 @@ in
   };
   development = {
     tools = devSets.devTools;
+    personalTools = devSets.personalDevTools;
   };
   runtime = {
     inherit (runtimeSets) waylandCore waylandTools;
