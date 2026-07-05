@@ -137,8 +137,19 @@ func copyExistingThinFlake(dest, target string) (bool, error) {
 	if !isThinWrapperFlake(string(data)) {
 		return false, nil
 	}
-	if isGeneratedMySetupWrapperFlake(string(data)) {
-		return true, nil
+	text := string(data)
+	if isGeneratedMySetupWrapperFlake(text) {
+		if migrated, changed := migrateGeneratedThinFlake(text); changed {
+			info, err := os.Stat(source)
+			if err != nil {
+				return false, err
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return false, err
+			}
+			return true, os.WriteFile(target, []byte(migrated), info.Mode().Perm())
+		}
+		return true, copyFile(source, target)
 	}
 	return true, copyFile(source, target)
 }

@@ -110,8 +110,8 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       url = "github:outfoxxed/quickshell";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    noctalia-shell = {
-      url = "github:noctalia-dev/noctalia-shell/v4.7.7";
+    noctalia = {
+      url = "github:noctalia-dev/noctalia/v5.0.0-beta1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     end4-dotfiles = {
@@ -135,14 +135,6 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       url = "github:nix-community/neovim-nightly-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    templ = {
-      url = "github:a-h/templ";
-      inputs = {
-        nixpkgs.follows = "nixpkgs-stable";
-        nixpkgs-unstable.follows = "nixpkgs";
-      };
-    };
-
     lanzaboote = {
       url = "github:nix-community/lanzaboote";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -177,13 +169,12 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       inputs.caelestia-shell.follows = "caelestia-shell";
       inputs.caelestia-cli.follows = "caelestia-cli";
       inputs.quickshell.follows = "quickshell";
-      inputs.noctalia-shell.follows = "noctalia-shell";
+      inputs.noctalia.follows = "noctalia";
       inputs.end4-dotfiles.follows = "end4-dotfiles";
       inputs.zen-browser.follows = "zen-browser";
       inputs.claude-code.follows = "claude-code";
       inputs.codex.follows = "codex";
       inputs.neovim-nightly-overlay.follows = "neovim-nightly-overlay";
-      inputs.templ.follows = "templ";
       inputs.lanzaboote.follows = "lanzaboote";
       inputs.nixos-hardware.follows = "nixos-hardware";
       inputs.nix-snapd.follows = "nix-snapd";

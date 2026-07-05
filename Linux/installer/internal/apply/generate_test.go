@@ -121,12 +121,15 @@ func TestFlakeNixUsesIndependentThinMySetupWrapper(t *testing.T) {
 		`home-manager = {`,
 		`nix-index-database = {`,
 		`quickshell = {`,
+		`noctalia = {`,
+		`url = "github:noctalia-dev/noctalia/v5.0.0-beta1";`,
 		`mysetup = {`,
 		`url = "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS";`,
 		`inputs.nixpkgs.follows = "nixpkgs";`,
 		`inputs.home-manager.follows = "home-manager";`,
 		`inputs.nix-index-database.follows = "nix-index-database";`,
 		`inputs.quickshell.follows = "quickshell";`,
+		`inputs.noctalia.follows = "noctalia";`,
 		`inputs.stylix.follows = "stylix";`,
 		`hostname = "workstation";`,
 		`mysetup.lib.mkMySetupHost`,
@@ -137,6 +140,15 @@ func TestFlakeNixUsesIndependentThinMySetupWrapper(t *testing.T) {
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("thin flake missing %q\n%s", want, out)
+		}
+	}
+	for _, forbidden := range []string{
+		`noctalia-shell`,
+		`github:a-h/templ`,
+		`inputs.templ.follows`,
+	} {
+		if strings.Contains(out, forbidden) {
+			t.Fatalf("thin flake must not keep legacy input %q\n%s", forbidden, out)
 		}
 	}
 }
@@ -697,13 +709,85 @@ func TestGeneratedWrapperDetectionAcceptsDevelopmentURL(t *testing.T) {
 	}
 }
 
-func TestPrepareThinHostLocalRegeneratesGeneratedThinWrapper(t *testing.T) {
+func TestMigrateGeneratedThinFlakeRemovesOnlyKnownLegacyInputs(t *testing.T) {
+	old := `{
+  description = "Host-local MySetup NixOS wrapper";
+
+  inputs = {
+    quickshell = {
+      url = "github:outfoxxed/quickshell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    noctalia-shell = {
+      url = "github:noctalia-dev/noctalia-shell/v4.7.7";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    custom-overlay = {
+      url = "github:example/custom-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    templ = {
+      url = "github:a-h/templ";
+      inputs = {
+        nixpkgs.follows = "nixpkgs-stable";
+        nixpkgs-unstable.follows = "nixpkgs";
+      };
+    };
+
+    mysetup = {
+      url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";
+      inputs.noctalia-shell.follows = "noctalia-shell";
+      inputs.templ.follows = "templ";
+      inputs.custom-overlay.follows = "custom-overlay";
+    };
+  };
+
+  outputs = { mysetup, ... }:
+    let
+      hostname = "NixOS";
+    in
+    {
+      nixosConfigurations.${hostname} = mysetup.lib.mkMySetupHost {
+        hostVars = ./host-vars.nix;
+        hardware = ./hardware-configuration.nix;
+        extraModules = [ ./configuration.nix ];
+        homeExtraModules =
+          if builtins.pathExists ./home.nix then [ ./home.nix ] else [ ];
+      };
+    };
+}
+`
+
+	migrated, changed := migrateGeneratedThinFlake(old)
+	if !changed {
+		t.Fatal("expected generated thin flake migration to report a change")
+	}
+	for _, want := range []string{
+		`noctalia = {`,
+		`url = "github:noctalia-dev/noctalia/v5.0.0-beta1";`,
+		`inputs.noctalia.follows = "noctalia";`,
+		`custom-overlay = {`,
+		`inputs.custom-overlay.follows = "custom-overlay";`,
+	} {
+		if !strings.Contains(migrated, want) {
+			t.Fatalf("migrated flake missing %q\n%s", want, migrated)
+		}
+	}
+	for _, forbidden := range []string{
+		`noctalia-shell`,
+		`github:a-h/templ`,
+		`inputs.templ.follows`,
+	} {
+		if strings.Contains(migrated, forbidden) {
+			t.Fatalf("migrated flake kept legacy input %q\n%s", forbidden, migrated)
+		}
+	}
+}
+
+func TestPrepareThinHostLocalPreservesGeneratedThinWrapper(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
-	for path, content := range map[string]string{
-		filepath.Join(staging, "flake.nix"):               "new generated wrapper\n",
-		filepath.Join(dest, "hardware-configuration.nix"): "hardware\n",
-		filepath.Join(dest, "flake.nix"): `{
+	existingFlake := `{
   description = "Host-local MySetup NixOS wrapper";
 
   inputs = {
@@ -727,10 +811,14 @@ func TestPrepareThinHostLocalRegeneratesGeneratedThinWrapper(t *testing.T) {
       };
     };
 }
-`,
-		filepath.Join(dest, "flake.lock"):        "existing-lock\n",
-		filepath.Join(dest, "configuration.nix"): "{ config, ... }: { }\n",
-		filepath.Join(dest, "home.nix"):          "{ pkgs, ... }: { }\n",
+`
+	for path, content := range map[string]string{
+		filepath.Join(staging, "flake.nix"):               "new generated wrapper\n",
+		filepath.Join(dest, "hardware-configuration.nix"): "hardware\n",
+		filepath.Join(dest, "flake.nix"):                  existingFlake,
+		filepath.Join(dest, "flake.lock"):                 "existing-lock\n",
+		filepath.Join(dest, "configuration.nix"):          "{ config, ... }: { }\n",
+		filepath.Join(dest, "home.nix"):                   "{ pkgs, ... }: { }\n",
 	} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
@@ -745,7 +833,7 @@ func TestPrepareThinHostLocalRegeneratesGeneratedThinWrapper(t *testing.T) {
 	}
 
 	for path, want := range map[string]string{
-		filepath.Join(staging, "flake.nix"):         "new generated wrapper\n",
+		filepath.Join(staging, "flake.nix"):         existingFlake,
 		filepath.Join(staging, "flake.lock"):        "existing-lock\n",
 		filepath.Join(staging, "configuration.nix"): "{ config, ... }: { }\n",
 		filepath.Join(staging, "home.nix"):          "{ pkgs, ... }: { }\n",
