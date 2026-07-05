@@ -261,7 +261,7 @@ Super+Shift+W
 The QuickShell selector opens on the focused monitor and switches between:
 
 - `caelestia-shell`
-- `noctalia-shell`
+- `noctalia`
 - `end4` / Illogical Impulse
 
 The full per-shell keybind reference (common + caelestia + noctalia + end4)
@@ -450,7 +450,7 @@ Linux/NixOS/
 │   ├── avatar.jpg
 │   ├── lib/                       # dotfile sync + shell selector helpers
 │   ├── caelestia/                 # caelestia-shell profile
-│   ├── noctalia/                  # noctalia-shell profile
+│   ├── noctalia/                  # noctalia profile
 │   ├── end4/                      # end-4 Illogical Impulse profile
 │   ├── programs/                  # btop, cava, fastfetch, fish, foot, git,
 │   │                              # packages (preset-gated home pkgs),

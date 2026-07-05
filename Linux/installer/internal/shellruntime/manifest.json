@@ -3,7 +3,7 @@
   "profiles": [
     {
       "id": "noctalia",
-      "title": "noctalia-shell",
+      "title": "noctalia",
       "accent": "#f48ab6",
       "surface": "#211f31",
       "logo": "assets/noctalia.svg",

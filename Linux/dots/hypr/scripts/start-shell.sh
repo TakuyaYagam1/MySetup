@@ -16,7 +16,6 @@ hypr_runtime_dir="$mysetup_hypr_runtime_dir"
 user_name="$mysetup_user_name"
 selector_pattern="$mysetup_selector_pattern"
 end4_pattern="$mysetup_end4_pattern"
-noctalia_pattern="$mysetup_noctalia_pattern"
 caelestia_pattern="$mysetup_caelestia_pattern"
 selector_handle='__selector__'
 caelestia_handle='__caelestia__'
@@ -25,7 +24,6 @@ noctalia_handle='__noctalia__'
 end4_handle='__end4__'
 end4_idle_handle='__end4_idle__'
 end4_idle_config="$hypr_runtime_dir/hypridle.conf"
-noctalia_env_pattern="$mysetup_noctalia_env_pattern"
 end4_env_pattern="$mysetup_end4_env_pattern"
 
 # shellcheck source=Linux/dots/hypr/scripts/shell-runtime-env.sh
@@ -240,7 +238,7 @@ start_profile_shell() {
 
       local noctalia_cmd
       if noctalia_cmd="$(mysetup_noctalia_command)"; then
-        start_with_retry "noctalia" "$noctalia_handle" "$noctalia_cmd" -d || return 1
+        start_with_retry "noctalia" "$noctalia_handle" "$noctalia_cmd" --daemon || return 1
       else
         log "noctalia command not found"
         return 1

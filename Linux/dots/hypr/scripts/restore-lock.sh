@@ -23,7 +23,7 @@ wait_for_profile() {
         pgrep -u "$mysetup_user_name" -f "$mysetup_caelestia_pattern" >/dev/null 2>&1 && return 0
         ;;
       noctalia)
-        pgrep -u "$mysetup_user_name" -f "$mysetup_noctalia_pattern" >/dev/null 2>&1 && return 0
+        mysetup_noctalia_running && return 0
         ;;
       end4)
         pgrep -u "$mysetup_user_name" -f "$mysetup_end4_pattern" >/dev/null 2>&1 && return 0
@@ -42,7 +42,7 @@ case "$profile" in
     hyprctl dispatch 'hl.dsp.global("caelestia:lock")' >/dev/null
     ;;
   noctalia)
-    noctalia-shell ipc call lockScreen lock
+    noctalia msg session lock
     ;;
   end4)
     hyprlock -c "$mysetup_hypr_runtime_dir/hyprlock.conf"

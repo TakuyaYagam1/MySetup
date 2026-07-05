@@ -67,7 +67,7 @@ shell-check: ## Check Hypr shell scripts and JSON/Python patch sources
 	cd $(REPO_ROOT) && find Linux/dots/hypr/scripts -type f -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
 	cd $(REPO_ROOT) && find Linux/dots/hypr/scripts -type f -name '*.sh' -print0 | xargs -0 -r shellcheck -x
 	cd $(REPO_ROOT) && fish -n Linux/dots/hypr/scripts/wsaction.fish
-	cd $(REPO_ROOT) && find Linux/NixOS/home/end4 Linux/NixOS/home/noctalia/config -type f -name '*.json' -print0 | xargs -0 -r -n1 jq empty
+	cd $(REPO_ROOT) && find Linux/NixOS/home/end4 -type f -name '*.json' -print0 | xargs -0 -r -n1 jq empty
 	cd $(REPO_ROOT) && python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("Linux/NixOS/home/end4/patches/quickshell.py").read_text())'
 
 .PHONY: hypr-bind-check

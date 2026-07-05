@@ -21,7 +21,7 @@ func TestSharedHyprKeybindsDoNotContainShellSpecificBindings(t *testing.T) {
 		"caelestia emoji",
 		"caelestia record",
 		"caelestia resizer pip",
-		"noctalia-shell ipc call",
+		"noctalia msg",
 		"app2unit -- $terminal",
 		`mysetup.hypr .. "/scripts/screenshot.sh full"`,
 		"$hypr/scripts/record-toggle.sh",
@@ -83,7 +83,7 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"noctalia-shell ipc call",
+		"noctalia msg",
 		"restore-lock.sh noctalia",
 		"shell-selector.sh toggle",
 		`"app2unit -- " .. v.terminal`,
@@ -194,7 +194,7 @@ func TestNoctaliaLauncherScriptIsGuarded(t *testing.T) {
 		"mysetup-noctalia-launcher",
 		"noctalia-launcher\\.sh",
 		"acquire_lock",
-		"noctalia-shell ipc call launcher toggle",
+		"noctalia msg panel-toggle launcher",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("noctalia launcher wrapper missing %q\n%s", want, text)
@@ -222,6 +222,7 @@ func TestShellSelectorScriptTracksFocusedMonitorAndActiveShell(t *testing.T) {
 		"wait_for_selector_spawn()",
 		"detect_shell_from_processes()",
 		"detect_shell_from_entrypoint()",
+		"mysetup_noctalia_running",
 		"quickshell/ii([/[:space:]]|$)",
 		"mysetup/hyprland.lua",
 		"hyprctl monitors -j",
@@ -269,6 +270,7 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 	}
 	text := string(data)
 	for _, helper := range []string{
+		"shell-runtime.sh",
 		"shell-process.sh",
 		"shell-profile-sync.sh",
 		"shell-runtime-env.sh",
@@ -289,6 +291,8 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		"shell-runtime-env.sh",
 		"shell-end4-overrides.sh",
 		"mysetup_pid_matches",
+		"mysetup_noctalia_pids()",
+		`pgrep -u "$mysetup_user_name" -x noctalia`,
 		"start-shell\\.sh",
 		"running_count()",
 		"dedupe_shell()",
@@ -328,6 +332,9 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 	if strings.Contains(text, `pkill -u "$user_name" -x hypridle`) {
 		t.Fatalf("start-shell script must only stop the managed end4 hypridle instance\n%s", text)
 	}
+	if strings.Contains(text, `(^|[ /])noctalia([[:space:]]|$)`) {
+		t.Fatalf("noctalia process detection must not match bare profile arguments\n%s", text)
+	}
 
 	prepareIndex := strings.Index(text, "if ! prepare_profile_or_fallback; then")
 	stopIndex := strings.Index(text, `if [ "$previous" != "$profile" ] || [ -n "$requested_profile" ]; then`)
@@ -358,7 +365,7 @@ func TestRestoreLockScriptStartsProfileBeforeLocking(t *testing.T) {
 		`"$script_dir/start-shell.sh" "$profile"`,
 		"wait_for_profile()",
 		`hyprctl dispatch 'hl.dsp.global("caelestia:lock")'`,
-		"noctalia-shell ipc call lockScreen lock",
+		"noctalia msg session lock",
 		`hyprlock -c "$mysetup_hypr_runtime_dir/hyprlock.conf"`,
 	} {
 		if !strings.Contains(text, want) {
@@ -445,10 +452,6 @@ func TestShellBrandingUsesNixOSLogoOutsideSelector(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	noctalia, err := os.ReadFile("../../../NixOS/home/noctalia/config/settings.json")
-	if err != nil {
-		t.Fatal(err)
-	}
 	selector, err := os.ReadFile("../../../NixOS/home/shells/quickshell/mysetup-shell-selector/shell.qml")
 	if err != nil {
 		t.Fatal(err)
@@ -459,14 +462,6 @@ func TestShellBrandingUsesNixOSLogoOutsideSelector(t *testing.T) {
 	} {
 		if !strings.Contains(string(caelestia), want) {
 			t.Fatalf("caelestia branding missing %q\n%s", want, string(caelestia))
-		}
-	}
-	for _, want := range []string{
-		`"icon": "nix-snowflake"`,
-		`"useDistroLogo": true`,
-	} {
-		if !strings.Contains(string(noctalia), want) {
-			t.Fatalf("noctalia branding missing %q\n%s", want, string(noctalia))
 		}
 	}
 	for _, want := range []string{
