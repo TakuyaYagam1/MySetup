@@ -237,8 +237,9 @@ start_profile_shell() {
       dedupe_shell "noctalia" "$noctalia_handle" stop_noctalia || true
 
       local noctalia_cmd
-      if noctalia_cmd="$(mysetup_noctalia_command)"; then
-        start_with_retry "noctalia" "$noctalia_handle" "$noctalia_cmd" --daemon || return 1
+      local noctalia_daemon_flag
+      if noctalia_cmd="$(mysetup_noctalia_command)" && noctalia_daemon_flag="$(mysetup_noctalia_daemon_flag)"; then
+        start_with_retry "noctalia" "$noctalia_handle" "$noctalia_cmd" "$noctalia_daemon_flag" || return 1
       else
         log "noctalia command not found"
         return 1

@@ -87,7 +87,7 @@ detect_shell_from_keybinds() {
     [ -r "$keybinds_path" ] || return 1
   fi
 
-  if grep -qE 'noctalia[/.]keybinds|noctalia msg|noctalia-launcher\.sh' "$keybinds_path"; then
+  if grep -qE 'noctalia[/.]keybinds|noctalia(-shell)? msg|noctalia-msg\.sh|noctalia-launcher\.sh' "$keybinds_path"; then
     printf '%s' noctalia
     return 0
   fi

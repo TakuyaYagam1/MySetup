@@ -123,7 +123,7 @@ func shellKeybindTextMatchesProfile(text, profile string) bool {
 	case "caelestia":
 		return strings.Contains(text, "caelestia:session") || strings.Contains(text, "caelestia:launcher")
 	case "noctalia":
-		return strings.Contains(text, "noctalia-shell ipc call") || strings.Contains(text, "noctalia-launcher.sh")
+		return strings.Contains(text, "noctalia-shell ipc call") || strings.Contains(text, "noctalia-msg.sh") || strings.Contains(text, "noctalia-launcher.sh")
 	default:
 		return false
 	}

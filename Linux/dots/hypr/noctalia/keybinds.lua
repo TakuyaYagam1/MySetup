@@ -1,7 +1,7 @@
 local mysetup = require("lib.mysetup")
 local v = require("variables")
 
-local noctalia = "noctalia msg"
+local noctalia = mysetup.hypr .. "/scripts/noctalia-msg.sh"
 
 mysetup.bind_exec(v.kbSession, noctalia .. " panel-toggle session")
 mysetup.bind_exec(v.kbShowSidebar, noctalia .. " panel-toggle control-center")

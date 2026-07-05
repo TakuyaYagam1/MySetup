@@ -50,7 +50,34 @@ mysetup_noctalia_command() {
     return 0
   fi
 
+  if command -v noctalia-shell >/dev/null 2>&1; then
+    printf '%s' noctalia-shell
+    return 0
+  fi
+
   return 1
+}
+
+mysetup_noctalia_daemon_flag() {
+  local command_name
+
+  command_name="$(mysetup_noctalia_command 2>/dev/null || true)"
+  case "${command_name##*/}" in
+    noctalia-shell)
+      printf '%s' --daemonize
+      ;;
+    *)
+      printf '%s' --daemon
+      ;;
+  esac
+}
+
+mysetup_noctalia_msg() {
+  local command_name
+
+  command_name="$(mysetup_noctalia_command 2>/dev/null || true)"
+  [ -n "$command_name" ] || return 1
+  "$command_name" msg "$@"
 }
 
 mysetup_pid_matches() {

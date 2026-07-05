@@ -83,7 +83,7 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"noctalia msg",
+		"noctalia-msg.sh",
 		"restore-lock.sh noctalia",
 		"shell-selector.sh toggle",
 		`"app2unit -- " .. v.terminal`,
@@ -194,7 +194,7 @@ func TestNoctaliaLauncherScriptIsGuarded(t *testing.T) {
 		"mysetup-noctalia-launcher",
 		"noctalia-launcher\\.sh",
 		"acquire_lock",
-		"noctalia msg panel-toggle launcher",
+		"mysetup_noctalia_msg panel-toggle launcher",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("noctalia launcher wrapper missing %q\n%s", want, text)
@@ -292,6 +292,7 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		"shell-end4-overrides.sh",
 		"mysetup_pid_matches",
 		"mysetup_noctalia_pids()",
+		"mysetup_noctalia_daemon_flag()",
 		`pgrep -u "$mysetup_user_name" -x noctalia`,
 		"start-shell\\.sh",
 		"running_count()",
@@ -365,7 +366,7 @@ func TestRestoreLockScriptStartsProfileBeforeLocking(t *testing.T) {
 		`"$script_dir/start-shell.sh" "$profile"`,
 		"wait_for_profile()",
 		`hyprctl dispatch 'hl.dsp.global("caelestia:lock")'`,
-		"noctalia msg session lock",
+		"mysetup_noctalia_msg session lock",
 		`hyprlock -c "$mysetup_hypr_runtime_dir/hyprlock.conf"`,
 	} {
 		if !strings.Contains(text, want) {

@@ -42,7 +42,7 @@ case "$profile" in
     hyprctl dispatch 'hl.dsp.global("caelestia:lock")' >/dev/null
     ;;
   noctalia)
-    noctalia msg session lock
+    mysetup_noctalia_msg session lock
     ;;
   end4)
     hyprlock -c "$mysetup_hypr_runtime_dir/hyprlock.conf"

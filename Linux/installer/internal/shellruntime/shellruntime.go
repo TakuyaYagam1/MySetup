@@ -146,7 +146,7 @@ func DetectShellFromKeybinds(path string) string {
 	}
 	text := string(data)
 	switch {
-	case strings.Contains(text, "noctalia.keybinds") || strings.Contains(text, "noctalia/keybinds.lua") || strings.Contains(text, "noctalia-shell ipc call") || strings.Contains(text, "noctalia-launcher.sh"):
+	case strings.Contains(text, "noctalia.keybinds") || strings.Contains(text, "noctalia/keybinds.lua") || strings.Contains(text, "noctalia-shell ipc call") || strings.Contains(text, "noctalia-msg.sh") || strings.Contains(text, "noctalia-launcher.sh"):
 		return Noctalia
 	case strings.Contains(text, "caelestia.keybinds") || strings.Contains(text, "caelestia/keybinds.lua") || strings.Contains(text, "caelestia:launcher"):
 		return Caelestia
