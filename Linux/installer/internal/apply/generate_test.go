@@ -32,6 +32,8 @@ func TestHostVarsNixContainsFeatureFlags(t *testing.T) {
 		`hostname = "workstation";`,
 		`packages = {`,
 		`preset = "personal";`,
+		`noctalia = {`,
+		`version = "v5";`,
 		`ctfTools = true;`,
 		`enable = true;`,
 		`nix = {`,
@@ -123,6 +125,8 @@ func TestFlakeNixUsesIndependentThinMySetupWrapper(t *testing.T) {
 		`quickshell = {`,
 		`noctalia = {`,
 		`url = "github:noctalia-dev/noctalia/v5.0.0-beta1";`,
+		`noctalia-shell = {`,
+		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
 		`mysetup = {`,
 		`url = "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS";`,
 		`inputs.nixpkgs.follows = "nixpkgs";`,
@@ -130,6 +134,7 @@ func TestFlakeNixUsesIndependentThinMySetupWrapper(t *testing.T) {
 		`inputs.nix-index-database.follows = "nix-index-database";`,
 		`inputs.quickshell.follows = "quickshell";`,
 		`inputs.noctalia.follows = "noctalia";`,
+		`inputs.noctalia-shell.follows = "noctalia-shell";`,
 		`inputs.stylix.follows = "stylix";`,
 		`hostname = "workstation";`,
 		`mysetup.lib.mkMySetupHost`,
@@ -143,7 +148,6 @@ func TestFlakeNixUsesIndependentThinMySetupWrapper(t *testing.T) {
 		}
 	}
 	for _, forbidden := range []string{
-		`noctalia-shell`,
 		`github:a-h/templ`,
 		`inputs.templ.follows`,
 	} {
@@ -199,6 +203,26 @@ func TestFlakeNixUsesDevelopmentMySetupChannel(t *testing.T) {
 				t.Fatalf("development channel must not keep stable MySetup URL\n%s", out)
 			}
 		})
+	}
+}
+
+func TestFlakeNixCarriesBothNoctaliaInputsForV4Selection(t *testing.T) {
+	state := config.Default()
+	state.Noctalia.Version = config.NoctaliaVersionV4
+	state.Host.Hostname = "workstation"
+
+	out, err := FlakeNix(state, LockModeIndependent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`url = "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS";`,
+		`url = "github:noctalia-dev/noctalia/v5.0.0-beta1";`,
+		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("independent wrapper missing %q\n%s", want, out)
+		}
 	}
 }
 
@@ -653,7 +677,7 @@ func TestPrepareThinHostLocalPreservesOverridesLockAndSecrets(t *testing.T) {
 		}
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 
@@ -709,6 +733,37 @@ func TestGeneratedWrapperDetectionAcceptsDevelopmentURL(t *testing.T) {
 	}
 }
 
+func TestGeneratedWrapperDetectionAcceptsNoctaliaV4URL(t *testing.T) {
+	text := `{
+  description = "Host-local MySetup NixOS wrapper";
+
+  inputs = {
+    mysetup.url = "github:TakuyaYagam1/MySetup/noctalia-v4?dir=Linux/NixOS";
+  };
+
+  outputs = { mysetup, ... }:
+    let
+      hostname = "NixOS";
+    in
+    {
+      nixosConfigurations.${hostname} = mysetup.lib.mkMySetupHost {
+        hostVars = ./host-vars.nix;
+        hardware = ./hardware-configuration.nix;
+        extraModules = [ ./configuration.nix ];
+        homeExtraModules =
+          if builtins.pathExists ./home.nix then [ ./home.nix ] else [ ];
+      };
+    };
+}
+`
+	if !isThinWrapperFlake(text) {
+		t.Fatal("noctalia-v4 MySetup URL should be recognised as a thin wrapper flake")
+	}
+	if !isGeneratedMySetupWrapperFlake(text) {
+		t.Fatal("noctalia-v4 MySetup URL should be recognised as generated MySetup wrapper")
+	}
+}
+
 func TestMigrateGeneratedThinFlakeRemovesOnlyKnownLegacyInputs(t *testing.T) {
 	old := `{
   description = "Host-local MySetup NixOS wrapper";
@@ -758,7 +813,7 @@ func TestMigrateGeneratedThinFlakeRemovesOnlyKnownLegacyInputs(t *testing.T) {
 }
 `
 
-	migrated, changed := migrateGeneratedThinFlake(old)
+	migrated, changed := migrateGeneratedThinFlake(old, config.SourceChannelStable)
 	if !changed {
 		t.Fatal("expected generated thin flake migration to report a change")
 	}
@@ -766,6 +821,9 @@ func TestMigrateGeneratedThinFlakeRemovesOnlyKnownLegacyInputs(t *testing.T) {
 		`noctalia = {`,
 		`url = "github:noctalia-dev/noctalia/v5.0.0-beta1";`,
 		`inputs.noctalia.follows = "noctalia";`,
+		`noctalia-shell = {`,
+		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
+		`inputs.noctalia-shell.follows = "noctalia-shell";`,
 		`custom-overlay = {`,
 		`inputs.custom-overlay.follows = "custom-overlay";`,
 	} {
@@ -774,12 +832,51 @@ func TestMigrateGeneratedThinFlakeRemovesOnlyKnownLegacyInputs(t *testing.T) {
 		}
 	}
 	for _, forbidden := range []string{
-		`noctalia-shell`,
 		`github:a-h/templ`,
 		`inputs.templ.follows`,
 	} {
 		if strings.Contains(migrated, forbidden) {
 			t.Fatalf("migrated flake kept legacy input %q\n%s", forbidden, migrated)
+		}
+	}
+}
+
+func TestMigrateGeneratedThinFlakeRewritesLegacyNoctaliaV4MySetupURL(t *testing.T) {
+	old := `{
+  description = "Host-local MySetup NixOS wrapper";
+
+  inputs = {
+    noctalia = {
+      url = "github:noctalia-dev/noctalia/v5.0.0-beta1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    mysetup = {
+	      url = "github:TakuyaYagam1/MySetup/noctalia-v4?dir=Linux/NixOS";
+      inputs.noctalia.follows = "noctalia";
+    };
+  };
+}
+`
+
+	migrated, changed := migrateGeneratedThinFlake(old, config.SourceChannelStable)
+	if !changed {
+		t.Fatal("expected generated thin flake migration to rewrite v4-selected wrapper")
+	}
+	for _, want := range []string{
+		`github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS`,
+		`github:noctalia-dev/noctalia/v5.0.0-beta1`,
+		`github:noctalia-dev/noctalia-shell/v4.7.7`,
+	} {
+		if !strings.Contains(migrated, want) {
+			t.Fatalf("migrated flake missing %q\n%s", want, migrated)
+		}
+	}
+	for _, forbidden := range []string{
+		`github:TakuyaYagam1/MySetup/noctalia-v4?dir=Linux/NixOS`,
+	} {
+		if strings.Contains(migrated, forbidden) {
+			t.Fatalf("migrated flake kept stale value %q\n%s", forbidden, migrated)
 		}
 	}
 }
@@ -812,6 +909,7 @@ func TestPrepareThinHostLocalPreservesGeneratedThinWrapper(t *testing.T) {
     };
 }
 `
+	wantFlake := strings.ReplaceAll(existingFlake, "github:TakuyaYagam1/MySetup?dir=Linux/NixOS", "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS")
 	for path, content := range map[string]string{
 		filepath.Join(staging, "flake.nix"):               "new generated wrapper\n",
 		filepath.Join(dest, "hardware-configuration.nix"): "hardware\n",
@@ -828,12 +926,12 @@ func TestPrepareThinHostLocalPreservesGeneratedThinWrapper(t *testing.T) {
 		}
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 
 	for path, want := range map[string]string{
-		filepath.Join(staging, "flake.nix"):         existingFlake,
+		filepath.Join(staging, "flake.nix"):         wantFlake,
 		filepath.Join(staging, "flake.lock"):        "existing-lock\n",
 		filepath.Join(staging, "configuration.nix"): "{ config, ... }: { }\n",
 		filepath.Join(staging, "home.nix"):          "{ pkgs, ... }: { }\n",
@@ -874,7 +972,7 @@ func TestPrepareThinHostLocalOverwritesFreshNixOSOverrides(t *testing.T) {
 		}
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 
@@ -908,7 +1006,7 @@ func TestPrepareThinHostLocalPreservesPrivateDefault(t *testing.T) {
 		}
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 
@@ -936,7 +1034,7 @@ func TestPrepareThinHostLocalRejectsPrivateFile(t *testing.T) {
 		}
 	}
 
-	err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin)
+	err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin)
 	if err == nil || !strings.Contains(err.Error(), "private path is not a directory") {
 		t.Fatalf("expected private file target error, got %v", err)
 	}
@@ -964,7 +1062,7 @@ func TestPrepareThinHostLocalReplacesLegacyFullFlake(t *testing.T) {
 		}
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1007,7 +1105,7 @@ func TestPrepareThinHostLocalStagesLegacySecretsWhenRootMissing(t *testing.T) {
 		}
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1036,7 +1134,7 @@ func TestCopyThinSecretsFallsBackToSudoRsync(t *testing.T) {
 			return nil
 		},
 	}
-	if err := copyExistingThinHostLocal(context.Background(), fake, staging, dest); err != nil {
+	if err := copyExistingThinHostLocal(context.Background(), fake, staging, dest, config.SourceChannelStable); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1208,7 +1306,7 @@ func TestPrepareStagingHostLocalCopiesHardwareAndPreservesStagedLock(t *testing.
 		t.Fatal(err)
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutFull); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutFull); err != nil {
 		t.Fatal(err)
 	}
 	for path, want := range map[string]string{
@@ -1239,7 +1337,7 @@ func TestPrepareStagingHostLocalDryRunDoesNotHashPassword(t *testing.T) {
 	t.Setenv("PATH", bin)
 
 	runner := run.Runner{DryRun: true, Stdout: io.Discard, Stderr: io.Discard}
-	err := prepareStagingHostLocal(context.Background(), runner, staging, dest, config.Secrets{UserPassword: "secret"}, LayoutThin)
+	err := prepareStagingHostLocal(context.Background(), runner, staging, dest, config.SourceChannelStable, config.Secrets{UserPassword: "secret"}, LayoutThin)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1272,7 +1370,7 @@ func TestPrepareStagingHostLocalCopiesPermissionDeniedHashWithSudo(t *testing.T)
 
 	var out bytes.Buffer
 	runner := run.Runner{DryRun: true, Stdout: &out, Stderr: &out}
-	if err := prepareStagingHostLocal(context.Background(), runner, staging, dest, config.Secrets{}, LayoutThin); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), runner, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 

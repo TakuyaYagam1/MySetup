@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const SchemaVersion = 6
+const SchemaVersion = 7
 
 type State struct {
 	SchemaVersion int      `json:"schemaVersion"`
@@ -24,6 +24,7 @@ type State struct {
 	Features      Features `json:"features"`
 	Zapret        Zapret   `json:"zapret"`
 	Dots          Dots     `json:"dots"`
+	Noctalia      Noctalia `json:"noctalia"`
 }
 type Host struct {
 	Hostname     string `json:"hostname"`
@@ -120,6 +121,9 @@ type Dots struct {
 	V2rayN     bool `json:"v2rayN"`
 	Wallpapers bool `json:"wallpapers"`
 }
+type Noctalia struct {
+	Version string `json:"version"`
+}
 type Secrets struct {
 	UserPassword string
 }
@@ -175,6 +179,9 @@ func Default() State {
 			Neovim:     true,
 			V2rayN:     true,
 			Wallpapers: true,
+		},
+		Noctalia: Noctalia{
+			Version: NoctaliaVersionV5,
 		},
 	}
 }
@@ -256,6 +263,7 @@ func Migrate(state State) State {
 	state = migrateLocale(state, def, oldVersion)
 	state = migrateIdentity(state, def)
 	state = migrateDisplay(state, def)
+	state = migrateNoctalia(state, def)
 	return migrateFeatures(state, def, legacy, oldVersion)
 }
 
@@ -345,6 +353,13 @@ func migrateDisplay(state State, def State) State {
 	}
 	if state.Display.MonitorScale == "" {
 		state.Display.MonitorScale = def.Display.MonitorScale
+	}
+	return state
+}
+
+func migrateNoctalia(state State, def State) State {
+	if state.Noctalia.Version == "" {
+		state.Noctalia.Version = def.Noctalia.Version
 	}
 	return state
 }

@@ -34,6 +34,7 @@ var keys = struct {
 func summary(s config.State, secrets config.Secrets, existingSecrets secretAvailability, statePath string) string {
 	return fmt.Sprintf(`Host: %s
 MySetup channel: %s
+Noctalia version: %s
 User: %s (%s)
 Packages: %s
 GPU: %s
@@ -47,6 +48,7 @@ Passwords: linux-user=%s
 State: %s%s`,
 		s.Host.Hostname,
 		sourceChannelLabel(s.Source.Channel),
+		noctaliaVersionLabel(s.Noctalia.Version),
 		s.User.Username,
 		s.User.HomeDirectory,
 		s.Packages.Preset,

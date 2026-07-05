@@ -78,10 +78,28 @@ func TestKnownMySetupFlakeURLsIncludeLegacyStableURL(t *testing.T) {
 		"github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS",
 		"github:TakuyaYagam1/MySetup?dir=Linux/NixOS",
 		"github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS",
+		"github:TakuyaYagam1/MySetup/noctalia-v4?dir=Linux/NixOS",
 	} {
 		if !containsString(urls, want) {
 			t.Fatalf("known MySetup URLs must include %q, got %#v", want, urls)
 		}
+	}
+}
+
+func TestNoctaliaFlakeURLs(t *testing.T) {
+	if got := NoctaliaFlakeURL(); got != "github:noctalia-dev/noctalia/v5.0.0-beta1" {
+		t.Fatalf("NoctaliaFlakeURL() = %q", got)
+	}
+	if got := NoctaliaShellFlakeURL(); got != "github:noctalia-dev/noctalia-shell/v4.7.7" {
+		t.Fatalf("NoctaliaShellFlakeURL() = %q", got)
+	}
+}
+
+func TestValidateRejectsBadNoctaliaVersion(t *testing.T) {
+	state := Default()
+	state.Noctalia.Version = "v6"
+	if err := Validate(state); err == nil {
+		t.Fatal("expected invalid noctalia version error")
 	}
 }
 

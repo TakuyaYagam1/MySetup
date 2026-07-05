@@ -31,6 +31,10 @@
       url = "github:noctalia-dev/noctalia/v5.0.0-beta1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    noctalia-shell = {
+      url = "github:noctalia-dev/noctalia-shell/v4.7.7";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     end4-dotfiles = {
       url = "git+https://github.com/end-4/dots-hyprland?submodules=1";
       flake = false;

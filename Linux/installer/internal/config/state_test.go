@@ -107,6 +107,9 @@ func TestDefaultFeatureAndDotsToggles(t *testing.T) {
 	if !state.Dots.Neovim {
 		t.Fatal("neovim sync should be enabled by default")
 	}
+	if state.Noctalia.Version != NoctaliaVersionV5 {
+		t.Fatalf("expected noctalia version default %q, got %q", NoctaliaVersionV5, state.Noctalia.Version)
+	}
 }
 
 func TestValidateRejectsUnsafeHomeDirectory(t *testing.T) {

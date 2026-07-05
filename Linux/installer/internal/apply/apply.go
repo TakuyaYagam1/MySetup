@@ -87,7 +87,7 @@ func Run(ctx context.Context, opts Options) error {
 	if err := stageConfiguration(ctx, runner, src, staging, opts.State, modes.layout, modes.lockMode); err != nil {
 		return err
 	}
-	if err := prepareStagingHostLocal(ctx, runner, staging, opts.Paths.NixOSDest, opts.Secrets, modes.layout); err != nil {
+	if err := prepareStagingHostLocal(ctx, runner, staging, opts.Paths.NixOSDest, opts.State.Source.Channel, opts.Secrets, modes.layout); err != nil {
 		return err
 	}
 	if err := lockStagingFlake(ctx, runner, staging, modes.layout, modes.lockMode); err != nil {

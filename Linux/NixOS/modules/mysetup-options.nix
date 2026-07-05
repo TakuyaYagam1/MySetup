@@ -69,6 +69,18 @@ let
           };
         };
       };
+      noctalia = mkOption {
+        type = types.submodule {
+          options.version = mkOption {
+            type = types.enum [
+              "v4"
+              "v5"
+            ];
+            default = "v5";
+          };
+        };
+        default = { };
+      };
       hardware = mkOption {
         type = types.submodule {
           options.gpu = mkOption {

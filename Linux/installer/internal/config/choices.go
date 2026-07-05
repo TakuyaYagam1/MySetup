@@ -3,11 +3,23 @@ package config
 const (
 	SourceChannelStable      = "stable"
 	SourceChannelDevelopment = "development"
+
+	NoctaliaVersionV4 = "v4"
+	NoctaliaVersionV5 = "v5"
+
+	legacyNoctaliaV4MySetupFlakeURL = "github:TakuyaYagam1/MySetup/noctalia-v4?dir=Linux/NixOS"
+	noctaliaFlakeURLV5              = "github:noctalia-dev/noctalia/v5.0.0-beta1"
+	noctaliaShellFlakeURLV4         = "github:noctalia-dev/noctalia-shell/v4.7.7"
 )
 
 var SourceChannels = []string{
 	SourceChannelStable,
 	SourceChannelDevelopment,
+}
+
+var NoctaliaVersions = []string{
+	NoctaliaVersionV5,
+	NoctaliaVersionV4,
 }
 
 var PackagePresets = []string{
@@ -57,11 +69,17 @@ func IsSourceChannel(value string) bool {
 	return oneOf(value, SourceChannels...)
 }
 
+func IsNoctaliaVersion(value string) bool {
+	return oneOf(value, NoctaliaVersions...)
+}
+
 func MySetupFlakeURL(channel string) string {
-	if channel == SourceChannelDevelopment {
+	switch channel {
+	case SourceChannelDevelopment:
 		return "github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS"
+	default:
+		return "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS"
 	}
-	return "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS"
 }
 
 func KnownMySetupFlakeURLs() []string {
@@ -69,7 +87,16 @@ func KnownMySetupFlakeURLs() []string {
 		MySetupFlakeURL(SourceChannelStable),
 		"github:TakuyaYagam1/MySetup?dir=Linux/NixOS",
 		MySetupFlakeURL(SourceChannelDevelopment),
+		legacyNoctaliaV4MySetupFlakeURL,
 	}
+}
+
+func NoctaliaFlakeURL() string {
+	return noctaliaFlakeURLV5
+}
+
+func NoctaliaShellFlakeURL() string {
+	return noctaliaShellFlakeURLV4
 }
 
 func IsPackagePreset(value string) bool {

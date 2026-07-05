@@ -25,6 +25,7 @@ type FieldErrors struct {
 	Username      string
 	Hostname      string
 	SourceChannel string
+	Noctalia      string
 	StateVersion  string
 	FullName      string
 	HomeDirectory string
@@ -48,6 +49,7 @@ func (e FieldErrors) Messages() []string {
 		e.Username,
 		e.Hostname,
 		e.SourceChannel,
+		e.Noctalia,
 		e.StateVersion,
 		e.FullName,
 		e.HomeDirectory,
@@ -156,6 +158,9 @@ func validateLocaleFields(state State, errs *FieldErrors) {
 func validateEnumFields(state State, errs *FieldErrors) {
 	if !IsSourceChannel(state.Source.Channel) {
 		errs.SourceChannel = "source channel must be stable or development"
+	}
+	if !IsNoctaliaVersion(state.Noctalia.Version) {
+		errs.Noctalia = "noctalia version must be v4 or v5"
 	}
 	if !IsPackagePreset(state.Packages.Preset) {
 		errs.PackagePreset = "package preset must be minimal, desktop, developer, or personal"

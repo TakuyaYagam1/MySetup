@@ -42,6 +42,7 @@ func previewGeneral(s config.State) []string {
 	return previewSettings(
 		previewSetting("Hostname", "Flake target and networking host name.", s.Host.Hostname),
 		previewSetting("MySetup channel", "Branch followed by the installed /etc/nixos wrapper.", sourceChannelLabel(s.Source.Channel)),
+		previewSetting("Noctalia version", "Selects the current v5 shell integration or the preserved legacy v4 config seed.", noctaliaVersionLabel(s.Noctalia.Version)),
 		previewSetting("State version", "NixOS compatibility baseline for this machine.", s.Host.StateVersion),
 	)
 }
@@ -105,6 +106,7 @@ func previewServices(s config.State) []string {
 
 func previewDots(s config.State) []string {
 	return previewSettings(
+		previewSetting("Noctalia version", "Controls which Noctalia Home Manager integration and seed assets are used.", noctaliaVersionLabel(s.Noctalia.Version)),
 		previewSetting("Hypr dots", "Mirrors Linux/dots/hypr into ~/.config/hypr and reloads Hypr if running.", formatBool(s.Dots.Hypr)),
 		previewSetting("Wallpapers", "Copies repo wallpapers into ~/Pictures/Wallpapers.", formatBool(s.Dots.Wallpapers)),
 		previewSetting("Zen Catppuccin chrome", "Installs the Zen Browser Catppuccin chrome theme.", formatBool(s.Dots.ZenTheme)),

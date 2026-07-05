@@ -14,9 +14,9 @@ import (
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
 )
 
-func prepareStagingHostLocal(ctx context.Context, runner run.CommandRunner, staging, dest string, secrets config.Secrets, layout Layout) error {
+func prepareStagingHostLocal(ctx context.Context, runner run.CommandRunner, staging, dest, sourceChannel string, secrets config.Secrets, layout Layout) error {
 	if layout == LayoutThin {
-		if err := copyExistingThinHostLocal(ctx, runner, staging, dest); err != nil {
+		if err := copyExistingThinHostLocal(ctx, runner, staging, dest, sourceChannel); err != nil {
 			return err
 		}
 	}
@@ -41,8 +41,8 @@ func prepareStagingHostLocal(ctx context.Context, runner run.CommandRunner, stag
 	return copyExistingHashedPassword(ctx, runner, existingHashedPasswordPaths(dest), filepath.Join(staging, hashedPasswordRel(layout)))
 }
 
-func copyExistingThinHostLocal(ctx context.Context, runner run.CommandRunner, staging, dest string) error {
-	thinFlake, err := copyExistingThinFlake(dest, filepath.Join(staging, "flake.nix"))
+func copyExistingThinHostLocal(ctx context.Context, runner run.CommandRunner, staging, dest, sourceChannel string) error {
+	thinFlake, err := copyExistingThinFlake(dest, filepath.Join(staging, "flake.nix"), sourceChannel)
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func copyExistingThinHostLocalDir(ctx context.Context, runner run.CommandRunner,
 	return nil
 }
 
-func copyExistingThinFlake(dest, target string) (bool, error) {
+func copyExistingThinFlake(dest, target, sourceChannel string) (bool, error) {
 	source := filepath.Join(dest, "flake.nix")
 	data, err := os.ReadFile(source)
 	if err != nil {
@@ -139,7 +139,7 @@ func copyExistingThinFlake(dest, target string) (bool, error) {
 	}
 	text := string(data)
 	if isGeneratedMySetupWrapperFlake(text) {
-		if migrated, changed := migrateGeneratedThinFlake(text); changed {
+		if migrated, changed := migrateGeneratedThinFlake(text, sourceChannel); changed {
 			info, err := os.Stat(source)
 			if err != nil {
 				return false, err

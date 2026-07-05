@@ -48,7 +48,12 @@ let
   ];
   shellImports = [
     inputs.caelestia-shell.homeManagerModules.default
-    inputs.noctalia.homeModules.default
+    (
+      if mysetup.noctalia.version == "v4" then
+        inputs.noctalia-shell.homeModules.default
+      else
+        inputs.noctalia.homeModules.default
+    )
     ./shells
     ./caelestia
     ./noctalia

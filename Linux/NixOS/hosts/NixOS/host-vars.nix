@@ -30,6 +30,10 @@
     preset = "personal";
   };
 
+  noctalia = {
+    version = "v5";
+  };
+
   hardware = {
     gpu = "amd";
   };
