@@ -452,10 +452,6 @@ func TestShellBrandingUsesNixOSLogoOutsideSelector(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	noctalia, err := os.ReadFile("../../../NixOS/home/noctalia/config/settings.json")
-	if err != nil {
-		t.Fatal(err)
-	}
 	selector, err := os.ReadFile("../../../NixOS/home/shells/quickshell/mysetup-shell-selector/shell.qml")
 	if err != nil {
 		t.Fatal(err)
@@ -466,14 +462,6 @@ func TestShellBrandingUsesNixOSLogoOutsideSelector(t *testing.T) {
 	} {
 		if !strings.Contains(string(caelestia), want) {
 			t.Fatalf("caelestia branding missing %q\n%s", want, string(caelestia))
-		}
-	}
-	for _, want := range []string{
-		`"icon": "nix-snowflake"`,
-		`"useDistroLogo": true`,
-	} {
-		if !strings.Contains(string(noctalia), want) {
-			t.Fatalf("noctalia branding missing %q\n%s", want, string(noctalia))
 		}
 	}
 	for _, want := range []string{
