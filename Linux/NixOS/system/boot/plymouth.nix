@@ -19,6 +19,8 @@ let
 
     src = lib.cleanSource ../../themes/plymouth-theme;
 
+    nativeBuildInputs = [ pkgs.imagemagick ];
+
     dontBuild = true;
 
     installPhase = ''
@@ -29,7 +31,7 @@ let
       cp meowrch.plymouth $dest/
       cp meowrch.script $dest/
 
-      cp ${plymouthLogo} $dest/assets/logo.png
+      convert ${plymouthLogo} $dest/assets/logo.png
 
       substituteInPlace $dest/meowrch.plymouth \
         --replace "/usr/share/plymouth/themes/meowrch/assets" "$dest/assets" \

@@ -25,6 +25,19 @@ Want your own logo on the GRUB/SDDM/Plymouth boot screens instead of the default
 image in `~/.config/mysetup/boot-theme/` - details in
 [Linux/README.md](Linux/README.md#boot-theme).
 
+Any image works as-is (sizing/format is handled automatically), but if you want the same
+circular, transparent-background look as the built-in default, crop it yourself first with
+[ImageMagick](https://imagemagick.org/):
+
+```bash
+convert your-photo.jpg -resize 320x320^ -gravity center -extent 320x320 \
+  \( +clone -alpha extract -fill black -colorize 100 -fill white -draw "circle 160,160 160,0" \) \
+  -alpha off -compose CopyOpacity -composite logo.png
+```
+
+This is entirely optional - a plain rectangular photo works fine too, it just renders as a
+square instead of a circle.
+
 ---
 
 ## Screenshots
