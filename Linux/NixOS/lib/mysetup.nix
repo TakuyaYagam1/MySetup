@@ -3,9 +3,10 @@
 let
   presets = import ./presets.nix { inherit lib; };
   ports = import ./service-ports.nix;
+  bootTheme = import ./boot-theme.nix;
 in
 {
-  inherit presets ports;
+  inherit presets ports bootTheme;
 
   mkIfPresetOrMore =
     preset: cfg: body:

@@ -1,15 +1,29 @@
-{ pkgs, ... }:
+{
+  config,
+  mysetupLib,
+  pkgs,
+  ...
+}:
 
 let
+  grubLogo = mysetupLib.bootTheme.resolveLogo {
+    homeDirectory = config.mysetup.user.homeDirectory;
+    service = "grub";
+    default = ../../themes/grub-theme/logo.png;
+  };
+
   meowrchGrubTheme = pkgs.stdenv.mkDerivation {
     pname = "meowrch-grub-theme";
     version = "1.0";
     src = ../../themes/grub-theme;
 
+    nativeBuildInputs = [ pkgs.imagemagick ];
+
     dontBuild = true;
     installPhase = ''
       mkdir -p $out
       cp -r ./* $out/
+      convert ${grubLogo} -resize 320x320^ -gravity center -extent 320x320 $out/logo.png
     '';
   };
 in

@@ -1,6 +1,18 @@
-{ pkgs, lib, ... }:
+{
+  config,
+  mysetupLib,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
+  plymouthLogo = mysetupLib.bootTheme.resolveLogo {
+    homeDirectory = config.mysetup.user.homeDirectory;
+    service = "plymouth";
+    default = ../../themes/plymouth-theme/assets/logo.png;
+  };
+
   plymouthTheme = pkgs.stdenv.mkDerivation {
     pname = "meowrch-plymouth-theme";
     version = "1.0";
@@ -17,7 +29,7 @@ let
       cp meowrch.plymouth $dest/
       cp meowrch.script $dest/
 
-      cp ${../../themes/plymouth-theme/assets/logo.png} $dest/assets/logo.png
+      cp ${plymouthLogo} $dest/assets/logo.png
 
       substituteInPlace $dest/meowrch.plymouth \
         --replace "/usr/share/plymouth/themes/meowrch/assets" "$dest/assets" \

@@ -14,7 +14,11 @@ in
 {
   config = mysetupLib.mkIfPresetOrMore "desktop" config.mysetup {
     environment.etc."sddm/faces/${config.mysetup.user.username}.face.icon".source =
-      ../themes/sddm-theme/icons/logo.png;
+      mysetupLib.bootTheme.resolveLogo {
+        homeDirectory = config.mysetup.user.homeDirectory;
+        service = "sddm";
+        default = ../themes/sddm-theme/icons/logo.png;
+      };
 
     services.gnome.gnome-keyring.enable = true;
     security.pam.services.sddm.enableGnomeKeyring = true;

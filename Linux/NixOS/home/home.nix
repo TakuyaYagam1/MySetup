@@ -27,6 +27,7 @@ let
     inputs.stylix.homeModules.stylix
     ./stylix.nix
     ./theming.nix
+    ./programs/boot-theme.nix
     ./programs/git.nix
     ./programs/fish.nix
     ./programs/shell-tools.nix
