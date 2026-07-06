@@ -265,7 +265,8 @@ The QuickShell selector opens on the focused monitor and switches between:
 - `end4` / Illogical Impulse
 
 The full per-shell keybind reference (common + caelestia + noctalia + end4)
-lives in the [GitHub Wiki](https://github.com/TakuyaYagam1/MySetup/wiki).
+lives in the [GitHub Wiki](https://github.com/TakuyaYagam1/MySetup/wiki) or
+[`Linux/keybinds.md`](keybinds.md).
 
 Runtime state:
 

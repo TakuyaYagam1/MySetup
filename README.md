@@ -18,6 +18,9 @@ Personal system configuration for Linux (NixOS + Hyprland) and Windows (Komorebi
 Three interchangeable Hyprland shells - **caelestia**, **noctalia**, **end-4** - swap between them at
 runtime, no reinstall needed. Details: [Linux/README.md](Linux/README.md#runtime-shells).
 
+Full keybind reference (every shell, every bind): [GitHub Wiki](https://github.com/TakuyaYagam1/MySetup/wiki)
+or [`Linux/keybinds.md`](Linux/keybinds.md).
+
 ---
 
 ## Screenshots
