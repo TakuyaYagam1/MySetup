@@ -8,7 +8,7 @@ const (
 	NoctaliaVersionV5 = "v5"
 
 	legacyNoctaliaV4MySetupFlakeURL = "github:TakuyaYagam1/MySetup/noctalia-v4?dir=Linux/NixOS"
-	noctaliaFlakeURLV5              = "github:noctalia-dev/noctalia/main"
+	noctaliaFlakeURLV5              = "github:noctalia-dev/noctalia"
 	noctaliaShellFlakeURLV4         = "github:noctalia-dev/noctalia-shell/v4.7.7"
 )
 

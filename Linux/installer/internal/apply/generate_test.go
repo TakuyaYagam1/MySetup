@@ -124,7 +124,7 @@ func TestFlakeNixUsesIndependentThinMySetupWrapper(t *testing.T) {
 		`nix-index-database = {`,
 		`quickshell = {`,
 		`noctalia = {`,
-		`url = "github:noctalia-dev/noctalia/main";`,
+		`url = "github:noctalia-dev/noctalia";`,
 		`noctalia-shell = {`,
 		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
 		`mysetup = {`,
@@ -217,7 +217,7 @@ func TestFlakeNixCarriesBothNoctaliaInputsForV4Selection(t *testing.T) {
 	}
 	for _, want := range []string{
 		`url = "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS";`,
-		`url = "github:noctalia-dev/noctalia/main";`,
+		`url = "github:noctalia-dev/noctalia";`,
 		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
 	} {
 		if !strings.Contains(out, want) {
@@ -819,7 +819,7 @@ func TestMigrateGeneratedThinFlakeRemovesOnlyKnownLegacyInputs(t *testing.T) {
 	}
 	for _, want := range []string{
 		`noctalia = {`,
-		`url = "github:noctalia-dev/noctalia/main";`,
+		`url = "github:noctalia-dev/noctalia";`,
 		`inputs.noctalia.follows = "noctalia";`,
 		`noctalia-shell = {`,
 		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
@@ -847,7 +847,7 @@ func TestMigrateGeneratedThinFlakeRewritesLegacyNoctaliaV4MySetupURL(t *testing.
 
   inputs = {
     noctalia = {
-      url = "github:noctalia-dev/noctalia/main";
+      url = "github:noctalia-dev/noctalia";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -865,7 +865,7 @@ func TestMigrateGeneratedThinFlakeRewritesLegacyNoctaliaV4MySetupURL(t *testing.
 	}
 	for _, want := range []string{
 		`github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS`,
-		`github:noctalia-dev/noctalia/main`,
+		`github:noctalia-dev/noctalia`,
 		`github:noctalia-dev/noctalia-shell/v4.7.7`,
 	} {
 		if !strings.Contains(migrated, want) {
@@ -878,6 +878,48 @@ func TestMigrateGeneratedThinFlakeRewritesLegacyNoctaliaV4MySetupURL(t *testing.
 		if strings.Contains(migrated, forbidden) {
 			t.Fatalf("migrated flake kept stale value %q\n%s", forbidden, migrated)
 		}
+	}
+}
+
+func TestMigrateGeneratedThinFlakeUpdatesStaleNoctaliaURLInPlace(t *testing.T) {
+	old := `{
+  description = "Host-local MySetup NixOS wrapper";
+
+  inputs = {
+    quickshell = {
+      url = "github:outfoxxed/quickshell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    noctalia = {
+      url = "github:noctalia-dev/noctalia/v5.0.0-beta1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    noctalia-shell = {
+      url = "github:noctalia-dev/noctalia-shell/v4.7.7";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    mysetup = {
+      url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";
+      inputs.noctalia.follows = "noctalia";
+      inputs.noctalia-shell.follows = "noctalia-shell";
+    };
+  };
+}
+`
+
+	migrated, changed := migrateGeneratedThinFlake(old, config.SourceChannelStable)
+	if !changed {
+		t.Fatal("expected generated thin flake migration to report a change")
+	}
+	if strings.Count(migrated, "noctalia = {") != 1 {
+		t.Fatalf("expected exactly one noctalia input block, got:\n%s", migrated)
+	}
+	if strings.Contains(migrated, "v5.0.0-beta1") {
+		t.Fatalf("migrated flake kept stale noctalia pin\n%s", migrated)
+	}
+	if !strings.Contains(migrated, `url = "github:noctalia-dev/noctalia";`) {
+		t.Fatalf("migrated flake missing updated noctalia url\n%s", migrated)
 	}
 }
 

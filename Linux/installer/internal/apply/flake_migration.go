@@ -1,6 +1,7 @@
 package apply
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
@@ -14,7 +15,7 @@ const (
 `
 
 	currentNoctaliaV5Input = `    noctalia = {
-      url = "github:noctalia-dev/noctalia/main";
+      url = "github:noctalia-dev/noctalia";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 `
@@ -35,6 +36,11 @@ const (
 `
 )
 
+// Matches any previously generated noctalia (v5) flake input block regardless
+// of which url/ref it was pinned to, so updating the pin replaces the block
+// in place instead of inserting a second, duplicate "noctalia" attribute.
+var noctaliaV5InputPattern = regexp.MustCompile(`    noctalia = \{\n      url = "[^"\n]*";\n      inputs\.nixpkgs\.follows = "nixpkgs";\n    \};\n`)
+
 func insertAfterFirst(text, anchor, insert string) string {
 	index := strings.Index(text, anchor)
 	if index == -1 {
@@ -50,12 +56,13 @@ func migrateGeneratedThinFlake(text, channel string) (string, bool) {
 	updated = strings.ReplaceAll(updated, `      inputs.templ.follows = "templ";
 `, "")
 
-	if !strings.Contains(updated, currentNoctaliaV5Input) {
-		if strings.Contains(updated, legacyNoctaliaV4Input) {
-			updated = strings.Replace(updated, legacyNoctaliaV4Input, currentNoctaliaV5Input+legacyNoctaliaV4Input, 1)
-		} else {
-			updated = insertAfterFirst(updated, quickshellInput, currentNoctaliaV5Input)
-		}
+	switch {
+	case noctaliaV5InputPattern.MatchString(updated):
+		updated = noctaliaV5InputPattern.ReplaceAllString(updated, currentNoctaliaV5Input)
+	case strings.Contains(updated, legacyNoctaliaV4Input):
+		updated = strings.Replace(updated, legacyNoctaliaV4Input, currentNoctaliaV5Input+legacyNoctaliaV4Input, 1)
+	default:
+		updated = insertAfterFirst(updated, quickshellInput, currentNoctaliaV5Input)
 	}
 	if !strings.Contains(updated, legacyNoctaliaV4Input) {
 		updated = insertAfterFirst(updated, currentNoctaliaV5Input, legacyNoctaliaV4Input)

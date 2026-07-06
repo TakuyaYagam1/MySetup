@@ -666,7 +666,6 @@
       },
       "original": {
         "owner": "noctalia-dev",
-        "ref": "main",
         "repo": "noctalia",
         "type": "github"
       }
