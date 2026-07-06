@@ -23,7 +23,7 @@ let
     installPhase = ''
       mkdir -p $out
       cp -r ./* $out/
-      convert ${grubLogo} -resize 320x320^ -gravity center -extent 320x320 $out/logo.png
+      convert ${grubLogo} -background none -resize 320x320^ -gravity center -extent 320x320 $out/logo.png
     '';
   };
 in
