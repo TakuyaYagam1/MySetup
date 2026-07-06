@@ -194,7 +194,7 @@ func TestNoctaliaLauncherScriptIsGuarded(t *testing.T) {
 		"mysetup-noctalia-launcher",
 		"noctalia-launcher\\.sh",
 		"acquire_lock",
-		"mysetup_noctalia_msg panel-toggle launcher",
+		"mysetup_noctalia_msg launcher toggle",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("noctalia launcher wrapper missing %q\n%s", want, text)
@@ -366,7 +366,7 @@ func TestRestoreLockScriptStartsProfileBeforeLocking(t *testing.T) {
 		`"$script_dir/start-shell.sh" "$profile"`,
 		"wait_for_profile()",
 		`hyprctl dispatch 'hl.dsp.global("caelestia:lock")'`,
-		"mysetup_noctalia_msg session lock",
+		"mysetup_noctalia_msg lockScreen lock",
 		`hyprlock -c "$mysetup_hypr_runtime_dir/hyprlock.conf"`,
 	} {
 		if !strings.Contains(text, want) {
