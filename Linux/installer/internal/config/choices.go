@@ -91,11 +91,11 @@ func KnownMySetupFlakeURLs() []string {
 	}
 }
 
-func NoctaliaFlakeURL() string {
+func NoctaliaV5FlakeURL() string {
 	return noctaliaFlakeURLV5
 }
 
-func NoctaliaShellFlakeURL() string {
+func NoctaliaV4FlakeURL() string {
 	return noctaliaShellFlakeURLV4
 }
 

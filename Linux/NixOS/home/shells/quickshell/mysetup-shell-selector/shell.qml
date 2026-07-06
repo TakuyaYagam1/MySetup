@@ -16,7 +16,7 @@ ShellRoot {
     // MYSETUP_SHELL_OPTIONS_BEGIN
     {
       id: "noctalia",
-      title: "noctalia-shell",
+      title: "noctalia",
       accent: "#f48ab6",
       surface: "#211f31",
       logo: Qt.resolvedUrl("assets/noctalia.svg")

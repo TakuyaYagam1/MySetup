@@ -7,13 +7,13 @@ import (
 )
 
 const (
-	legacyNoctaliaInput = `    noctalia-shell = {
+	legacyNoctaliaV4Input = `    noctalia-shell = {
       url = "github:noctalia-dev/noctalia-shell/v4.7.7";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 `
 
-	currentNoctaliaInput = `    noctalia = {
+	currentNoctaliaV5Input = `    noctalia = {
       url = "github:noctalia-dev/noctalia/v5.0.0-beta1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
@@ -50,15 +50,15 @@ func migrateGeneratedThinFlake(text, channel string) (string, bool) {
 	updated = strings.ReplaceAll(updated, `      inputs.templ.follows = "templ";
 `, "")
 
-	if !strings.Contains(updated, currentNoctaliaInput) {
-		if strings.Contains(updated, legacyNoctaliaInput) {
-			updated = strings.Replace(updated, legacyNoctaliaInput, currentNoctaliaInput+legacyNoctaliaInput, 1)
+	if !strings.Contains(updated, currentNoctaliaV5Input) {
+		if strings.Contains(updated, legacyNoctaliaV4Input) {
+			updated = strings.Replace(updated, legacyNoctaliaV4Input, currentNoctaliaV5Input+legacyNoctaliaV4Input, 1)
 		} else {
-			updated = insertAfterFirst(updated, quickshellInput, currentNoctaliaInput)
+			updated = insertAfterFirst(updated, quickshellInput, currentNoctaliaV5Input)
 		}
 	}
-	if !strings.Contains(updated, legacyNoctaliaInput) {
-		updated = insertAfterFirst(updated, currentNoctaliaInput, legacyNoctaliaInput)
+	if !strings.Contains(updated, legacyNoctaliaV4Input) {
+		updated = insertAfterFirst(updated, currentNoctaliaV5Input, legacyNoctaliaV4Input)
 	}
 
 	if !strings.Contains(updated, `      inputs.noctalia.follows = "noctalia";`) {

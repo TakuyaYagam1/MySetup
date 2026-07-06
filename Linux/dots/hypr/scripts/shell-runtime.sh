@@ -19,9 +19,9 @@ mysetup_default_shell_profile="caelestia"
 
 mysetup_selector_pattern='((^|[ /])(qs|quickshell)([[:space:]].*)?-c[[:space:]]mysetup-shell-selector([[:space:]]|$))|quickshell/mysetup-shell-selector([/[:space:]]|$)'
 mysetup_end4_pattern='((^|[ /])(qs-end4|qs|quickshell)([[:space:]].*)?-c[[:space:]]ii([[:space:]]|$))|quickshell/ii([/[:space:]]|$)'
-mysetup_noctalia_pattern='(^|[ /])noctalia-shell([[:space:]]|$)|share/noctalia-shell'
+mysetup_noctalia_v4_pattern='(^|[ /])noctalia-shell([[:space:]]|$)|share/noctalia-shell'
 mysetup_caelestia_pattern='share/caelestia-shell|caelestia-shell|(^|[ /])caelestia[[:space:]]+shell([[:space:]]|$)'
-mysetup_noctalia_env_pattern='^QS_CONFIG_PATH=.*/share/noctalia-shell$'
+mysetup_noctalia_v4_env_pattern='^QS_CONFIG_PATH=.*/share/noctalia-shell$'
 mysetup_end4_env_pattern='^qsConfig=.*/quickshell/ii$|^ILLOGICAL_IMPULSE_DOTFILES_SOURCE='
 
 mysetup_user_name="${USER:-}"
@@ -109,9 +109,9 @@ mysetup_noctalia_pids() {
   {
     pgrep -u "$mysetup_user_name" -x noctalia 2>/dev/null || true
     pgrep -u "$mysetup_user_name" -f '(^|[ /])\.noctalia-wrapped([[:space:]]|$)' 2>/dev/null || true
-    pgrep -u "$mysetup_user_name" -f "$mysetup_noctalia_pattern" 2>/dev/null || true
+    pgrep -u "$mysetup_user_name" -f "$mysetup_noctalia_v4_pattern" 2>/dev/null || true
     for pid in $(mysetup_quickshell_pids); do
-      if mysetup_pid_has_env_regex "$pid" "$mysetup_noctalia_env_pattern"; then
+      if mysetup_pid_has_env_regex "$pid" "$mysetup_noctalia_v4_env_pattern"; then
         printf '%s\n' "$pid"
       fi
     done

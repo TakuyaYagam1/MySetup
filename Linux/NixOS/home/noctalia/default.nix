@@ -13,8 +13,8 @@ let
   dotfilesLib = homeLibs.dotfiles;
   trans = homeLibs.transparency;
   isV4 = mysetup.noctalia.version == "v4";
-  noctaliaPackage = inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default;
-  noctaliaShellPackage = inputs.noctalia-shell.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  noctaliaV5Package = inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  noctaliaV4Package = inputs.noctalia-shell.packages.${pkgs.stdenv.hostPlatform.system}.default;
   settingsJson = ./legacy-v4/settings.json;
   colorsJson = ./legacy-v4/colors.json;
   pluginsJson = ./legacy-v4/plugins.json;
@@ -35,7 +35,7 @@ let
   noctaliaProgramOption = if options.programs ? noctalia then "noctalia" else "noctalia-shell";
   noctaliaProgramConfigV5 = {
     enable = true;
-    package = noctaliaPackage;
+    package = noctaliaV5Package;
     systemd.enable = false;
     validateConfig = true;
     settings = {
@@ -54,7 +54,7 @@ let
   };
   noctaliaProgramConfigV4 = {
     enable = true;
-    package = noctaliaShellPackage;
+    package = noctaliaV4Package;
     systemd.enable = false;
     settings = lib.mkForce { };
   }
