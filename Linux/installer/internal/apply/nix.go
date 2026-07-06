@@ -64,6 +64,7 @@ func nixosRebuildArgs(action, target string) []string {
 	return []string{
 		"nixos-rebuild",
 		action,
+		"--impure",
 		"--flake", target,
 		"--option", "max-jobs", safeBuildMaxJobs,
 		"--option", "cores", safeBuildCores,

@@ -319,9 +319,10 @@ Drop your own logo into:
 ~/.config/mysetup/boot-theme/
 ```
 
-First apply seeds that directory with an example `logo.png` (the current
-default theme logo) and a `README.txt` explaining the naming below - it never
-overwrites a file that's already there.
+First apply seeds that directory once with an example `logo.png` (the current
+default theme logo) and a `README.txt` explaining the naming below. After that
+first seed it's entirely yours - delete `logo.png` and it stays deleted, it
+won't come back on the next apply.
 
 Naming, highest priority first:
 
@@ -330,10 +331,18 @@ Naming, highest priority first:
 - `plymouth.png` / `plymouth.jpg` - Plymouth boot splash only
 - `logo.png` / `logo.jpg` - shared fallback used by all three
 
-A per-service file always wins over `logo.png`. Delete a file to fall back to
-the next one in that order, or delete them all to restore the built-in
-default. GRUB's image is auto-resized to 320x320 (its theme layout is
-hand-calibrated for that size); SDDM and Plymouth accept any aspect ratio.
+A per-service file always wins over `logo.png`. This is deliberately strict
+once the directory exists: every one of grub/sddm/plymouth must resolve to a
+real file (its own override or `logo.png`) - covering some services and
+leaving others with no fallback fails the build instead of silently guessing.
+Delete the whole directory to go back to the built-in default. GRUB's image
+is auto-resized to 320x320 (its theme layout is hand-calibrated for that
+size); SDDM and Plymouth accept any aspect ratio.
+
+Reading these files requires `--impure` on `nixos-rebuild` (they live outside
+the flake source, under `$HOME`) - `nixos-update` and `mysetup apply` already
+pass it. Running `nixos-rebuild` yourself for something else? Add `--impure`
+or these overrides silently fall back to the built-in default.
 
 Takes effect on the next `mysetup apply` / `nixos-rebuild switch`. SDDM shows
 the new avatar at the next login screen; GRUB and Plymouth render before Linux

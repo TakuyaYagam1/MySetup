@@ -372,7 +372,7 @@ func TestRunDryRunNoSwitchStopsAfterDryBuildWithoutWritingEtcDotsOrState(t *test
 		}
 	})
 
-	dryBuild := strings.Index(out, "sudo nixos-rebuild dry-build --flake ")
+	dryBuild := strings.Index(out, "sudo nixos-rebuild dry-build --impure --flake ")
 	backup := strings.Index(out, "sudo cp -a")
 	dotsApply := strings.Index(out, "write hypr local config")
 	stateWrite := strings.LastIndex(out, filepath.Join(dest, "mysetup/state.json"))

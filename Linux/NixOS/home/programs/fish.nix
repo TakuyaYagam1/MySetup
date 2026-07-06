@@ -123,7 +123,7 @@ _:
       '';
 
       nixos-switch = ''
-        /run/wrappers/bin/sudo /run/current-system/sw/bin/nixos-rebuild switch --flake /etc/nixos#NixOS $argv
+        /run/wrappers/bin/sudo /run/current-system/sw/bin/nixos-rebuild switch --impure --flake /etc/nixos#NixOS $argv
       '';
 
       nixos-update = ''
@@ -139,7 +139,7 @@ _:
             return $update_status
         end
 
-        /run/wrappers/bin/sudo /run/current-system/sw/bin/nixos-rebuild switch --flake .#NixOS
+        /run/wrappers/bin/sudo /run/current-system/sw/bin/nixos-rebuild switch --impure --flake .#NixOS
         set -l rebuild_status $status
         cd "$old_pwd"
         return $rebuild_status
