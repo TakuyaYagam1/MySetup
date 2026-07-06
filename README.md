@@ -21,6 +21,10 @@ runtime, no reinstall needed. Details: [Linux/README.md](Linux/README.md#runtime
 Full keybind reference (every shell, every bind): [GitHub Wiki](https://github.com/TakuyaYagam1/MySetup/wiki)
 or [`Linux/keybinds.md`](Linux/keybinds.md).
 
+Want your own logo on the GRUB/SDDM/Plymouth boot screens instead of the default one? Drop an
+image in `~/.config/mysetup/boot-theme/` - details in
+[Linux/README.md](Linux/README.md#boot-theme).
+
 ---
 
 ## Screenshots
@@ -36,6 +40,8 @@ or [`Linux/keybinds.md`](Linux/keybinds.md).
 | TUI Installer - User | TUI Installer - Display |
 | :---: | :---: |
 | ![TUI installer - User](assets/tui1.png) | ![TUI installer - Display](assets/tui2.png) |
+
+### Windows (Komorebi + YASB)
 
 ![Windows - Komorebi tiling WM + YASB status bar](assets/windows.png)
 

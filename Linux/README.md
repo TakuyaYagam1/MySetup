@@ -309,6 +309,38 @@ Ownership contract:
 - User/vendor state remains mutable under shell-specific config/cache paths,
   especially Caelestia/Noctalia JSON and end4 Illogical Impulse settings.
 
+## Boot Theme
+
+Customize the GRUB, SDDM, and Plymouth boot logos with your own image.
+
+Drop your own logo into:
+
+```text
+~/.config/mysetup/boot-theme/
+```
+
+First apply seeds that directory with an example `logo.png` (the current
+default theme logo) and a `README.txt` explaining the naming below - it never
+overwrites a file that's already there.
+
+Naming, highest priority first:
+
+- `grub.png` / `grub.jpg` - GRUB boot menu logo only
+- `sddm.png` / `sddm.jpg` - SDDM login avatar only
+- `plymouth.png` / `plymouth.jpg` - Plymouth boot splash only
+- `logo.png` / `logo.jpg` - shared fallback used by all three
+
+A per-service file always wins over `logo.png`. Delete a file to fall back to
+the next one in that order, or delete them all to restore the built-in
+default. GRUB's image is auto-resized to 320x320 (its theme layout is
+hand-calibrated for that size); SDDM and Plymouth accept any aspect ratio.
+
+Takes effect on the next `mysetup apply` / `nixos-rebuild switch`. SDDM shows
+the new avatar at the next login screen; GRUB and Plymouth render before Linux
+even starts, so you need an actual reboot to see them - `switch` alone
+prepares the files but can't repaint a bootloader or splash screen that's
+already run.
+
 ## Apply Flow
 
 The installer applies changes defensively:
