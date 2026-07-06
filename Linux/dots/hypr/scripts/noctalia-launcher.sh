@@ -40,7 +40,7 @@ case "${1:-release}" in
     ;;
   release)
     if [ -e "$active_file" ] && [ ! -e "$interrupt_file" ]; then
-      mysetup_noctalia_msg panel-toggle launcher >/dev/null 2>&1 || true
+      mysetup_noctalia_msg launcher toggle >/dev/null 2>&1 || true
     fi
     rm -f "$active_file" "$interrupt_file"
     ;;
