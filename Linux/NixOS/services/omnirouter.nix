@@ -76,7 +76,7 @@ in
       wants = [ "network-online.target" ];
 
       path = [
-        pkgs.nodejs
+        pkgs.nodejs_22
         cfg.package
       ];
 

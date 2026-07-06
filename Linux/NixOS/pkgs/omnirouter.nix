@@ -21,16 +21,16 @@ let
 in
 buildNpmPackage' rec {
   pname = "omnirouter";
-  version = "3.8.40";
+  version = "3.8.45";
 
   src = fetchFromGitHub {
     owner = "diegosouzapw";
     repo = "OmniRoute";
-    rev = "v3.8.40";
-    hash = "sha256-EmwtxxMBLOgRoNOW3tjCmp5VmRrfUysoiyVJBzAwA0Q=";
+    rev = "v3.8.45";
+    hash = "sha256-guxp4ketc4G+WC9y4dOLp9duvsfFed/hdYBQiRxnx/M=";
   };
 
-  npmDepsHash = "sha256-40v7/fOn+wdGY0GnFJaK6nOlHhIzBDqqz38WJLtuP4I=";
+  npmDepsHash = "sha256-67XFt7Nxm2Bt+isbWiwKNP3qPRA3W2iVEYPUCDHvhLs=";
 
   nativeBuildInputs = [
     python311
@@ -54,7 +54,6 @@ buildNpmPackage' rec {
     NEXT_TELEMETRY_DISABLED = "1";
     npm_config_arch = stdenv.hostPlatform.parsed.cpu.name;
     SHARP_IGNORE_GLOBAL_LIBVIPS = "0";
-    # CPU binaries are bundled; skip optional CUDA downloads from NuGet.
     ONNXRUNTIME_NODE_INSTALL = "skip";
     ONNXRUNTIME_NODE_INSTALL_CUDA = "skip";
   };
@@ -76,6 +75,7 @@ buildNpmPackage' rec {
     export NODE_ENV=production
     export CYPRESS_INSTALL_BINARY=0
     export HUSKY_SKIP_INSTALL=1
+    npm rebuild better-sqlite3 --build-from-source
     npm run build
   '';
 
@@ -89,12 +89,12 @@ buildNpmPackage' rec {
     mkdir -p $out/bin
     cat > $out/bin/omnirouter <<EOF
     #!/bin/sh
-    cd $out/share/omnirouter
+    cd $out/share/omnirouter/.build/next/standalone
     export DATA_DIR="\''${DATA_DIR:-\''${HOME:-/var/lib/omnirouter}}"
     export APP_LOG_FILE_PATH="\''${APP_LOG_FILE_PATH:-\''${DATA_DIR}/logs/application/app.log}"
     export NODE_ENV=production
     export OMNIROUTE_NO_UPDATE_NOTIFIER="\''${OMNIROUTE_NO_UPDATE_NOTIFIER:-1}"
-    exec ${lib.getExe nodejs} scripts/dev/run-next.mjs start "\$@"
+    exec ${lib.getExe nodejs} dev/run-standalone.mjs "\$@"
     EOF
 
     chmod +x $out/bin/omnirouter
