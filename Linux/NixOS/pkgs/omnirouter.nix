@@ -21,16 +21,16 @@ let
 in
 buildNpmPackage' rec {
   pname = "omnirouter";
-  version = "3.8.45";
+  version = "3.8.40";
 
   src = fetchFromGitHub {
     owner = "diegosouzapw";
     repo = "OmniRoute";
-    rev = "v3.8.45";
-    hash = "sha256-guxp4ketc4G+WC9y4dOLp9duvsfFed/hdYBQiRxnx/M=";
+    rev = "v3.8.40";
+    hash = "sha256-EmwtxxMBLOgRoNOW3tjCmp5VmRrfUysoiyVJBzAwA0Q=";
   };
 
-  npmDepsHash = "sha256-67XFt7Nxm2Bt+isbWiwKNP3qPRA3W2iVEYPUCDHvhLs=";
+  npmDepsHash = "sha256-40v7/fOn+wdGY0GnFJaK6nOlHhIzBDqqz38WJLtuP4I=";
 
   nativeBuildInputs = [
     python311
