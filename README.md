@@ -57,7 +57,7 @@ or [`Linux/keybinds.md`](Linux/keybinds.md).
 | --- | --- |
 | Install (stable `main`, opens TUI) | `nix run --refresh 'github:TakuyaYagam1/MySetup'` |
 | Install (latest `dev`, opens TUI) | `nix run --refresh 'github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS#mysetup' -- tui` |
-| More build cores (e.g. 4/4 instead of the safe 1/2 default) | add `--option max-jobs 4 --option cores 4` right after `nix run --refresh` |
+| Install with more build cores (e.g. 4/4 instead of the safe 1/2 default), latest `dev`, opens TUI | `nix run --refresh --option max-jobs 4 --option cores 4 'github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS#mysetup' -- tui` |
 | Reapply saved config, no TUI | `nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- apply` |
 | Inspect / repair an installed host | `nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- doctor` |
 | Update an already-installed system | `nixos-update` |
