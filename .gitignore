@@ -9,6 +9,7 @@
 
 ida*
 .codex
+.claude
 .cursor/
 __pycache__/
 *.py[cod]
