@@ -86,8 +86,10 @@ end4) via `source = $hypr/shell-common-keybinds.conf` and
 | `Ctrl+Super+Left` | Previous workspace |
 | `Super+Tab` | Toggle special workspace |
 | `Super+Page_Up` / `Super+Page_Down` | Previous / next workspace (repeats) |
+| `Super+ScrollUp/Down` | Previous / next workspace |
 | `Ctrl+Super+ScrollUp/Down` | Move ±10 workspaces |
 | `Super+Alt+Page_Up/Down` | Move window ±1 workspace |
+| `Super+Shift+ScrollUp/Down` | Move window ±1 workspace |
 | `Ctrl+Super+Shift+Right/Left` | Move window ±1 workspace |
 | `Ctrl+Super+Shift+Up` | Move window to special:special |
 | `Ctrl+Super+Shift+Down` | Move window to current ws |
