@@ -124,7 +124,7 @@ func TestFlakeNixUsesIndependentThinMySetupWrapper(t *testing.T) {
 		`nix-index-database = {`,
 		`quickshell = {`,
 		`noctalia = {`,
-		`url = "github:noctalia-dev/noctalia/v5.0.0-beta1";`,
+		`url = "github:noctalia-dev/noctalia/main";`,
 		`noctalia-shell = {`,
 		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
 		`mysetup = {`,
@@ -217,7 +217,7 @@ func TestFlakeNixCarriesBothNoctaliaInputsForV4Selection(t *testing.T) {
 	}
 	for _, want := range []string{
 		`url = "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS";`,
-		`url = "github:noctalia-dev/noctalia/v5.0.0-beta1";`,
+		`url = "github:noctalia-dev/noctalia/main";`,
 		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
 	} {
 		if !strings.Contains(out, want) {
@@ -819,7 +819,7 @@ func TestMigrateGeneratedThinFlakeRemovesOnlyKnownLegacyInputs(t *testing.T) {
 	}
 	for _, want := range []string{
 		`noctalia = {`,
-		`url = "github:noctalia-dev/noctalia/v5.0.0-beta1";`,
+		`url = "github:noctalia-dev/noctalia/main";`,
 		`inputs.noctalia.follows = "noctalia";`,
 		`noctalia-shell = {`,
 		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
@@ -847,7 +847,7 @@ func TestMigrateGeneratedThinFlakeRewritesLegacyNoctaliaV4MySetupURL(t *testing.
 
   inputs = {
     noctalia = {
-      url = "github:noctalia-dev/noctalia/v5.0.0-beta1";
+      url = "github:noctalia-dev/noctalia/main";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -865,7 +865,7 @@ func TestMigrateGeneratedThinFlakeRewritesLegacyNoctaliaV4MySetupURL(t *testing.
 	}
 	for _, want := range []string{
 		`github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS`,
-		`github:noctalia-dev/noctalia/v5.0.0-beta1`,
+		`github:noctalia-dev/noctalia/main`,
 		`github:noctalia-dev/noctalia-shell/v4.7.7`,
 	} {
 		if !strings.Contains(migrated, want) {

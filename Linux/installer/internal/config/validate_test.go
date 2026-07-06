@@ -87,7 +87,7 @@ func TestKnownMySetupFlakeURLsIncludeLegacyStableURL(t *testing.T) {
 }
 
 func TestNoctaliaFlakeURLs(t *testing.T) {
-	if got := NoctaliaV5FlakeURL(); got != "github:noctalia-dev/noctalia/v5.0.0-beta1" {
+	if got := NoctaliaV5FlakeURL(); got != "github:noctalia-dev/noctalia/main" {
 		t.Fatalf("NoctaliaV5FlakeURL() = %q", got)
 	}
 	if got := NoctaliaV4FlakeURL(); got != "github:noctalia-dev/noctalia-shell/v4.7.7" {
