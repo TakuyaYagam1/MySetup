@@ -80,6 +80,97 @@ mysetup_noctalia_msg() {
   "$command_name" msg "$@"
 }
 
+mysetup_noctalia_is_v4() {
+  local command_name
+
+  command_name="$(mysetup_noctalia_command 2>/dev/null || true)"
+  [ "${command_name##*/}" = "noctalia-shell" ]
+}
+
+# v4 (noctalia-shell) uses `msg <target> <function>`; v5 (noctalia) uses a
+# flat hyphenated `msg <command>` vocabulary. Translate stable semantic
+# action names to whichever syntax the running binary understands.
+mysetup_noctalia_action() {
+  local action="$1"
+
+  case "$action" in
+    launcher-toggle)
+      if mysetup_noctalia_is_v4; then
+        mysetup_noctalia_msg launcher toggle
+      else
+        mysetup_noctalia_msg panel-toggle launcher
+      fi
+      ;;
+    session-menu-toggle)
+      if mysetup_noctalia_is_v4; then
+        mysetup_noctalia_msg sessionMenu toggle
+      else
+        mysetup_noctalia_msg panel-toggle session
+      fi
+      ;;
+    control-center-toggle)
+      if mysetup_noctalia_is_v4; then
+        mysetup_noctalia_msg controlCenter toggle
+      else
+        mysetup_noctalia_msg panel-toggle control-center
+      fi
+      ;;
+    notifications-clear)
+      if mysetup_noctalia_is_v4; then
+        mysetup_noctalia_msg notifications dismissAll
+      else
+        mysetup_noctalia_msg notification-clear-active
+      fi
+      ;;
+    settings-toggle)
+      if mysetup_noctalia_is_v4; then
+        mysetup_noctalia_msg settings toggle
+      else
+        mysetup_noctalia_msg settings-toggle
+      fi
+      ;;
+    lock)
+      if mysetup_noctalia_is_v4; then
+        mysetup_noctalia_msg lockScreen lock
+      else
+        mysetup_noctalia_msg session lock
+      fi
+      ;;
+    brightness-up)
+      if mysetup_noctalia_is_v4; then
+        mysetup_noctalia_msg brightness increase
+      else
+        mysetup_noctalia_msg brightness-up
+      fi
+      ;;
+    brightness-down)
+      if mysetup_noctalia_is_v4; then
+        mysetup_noctalia_msg brightness decrease
+      else
+        mysetup_noctalia_msg brightness-down
+      fi
+      ;;
+    clipboard-toggle)
+      if mysetup_noctalia_is_v4; then
+        mysetup_noctalia_msg launcher clipboard
+      else
+        mysetup_noctalia_msg panel-toggle clipboard
+      fi
+      ;;
+    emoji-toggle)
+      if mysetup_noctalia_is_v4; then
+        mysetup_noctalia_msg launcher emoji
+      else
+        mysetup_noctalia_msg panel-toggle launcher /emo
+      fi
+      ;;
+    *)
+      shift
+      mysetup_noctalia_msg "$action" "$@"
+      ;;
+  esac
+}
+
 mysetup_pid_matches() {
   local pid="$1"
   local pattern="$2"
