@@ -7,7 +7,6 @@ hl.on("hyprland.start", function()
 	hl.exec_cmd(
 		"dbus-update-activation-environment --systemd HYPRLAND_INSTANCE_SIGNATURE WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_DATA_DIRS"
 	)
-
 	hl.exec_cmd("gnome-keyring-daemon --start --components=secrets,pkcs11,ssh")
 	hl.exec_cmd("systemctl --user start polkit-gnome-authentication-agent-1")
 
