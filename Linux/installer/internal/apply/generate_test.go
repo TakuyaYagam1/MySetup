@@ -226,6 +226,132 @@ func TestFlakeNixCarriesBothNoctaliaInputsForV4Selection(t *testing.T) {
 	}
 }
 
+func TestFlakeNixOmitsPersonalOnlyAndOptionalInputsForNonPersonalPresets(t *testing.T) {
+	for _, preset := range []string{"minimal", "desktop", "developer"} {
+		t.Run(preset, func(t *testing.T) {
+			state := config.Default()
+			state.Packages.Preset = preset
+			state.Host.Hostname = "workstation"
+
+			out, err := FlakeNix(state, LockModeIndependent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, forbidden := range []string{
+				`claude-code = {`,
+				`inputs.claude-code.follows = "claude-code";`,
+				`codex = {`,
+				`inputs.codex.follows = "codex";`,
+				`lanzaboote = {`,
+				`inputs.lanzaboote.follows = "lanzaboote";`,
+				`zapret-discord-youtube = {`,
+				`inputs.zapret-discord-youtube.follows = "zapret-discord-youtube";`,
+			} {
+				if strings.Contains(out, forbidden) {
+					t.Fatalf("%s preset must not include %q\n%s", preset, forbidden, out)
+				}
+			}
+			for _, want := range []string{
+				`nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";`,
+				`home-manager = {`,
+				`caelestia-shell = {`,
+				`quickshell = {`,
+				`noctalia = {`,
+				`zen-browser = {`,
+				`neovim-nightly-overlay = {`,
+				`stylix = {`,
+				`nix-index-database = {`,
+			} {
+				if !strings.Contains(out, want) {
+					t.Fatalf("%s preset must keep baseline input %q\n%s", preset, want, out)
+				}
+			}
+		})
+	}
+}
+
+func TestFlakeNixIncludesClaudeCodeAndCodexOnlyForPersonalPreset(t *testing.T) {
+	for _, tc := range []struct {
+		preset string
+		want   bool
+	}{
+		{"minimal", false},
+		{"desktop", false},
+		{"developer", false},
+		{"personal", true},
+	} {
+		t.Run(tc.preset, func(t *testing.T) {
+			state := config.Default()
+			state.Packages.Preset = tc.preset
+
+			out, err := FlakeNix(state, LockModeIndependent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := strings.Contains(out, `claude-code = {`) && strings.Contains(out, `codex = {`) &&
+				strings.Contains(out, `inputs.claude-code.follows = "claude-code";`) &&
+				strings.Contains(out, `inputs.codex.follows = "codex";`)
+			if got != tc.want {
+				t.Fatalf("preset %q: claude-code/codex pair present=%v, want=%v\n%s", tc.preset, got, tc.want, out)
+			}
+		})
+	}
+}
+
+func TestFlakeNixIncludesLanzabooteOnlyWhenSecureBootEnabled(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		state := config.Default()
+		state.Features.SecureBoot = enabled
+
+		out, err := FlakeNix(state, LockModeIndependent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := strings.Contains(out, `lanzaboote = {`) && strings.Contains(out, `inputs.lanzaboote.follows = "lanzaboote";`)
+		if got != enabled {
+			t.Fatalf("SecureBoot=%v: lanzaboote present=%v, want=%v\n%s", enabled, got, enabled, out)
+		}
+	}
+}
+
+func TestFlakeNixIncludesZapretDiscordYoutubeOnlyWhenZapretEnabled(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		state := config.Default()
+		state.Zapret.Enable = enabled
+
+		out, err := FlakeNix(state, LockModeIndependent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := strings.Contains(out, `zapret-discord-youtube = {`) &&
+			strings.Contains(out, `inputs.zapret-discord-youtube.follows = "zapret-discord-youtube";`)
+		if got != enabled {
+			t.Fatalf("Zapret.Enable=%v: zapret-discord-youtube present=%v, want=%v\n%s", enabled, got, enabled, out)
+		}
+	}
+}
+
+func TestFlakeNixManagedModeIgnoresPresetAndFeatureToggles(t *testing.T) {
+	state := config.Default()
+	state.Packages.Preset = "personal"
+	state.Features.SecureBoot = true
+	state.Zapret.Enable = true
+	state.Host.Hostname = "workstation"
+
+	out, err := FlakeNix(state, LockModeManaged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{`claude-code`, `codex`, `lanzaboote`, `zapret-discord-youtube`, `nixpkgs.url`} {
+		if strings.Contains(out, forbidden) {
+			t.Fatalf("managed mode must stay a single mysetup input regardless of preset/toggles, found %q\n%s", forbidden, out)
+		}
+	}
+	if !strings.Contains(out, `mysetup.url = "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS";`) {
+		t.Fatalf("managed mode must keep the single mysetup input\n%s", out)
+	}
+}
+
 func TestThinTemplatesExposeSystemAndHomeOverrides(t *testing.T) {
 	if !strings.Contains(ConfigurationNix(), "environment.systemPackages") {
 		t.Fatalf("configuration.nix template must expose system packages\n%s", ConfigurationNix())
@@ -677,7 +803,7 @@ func TestPrepareThinHostLocalPreservesOverridesLockAndSecrets(t *testing.T) {
 		}
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Default(), config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 
@@ -813,7 +939,7 @@ func TestMigrateGeneratedThinFlakeRemovesOnlyKnownLegacyInputs(t *testing.T) {
 }
 `
 
-	migrated, changed := migrateGeneratedThinFlake(old, config.SourceChannelStable)
+	migrated, changed := migrateGeneratedThinFlake(old, config.Default())
 	if !changed {
 		t.Fatal("expected generated thin flake migration to report a change")
 	}
@@ -859,7 +985,7 @@ func TestMigrateGeneratedThinFlakeRewritesLegacyNoctaliaV4MySetupURL(t *testing.
 }
 `
 
-	migrated, changed := migrateGeneratedThinFlake(old, config.SourceChannelStable)
+	migrated, changed := migrateGeneratedThinFlake(old, config.Default())
 	if !changed {
 		t.Fatal("expected generated thin flake migration to rewrite v4-selected wrapper")
 	}
@@ -908,7 +1034,7 @@ func TestMigrateGeneratedThinFlakeUpdatesStaleNoctaliaURLInPlace(t *testing.T) {
 }
 `
 
-	migrated, changed := migrateGeneratedThinFlake(old, config.SourceChannelStable)
+	migrated, changed := migrateGeneratedThinFlake(old, config.Default())
 	if !changed {
 		t.Fatal("expected generated thin flake migration to report a change")
 	}
@@ -920,6 +1046,177 @@ func TestMigrateGeneratedThinFlakeUpdatesStaleNoctaliaURLInPlace(t *testing.T) {
 	}
 	if !strings.Contains(migrated, `url = "github:noctalia-dev/noctalia";`) {
 		t.Fatalf("migrated flake missing updated noctalia url\n%s", migrated)
+	}
+}
+
+func TestMigrateGeneratedThinFlakeRemovesClaudeCodeCodexWhenPresetNoLongerPersonal(t *testing.T) {
+	before := config.Default()
+	before.Packages.Preset = "personal"
+	old, err := FlakeNix(before, LockModeIndependent)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	after := config.Default()
+	after.Packages.Preset = "minimal"
+	migrated, changed := migrateGeneratedThinFlake(old, after)
+	if !changed {
+		t.Fatal("expected migration to report a change when preset drops out of personal")
+	}
+	for _, forbidden := range []string{
+		`claude-code = {`,
+		`inputs.claude-code.follows = "claude-code";`,
+		`codex = {`,
+		`inputs.codex.follows = "codex";`,
+	} {
+		if strings.Contains(migrated, forbidden) {
+			t.Fatalf("migrated flake kept %q after preset dropped out of personal\n%s", forbidden, migrated)
+		}
+	}
+}
+
+func TestMigrateGeneratedThinFlakeAddsClaudeCodeCodexWhenPresetBecomesPersonal(t *testing.T) {
+	before := config.Default()
+	before.Packages.Preset = "minimal"
+	old, err := FlakeNix(before, LockModeIndependent)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	after := config.Default()
+	after.Packages.Preset = "personal"
+	migrated, changed := migrateGeneratedThinFlake(old, after)
+	if !changed {
+		t.Fatal("expected migration to report a change when preset becomes personal")
+	}
+	for _, want := range []string{
+		`claude-code = {`,
+		`inputs.claude-code.follows = "claude-code";`,
+		`codex = {`,
+		`inputs.codex.follows = "codex";`,
+	} {
+		if !strings.Contains(migrated, want) {
+			t.Fatalf("migrated flake missing %q after preset became personal\n%s", want, migrated)
+		}
+	}
+	zenBrowserIdx := strings.Index(migrated, `zen-browser = {`)
+	claudeCodeIdx := strings.Index(migrated, `claude-code = {`)
+	codexIdx := strings.Index(migrated, `codex = {`)
+	neovimIdx := strings.Index(migrated, `neovim-nightly-overlay = {`)
+	if zenBrowserIdx >= claudeCodeIdx || claudeCodeIdx >= codexIdx || codexIdx >= neovimIdx {
+		t.Fatalf("expected claude-code/codex inserted between zen-browser and neovim-nightly-overlay\n%s", migrated)
+	}
+}
+
+func TestMigrateGeneratedThinFlakeAddsAndRemovesLanzabooteWithSecureBootToggle(t *testing.T) {
+	t.Run("off to on", func(t *testing.T) {
+		before := config.Default()
+		before.Features.SecureBoot = false
+		old, err := FlakeNix(before, LockModeIndependent)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		after := config.Default()
+		after.Features.SecureBoot = true
+		migrated, changed := migrateGeneratedThinFlake(old, after)
+		if !changed {
+			t.Fatal("expected migration to report a change when Secure Boot is enabled")
+		}
+		if !strings.Contains(migrated, `lanzaboote = {`) || !strings.Contains(migrated, `inputs.lanzaboote.follows = "lanzaboote";`) {
+			t.Fatalf("migrated flake missing lanzaboote after enabling Secure Boot\n%s", migrated)
+		}
+	})
+
+	t.Run("on to off", func(t *testing.T) {
+		before := config.Default()
+		before.Features.SecureBoot = true
+		old, err := FlakeNix(before, LockModeIndependent)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		after := config.Default()
+		after.Features.SecureBoot = false
+		migrated, changed := migrateGeneratedThinFlake(old, after)
+		if !changed {
+			t.Fatal("expected migration to report a change when Secure Boot is disabled")
+		}
+		if strings.Contains(migrated, `lanzaboote = {`) || strings.Contains(migrated, `inputs.lanzaboote.follows = "lanzaboote";`) {
+			t.Fatalf("migrated flake kept lanzaboote after disabling Secure Boot\n%s", migrated)
+		}
+	})
+}
+
+func TestMigrateGeneratedThinFlakeAddsAndRemovesZapretDiscordYoutubeWithZapretToggle(t *testing.T) {
+	t.Run("off to on", func(t *testing.T) {
+		before := config.Default()
+		before.Zapret.Enable = false
+		old, err := FlakeNix(before, LockModeIndependent)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		after := config.Default()
+		after.Zapret.Enable = true
+		migrated, changed := migrateGeneratedThinFlake(old, after)
+		if !changed {
+			t.Fatal("expected migration to report a change when Zapret is enabled")
+		}
+		if !strings.Contains(migrated, `zapret-discord-youtube = {`) ||
+			!strings.Contains(migrated, `inputs.zapret-discord-youtube.follows = "zapret-discord-youtube";`) {
+			t.Fatalf("migrated flake missing zapret-discord-youtube after enabling Zapret\n%s", migrated)
+		}
+	})
+
+	t.Run("on to off", func(t *testing.T) {
+		before := config.Default()
+		before.Zapret.Enable = true
+		old, err := FlakeNix(before, LockModeIndependent)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		after := config.Default()
+		after.Zapret.Enable = false
+		migrated, changed := migrateGeneratedThinFlake(old, after)
+		if !changed {
+			t.Fatal("expected migration to report a change when Zapret is disabled")
+		}
+		if strings.Contains(migrated, `zapret-discord-youtube = {`) ||
+			strings.Contains(migrated, `inputs.zapret-discord-youtube.follows = "zapret-discord-youtube";`) {
+			t.Fatalf("migrated flake kept zapret-discord-youtube after disabling Zapret\n%s", migrated)
+		}
+	})
+}
+
+func TestMigrateGeneratedThinFlakeIsIdempotentWhenDesiredStateAlreadyMatches(t *testing.T) {
+	state := config.Default()
+	state.Packages.Preset = "personal"
+	state.Features.SecureBoot = true
+	state.Zapret.Enable = true
+
+	old, err := FlakeNix(state, LockModeIndependent)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	firstPass, changed := migrateGeneratedThinFlake(old, state)
+	if changed {
+		t.Fatalf("expected no change migrating a freshly-generated flake against the same state it was generated for\n%s", firstPass)
+	}
+
+	secondPass, changedAgain := migrateGeneratedThinFlake(firstPass, state)
+	if changedAgain {
+		t.Fatalf("expected second migration pass to be a no-op\n%s", secondPass)
+	}
+	if firstPass != secondPass {
+		t.Fatalf("expected repeated migration with unchanged state to be byte-identical\nfirst:\n%s\nsecond:\n%s", firstPass, secondPass)
+	}
+	for _, block := range []string{`claude-code = {`, `codex = {`, `lanzaboote = {`, `zapret-discord-youtube = {`} {
+		if count := strings.Count(secondPass, block); count != 1 {
+			t.Fatalf("expected exactly one %q block after repeated migration, got %d\n%s", block, count, secondPass)
+		}
 	}
 }
 
@@ -968,7 +1265,7 @@ func TestPrepareThinHostLocalPreservesGeneratedThinWrapper(t *testing.T) {
 		}
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Default(), config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1014,7 +1311,7 @@ func TestPrepareThinHostLocalOverwritesFreshNixOSOverrides(t *testing.T) {
 		}
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Default(), config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1048,7 +1345,7 @@ func TestPrepareThinHostLocalPreservesPrivateDefault(t *testing.T) {
 		}
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Default(), config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1076,7 +1373,7 @@ func TestPrepareThinHostLocalRejectsPrivateFile(t *testing.T) {
 		}
 	}
 
-	err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin)
+	err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Default(), config.Secrets{}, LayoutThin)
 	if err == nil || !strings.Contains(err.Error(), "private path is not a directory") {
 		t.Fatalf("expected private file target error, got %v", err)
 	}
@@ -1104,7 +1401,7 @@ func TestPrepareThinHostLocalReplacesLegacyFullFlake(t *testing.T) {
 		}
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Default(), config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1147,7 +1444,7 @@ func TestPrepareThinHostLocalStagesLegacySecretsWhenRootMissing(t *testing.T) {
 		}
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Default(), config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1176,7 +1473,7 @@ func TestCopyThinSecretsFallsBackToSudoRsync(t *testing.T) {
 			return nil
 		},
 	}
-	if err := copyExistingThinHostLocal(context.Background(), fake, staging, dest, config.SourceChannelStable); err != nil {
+	if err := copyExistingThinHostLocal(context.Background(), fake, staging, dest, config.Default()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1348,7 +1645,7 @@ func TestPrepareStagingHostLocalCopiesHardwareAndPreservesStagedLock(t *testing.
 		t.Fatal(err)
 	}
 
-	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutFull); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Default(), config.Secrets{}, LayoutFull); err != nil {
 		t.Fatal(err)
 	}
 	for path, want := range map[string]string{
@@ -1379,7 +1676,7 @@ func TestPrepareStagingHostLocalDryRunDoesNotHashPassword(t *testing.T) {
 	t.Setenv("PATH", bin)
 
 	runner := run.Runner{DryRun: true, Stdout: io.Discard, Stderr: io.Discard}
-	err := prepareStagingHostLocal(context.Background(), runner, staging, dest, config.SourceChannelStable, config.Secrets{UserPassword: "secret"}, LayoutThin)
+	err := prepareStagingHostLocal(context.Background(), runner, staging, dest, config.Default(), config.Secrets{UserPassword: "secret"}, LayoutThin)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1412,7 +1709,7 @@ func TestPrepareStagingHostLocalCopiesPermissionDeniedHashWithSudo(t *testing.T)
 
 	var out bytes.Buffer
 	runner := run.Runner{DryRun: true, Stdout: &out, Stderr: &out}
-	if err := prepareStagingHostLocal(context.Background(), runner, staging, dest, config.SourceChannelStable, config.Secrets{}, LayoutThin); err != nil {
+	if err := prepareStagingHostLocal(context.Background(), runner, staging, dest, config.Default(), config.Secrets{}, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
 

@@ -24,6 +24,8 @@
     description = "Theme / UX knobs consumed across the config.";
   };
 
+  config.home.pointerCursor.enable = true;
+
   config.stylix = {
     enable = true;
 

@@ -131,6 +131,7 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       url = "github:youwen5/zen-browser-flake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+{{ if eq .Packages.Preset "personal" }}
     claude-code = {
       url = "github:sadjow/claude-code-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -139,14 +140,17 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       url = "github:sadjow/codex-cli-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+{{ end }}
     neovim-nightly-overlay = {
       url = "github:nix-community/neovim-nightly-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+{{ if .Features.SecureBoot }}
     lanzaboote = {
       url = "github:nix-community/lanzaboote";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+{{ end }}
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
     nix-snapd = {
       url = "github:nix-community/nix-snapd";
@@ -160,10 +164,12 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+{{ if .Zapret.Enable }}
     zapret-discord-youtube = {
       url = "github:kartavkun/zapret-discord-youtube";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+{{ end }}
     stylix = {
       url = "github:danth/stylix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -181,15 +187,21 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       inputs.noctalia-shell.follows = "noctalia-shell";
       inputs.end4-dotfiles.follows = "end4-dotfiles";
       inputs.zen-browser.follows = "zen-browser";
+{{ if eq .Packages.Preset "personal" }}
       inputs.claude-code.follows = "claude-code";
       inputs.codex.follows = "codex";
+{{ end }}
       inputs.neovim-nightly-overlay.follows = "neovim-nightly-overlay";
+{{ if .Features.SecureBoot }}
       inputs.lanzaboote.follows = "lanzaboote";
+{{ end }}
       inputs.nixos-hardware.follows = "nixos-hardware";
       inputs.nix-snapd.follows = "nix-snapd";
       inputs.sops-nix.follows = "sops-nix";
       inputs.nix-index-database.follows = "nix-index-database";
+{{ if .Zapret.Enable }}
       inputs.zapret-discord-youtube.follows = "zapret-discord-youtube";
+{{ end }}
       inputs.stylix.follows = "stylix";
     };
 {{ else }}

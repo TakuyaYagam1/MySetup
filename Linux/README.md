@@ -223,6 +223,15 @@ group, and individual modules gate behavior with `mysetup.packages.preset`.
 This keeps one host graph while letting `minimal`, `desktop`, `developer`, and
 `personal` evaluate through the same code path.
 
+The generated thin wrapper `flake.nix` (independent lock mode) also scopes its
+own input list to the chosen preset and feature flags: `claude-code`/`codex`
+only appear for the `personal` preset, and `lanzaboote`/`zapret-discord-youtube`
+only appear when Secure Boot / Zapret are enabled. This only affects whether
+`/etc/nixos/flake.lock` independently tracks/updates that dependency - the
+underlying NixOS module always resolves it through MySetup's own lock either
+way, so a `minimal` install never fails to evaluate just because it left an
+input out.
+
 ## Hyprland Lua Runtime
 
 The active Hyprland config is Lua-only and assumes Hyprland 0.55 or newer:
@@ -663,7 +672,11 @@ MySetup source revision. The `stable` channel uses the `main` branch; the
 
 Existing generated thin wrappers migrate to the independent lock shape on the
 next `mysetup apply`; a plain `nix flake update` only changes `flake.lock`, not
-the wrapper `flake.nix` structure.
+the wrapper `flake.nix` structure. The same `mysetup apply` also reconciles
+`claude-code`/`codex`/`lanzaboote`/`zapret-discord-youtube` toward whatever the
+current preset and feature flags call for - changing the package preset or
+toggling Secure Boot/Zapret and re-running the installer adds or removes just
+those input blocks on the existing `flake.nix`.
 
 Garbage collection:
 
