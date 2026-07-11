@@ -38,7 +38,6 @@ type FieldErrors struct {
 	Keyboard      string
 	PackagePreset string
 	GPU           string
-	ZapretConfig  string
 	Monitor       string
 	ExtraMonitors []string
 }
@@ -62,7 +61,6 @@ func (e FieldErrors) Messages() []string {
 		e.Keyboard,
 		e.PackagePreset,
 		e.GPU,
-		e.ZapretConfig,
 		e.Monitor,
 	} {
 		if message != "" {
@@ -167,9 +165,6 @@ func validateEnumFields(state State, errs *FieldErrors) {
 	}
 	if !IsGPUProfile(state.Hardware.GPU) {
 		errs.GPU = "gpu must be amd, intel, nvidia, or other"
-	}
-	if !IsZapretConfig(state.Zapret.Config) {
-		errs.ZapretConfig = "zapret config must be one of the supported upstream presets"
 	}
 }
 

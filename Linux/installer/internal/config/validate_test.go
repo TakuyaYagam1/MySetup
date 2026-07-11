@@ -127,14 +127,6 @@ func TestValidateRejectsBadKeyboardSettings(t *testing.T) {
 	}
 }
 
-func TestValidateRejectsBadZapretConfig(t *testing.T) {
-	state := Default()
-	state.Zapret.Config = "custom untracked preset"
-	if err := Validate(state); err == nil {
-		t.Fatal("expected invalid zapret config error")
-	}
-}
-
 func TestValidateMonitorLine(t *testing.T) {
 	valid := []string{
 		"eDP-1, 2560x1600@120, 0x0, 1",

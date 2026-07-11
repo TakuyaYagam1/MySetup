@@ -202,7 +202,6 @@ Secret files must be regular files, non-symlinks, and not group/world readable.
 - Display: monitor name, mode, position, scale, Hypr keyboard layouts/toggle.
 - Package preset: `personal`, `developer`, `desktop`, or `minimal`.
 - Feature flags: GPU type, Secure Boot, CTF tools, OmniRouter.
-- Services: Zapret enable flag, Zapret config preset.
 - Passwords: Linux user password hash.
 - Dots: Hyprland Lua config, scripts chmod, wallpapers, Zen Browser Catppuccin
   chrome, optional Sine profile, Neovim, v2rayN `sing-box`.
@@ -225,8 +224,8 @@ This keeps one host graph while letting `minimal`, `desktop`, `developer`, and
 
 The generated thin wrapper `flake.nix` (independent lock mode) also scopes its
 own input list to the chosen preset and feature flags: `claude-code`/`codex`
-only appear for the `personal` preset, and `lanzaboote`/`zapret-discord-youtube`
-only appear when Secure Boot / Zapret are enabled. This only affects whether
+only appear for the `personal` preset, and `lanzaboote` only appears when
+Secure Boot is enabled. This only affects whether
 `/etc/nixos/flake.lock` independently tracks/updates that dependency - the
 underlying NixOS module always resolves it through MySetup's own lock either
 way, so a `minimal` install never fails to evaluate just because it left an
@@ -514,7 +513,7 @@ Linux/NixOS/
 ├── programs/                      # system-wide program modules
 │                                  # (dev-tools, fish, hyprland, thunar, …)
 ├── services/                      # databases, observability, sddm,
-│                                  # virtualization, zapret, omnirouter, …
+│                                  # virtualization, omnirouter, …
 ├── system/                        # fonts, hardware, kernel, locale,
 │   │                              # networking, nvidia, packages, settings
 │   └── boot/                      # grub, plymouth, secure boot
@@ -673,10 +672,10 @@ MySetup source revision. The `stable` channel uses the `main` branch; the
 Existing generated thin wrappers migrate to the independent lock shape on the
 next `mysetup apply`; a plain `nix flake update` only changes `flake.lock`, not
 the wrapper `flake.nix` structure. The same `mysetup apply` also reconciles
-`claude-code`/`codex`/`lanzaboote`/`zapret-discord-youtube` toward whatever the
-current preset and feature flags call for - changing the package preset or
-toggling Secure Boot/Zapret and re-running the installer adds or removes just
-those input blocks on the existing `flake.nix`.
+`claude-code`/`codex`/`lanzaboote` toward whatever the current preset and
+feature flags call for - changing the package preset or toggling Secure Boot
+and re-running the installer adds or removes just those input blocks on the
+existing `flake.nix`.
 
 Garbage collection:
 

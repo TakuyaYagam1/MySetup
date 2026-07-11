@@ -1,5 +1,5 @@
 {
-  description = "NixOS + Caelestia-dots + meowrch themes + Flatpak + Snap + Zapret (Kartavkun)";
+  description = "NixOS + Caelestia-dots + meowrch themes + Flatpak + Snap";
 
   inputs = {
     # Core
@@ -76,10 +76,6 @@
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    zapret-discord-youtube = {
-      url = "github:kartavkun/zapret-discord-youtube";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
 
     # Theming
     stylix = {
@@ -94,7 +90,6 @@
       nixpkgs,
       nixpkgs-stable,
       home-manager,
-      zapret-discord-youtube,
       ...
     }@inputs:
     let
@@ -152,7 +147,6 @@
           mysetupLib
           nixpkgs
           nixpkgs-stable
-          zapret-discord-youtube
           ;
         inputs = inputsForModules;
       };

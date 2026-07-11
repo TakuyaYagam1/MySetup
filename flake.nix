@@ -76,10 +76,6 @@
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    zapret-discord-youtube = {
-      url = "github:kartavkun/zapret-discord-youtube";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
 
     stylix = {
       url = "github:danth/stylix";
@@ -185,10 +181,6 @@
               ctfTools = lib.mkDefault false;
               omnirouter = lib.mkDefault false;
               observability = lib.mkDefault false;
-            };
-            zapret = {
-              enable = lib.mkDefault false;
-              config = lib.mkDefault "";
             };
             hypr = {
               keyboardLayouts = lib.mkDefault "us";

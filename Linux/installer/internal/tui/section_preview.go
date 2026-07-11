@@ -93,15 +93,10 @@ func previewPackages(s config.State) []string {
 }
 
 func previewServices(s config.State) []string {
-	settings := [][]string{
+	return previewSettings(
 		previewSetting("OmniRouter", "Builds/enables the local OmniRouter package and module.", formatBool(s.Features.OmniRouter)),
 		previewSetting("Observability", "Enables the localhost Grafana/Prometheus/Loki stack.", formatBool(s.Features.Observability)),
-		previewSetting("Zapret", "Enables the zapret service/config for Discord/YouTube bypass presets.", formatBool(s.Zapret.Enable)),
-	}
-	if shouldShowZapretConfig(s) {
-		settings = append(settings, previewSetting("Zapret config", "Preset selected from the upstream zapret configs.", s.Zapret.Config))
-	}
-	return previewSettings(settings...)
+	)
 }
 
 func previewDots(s config.State) []string {

@@ -99,14 +99,6 @@ let
           };
         };
       };
-      zapret = mkOption {
-        type = types.submodule {
-          options = {
-            enable = boolOption false;
-            config = strOption;
-          };
-        };
-      };
       nix = mkOption {
         type = types.submodule {
           options = {

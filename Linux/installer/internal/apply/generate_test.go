@@ -19,7 +19,6 @@ func TestHostVarsNixContainsFeatureFlags(t *testing.T) {
 	state := config.Default()
 	state.Host.Hostname = "workstation"
 	state.Features.CTFTools = true
-	state.Zapret.Enable = true
 	state.Dots.Wallpapers = true
 	state.Display.MonitorMode = "1920x1080@144"
 
@@ -244,8 +243,6 @@ func TestFlakeNixOmitsPersonalOnlyAndOptionalInputsForNonPersonalPresets(t *test
 				`inputs.codex.follows = "codex";`,
 				`lanzaboote = {`,
 				`inputs.lanzaboote.follows = "lanzaboote";`,
-				`zapret-discord-youtube = {`,
-				`inputs.zapret-discord-youtube.follows = "zapret-discord-youtube";`,
 			} {
 				if strings.Contains(out, forbidden) {
 					t.Fatalf("%s preset must not include %q\n%s", preset, forbidden, out)
@@ -314,35 +311,17 @@ func TestFlakeNixIncludesLanzabooteOnlyWhenSecureBootEnabled(t *testing.T) {
 	}
 }
 
-func TestFlakeNixIncludesZapretDiscordYoutubeOnlyWhenZapretEnabled(t *testing.T) {
-	for _, enabled := range []bool{false, true} {
-		state := config.Default()
-		state.Zapret.Enable = enabled
-
-		out, err := FlakeNix(state, LockModeIndependent)
-		if err != nil {
-			t.Fatal(err)
-		}
-		got := strings.Contains(out, `zapret-discord-youtube = {`) &&
-			strings.Contains(out, `inputs.zapret-discord-youtube.follows = "zapret-discord-youtube";`)
-		if got != enabled {
-			t.Fatalf("Zapret.Enable=%v: zapret-discord-youtube present=%v, want=%v\n%s", enabled, got, enabled, out)
-		}
-	}
-}
-
 func TestFlakeNixManagedModeIgnoresPresetAndFeatureToggles(t *testing.T) {
 	state := config.Default()
 	state.Packages.Preset = "personal"
 	state.Features.SecureBoot = true
-	state.Zapret.Enable = true
 	state.Host.Hostname = "workstation"
 
 	out, err := FlakeNix(state, LockModeManaged)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{`claude-code`, `codex`, `lanzaboote`, `zapret-discord-youtube`, `nixpkgs.url`} {
+	for _, forbidden := range []string{`claude-code`, `codex`, `lanzaboote`, `nixpkgs.url`} {
 		if strings.Contains(out, forbidden) {
 			t.Fatalf("managed mode must stay a single mysetup input regardless of preset/toggles, found %q\n%s", forbidden, out)
 		}
@@ -967,6 +946,77 @@ func TestMigrateGeneratedThinFlakeRemovesOnlyKnownLegacyInputs(t *testing.T) {
 	}
 }
 
+func TestMigrateGeneratedThinFlakeRemovesLegacyZapretDiscordYoutubeInput(t *testing.T) {
+	old := `{
+  description = "Host-local MySetup NixOS wrapper";
+
+  inputs = {
+    quickshell = {
+      url = "github:outfoxxed/quickshell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    noctalia = {
+      url = "github:noctalia-dev/noctalia";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    noctalia-shell = {
+      url = "github:noctalia-dev/noctalia-shell/v4.7.7";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    zapret-discord-youtube = {
+      url = "github:kartavkun/zapret-discord-youtube";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    mysetup = {
+      url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";
+      inputs.noctalia.follows = "noctalia";
+      inputs.noctalia-shell.follows = "noctalia-shell";
+      inputs.zapret-discord-youtube.follows = "zapret-discord-youtube";
+    };
+  };
+
+  outputs = { mysetup, ... }:
+    let
+      hostname = "NixOS";
+    in
+    {
+      nixosConfigurations.${hostname} = mysetup.lib.mkMySetupHost {
+        hostVars = ./host-vars.nix;
+        hardware = ./hardware-configuration.nix;
+        extraModules = [ ./configuration.nix ];
+        homeExtraModules =
+          if builtins.pathExists ./home.nix then [ ./home.nix ] else [ ];
+      };
+    };
+}
+`
+
+	migrated, changed := migrateGeneratedThinFlake(old, config.Default())
+	if !changed {
+		t.Fatal("expected generated thin flake migration to report a change")
+	}
+	for _, forbidden := range []string{
+		`zapret-discord-youtube = {`,
+		`github:kartavkun/zapret-discord-youtube`,
+		`inputs.zapret-discord-youtube.follows`,
+	} {
+		if strings.Contains(migrated, forbidden) {
+			t.Fatalf("migrated flake kept retired zapret-discord-youtube input %q\n%s", forbidden, migrated)
+		}
+	}
+	for _, want := range []string{
+		`noctalia = {`,
+		`inputs.noctalia.follows = "noctalia";`,
+		`noctalia-shell = {`,
+		`inputs.noctalia-shell.follows = "noctalia-shell";`,
+	} {
+		if !strings.Contains(migrated, want) {
+			t.Fatalf("migrated flake lost unrelated input %q\n%s", want, migrated)
+		}
+	}
+}
+
 func TestMigrateGeneratedThinFlakeRewritesLegacyNoctaliaV4MySetupURL(t *testing.T) {
 	old := `{
   description = "Host-local MySetup NixOS wrapper";
@@ -1148,53 +1198,10 @@ func TestMigrateGeneratedThinFlakeAddsAndRemovesLanzabooteWithSecureBootToggle(t
 	})
 }
 
-func TestMigrateGeneratedThinFlakeAddsAndRemovesZapretDiscordYoutubeWithZapretToggle(t *testing.T) {
-	t.Run("off to on", func(t *testing.T) {
-		before := config.Default()
-		before.Zapret.Enable = false
-		old, err := FlakeNix(before, LockModeIndependent)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		after := config.Default()
-		after.Zapret.Enable = true
-		migrated, changed := migrateGeneratedThinFlake(old, after)
-		if !changed {
-			t.Fatal("expected migration to report a change when Zapret is enabled")
-		}
-		if !strings.Contains(migrated, `zapret-discord-youtube = {`) ||
-			!strings.Contains(migrated, `inputs.zapret-discord-youtube.follows = "zapret-discord-youtube";`) {
-			t.Fatalf("migrated flake missing zapret-discord-youtube after enabling Zapret\n%s", migrated)
-		}
-	})
-
-	t.Run("on to off", func(t *testing.T) {
-		before := config.Default()
-		before.Zapret.Enable = true
-		old, err := FlakeNix(before, LockModeIndependent)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		after := config.Default()
-		after.Zapret.Enable = false
-		migrated, changed := migrateGeneratedThinFlake(old, after)
-		if !changed {
-			t.Fatal("expected migration to report a change when Zapret is disabled")
-		}
-		if strings.Contains(migrated, `zapret-discord-youtube = {`) ||
-			strings.Contains(migrated, `inputs.zapret-discord-youtube.follows = "zapret-discord-youtube";`) {
-			t.Fatalf("migrated flake kept zapret-discord-youtube after disabling Zapret\n%s", migrated)
-		}
-	})
-}
-
 func TestMigrateGeneratedThinFlakeIsIdempotentWhenDesiredStateAlreadyMatches(t *testing.T) {
 	state := config.Default()
 	state.Packages.Preset = "personal"
 	state.Features.SecureBoot = true
-	state.Zapret.Enable = true
 
 	old, err := FlakeNix(state, LockModeIndependent)
 	if err != nil {
@@ -1213,7 +1220,7 @@ func TestMigrateGeneratedThinFlakeIsIdempotentWhenDesiredStateAlreadyMatches(t *
 	if firstPass != secondPass {
 		t.Fatalf("expected repeated migration with unchanged state to be byte-identical\nfirst:\n%s\nsecond:\n%s", firstPass, secondPass)
 	}
-	for _, block := range []string{`claude-code = {`, `codex = {`, `lanzaboote = {`, `zapret-discord-youtube = {`} {
+	for _, block := range []string{`claude-code = {`, `codex = {`, `lanzaboote = {`} {
 		if count := strings.Count(secondPass, block); count != 1 {
 			t.Fatalf("expected exactly one %q block after repeated migration, got %d\n%s", block, count, secondPass)
 		}

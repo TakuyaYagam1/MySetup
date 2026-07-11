@@ -739,7 +739,6 @@
         "quickshell": "quickshell",
         "sops-nix": "sops-nix",
         "stylix": "stylix",
-        "zapret-discord-youtube": "zapret-discord-youtube",
         "zen-browser": "zen-browser"
       }
     },
@@ -960,43 +959,6 @@
       "original": {
         "owner": "numtide",
         "repo": "treefmt-nix",
-        "type": "github"
-      }
-    },
-    "zapret-discord-youtube": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "zapret-flowseal": "zapret-flowseal"
-      },
-      "locked": {
-        "lastModified": 1783536375,
-        "narHash": "sha256-8qB9otinSvzVcRMTdXvRsswakFn9YRXdIeHWxlN3qsw=",
-        "owner": "kartavkun",
-        "repo": "zapret-discord-youtube",
-        "rev": "c7bc32aaac5f0671a7c5fe0777b700b109a0217f",
-        "type": "github"
-      },
-      "original": {
-        "owner": "kartavkun",
-        "repo": "zapret-discord-youtube",
-        "type": "github"
-      }
-    },
-    "zapret-flowseal": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1783190817,
-        "narHash": "sha256-8hNSwkVREf+16npV4mYnaNeyb9MGicxwSN9TZnZ9E1A=",
-        "owner": "Flowseal",
-        "repo": "zapret-discord-youtube",
-        "rev": "d75903b44cb7c8e7eedb998c3dd9ff674d10880a",
-        "type": "github"
-      },
-      "original": {
-        "owner": "Flowseal",
-        "repo": "zapret-discord-youtube",
         "type": "github"
       }
     },

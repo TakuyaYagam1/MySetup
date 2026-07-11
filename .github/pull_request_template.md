@@ -8,7 +8,7 @@ PR title MUST follow Conventional Commits:
 Examples:
   feat(installer): add doctor command for nix store check
   fix(hypr/keybinds): correct workspace switcher chord
-  docs(readme): clarify zapret region prompt
+  docs(readme): clarify locale region prompt
 -->
 
 ## What

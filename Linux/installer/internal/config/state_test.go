@@ -98,9 +98,6 @@ func TestDefaultFeatureAndDotsToggles(t *testing.T) {
 	if state.Features.SecureBoot {
 		t.Fatal("secure boot must be disabled by default")
 	}
-	if state.Zapret.Enable {
-		t.Fatal("zapret must be disabled by default")
-	}
 	if !state.Dots.Sine {
 		t.Fatal("sine profile install should be enabled by default")
 	}

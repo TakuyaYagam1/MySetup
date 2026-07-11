@@ -82,7 +82,7 @@ square instead of a circle.
 | Update an already-installed system | `nixos-update` |
 
 The installer asks about: MySetup channel, username/password, package preset, display and
-keyboard layout, Secure Boot, GPU type, locale/timezone, Zapret DPI bypass, CTF tools, and user
+keyboard layout, Secure Boot, GPU type, locale/timezone, CTF tools, and user
 dotfiles. Full flag reference (`--layout`, `--lock-mode`, low-RAM bootstrap, flake module usage
 for external hosts, etc.) is in [Linux/README.md](Linux/README.md).
 

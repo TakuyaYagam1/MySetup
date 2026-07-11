@@ -42,7 +42,6 @@ Secure Boot: %t
 CTF Tools: %t
 OmniRouter: %t
 Observability: %t
-Zapret: %t %s
 Dots: hypr=%t zen=%t sine=%t nvim=%t v2rayN=%t wallpapers=%t
 Passwords: linux-user=%s
 State: %s%s`,
@@ -57,8 +56,6 @@ State: %s%s`,
 		s.Features.CTFTools,
 		s.Features.OmniRouter,
 		s.Features.Observability,
-		s.Zapret.Enable,
-		s.Zapret.Config,
 		s.Dots.Hypr,
 		s.Dots.ZenTheme,
 		s.Dots.Sine,

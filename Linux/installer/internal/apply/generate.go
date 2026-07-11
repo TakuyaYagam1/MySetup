@@ -164,12 +164,6 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-{{ if .Zapret.Enable }}
-    zapret-discord-youtube = {
-      url = "github:kartavkun/zapret-discord-youtube";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-{{ end }}
     stylix = {
       url = "github:danth/stylix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -199,9 +193,6 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       inputs.nix-snapd.follows = "nix-snapd";
       inputs.sops-nix.follows = "sops-nix";
       inputs.nix-index-database.follows = "nix-index-database";
-{{ if .Zapret.Enable }}
-      inputs.zapret-discord-youtube.follows = "zapret-discord-youtube";
-{{ end }}
       inputs.stylix.follows = "stylix";
     };
 {{ else }}
@@ -282,11 +273,6 @@ var hostVarsTemplate = template.Must(template.New("host-vars.nix").Funcs(templat
     ctfTools = {{ nixBool .Features.CTFTools }};
     omnirouter = {{ nixBool .Features.OmniRouter }};
     observability = {{ nixBool .Features.Observability }};
-  };
-
-  zapret = {
-    enable = {{ nixBool .Zapret.Enable }};
-    config = {{ nixString .Zapret.Config }};
   };
 
   nix = {

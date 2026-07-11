@@ -4,7 +4,6 @@
   mysetupLib,
   nixpkgs,
   nixpkgs-stable,
-  zapret-discord-youtube,
 }:
 
 {
@@ -96,7 +95,6 @@ nixpkgs.lib.nixosSystem {
     extraOverlaysModule
 
     inputs.lanzaboote.nixosModules.lanzaboote
-    zapret-discord-youtube.nixosModules.default
     inputs.nix-snapd.nixosModules.default
     inputs.stylix.nixosModules.stylix
     inputs.sops-nix.nixosModules.sops

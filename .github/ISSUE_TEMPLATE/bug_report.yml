@@ -37,7 +37,6 @@ body:
         - NixOS flake / Nix modules
         - Hyprland / WM
         - Shell profile (caelestia / noctalia / end-4)
-        - Zapret / region tools
         - Komorebi / YASB (Windows)
         - Other
     validations:

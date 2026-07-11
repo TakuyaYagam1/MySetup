@@ -45,11 +45,6 @@
     observability = false;
   };
 
-  zapret = {
-    enable = false;
-    config = "general (FAKE_TLS_AUTO_ALT3)";
-  };
-
   nix = {
     gcRetention = "14d";
     maxJobs = 4;

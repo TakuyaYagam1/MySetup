@@ -35,6 +35,18 @@ const (
     };
 `
 
+	// legacyZapretDiscordYoutubeInput/-Follows: zapret-discord-youtube and its
+	// own upstream both went permanently offline; strip this input
+	// unconditionally from any existing generated flake.nix, the same way
+	// legacyTemplInput above retires templ.
+	legacyZapretDiscordYoutubeInput = `    zapret-discord-youtube = {
+      url = "github:kartavkun/zapret-discord-youtube";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+`
+	legacyZapretDiscordYoutubeFollows = `      inputs.zapret-discord-youtube.follows = "zapret-discord-youtube";
+`
+
 	claudeCodeInput = `    claude-code = {
       url = "github:sadjow/claude-code-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -50,19 +62,12 @@ const (
       inputs.nixpkgs.follows = "nixpkgs";
     };
 `
-	zapretDiscordYoutubeInput = `    zapret-discord-youtube = {
-      url = "github:kartavkun/zapret-discord-youtube";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-`
 
 	claudeCodeFollows = `      inputs.claude-code.follows = "claude-code";
 `
 	codexFollows = `      inputs.codex.follows = "codex";
 `
 	lanzabooteFollows = `      inputs.lanzaboote.follows = "lanzaboote";
-`
-	zapretDiscordYoutubeFollows = `      inputs.zapret-discord-youtube.follows = "zapret-discord-youtube";
 `
 
 	// Anchors: stable, always-present input/follows blocks that the
@@ -77,16 +82,9 @@ const (
       inputs.nixpkgs.follows = "nixpkgs";
     };
 `
-	nixIndexDatabaseInputAnchor = `    nix-index-database = {
-      url = "github:nix-community/nix-index-database";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-`
 	zenBrowserFollowsAnchor = `      inputs.zen-browser.follows = "zen-browser";
 `
 	neovimNightlyOverlayFollowsAnchor = `      inputs.neovim-nightly-overlay.follows = "neovim-nightly-overlay";
-`
-	nixIndexDatabaseFollowsAnchor = `      inputs.nix-index-database.follows = "nix-index-database";
 `
 )
 
@@ -110,14 +108,12 @@ func insertAfterFirst(text, anchor, insert string) string {
 type desiredFlakeInputs struct {
 	Personal   bool // claude-code + codex, as a pair
 	SecureBoot bool // lanzaboote
-	Zapret     bool // zapret-discord-youtube
 }
 
 func desiredFlakeInputsFromState(s config.State) desiredFlakeInputs {
 	return desiredFlakeInputs{
 		Personal:   s.Packages.Preset == "personal",
 		SecureBoot: s.Features.SecureBoot,
-		Zapret:     s.Zapret.Enable,
 	}
 }
 
@@ -145,6 +141,8 @@ func migrateGeneratedThinFlake(text string, state config.State) (string, bool) {
 	updated = strings.Replace(updated, legacyTemplInput, "", 1)
 	updated = strings.ReplaceAll(updated, `      inputs.templ.follows = "templ";
 `, "")
+	updated = strings.Replace(updated, legacyZapretDiscordYoutubeInput, "", 1)
+	updated = strings.Replace(updated, legacyZapretDiscordYoutubeFollows, "", 1)
 
 	switch {
 	case noctaliaV5InputPattern.MatchString(updated):
@@ -187,7 +185,6 @@ func migrateGeneratedThinFlake(text string, state config.State) (string, bool) {
 	updated = syncOptionalInput(updated, desired.Personal, claudeCodeInput, zenBrowserInputAnchor, claudeCodeFollows, zenBrowserFollowsAnchor)
 	updated = syncOptionalInput(updated, desired.Personal, codexInput, claudeCodeInput, codexFollows, claudeCodeFollows)
 	updated = syncOptionalInput(updated, desired.SecureBoot, lanzabooteInput, neovimNightlyOverlayInputAnchor, lanzabooteFollows, neovimNightlyOverlayFollowsAnchor)
-	updated = syncOptionalInput(updated, desired.Zapret, zapretDiscordYoutubeInput, nixIndexDatabaseInputAnchor, zapretDiscordYoutubeFollows, nixIndexDatabaseFollowsAnchor)
 
 	desiredMySetupURL := config.MySetupFlakeURL(state.Source.Channel)
 	for _, flakeURL := range config.KnownMySetupFlakeURLs() {

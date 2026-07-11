@@ -22,7 +22,6 @@ type State struct {
 	Display       Display  `json:"display"`
 	Hardware      Hardware `json:"hardware"`
 	Features      Features `json:"features"`
-	Zapret        Zapret   `json:"zapret"`
 	Dots          Dots     `json:"dots"`
 	Noctalia      Noctalia `json:"noctalia"`
 }
@@ -109,10 +108,6 @@ type Features struct {
 	OmniRouter    bool `json:"omniRouter"`
 	Observability bool `json:"observability"`
 }
-type Zapret struct {
-	Enable bool   `json:"enable"`
-	Config string `json:"config"`
-}
 type Dots struct {
 	Hypr       bool `json:"hypr"`
 	ZenTheme   bool `json:"zenTheme"`
@@ -169,9 +164,6 @@ func Default() State {
 			GPU: "amd",
 		},
 		Features: Features{},
-		Zapret: Zapret{
-			Config: "general (FAKE_TLS_AUTO_ALT3)",
-		},
 		Dots: Dots{
 			Hypr:       true,
 			ZenTheme:   true,
@@ -367,9 +359,6 @@ func migrateNoctalia(state State, def State) State {
 func migrateFeatures(state State, def State, legacy bool, oldVersion int) State {
 	if state.Hardware.GPU == "" {
 		state.Hardware.GPU = def.Hardware.GPU
-	}
-	if state.Zapret.Config == "" {
-		state.Zapret.Config = def.Zapret.Config
 	}
 	if legacy {
 		state.Dots = def.Dots

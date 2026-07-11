@@ -19,7 +19,6 @@ let
 in
 {
   imports = [
-    ../services/zapret.nix
     ../services/omnirouter.nix
     ../services/observability.nix
   ];

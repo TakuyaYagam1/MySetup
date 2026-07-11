@@ -43,28 +43,6 @@ var KeyboardToggles = []string{
 	"grp:caps_toggle",
 }
 
-var ZapretConfigs = []string{
-	"general",
-	"general (FAKE_TLS_AUTO)",
-	"general (FAKE_TLS_AUTO_ALT)",
-	"general (FAKE_TLS_AUTO_ALT2)",
-	"general (FAKE_TLS_AUTO_ALT3)",
-	"general (SIMPLE FAKE)",
-	"general (SIMPLE FAKE ALT)",
-	"general (SIMPLE_FAKE_ALT2)",
-	"general(ALT)",
-	"general(ALT2)",
-	"general(ALT3)",
-	"general(ALT4)",
-	"general(ALT5)",
-	"general(ALT6)",
-	"general(ALT7)",
-	"general(ALT8)",
-	"general(ALT9)",
-	"general(ALT10)",
-	"general(ALT11)",
-}
-
 func IsSourceChannel(value string) bool {
 	return oneOf(value, SourceChannels...)
 }
@@ -109,8 +87,4 @@ func IsGPUProfile(value string) bool {
 
 func IsKeyboardToggle(value string) bool {
 	return oneOf(value, KeyboardToggles...)
-}
-
-func IsZapretConfig(value string) bool {
-	return oneOf(value, ZapretConfigs...)
 }
