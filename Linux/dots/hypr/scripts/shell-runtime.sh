@@ -199,7 +199,7 @@ mysetup_noctalia_pids() {
 
   {
     pgrep -u "$mysetup_user_name" -x noctalia 2>/dev/null || true
-    pgrep -u "$mysetup_user_name" -f '(^|[ /])\.noctalia-wrapped([[:space:]]|$)' 2>/dev/null || true
+    pgrep -u "$mysetup_user_name" -f '(^|/)noctalia([[:space:]]|$)' 2>/dev/null || true
     pgrep -u "$mysetup_user_name" -f "$mysetup_noctalia_v4_pattern" 2>/dev/null || true
     for pid in $(mysetup_quickshell_pids); do
       if mysetup_pid_has_env_regex "$pid" "$mysetup_noctalia_v4_env_pattern"; then
