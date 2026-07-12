@@ -266,42 +266,12 @@ valid_profile() {
   mysetup_valid_shell_profile "$1"
 }
 
-profile_is_running() {
-  case "$1" in
-    caelestia) is_running "$caelestia_handle" ;;
-    noctalia) is_running "$noctalia_handle" ;;
-    end4) is_running "$end4_handle" ;;
-    *) return 1 ;;
-  esac
-}
-
 log "requested profile=$profile input=${requested_profile:-auto}"
 wait_for_session
 
 previous=""
 if [ -f "$persistent_state_file" ]; then
   previous="$(tr -d '[:space:]' <"$persistent_state_file" 2>/dev/null || true)"
-fi
-
-if [ -z "$requested_profile" ] && [ "$previous" = "$profile" ] && profile_is_running "$profile"; then
-  log "profile=$profile already running for auto request; skipping duplicate start"
-  profile_handle=""
-  case "$profile" in
-    caelestia) profile_handle="$caelestia_handle" ;;
-    noctalia) profile_handle="$noctalia_handle" ;;
-    end4) profile_handle="$end4_handle" ;;
-  esac
-  while IFS= read -r matched_pid; do
-    [ -n "$matched_pid" ] || continue
-    log "  matched pid=$matched_pid started=$(ps -o lstart= -p "$matched_pid" 2>/dev/null || echo unknown) args=$(ps -o args= -p "$matched_pid" 2>/dev/null || echo unknown)"
-  done < <(matching_pids "$profile_handle" | sort -u)
-  stop_inactive_shells "$profile"
-  if [ "$profile" = "end4" ]; then
-    ensure_end4_idle || true
-  else
-    stop_end4_idle
-  fi
-  exit 0
 fi
 
 if ! prepare_profile_or_fallback; then
