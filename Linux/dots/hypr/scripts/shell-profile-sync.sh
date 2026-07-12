@@ -6,7 +6,7 @@ home_manager_files_root() {
   local qs_path resolved root
 
   qs_path="$config_home/quickshell/ii"
-  resolved="$(readlink -f "$qs_path" 2>/dev/null || true)"
+  resolved="$(readlink "$qs_path" 2>/dev/null || true)"
   [ -n "$resolved" ] || return 1
 
   case "$resolved" in
