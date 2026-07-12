@@ -13,6 +13,7 @@ let
     clang-tools
     lld
     gdb
+    musl
   ];
   buildExtraTools = with pkgs; [
     templ
@@ -146,6 +147,7 @@ let
     yq-go
     lazygit
     tldr
+    gh
   ];
   generalExtraTools = with pkgs; [
     mercurial
