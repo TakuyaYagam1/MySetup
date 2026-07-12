@@ -285,6 +285,16 @@ fi
 
 if [ -z "$requested_profile" ] && [ "$previous" = "$profile" ] && profile_is_running "$profile"; then
   log "profile=$profile already running for auto request; skipping duplicate start"
+  profile_handle=""
+  case "$profile" in
+    caelestia) profile_handle="$caelestia_handle" ;;
+    noctalia) profile_handle="$noctalia_handle" ;;
+    end4) profile_handle="$end4_handle" ;;
+  esac
+  while IFS= read -r matched_pid; do
+    [ -n "$matched_pid" ] || continue
+    log "  matched pid=$matched_pid started=$(ps -o lstart= -p "$matched_pid" 2>/dev/null || echo unknown) args=$(ps -o args= -p "$matched_pid" 2>/dev/null || echo unknown)"
+  done < <(matching_pids "$profile_handle" | sort -u)
   stop_inactive_shells "$profile"
   if [ "$profile" = "end4" ]; then
     ensure_end4_idle || true
