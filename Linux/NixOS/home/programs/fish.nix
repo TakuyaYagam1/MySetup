@@ -139,7 +139,7 @@ _:
             return $update_status
         end
 
-        /run/wrappers/bin/sudo /run/current-system/sw/bin/nixos-rebuild switch --impure --flake .#NixOS
+        /run/wrappers/bin/sudo /run/current-system/sw/bin/nixos-rebuild switch --impure --option max-jobs auto --option cores 0 --flake .#NixOS
         set -l rebuild_status $status
         cd "$old_pwd"
         return $rebuild_status
