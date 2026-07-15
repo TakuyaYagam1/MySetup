@@ -255,6 +255,46 @@ Lua bind helpers call `hl.dsp.*` directly. This matters on Hyprland 0.55:
 legacy commands such as `hyprctl dispatch movewindow l` are parsed as Lua and
 will not behave like old hyprlang dispatchers.
 
+### Why everything under `~/.config/hypr/` is read-only
+
+Every file under `~/.config/hypr/` is declared via Home Manager's
+`xdg.configFile`, so it is realized as a symlink into `/nix/store/...` and
+cannot be edited in place. This is not caused by pulling `hyprland/*.lua` from
+a URL - those files already live directly in this repo (`Linux/dots/hypr/`),
+not an external flake input. It's inherent to `xdg.configFile` itself: any
+declared dotfile becomes a read-only store symlink regardless of source, so
+that `nixos-rebuild switch`/`mysetup update` always reproduces the exact same
+config, generations stay rollback-able, and a fresh clone with a cold cache
+still builds. Switching to a plain `cp` at rebuild time would trade that away:
+an unconditional copy silently wipes local edits on every update, while a
+copy-only-if-missing has the opposite problem - your fixes to the shared
+config never reach installs that already have a file at that path.
+
+### Customizing Hyprland without forking the repo
+
+`~/.config/hypr/mysetup/` is the escape hatch: files there are **not**
+Home Manager-managed, so they're real, writable, and survive rebuilds. Create
+whichever ones you need (all optional, loaded via `hl` config, same layout
+`end-4/dots-hyprland` itself uses for its own `custom/` folder):
+
+- `mysetup/env.lua` - loads right after the base `hyprland/env.lua`.
+- `mysetup/execs.lua`, `mysetup/general.lua`, `mysetup/rules.lua`,
+  `mysetup/keybinds.lua` - loaded last, after every default bind in this setup
+  (including the active shell profile's own binds) is already registered.
+
+That last point matters for keybinds specifically: Hyprland does not
+auto-replace a duplicate bind - if you bind an already-used combo again, both
+actions fire. To cleanly override one, `hl.unbind()` it first, then rebind
+([Hyprland Wiki: Binds](https://wiki.hypr.land/Configuring/Basics/Binds/)).
+`mysetup/keybinds.lua` is pre-seeded on first apply with a commented example
+of exactly this - replacing the default AmneziaVPN launcher
+(`SUPER + SHIFT + Q`) with your own program:
+
+```lua
+hl.unbind("SUPER + SHIFT + Q")
+hl.bind("SUPER + SHIFT + Q", hl.dsp.exec_cmd("openvpn --config ~/my.ovpn"))
+```
+
 ## Runtime Shells
 
 Shell selection is runtime-managed after the system is applied. It is no longer

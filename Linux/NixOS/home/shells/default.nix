@@ -105,6 +105,7 @@ let
     "${hyprDir}/shell-launcher.conf"
     "${hyprDir}/shell-keybinds.conf"
     "${hyprDir}/mysetup/hyprland.conf"
+    "${hyprDir}/mysetup/local.lua"
     "${hyprRuntimeDir}/hyprland.conf"
     "${hyprRuntimeDir}/shell-profile.conf"
     "${hyprRuntimeDir}/shell-launcher.conf"
@@ -163,7 +164,7 @@ in
           runtime_dir="${hyprRuntimeDir}"
           active_shell="${activeShellState}"
 
-          $DRY_RUN_CMD mkdir -p "$runtime_dir" "$(dirname "$active_shell")"
+          $DRY_RUN_CMD mkdir -p "$runtime_dir" "$(dirname "$active_shell")" "${hyprDir}/mysetup"
 
           seed_file() {
             local target="$1"
@@ -205,6 +206,24 @@ in
           seed_file "$runtime_dir/shell-keybinds.lua" "${pkgs.writeText "mysetup-shell-keybinds-default" ''
             -- Active shell keybind profile: ${defaultProfile.id}
             require("${defaultProfile.id}.keybinds")
+          ''}"
+
+          seed_file "${hyprDir}/mysetup/keybinds.lua" "${pkgs.writeText "mysetup-hypr-local-keybinds-example" ''
+            -- Your own Hyprland keybind overrides go here. This file is NOT
+            -- managed by Nix/Home Manager - edit it freely, it survives rebuilds
+            -- and `mysetup update`.
+            --
+            -- It loads LAST, after every bind in this setup is already
+            -- registered, so hl.unbind() here actually works. Hyprland does not
+            -- auto-replace a duplicate bind - skip unbind() and both the old and
+            -- the new action fire on the same key.
+            -- Docs: https://wiki.hypr.land/Configuring/Basics/Binds/
+            --
+            -- Example: replace the default AmneziaVPN launcher (SUPER + SHIFT +
+            -- Q) with something else, e.g. OpenVPN:
+            --
+            -- hl.unbind("SUPER + SHIFT + Q")
+            -- hl.bind("SUPER + SHIFT + Q", hl.dsp.exec_cmd("openvpn --config ~/my.ovpn"))
           ''}"
         '';
 

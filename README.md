@@ -25,6 +25,11 @@ Want your own logo on the GRUB/SDDM/Plymouth boot screens instead of the default
 image in `~/.config/mysetup/boot-theme/` - details in
 [Linux/README.md](Linux/README.md#boot-theme).
 
+Want your own Hyprland keybinds/rules/execs without forking the repo? Everything under
+`~/.config/hypr/` is Home Manager-managed and read-only, but `~/.config/hypr/mysetup/` isn't -
+details in
+[Linux/README.md](Linux/README.md#customizing-hyprland-without-forking-the-repo).
+
 Any image works as-is (sizing/format is handled automatically), but if you want the same
 circular, transparent-background look as the built-in default, crop it yourself first with
 [ImageMagick](https://imagemagick.org/):
