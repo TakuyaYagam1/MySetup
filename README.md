@@ -92,6 +92,18 @@ keyboard layout, Secure Boot, GPU type, locale/timezone, CTF tools, and user
 dotfiles. Full flag reference (`--layout`, `--lock-mode`, low-RAM bootstrap, flake module usage
 for external hosts, etc.) is in [Linux/README.md](Linux/README.md).
 
+#### Package presets
+
+Presets are **cumulative** - each tier includes everything below it and adds more on top
+(`minimal` -> `desktop` -> `developer` -> `personal`). Pick by what the machine is for:
+
+| Preset | Boots into | What it adds on top of the tier below | Best for |
+| --- | --- | --- | --- |
+| `minimal` | **Text console only** (no display manager, no Hyprland) | Base system + core CLI/system tools, Wayland libraries/tools, and audio utilities (cava, pavucontrol). **No graphical desktop** - you log in at a TTY. | Servers, VMs, low-spec boxes, or anyone who just wants the CLI base. If you boot to a black screen with a blinking cursor, that is the console login working as intended - type your user and password. |
+| `desktop` | **The graphical Hyprland rice** | SDDM greeter + Hyprland compositor + the three runtime shells, plus everyday GUI apps (Firefox, Zen, Spotify, Telegram, Vesktop, LibreOffice, mpv, Obsidian, file manager, screenshot/calculator/terminal-multiplexer tools) and gaming/portal/font support. | Most people who want the desktop but not a dev or private-workstation load. This is the lowest preset that gives you a graphical session. |
+| `developer` | Same graphical desktop | Developer/API/container tooling: VS Code, API clients (yaak, ngrok), a SQLite TUI, and container extras. | A workstation you also code on, without the full personal app pile. |
+| `personal` | Same graphical desktop | The full private-workstation load: Chrome, extra office suites, Anytype, DBeaver/DataGrip, many editors/IDEs (Cursor, Zed, QtCreator, Android Studio), AI CLIs (claude-code, codex, gemini-cli, ollama, opencode), Flutter/Android tooling, plus games (Lutris, Heroic). | **My own machine, basically.** I built this preset specifically for my personal daily-driver, so it's opinionated and packed with my exact toolset - most people should stick to one of the first three. This is by far the heaviest build; on <16GB RAM keep `max-jobs` low (see the build-cores note above) to avoid OOM during the first build. |
+
 ### Windows
 
 > **Read [Windows/README.md](Windows/README.md) first** - you must update paths in

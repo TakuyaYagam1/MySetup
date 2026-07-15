@@ -206,30 +206,32 @@ Secret files must be regular files, non-symlinks, and not group/world readable.
 - Dots: Hyprland Lua config, scripts chmod, wallpapers, Zen Browser Catppuccin
   chrome, optional Sine profile, Neovim, v2rayN `sing-box`.
 
-Package presets are intentionally coarse:
+Presets are cumulative - each one includes everything below it and adds more
+(`minimal` -> `desktop` -> `developer` -> `personal`). The full per-tier
+breakdown is in the [root README](../README.md#package-presets); in short:
 
-- `personal`: full private workstation profile, including desktop apps, dev
-  stacks, proxy/VPN tools, Wine, games, containers, virtualization, and optional
-  CTF tooling.
-- `developer`: desktop apps plus developer/API/container tooling, without the
-  personal gaming/proxy/Wine layer.
-- `desktop`: browser, chat, office, media, shell/Wayland essentials, and common
-  desktop utilities.
-- `minimal`: shell/Wayland essentials and core CLI/system tools only.
+- `minimal`: console only. Core CLI/system tools plus Wayland libraries, but
+  **no display manager and no Hyprland desktop** - you log in at a text TTY. If
+  you picked this and hit a black screen with a blinking cursor, that is the
+  console login working, not a bug.
+- `desktop`: the first preset with a graphical session. Adds the SDDM login
+  screen, Hyprland, the runtime shells, and everyday GUI apps (browser, chat,
+  office, media, file manager).
+- `developer`: `desktop` plus developer/API/container tooling (VS Code, API
+  clients).
+- `personal`: `developer` plus the full private-workstation load - extra apps,
+  IDEs, AI CLIs, and games. This is the heaviest build.
 
-Implementation note: `hosts/NixOS/default.nix` imports the full local module
-group, and individual modules gate behavior with `mysetup.packages.preset`.
-This keeps one host graph while letting `minimal`, `desktop`, `developer`, and
-`personal` evaluate through the same code path.
+How it works under the hood: `hosts/NixOS/default.nix` imports every local
+module, and each module turns itself on or off based on `mysetup.packages.preset`.
+That way all four presets run through the same code path.
 
-The generated thin wrapper `flake.nix` (independent lock mode) also scopes its
-own input list to the chosen preset and feature flags: `claude-code`/`codex`
-only appear for the `personal` preset, and `lanzaboote` only appears when
-Secure Boot is enabled. This only affects whether
-`/etc/nixos/flake.lock` independently tracks/updates that dependency - the
-underlying NixOS module always resolves it through MySetup's own lock either
-way, so a `minimal` install never fails to evaluate just because it left an
-input out.
+The generated wrapper `flake.nix` (independent lock mode) also trims its own
+input list to match the preset and feature flags: `claude-code`/`codex` appear
+only for `personal`, and `lanzaboote` only when Secure Boot is on. This just
+controls whether `/etc/nixos/flake.lock` tracks that input directly - the
+NixOS module always resolves it through MySetup's own lock either way, so a
+`minimal` install never fails to build just because an input was left out.
 
 ## Hyprland Lua Runtime
 
@@ -257,18 +259,19 @@ will not behave like old hyprlang dispatchers.
 
 ### Why everything under `~/.config/hypr/` is read-only
 
-Every file under `~/.config/hypr/` is declared via Home Manager's
-`xdg.configFile`, so it is realized as a symlink into `/nix/store/...` and
-cannot be edited in place. This is not caused by pulling `hyprland/*.lua` from
-a URL - those files already live directly in this repo (`Linux/dots/hypr/`),
-not an external flake input. It's inherent to `xdg.configFile` itself: any
-declared dotfile becomes a read-only store symlink regardless of source, so
-that `nixos-rebuild switch`/`mysetup update` always reproduces the exact same
-config, generations stay rollback-able, and a fresh clone with a cold cache
-still builds. Switching to a plain `cp` at rebuild time would trade that away:
-an unconditional copy silently wipes local edits on every update, while a
-copy-only-if-missing has the opposite problem - your fixes to the shared
-config never reach installs that already have a file at that path.
+Every file under `~/.config/hypr/` is declared through Home Manager's
+`xdg.configFile`, so it becomes a symlink into `/nix/store/...` and can't be
+edited in place. This has nothing to do with where the files come from - the
+`hyprland/*.lua` files already live in this repo (`Linux/dots/hypr/`), not some
+external URL. It is just how `xdg.configFile` works: any declared dotfile turns
+into a read-only store symlink.
+
+That trade-off is on purpose. It means every rebuild reproduces the exact same
+config, you can roll back to any past generation, and a fresh clone always
+builds. A plain `cp` at rebuild time would lose all of that - copying always
+would silently overwrite your edits on each update, and copying only-if-missing
+would mean your fixes to the shared config never reach machines that already
+have that file.
 
 ### Customizing Hyprland without forking the repo
 
