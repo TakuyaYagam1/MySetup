@@ -26,6 +26,7 @@
   ];
   personal = with pkgs; [
     google-chrome
+    chromium
     wpsoffice
     onlyoffice-desktopeditors
     anytype

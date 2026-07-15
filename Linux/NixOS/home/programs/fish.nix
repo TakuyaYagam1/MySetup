@@ -155,6 +155,29 @@ _:
         set pass $argv[3]
         /run/wrappers/bin/sudo nmcli dev wifi connect "$ssid" password "$pass"
       '';
+
+      # On-demand launchers for the chrome-devtools MCP server. The debug port is a
+      # live credential (full control of the profile's cookies/sessions), so these are
+      # NOT auto-started: the port only exists while the window is open. Port defaults
+      # to 9222 to match the MCP --browser-url; override with CHROME_DEBUG_PORT if the
+      # MCP is pinned elsewhere. Isolated --user-data-dir is mandatory - Chrome >=136
+      # ignores --remote-debugging-port on the default profile. The port binds to
+      # loopback by default; never add --remote-debugging-address.
+      chrome-debug = ''
+        set -l port 9222
+        set -q CHROME_DEBUG_PORT; and set port $CHROME_DEBUG_PORT
+        google-chrome-stable \
+            --remote-debugging-port=$port \
+            --user-data-dir="$HOME/.chrome-debug-profile" $argv
+      '';
+
+      chromium-debug = ''
+        set -l port 9222
+        set -q CHROME_DEBUG_PORT; and set port $CHROME_DEBUG_PORT
+        chromium \
+            --remote-debugging-port=$port \
+            --user-data-dir="$HOME/.chromium-debug-profile" $argv
+      '';
     };
   };
 }
