@@ -158,13 +158,15 @@ _:
 
       # On-demand launchers for the chrome-devtools MCP server. The debug port is a
       # live credential (full control of the profile's cookies/sessions), so these are
-      # NOT auto-started: the port only exists while the window is open. Port defaults
-      # to 9222 to match the MCP --browser-url; override with CHROME_DEBUG_PORT if the
-      # MCP is pinned elsewhere. Isolated --user-data-dir is mandatory - Chrome >=136
-      # ignores --remote-debugging-port on the default profile. The port binds to
-      # loopback by default; never add --remote-debugging-address.
+      # NOT auto-started: the port only exists while the window is open. Chromium
+      # defaults to 9222 (matches the MCP's default --browser-url) and Chrome to 9223,
+      # deliberately different so both can run at once without a port/profile-lock
+      # collision - override either with CHROME_DEBUG_PORT if the MCP is pinned
+      # elsewhere. Isolated --user-data-dir is mandatory - Chrome >=136 ignores
+      # --remote-debugging-port on the default profile. The port binds to loopback by
+      # default; never add --remote-debugging-address.
       chrome-debug = ''
-        set -l port 9222
+        set -l port 9223
         set -q CHROME_DEBUG_PORT; and set port $CHROME_DEBUG_PORT
         google-chrome-stable \
             --remote-debugging-port=$port \
