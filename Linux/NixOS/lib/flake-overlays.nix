@@ -16,6 +16,7 @@ let
         neovim = inputs.neovim-nightly-overlay.packages.${system}.default;
         zen-browser = inputs.zen-browser.packages.${system}.default;
         burpsuitepro = prev.callPackage ../pkgs/burpsuitepro.nix { };
+        firefox-legacy = prev.callPackage ../pkgs/firefox-legacy.nix { };
       };
     in
     flakePackages
