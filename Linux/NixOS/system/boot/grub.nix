@@ -23,7 +23,7 @@ let
     installPhase = ''
       mkdir -p $out
       cp -r ./* $out/
-      convert ${grubLogo} -background none -resize 320x320^ -gravity center -extent 320x320 $out/logo.png
+      convert ${grubLogo} -background none -resize 260x260^ -gravity center -extent 260x260 $out/logo.png
     '';
   };
 in
@@ -48,7 +48,7 @@ in
         device = "nodev";
         useOSProber = true;
         configurationLimit = 10;
-        gfxmodeEfi = "auto";
+        gfxmodeEfi = "1920x1080,auto";
         theme = meowrchGrubTheme;
       };
     };
