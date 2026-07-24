@@ -270,7 +270,7 @@ func TestDryBuildSystemInvokesNixosRebuild(t *testing.T) {
 	if got.name != "sudo" {
 		t.Errorf("name = %q; want %q", got.name, "sudo")
 	}
-	wantPrefix := "nixos-rebuild dry-build --impure --flake /tmp/staging#TestHost"
+	wantPrefix := "nixos-rebuild dry-build --impure --flake path:/tmp/staging#TestHost"
 	if !strings.HasPrefix(strings.Join(got.args, " "), wantPrefix) {
 		t.Errorf("args = %q; want prefix %q", strings.Join(got.args, " "), wantPrefix)
 	}

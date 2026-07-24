@@ -89,7 +89,7 @@ func lockStagingFlake(ctx context.Context, runner run.CommandRunner, staging str
 	if lockMode == LockModeManaged {
 		args = append(args, "mysetup")
 	}
-	args = append(args, "--flake", staging)
+	args = append(args, "--flake", "path:"+staging)
 	return runner.Command(ctx, "nix", args...)
 }
 
