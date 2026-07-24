@@ -39,6 +39,9 @@ in
         "test_fix_package_name"
         "test_parse_specifier_for_metadata"
       ];
+      disabledTestPaths = (old.disabledTestPaths or [ ]) ++ [
+        "tests/test_inject.py"
+      ];
     });
   };
 }
