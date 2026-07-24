@@ -25,7 +25,7 @@
       };
 
       "colors-dark" = {
-        alpha = lib.mkForce 0.78;
+        alpha = lib.mkForce 1.0;
       };
 
       key-bindings = {
