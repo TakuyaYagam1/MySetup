@@ -1,0 +1,168 @@
+name: Update Portainer
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Specific Portainer version without leading v (optional)"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 11 * * 1"
+
+jobs:
+  update-portainer:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      FLAKE: ./Linux/NixOS
+      PORTAINER_NIX: Linux/NixOS/services/portainer.nix
+      GITHUB_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31.10.5
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Read current version
+        id: current
+        run: |
+          current="$(grep -oP 'portainer-ce:\K[0-9][^"]*' "$PORTAINER_NIX" | head -1)"
+          echo "version=$current" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve latest release
+        id: release
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="$(
+              curl -fsSL \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: Bearer $GITHUB_TOKEN" \
+                https://api.github.com/repos/portainer/portainer/releases/latest \
+                | jq -r '.tag_name'
+            )"
+          fi
+          version="${version#v}"
+
+          if [ -z "$version" ] || [ "$version" = "null" ]; then
+            echo "::error::Failed to resolve latest Portainer release"
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Compare versions
+        id: compare
+        run: |
+          current="${{ steps.current.outputs.version }}"
+          target="${{ steps.release.outputs.version }}"
+          manual="${{ github.event.inputs.version }}"
+
+          if [ "$current" = "$target" ]; then
+            echo "should_update=false" >> "$GITHUB_OUTPUT"
+            echo "Portainer is already on $current"
+            exit 0
+          fi
+
+          if [ -n "$manual" ]; then
+            echo "should_update=true" >> "$GITHUB_OUTPUT"
+            echo "Manual update requested: $current -> $target"
+            exit 0
+          fi
+
+          newest="$(printf '%s\n%s\n' "$current" "$target" | sort -V | tail -1)"
+          if [ "$newest" != "$target" ]; then
+            echo "should_update=false" >> "$GITHUB_OUTPUT"
+            echo "Latest GitHub release $target is not newer than packaged $current; skipping downgrade."
+            exit 0
+          fi
+
+          echo "should_update=true" >> "$GITHUB_OUTPUT"
+          echo "Updating Portainer: $current -> $target"
+
+      - name: Verify Docker Hub image tag exists
+        id: image
+        if: steps.compare.outputs.should_update == 'true'
+        run: |
+          version="${{ steps.release.outputs.version }}"
+          status="$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://hub.docker.com/v2/repositories/portainer/portainer-ce/tags/${version}")"
+
+          if [ "$status" != "200" ]; then
+            echo "::error::portainer/portainer-ce:${version} not found on Docker Hub (HTTP ${status}) - GitHub released before the image was published, skipping."
+            exit 1
+          fi
+
+          echo "GitHub release ${version} has a matching Docker Hub image tag"
+
+      - name: Patch image tag
+        if: steps.compare.outputs.should_update == 'true'
+        run: |
+          sed -i 's|portainer-ce:[^"]*|portainer-ce:${{ steps.release.outputs.version }}|' "$PORTAINER_NIX"
+
+      - name: Verify module evaluates with the new tag
+        if: steps.compare.outputs.should_update == 'true'
+        run: |
+          got="$(nix eval --impure --raw --no-write-lock-file --expr '
+            let
+              f = builtins.getFlake "path:'"$PWD"'?dir=Linux/NixOS";
+              lib = f.inputs.nixpkgs.lib;
+              system = f.nixosConfigurations.NixOS.extendModules {
+                modules = [{ mysetup.features.portainer = lib.mkForce true; }];
+              };
+            in system.config.virtualisation.oci-containers.containers.portainer.image
+          ')"
+
+          want="portainer/portainer-ce:${{ steps.release.outputs.version }}"
+          if [ "$got" != "$want" ]; then
+            echo "::error::Expected container image '$want', evaluated '$got'"
+            exit 1
+          fi
+
+          echo "Module evaluates cleanly: $got"
+
+      - name: Create pull request
+        id: cpr
+        if: steps.compare.outputs.should_update == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(nix): update portainer"
+          branch: "update-portainer"
+          delete-branch: true
+          add-paths: |
+            Linux/NixOS/services/portainer.nix
+          title: "chore(nix): update portainer to ${{ steps.release.outputs.version }}"
+          body: |
+            ## What
+
+            Bumps the pinned `portainer/portainer-ce` image tag to `${{ steps.release.outputs.version }}`.
+
+            ## Why
+
+            Keeps the deployed Portainer release current. Verified the Docker Hub tag exists before opening this PR.
+
+            ## Testing
+
+            - Confirmed `portainer/portainer-ce:${{ steps.release.outputs.version }}` exists on Docker Hub.
+            - `nix eval` with `mysetup.features.portainer` force-enabled resolves the expected image string.
+
+      - name: Merge pull request
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+        run: |
+          if gh pr merge "$PR_NUMBER" --squash --delete-branch; then
+            exit 0
+          fi
+          gh pr merge "$PR_NUMBER" --auto --squash --delete-branch
