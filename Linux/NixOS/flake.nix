@@ -12,7 +12,7 @@
 
     # Shells
     caelestia-shell = {
-      url = "github:caelestia-dots/shell";
+      url = "github:caelestia-dots/shell/v2.2.0";
       inputs = {
         caelestia-cli.follows = "caelestia-cli";
         nixpkgs.follows = "nixpkgs";
@@ -20,7 +20,7 @@
       };
     };
     caelestia-cli = {
-      url = "github:caelestia-dots/cli";
+      url = "github:caelestia-dots/cli/v1.1.2";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     quickshell = {
@@ -28,7 +28,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     noctalia = {
-      url = "github:noctalia-dev/noctalia";
+      url = "github:noctalia-dev/noctalia/v5.0.0-beta.4";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     noctalia-shell = {
