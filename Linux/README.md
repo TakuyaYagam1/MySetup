@@ -201,7 +201,7 @@ Secret files must be regular files, non-symlinks, and not group/world readable.
 - Locale/region fields: timezone, locale, console keymap, weather location.
 - Display: monitor name, mode, position, scale, Hypr keyboard layouts/toggle.
 - Package preset: `personal`, `developer`, `desktop`, or `minimal`.
-- Feature flags: GPU type, Secure Boot, CTF tools, OmniRouter.
+- Feature flags: GPU type, Secure Boot, CTF tools, OmniRouter, Portainer.
 - Passwords: Linux user password hash.
 - Dots: Hyprland Lua config, scripts chmod, wallpapers, Zen Browser Catppuccin
   chrome, optional Sine profile, Neovim, v2rayN `sing-box`.
@@ -556,7 +556,7 @@ Linux/NixOS/
 ├── programs/                      # system-wide program modules
 │                                  # (dev-tools, fish, hyprland, thunar, …)
 ├── services/                      # databases, observability, sddm,
-│                                  # virtualization, omnirouter, …
+│                                  # virtualization, omnirouter, portainer, …
 ├── system/                        # fonts, hardware, kernel, locale,
 │   │                              # networking, nvidia, packages, settings
 │   └── boot/                      # grub, plymouth, secure boot

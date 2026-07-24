@@ -272,6 +272,7 @@ var hostVarsTemplate = template.Must(template.New("host-vars.nix").Funcs(templat
     secureBoot = {{ nixBool .Features.SecureBoot }};
     ctfTools = {{ nixBool .Features.CTFTools }};
     omnirouter = {{ nixBool .Features.OmniRouter }};
+    portainer = {{ nixBool .Features.Portainer }};
     observability = {{ nixBool .Features.Observability }};
   };
 

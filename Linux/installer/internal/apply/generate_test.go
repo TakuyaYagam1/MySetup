@@ -19,6 +19,7 @@ func TestHostVarsNixContainsFeatureFlags(t *testing.T) {
 	state := config.Default()
 	state.Host.Hostname = "workstation"
 	state.Features.CTFTools = true
+	state.Features.Portainer = true
 	state.Dots.Wallpapers = true
 	state.Display.MonitorMode = "1920x1080@144"
 
@@ -34,6 +35,7 @@ func TestHostVarsNixContainsFeatureFlags(t *testing.T) {
 		`noctalia = {`,
 		`version = "v5";`,
 		`ctfTools = true;`,
+		`portainer = true;`,
 		`enable = true;`,
 		`nix = {`,
 		`maxJobs = 1;`,

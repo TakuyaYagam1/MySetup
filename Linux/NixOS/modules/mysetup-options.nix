@@ -95,6 +95,7 @@ let
             secureBoot = boolOption false;
             ctfTools = boolOption false;
             omnirouter = boolOption false;
+            portainer = boolOption false;
             observability = boolOption false;
           };
         };

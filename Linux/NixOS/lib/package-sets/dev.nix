@@ -41,6 +41,7 @@ let
     gofumpt
     govulncheck
     grpcurl
+    vips
   ];
   goExtraTools = with pkgs; [
     air

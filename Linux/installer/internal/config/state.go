@@ -106,6 +106,7 @@ type Features struct {
 	SecureBoot    bool `json:"secureBoot"`
 	CTFTools      bool `json:"ctfTools"`
 	OmniRouter    bool `json:"omniRouter"`
+	Portainer     bool `json:"portainer"`
 	Observability bool `json:"observability"`
 }
 type Dots struct {

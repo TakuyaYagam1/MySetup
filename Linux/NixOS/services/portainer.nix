@@ -1,0 +1,36 @@
+{
+  config,
+  lib,
+  ...
+}:
+let
+  cfg = config.services.portainer;
+in
+{
+  options.services.portainer = {
+    enable = lib.mkEnableOption "Portainer Docker management UI";
+  };
+
+  config = lib.mkIf cfg.enable {
+
+    virtualisation.docker.enable = true;
+
+    virtualisation.oci-containers.backend = "docker";
+
+    systemd.tmpfiles.rules = [
+      "d /var/lib/portainer 0700 root root - -"
+    ];
+
+    virtualisation.oci-containers.containers.portainer = {
+      image = "portainer/portainer-ce:2.39.5";
+      autoStart = true;
+      ports = [
+        "127.0.0.1:9443:9443"
+      ];
+      volumes = [
+        "/var/run/docker.sock:/var/run/docker.sock"
+        "/var/lib/portainer:/data"
+      ];
+    };
+  };
+}

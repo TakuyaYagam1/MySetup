@@ -20,6 +20,7 @@ in
 {
   imports = [
     ../services/omnirouter.nix
+    ../services/portainer.nix
     ../services/observability.nix
   ];
 

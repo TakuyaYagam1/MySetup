@@ -18,6 +18,7 @@ in
     tumbler.enable = desktopOrMore;
     udisks2.enable = desktopOrMore;
     omnirouter.enable = cfg.features.omnirouter;
+    portainer.enable = cfg.features.portainer;
   };
 
   systemd.user.services.nm-applet = lib.mkIf desktopOrMore {

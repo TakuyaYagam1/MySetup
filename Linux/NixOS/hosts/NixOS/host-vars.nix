@@ -42,6 +42,7 @@
     secureBoot = false;
     ctfTools = false;
     omnirouter = false;
+    portainer = false;
     observability = false;
   };
 
