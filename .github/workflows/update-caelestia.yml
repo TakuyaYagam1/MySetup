@@ -1,0 +1,166 @@
+name: Update Caelestia
+
+on:
+  workflow_dispatch:
+    inputs:
+      shellVersion:
+        description: "Specific caelestia-shell version without leading v (optional)"
+        required: false
+        type: string
+      cliVersion:
+        description: "Specific caelestia-cli version without leading v (optional)"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 0 */3 * *"
+
+jobs:
+  update-caelestia:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      FLAKE: ./Linux/NixOS
+      GITHUB_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31.10.5
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Resolve current and latest versions
+        id: resolve
+        run: |
+          resolve_one() {
+            local repo="$1" manual="$2" anchor="$3"
+            local current target
+
+            current="$(grep -oP "url = \"github:${repo}(?=[\"/])\K[^\"]*" flake.nix | sed 's#^/##')"
+
+            if [ -n "$manual" ]; then
+              target="$manual"
+            else
+              target="$(
+                curl -fsSL \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "Authorization: Bearer $GITHUB_TOKEN" \
+                  "https://api.github.com/repos/${repo}/releases/latest" \
+                  | jq -r '.tag_name'
+              )"
+            fi
+            target="${target#v}"
+            [ -n "$current" ] && current="${current#v}"
+
+            if [ -z "$target" ] || [ "$target" = "null" ]; then
+              echo "::error::Failed to resolve latest release for $repo"
+              exit 1
+            fi
+
+            local should=false
+            if [ -z "$current" ]; then
+              should=true
+              echo "$anchor: currently unpinned -> v$target"
+            elif [ "$current" = "$target" ]; then
+              echo "$anchor: already on v$current"
+            elif [ -n "$manual" ]; then
+              should=true
+              echo "$anchor: manual update v$current -> v$target"
+            else
+              local newest
+              newest="$(printf '%s\n%s\n' "$current" "$target" | sort -V | tail -1)"
+              if [ "$newest" = "$target" ]; then
+                should=true
+                echo "$anchor: v$current -> v$target"
+              else
+                echo "$anchor: latest release v$target is not newer than pinned v$current; skipping downgrade."
+              fi
+            fi
+
+            {
+              echo "${anchor}_current=$current"
+              echo "${anchor}_target=$target"
+              echo "${anchor}_should=$should"
+            } >> "$GITHUB_OUTPUT"
+          }
+
+          resolve_one "caelestia-dots/shell" "${{ github.event.inputs.shellVersion }}" "shell"
+          resolve_one "caelestia-dots/cli" "${{ github.event.inputs.cliVersion }}" "cli"
+
+      - name: Compare versions
+        id: compare
+        run: |
+          if [ "${{ steps.resolve.outputs.shell_should }}" = "true" ] || [ "${{ steps.resolve.outputs.cli_should }}" = "true" ]; then
+            echo "should_update=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_update=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Patch flake inputs
+        if: steps.compare.outputs.should_update == 'true'
+        run: |
+          for f in flake.nix Linux/NixOS/flake.nix; do
+            if [ "${{ steps.resolve.outputs.shell_should }}" = "true" ]; then
+              sed -i -E 's|url = "github:caelestia-dots/shell(/[^"]*)?"|url = "github:caelestia-dots/shell/v${{ steps.resolve.outputs.shell_target }}"|' "$f"
+            fi
+            if [ "${{ steps.resolve.outputs.cli_should }}" = "true" ]; then
+              sed -i -E 's|url = "github:caelestia-dots/cli(/[^"]*)?"|url = "github:caelestia-dots/cli/v${{ steps.resolve.outputs.cli_target }}"|' "$f"
+            fi
+          done
+
+      - name: Relock flakes
+        if: steps.compare.outputs.should_update == 'true'
+        run: |
+          nix --extra-experimental-features 'nix-command flakes' flake lock
+          nix --extra-experimental-features 'nix-command flakes' flake lock --flake "$FLAKE"
+
+      - name: Verify both flakes evaluate
+        if: steps.compare.outputs.should_update == 'true'
+        run: |
+          nix --extra-experimental-features 'nix-command flakes' flake check --no-write-lock-file .
+          nix --extra-experimental-features 'nix-command flakes' flake check --no-write-lock-file "$FLAKE"
+
+      - name: Create pull request
+        id: cpr
+        if: steps.compare.outputs.should_update == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(nix): update caelestia"
+          branch: "update-caelestia"
+          delete-branch: true
+          add-paths: |
+            flake.nix
+            flake.lock
+            Linux/NixOS/flake.nix
+            Linux/NixOS/flake.lock
+          title: "chore(nix): update caelestia-shell/cli"
+          body: |
+            ## What
+
+            Pins `caelestia-shell` to `v${{ steps.resolve.outputs.shell_target }}` and `caelestia-cli` to `v${{ steps.resolve.outputs.cli_target }}` (only the ones that actually changed), in both the root flake and `Linux/NixOS`.
+
+            ## Why
+
+            Keeps the deployed Caelestia shell current without every routine `nix flake update` yanking in an unstable `main` commit and forcing a from-scratch local rebuild.
+
+            ## Testing
+
+            - `nix flake check --no-write-lock-file .`
+            - `nix flake check --no-write-lock-file ./Linux/NixOS`
+
+      - name: Merge pull request
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+        run: |
+          if gh pr merge "$PR_NUMBER" --squash --delete-branch; then
+            exit 0
+          fi
+          gh pr merge "$PR_NUMBER" --auto --squash --delete-branch

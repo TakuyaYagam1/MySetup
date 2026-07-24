@@ -1,24 +1,23 @@
-name: Update Portainer
+name: Update Noctalia
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Specific Portainer version without leading v (optional)"
+        description: "Specific noctalia version without leading v (optional)"
         required: false
         type: string
   schedule:
     - cron: "0 0 */3 * *"
 
 jobs:
-  update-portainer:
+  update-noctalia:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
     env:
       FLAKE: ./Linux/NixOS
-      PORTAINER_NIX: Linux/NixOS/services/portainer.nix
       GITHUB_TOKEN: ${{ github.token }}
 
     steps:
@@ -34,7 +33,7 @@ jobs:
       - name: Read current version
         id: current
         run: |
-          current="$(grep -oP 'portainer-ce:\K[0-9][^"]*' "$PORTAINER_NIX" | head -1)"
+          current="$(grep -oP 'url = "github:noctalia-dev/noctalia(?=["/])\K[^"]*' flake.nix | sed 's#^/##;s/^v//')"
           echo "version=$current" >> "$GITHUB_OUTPUT"
 
       - name: Resolve latest release
@@ -47,14 +46,14 @@ jobs:
               curl -fsSL \
                 -H "Accept: application/vnd.github+json" \
                 -H "Authorization: Bearer $GITHUB_TOKEN" \
-                https://api.github.com/repos/portainer/portainer/releases/latest \
+                https://api.github.com/repos/noctalia-dev/noctalia/releases/latest \
                 | jq -r '.tag_name'
             )"
           fi
           version="${version#v}"
 
           if [ -z "$version" ] || [ "$version" = "null" ]; then
-            echo "::error::Failed to resolve latest Portainer release"
+            echo "::error::Failed to resolve latest Noctalia release"
             exit 1
           fi
 
@@ -67,68 +66,52 @@ jobs:
           target="${{ steps.release.outputs.version }}"
           manual="${{ github.event.inputs.version }}"
 
+          if [ -z "$current" ]; then
+            echo "should_update=true" >> "$GITHUB_OUTPUT"
+            echo "Noctalia is currently unpinned -> v$target"
+            exit 0
+          fi
+
           if [ "$current" = "$target" ]; then
             echo "should_update=false" >> "$GITHUB_OUTPUT"
-            echo "Portainer is already on $current"
+            echo "Noctalia is already on v$current"
             exit 0
           fi
 
           if [ -n "$manual" ]; then
             echo "should_update=true" >> "$GITHUB_OUTPUT"
-            echo "Manual update requested: $current -> $target"
+            echo "Manual update requested: v$current -> v$target"
             exit 0
           fi
 
           newest="$(printf '%s\n%s\n' "$current" "$target" | sort -V | tail -1)"
           if [ "$newest" != "$target" ]; then
             echo "should_update=false" >> "$GITHUB_OUTPUT"
-            echo "Latest GitHub release $target is not newer than packaged $current; skipping downgrade."
+            echo "Latest release v$target is not newer than pinned v$current; skipping downgrade."
             exit 0
           fi
 
           echo "should_update=true" >> "$GITHUB_OUTPUT"
-          echo "Updating Portainer: $current -> $target"
+          echo "Updating Noctalia: v$current -> v$target"
 
-      - name: Verify Docker Hub image tag exists
-        id: image
+      - name: Patch flake inputs
         if: steps.compare.outputs.should_update == 'true'
         run: |
-          version="${{ steps.release.outputs.version }}"
-          status="$(curl -s -o /dev/null -w '%{http_code}' \
-            "https://hub.docker.com/v2/repositories/portainer/portainer-ce/tags/${version}")"
+          for f in flake.nix Linux/NixOS/flake.nix; do
+            sed -i -E 's|url = "github:noctalia-dev/noctalia(/[^"]*)?"|url = "github:noctalia-dev/noctalia/v${{ steps.release.outputs.version }}"|' "$f"
+          done
 
-          if [ "$status" != "200" ]; then
-            echo "::error::portainer/portainer-ce:${version} not found on Docker Hub (HTTP ${status}) - GitHub released before the image was published, skipping."
-            exit 1
-          fi
-
-          echo "GitHub release ${version} has a matching Docker Hub image tag"
-
-      - name: Patch image tag
+      - name: Relock flakes
         if: steps.compare.outputs.should_update == 'true'
         run: |
-          sed -i 's|portainer-ce:[^"]*|portainer-ce:${{ steps.release.outputs.version }}|' "$PORTAINER_NIX"
+          nix --extra-experimental-features 'nix-command flakes' flake lock
+          nix --extra-experimental-features 'nix-command flakes' flake lock --flake "$FLAKE"
 
-      - name: Verify module evaluates with the new tag
+      - name: Verify both flakes evaluate
         if: steps.compare.outputs.should_update == 'true'
         run: |
-          got="$(nix eval --impure --raw --no-write-lock-file --expr '
-            let
-              f = builtins.getFlake "path:'"$PWD"'?dir=Linux/NixOS";
-              lib = f.inputs.nixpkgs.lib;
-              system = f.nixosConfigurations.NixOS.extendModules {
-                modules = [{ mysetup.features.portainer = lib.mkForce true; }];
-              };
-            in system.config.virtualisation.oci-containers.containers.portainer.image
-          ')"
-
-          want="portainer/portainer-ce:${{ steps.release.outputs.version }}"
-          if [ "$got" != "$want" ]; then
-            echo "::error::Expected container image '$want', evaluated '$got'"
-            exit 1
-          fi
-
-          echo "Module evaluates cleanly: $got"
+          nix --extra-experimental-features 'nix-command flakes' flake check --no-write-lock-file .
+          nix --extra-experimental-features 'nix-command flakes' flake check --no-write-lock-file "$FLAKE"
 
       - name: Create pull request
         id: cpr
@@ -136,25 +119,28 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore(nix): update portainer"
-          branch: "update-portainer"
+          commit-message: "chore(nix): update noctalia"
+          branch: "update-noctalia"
           delete-branch: true
           add-paths: |
-            Linux/NixOS/services/portainer.nix
-          title: "chore(nix): update portainer to ${{ steps.release.outputs.version }}"
+            flake.nix
+            flake.lock
+            Linux/NixOS/flake.nix
+            Linux/NixOS/flake.lock
+          title: "chore(nix): update noctalia to v${{ steps.release.outputs.version }}"
           body: |
             ## What
 
-            Bumps the pinned `portainer/portainer-ce` image tag to `${{ steps.release.outputs.version }}`.
+            Pins `noctalia` to `v${{ steps.release.outputs.version }}`, in both the root flake and `Linux/NixOS`.
 
             ## Why
 
-            Keeps the deployed Portainer release current. Verified the Docker Hub tag exists before opening this PR.
+            Keeps the deployed Noctalia shell current without every routine `nix flake update` yanking in an unstable `main` commit and forcing a from-scratch local rebuild.
 
             ## Testing
 
-            - Confirmed `portainer/portainer-ce:${{ steps.release.outputs.version }}` exists on Docker Hub.
-            - `nix eval` with `mysetup.features.portainer` force-enabled resolves the expected image string.
+            - `nix flake check --no-write-lock-file .`
+            - `nix flake check --no-write-lock-file ./Linux/NixOS`
 
       - name: Merge pull request
         if: steps.cpr.outputs.pull-request-number != ''
