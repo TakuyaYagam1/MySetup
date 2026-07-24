@@ -41,7 +41,7 @@
     code-cursor
     zed-editor-fhs
     qtcreator
-    antigravity
+    antigravity-ide
     gemini-cli
     claude-code
     codex
