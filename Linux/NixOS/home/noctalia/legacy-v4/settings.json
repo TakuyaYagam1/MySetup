@@ -40,10 +40,10 @@
   "bar": {
     "autoHideDelay": 500,
     "autoShowDelay": 150,
-    "backgroundOpacity": 0.8,
+    "backgroundOpacity": 0.85,
     "barType": "floating",
     "capsuleColorKey": "none",
-    "capsuleOpacity": 0.8,
+    "capsuleOpacity": 0.85,
     "contentPadding": 10,
     "density": "spacious",
     "displayMode": "always_visible",
@@ -303,7 +303,7 @@
   },
   "dock": {
     "animationSpeed": 1,
-    "backgroundOpacity": 0.8,
+    "backgroundOpacity": 0.85,
     "colorizeIcons": false,
     "deadOpacity": 0.6,
     "displayMode": "auto_hide",
@@ -343,7 +343,7 @@
     "clockFormat": "hh\\nmm",
     "clockStyle": "custom",
     "compactLockScreen": false,
-    "dimmerOpacity": 0.2,
+    "dimmerOpacity": 0.15,
     "enableBlurBehind": true,
     "enableLockScreenCountdown": true,
     "enableLockScreenMediaControls": false,
@@ -447,7 +447,7 @@
     "disableWallpaper": false
   },
   "notifications": {
-    "backgroundOpacity": 0.8,
+    "backgroundOpacity": 0.85,
     "clearDismissed": true,
     "criticalUrgencyDuration": 15,
     "density": "compact",
@@ -479,7 +479,7 @@
   },
   "osd": {
     "autoHideMs": 2000,
-    "backgroundOpacity": 0.8,
+    "backgroundOpacity": 0.85,
     "enabled": true,
     "enabledTypes": [0, 1, 2],
     "location": "top_right",
@@ -724,7 +724,7 @@
     "fontDefaultScale": 1,
     "fontFixed": "JetBrainsMono Nerd Font",
     "fontFixedScale": 1,
-    "panelBackgroundOpacity": 0.8,
+    "panelBackgroundOpacity": 0.85,
     "panelsAttachedToBar": true,
     "scrollbarAlwaysVisible": true,
     "settingsPanelMode": "window",

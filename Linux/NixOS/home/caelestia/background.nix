@@ -5,15 +5,15 @@ _:
     desktopClock = {
       enabled = true;
       scale = 1.0;
-      position = "top-left";
+      position = "top-right";
       shadow = {
         enabled = true;
-        opacity = 0.8;
+        opacity = 0.85;
         blur = 0.4;
       };
       background = {
         enabled = false;
-        opacity = 0.8;
+        opacity = 0.85;
         blur = true;
       };
       invertColors = false;

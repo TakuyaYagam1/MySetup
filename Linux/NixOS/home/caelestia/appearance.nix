@@ -21,8 +21,8 @@ _:
     spacing.scale = 1;
     transparency = {
       enabled = true;
-      base = 0.8;
-      layers = 0.2;
+      base = 0.85;
+      layers = 0.15;
     };
   };
 

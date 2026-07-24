@@ -35,8 +35,8 @@
     },
     "transparency": {
       "automatic": false,
-      "backgroundTransparency": 0.4,
-      "contentTransparency": 0.4,
+      "backgroundTransparency": 0.15,
+      "contentTransparency": 0.15,
       "enable": true
     },
     "wallpaperTheming": {
@@ -301,7 +301,7 @@
     "pinnedOnStartup": false
   },
   "overlay": {
-    "clickthroughOpacity": 0.4,
+    "clickthroughOpacity": 0.15,
     "darkenScreen": true,
     "floatingImage": {
       "imageSource": "https://media.tenor.com/H5U5bJzj3oAAAAAi/kukuru.gif",
@@ -336,9 +336,9 @@
     },
     "targetRegions": {
       "content": true,
-      "contentRegionOpacity": 0.4,
+      "contentRegionOpacity": 0.15,
       "layers": true,
-      "opacity": 0.4,
+      "opacity": 0.15,
       "selectionPadding": 5,
       "showLabel": false,
       "windows": true
