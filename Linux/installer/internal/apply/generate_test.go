@@ -49,7 +49,7 @@ func TestHostVarsNixContainsFeatureFlags(t *testing.T) {
 		`monitorMode = "1920x1080@144";`,
 		`monitorPosition = "0x0";`,
 		`monitorScale = "1";`,
-		`windowOpacity = "0.8";`,
+		`windowOpacity = "0.85";`,
 		`wallpapers = {`,
 	} {
 		if !strings.Contains(out, want) {

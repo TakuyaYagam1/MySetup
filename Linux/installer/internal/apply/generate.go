@@ -290,7 +290,7 @@ var hostVarsTemplate = template.Must(template.New("host-vars.nix").Funcs(templat
   hypr = {
     keyboardLayouts = {{ nixString .Locale.KeyboardLayouts }};
     keyboardToggle = {{ nixString .Locale.KeyboardToggle }};
-    windowOpacity = "0.8";
+    windowOpacity = "0.85";
   };
 
   display = {

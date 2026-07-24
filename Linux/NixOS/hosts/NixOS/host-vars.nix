@@ -60,7 +60,7 @@
   hypr = {
     keyboardLayouts = "us,ru";
     keyboardToggle = "grp:alt_shift_toggle";
-    windowOpacity = "0.8";
+    windowOpacity = "0.85";
   };
 
   display = {

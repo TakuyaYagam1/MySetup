@@ -76,6 +76,7 @@
     app2unit
     cmatrix
     tmux
+    herdr
     zellij
     drawing
     ksnip
