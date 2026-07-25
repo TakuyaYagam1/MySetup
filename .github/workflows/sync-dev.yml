@@ -53,7 +53,7 @@ jobs:
       - name: Merge sync pull request
         if: steps.diff.outputs.has_diff == 'true'
         run: |
-          if gh pr merge "${{ steps.pr.outputs.number }}" --merge; then
+          if gh pr merge "${{ steps.pr.outputs.number }}" --squash; then
             exit 0
           fi
-          gh pr merge "${{ steps.pr.outputs.number }}" --auto --merge
+          gh pr merge "${{ steps.pr.outputs.number }}" --auto --squash
