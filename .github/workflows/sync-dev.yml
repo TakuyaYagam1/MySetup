@@ -1,0 +1,59 @@
+name: Sync dev with main
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-dev-with-main
+  cancel-in-progress: false
+
+jobs:
+  sync-dev:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check for pending diff
+        id: diff
+        run: |
+          git fetch origin dev main
+          if git diff --quiet origin/dev origin/main; then
+            echo "has_diff=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_diff=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open sync pull request
+        id: pr
+        if: steps.diff.outputs.has_diff == 'true'
+        run: |
+          existing="$(gh pr list --base dev --head main --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            echo "number=$existing" >> "$GITHUB_OUTPUT"
+          else
+            url="$(gh pr create --base dev --head main \
+              --title "chore: sync dev with main" \
+              --body "Automated sync: merges main into dev so dev never falls behind main's CI-driven release bumps (update-flake, update-omnirouter, update-portainer, update-caelestia, update-noctalia).")"
+            echo "number=${url##*/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge sync pull request
+        if: steps.diff.outputs.has_diff == 'true'
+        run: |
+          if gh pr merge "${{ steps.pr.outputs.number }}" --merge; then
+            exit 0
+          fi
+          gh pr merge "${{ steps.pr.outputs.number }}" --auto --merge
