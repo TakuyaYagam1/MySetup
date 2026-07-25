@@ -14,12 +14,6 @@ const (
     };
 `
 
-	currentNoctaliaV5Input = `    noctalia = {
-      url = "github:noctalia-dev/noctalia";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-`
-
 	quickshellInput = `    quickshell = {
       url = "github:outfoxxed/quickshell";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -35,10 +29,6 @@ const (
     };
 `
 
-	// legacyZapretDiscordYoutubeInput/-Follows: zapret-discord-youtube and its
-	// own upstream both went permanently offline; strip this input
-	// unconditionally from any existing generated flake.nix, the same way
-	// legacyTemplInput above retires templ.
 	legacyZapretDiscordYoutubeInput = `    zapret-discord-youtube = {
       url = "github:kartavkun/zapret-discord-youtube";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -70,8 +60,6 @@ const (
 	lanzabooteFollows = `      inputs.lanzaboote.follows = "lanzaboote";
 `
 
-	// Anchors: stable, always-present input/follows blocks that the
-	// optional blocks above get chained after when inserting.
 	zenBrowserInputAnchor = `    zen-browser = {
       url = "github:youwen5/zen-browser-flake";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -88,10 +76,38 @@ const (
 `
 )
 
-// Matches any previously generated noctalia (v5) flake input block regardless
-// of which url/ref it was pinned to, so updating the pin replaces the block
-// in place instead of inserting a second, duplicate "noctalia" attribute.
 var noctaliaV5InputPattern = regexp.MustCompile(`    noctalia = \{\n      url = "[^"\n]*";\n      inputs\.nixpkgs\.follows = "nixpkgs";\n    \};\n`)
+
+func currentNoctaliaV5Input() string {
+	return `    noctalia = {
+      url = "` + config.NoctaliaV5FlakeURL() + `";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+`
+}
+
+func currentCaelestiaShellInput() string {
+	return `    caelestia-shell = {
+      url = "` + config.CaelestiaShellFlakeURL() + `";
+      inputs = {
+        caelestia-cli.follows = "caelestia-cli";
+        nixpkgs.follows = "nixpkgs";
+        quickshell.follows = "quickshell";
+      };
+    };
+`
+}
+
+func currentCaelestiaCliInput() string {
+	return `    caelestia-cli = {
+      url = "` + config.CaelestiaCliFlakeURL() + `";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+`
+}
+
+var caelestiaShellInputPattern = regexp.MustCompile(`    caelestia-shell = \{\n      url = "[^"\n]*";\n      inputs = \{\n        caelestia-cli\.follows = "caelestia-cli";\n        nixpkgs\.follows = "nixpkgs";\n        quickshell\.follows = "quickshell";\n      \};\n    \};\n`)
+var caelestiaCliInputPattern = regexp.MustCompile(`    caelestia-cli = \{\n      url = "[^"\n]*";\n      inputs\.nixpkgs\.follows = "nixpkgs";\n    \};\n`)
 
 func insertAfterFirst(text, anchor, insert string) string {
 	index := strings.Index(text, anchor)
@@ -102,12 +118,9 @@ func insertAfterFirst(text, anchor, insert string) string {
 	return text[:index] + insert + text[index:]
 }
 
-// desiredFlakeInputs mirrors the {{if}} guards in flakeTemplate (generate.go)
-// so migrateGeneratedThinFlake can reconcile an existing wrapper flake.nix
-// toward whatever a fresh generation would produce for the current state.
 type desiredFlakeInputs struct {
-	Personal   bool // claude-code + codex, as a pair
-	SecureBoot bool // lanzaboote
+	Personal   bool
+	SecureBoot bool
 }
 
 func desiredFlakeInputsFromState(s config.State) desiredFlakeInputs {
@@ -117,9 +130,6 @@ func desiredFlakeInputsFromState(s config.State) desiredFlakeInputs {
 	}
 }
 
-// syncOptionalInput inserts inputBlock/followsLine when want is true and
-// they are not already present, or removes them when want is false. It is a
-// no-op when the current text already matches the desired state.
 func syncOptionalInput(text string, want bool, inputBlock, afterInputAnchor, followsLine, afterFollowsAnchor string) string {
 	switch hasInput := strings.Contains(text, inputBlock); {
 	case want && !hasInput:
@@ -146,14 +156,21 @@ func migrateGeneratedThinFlake(text string, state config.State) (string, bool) {
 
 	switch {
 	case noctaliaV5InputPattern.MatchString(updated):
-		updated = noctaliaV5InputPattern.ReplaceAllString(updated, currentNoctaliaV5Input)
+		updated = noctaliaV5InputPattern.ReplaceAllString(updated, currentNoctaliaV5Input())
 	case strings.Contains(updated, legacyNoctaliaV4Input):
-		updated = strings.Replace(updated, legacyNoctaliaV4Input, currentNoctaliaV5Input+legacyNoctaliaV4Input, 1)
+		updated = strings.Replace(updated, legacyNoctaliaV4Input, currentNoctaliaV5Input()+legacyNoctaliaV4Input, 1)
 	default:
-		updated = insertAfterFirst(updated, quickshellInput, currentNoctaliaV5Input)
+		updated = insertAfterFirst(updated, quickshellInput, currentNoctaliaV5Input())
 	}
 	if !strings.Contains(updated, legacyNoctaliaV4Input) {
-		updated = insertAfterFirst(updated, currentNoctaliaV5Input, legacyNoctaliaV4Input)
+		updated = insertAfterFirst(updated, currentNoctaliaV5Input(), legacyNoctaliaV4Input)
+	}
+
+	if caelestiaShellInputPattern.MatchString(updated) {
+		updated = caelestiaShellInputPattern.ReplaceAllString(updated, currentCaelestiaShellInput())
+	}
+	if caelestiaCliInputPattern.MatchString(updated) {
+		updated = caelestiaCliInputPattern.ReplaceAllString(updated, currentCaelestiaCliInput())
 	}
 
 	if !strings.Contains(updated, `      inputs.noctalia.follows = "noctalia";`) {

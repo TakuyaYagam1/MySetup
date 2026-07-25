@@ -124,8 +124,12 @@ func TestFlakeNixUsesIndependentThinMySetupWrapper(t *testing.T) {
 		`home-manager = {`,
 		`nix-index-database = {`,
 		`quickshell = {`,
+		`caelestia-shell = {`,
+		`url = "github:caelestia-dots/shell/v2.2.0";`,
+		`caelestia-cli = {`,
+		`url = "github:caelestia-dots/cli/v1.1.2";`,
 		`noctalia = {`,
-		`url = "github:noctalia-dev/noctalia";`,
+		`url = "github:noctalia-dev/noctalia/v5.0.0-beta.4";`,
 		`noctalia-shell = {`,
 		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
 		`mysetup = {`,
@@ -218,7 +222,7 @@ func TestFlakeNixCarriesBothNoctaliaInputsForV4Selection(t *testing.T) {
 	}
 	for _, want := range []string{
 		`url = "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS";`,
-		`url = "github:noctalia-dev/noctalia";`,
+		`url = "github:noctalia-dev/noctalia/v5.0.0-beta.4";`,
 		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
 	} {
 		if !strings.Contains(out, want) {
@@ -926,7 +930,7 @@ func TestMigrateGeneratedThinFlakeRemovesOnlyKnownLegacyInputs(t *testing.T) {
 	}
 	for _, want := range []string{
 		`noctalia = {`,
-		`url = "github:noctalia-dev/noctalia";`,
+		`url = "github:noctalia-dev/noctalia/v5.0.0-beta.4";`,
 		`inputs.noctalia.follows = "noctalia";`,
 		`noctalia-shell = {`,
 		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
@@ -1096,8 +1100,64 @@ func TestMigrateGeneratedThinFlakeUpdatesStaleNoctaliaURLInPlace(t *testing.T) {
 	if strings.Contains(migrated, "v5.0.0-beta1") {
 		t.Fatalf("migrated flake kept stale noctalia pin\n%s", migrated)
 	}
-	if !strings.Contains(migrated, `url = "github:noctalia-dev/noctalia";`) {
+	if !strings.Contains(migrated, `url = "github:noctalia-dev/noctalia/v5.0.0-beta.4";`) {
 		t.Fatalf("migrated flake missing updated noctalia url\n%s", migrated)
+	}
+}
+
+func TestMigrateGeneratedThinFlakeUpdatesStaleCaelestiaURLsInPlace(t *testing.T) {
+	old := `{
+  description = "Host-local MySetup NixOS wrapper";
+
+  inputs = {
+    caelestia-shell = {
+      url = "github:caelestia-dots/shell";
+      inputs = {
+        caelestia-cli.follows = "caelestia-cli";
+        nixpkgs.follows = "nixpkgs";
+        quickshell.follows = "quickshell";
+      };
+    };
+    caelestia-cli = {
+      url = "github:caelestia-dots/cli";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    quickshell = {
+      url = "github:outfoxxed/quickshell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    mysetup = {
+      url = "github:TakuyaYagam1/MySetup?dir=Linux/NixOS";
+      inputs.caelestia-shell.follows = "caelestia-shell";
+      inputs.caelestia-cli.follows = "caelestia-cli";
+    };
+  };
+}
+`
+
+	migrated, changed := migrateGeneratedThinFlake(old, config.Default())
+	if !changed {
+		t.Fatal("expected generated thin flake migration to report a change")
+	}
+	if strings.Count(migrated, "caelestia-shell = {") != 1 || strings.Count(migrated, "caelestia-cli = {") != 1 {
+		t.Fatalf("expected exactly one caelestia-shell and one caelestia-cli input block, got:\n%s", migrated)
+	}
+	for _, want := range []string{
+		`url = "github:caelestia-dots/shell/v2.2.0";`,
+		`url = "github:caelestia-dots/cli/v1.1.2";`,
+	} {
+		if !strings.Contains(migrated, want) {
+			t.Fatalf("migrated flake missing pinned caelestia url %q\n%s", want, migrated)
+		}
+	}
+	for _, forbidden := range []string{
+		`url = "github:caelestia-dots/shell";`,
+		`url = "github:caelestia-dots/cli";`,
+	} {
+		if strings.Contains(migrated, forbidden) {
+			t.Fatalf("migrated flake kept unpinned caelestia url %q\n%s", forbidden, migrated)
+		}
 	}
 }
 

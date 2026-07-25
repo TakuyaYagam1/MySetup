@@ -19,20 +19,24 @@ func HostVarsNix(s config.State) (string, error) {
 
 type flakeTemplateData struct {
 	config.State
-	LockMode      LockMode
-	MySetupURL    string
-	NoctaliaV5URL string
-	NoctaliaV4URL string
+	LockMode          LockMode
+	MySetupURL        string
+	NoctaliaV5URL     string
+	NoctaliaV4URL     string
+	CaelestiaShellURL string
+	CaelestiaCliURL   string
 }
 
 func FlakeNix(s config.State, lockMode LockMode) (string, error) {
 	var out bytes.Buffer
 	if err := flakeTemplate.Execute(&out, flakeTemplateData{
-		State:         s,
-		LockMode:      lockMode,
-		MySetupURL:    config.MySetupFlakeURL(s.Source.Channel),
-		NoctaliaV5URL: config.NoctaliaV5FlakeURL(),
-		NoctaliaV4URL: config.NoctaliaV4FlakeURL(),
+		State:             s,
+		LockMode:          lockMode,
+		MySetupURL:        config.MySetupFlakeURL(s.Source.Channel),
+		NoctaliaV5URL:     config.NoctaliaV5FlakeURL(),
+		NoctaliaV4URL:     config.NoctaliaV4FlakeURL(),
+		CaelestiaShellURL: config.CaelestiaShellFlakeURL(),
+		CaelestiaCliURL:   config.CaelestiaCliFlakeURL(),
 	}); err != nil {
 		return "", fmt.Errorf("render flake.nix: %w", err)
 	}
@@ -99,7 +103,7 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
     };
 
     caelestia-shell = {
-      url = "github:caelestia-dots/shell";
+      url = {{ nixString .CaelestiaShellURL }};
       inputs = {
         caelestia-cli.follows = "caelestia-cli";
         nixpkgs.follows = "nixpkgs";
@@ -107,7 +111,7 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       };
     };
     caelestia-cli = {
-      url = "github:caelestia-dots/cli";
+      url = {{ nixString .CaelestiaCliURL }};
       inputs.nixpkgs.follows = "nixpkgs";
     };
     quickshell = {

@@ -10,7 +10,6 @@ import (
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
 )
 
-// fakeRunner records hyprctl invocations and returns canned stdout/error.
 type fakeRunner struct {
 	output string
 	err    error

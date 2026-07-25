@@ -1,7 +1,3 @@
-// Package rollback restores /etc/nixos from a backup snapshot produced by
-// `mysetup apply` (named "{dest}.bak.{nano}.{pid}.{attempt}"). It does NOT
-// roll the active system generation - that is `nixos-rebuild switch
-// --rollback` and the user is prompted to run it after a successful restore.
 package rollback
 
 import (
@@ -79,8 +75,6 @@ func Run(ctx context.Context, opts Options) error {
 	return nil
 }
 
-// FindLatest returns the most recently modified `<dest>.bak.*` directory next
-// to dest (in its parent directory). Returns an error when no backup is found.
 func FindLatest(dest string) (string, error) {
 	dir := filepath.Dir(dest)
 	base := filepath.Base(dest)
@@ -108,8 +102,6 @@ func FindLatest(dest string) (string, error) {
 	return candidates[0], nil
 }
 
-// validateBackupPath rejects a `--backup` value that does not look like a
-// sibling backup of dest, to avoid restoring from an unrelated path by accident.
 func validateBackupPath(backup, dest string) error {
 	abs, err := filepath.Abs(backup)
 	if err != nil {

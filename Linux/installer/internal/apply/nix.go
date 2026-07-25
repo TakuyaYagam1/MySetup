@@ -22,10 +22,6 @@ const (
 )
 
 func dryBuildSystem(ctx context.Context, runner run.CommandRunner, flakePath, hostname string) error {
-	// path: forces Nix to treat flakePath as a plain filesystem path instead
-	// of auto-promoting it to a git+file:// ref, which happens whenever a
-	// .git directory (even a broken/unrelated one) exists anywhere above it
-	// - flakePath sits under the user's home/cache dir, where that's common.
 	target := fmt.Sprintf("path:%s#%s", flakePath, hostname)
 	if err := runner.Command(ctx, "sudo", nixosRebuildArgs("dry-build", target)...); err != nil {
 		return err
@@ -59,10 +55,6 @@ func switchSystem(ctx context.Context, runner run.CommandRunner, opts Options) (
 	return true, nil
 }
 
-// nixosRebuildArgs returns the argv passed to `sudo`, beginning with
-// `nixos-rebuild`, so callers can run `runner.Command(ctx, "sudo",
-// nixosRebuildArgs(...)...)`.
-//
 //nolint:misspell // Nix names this option extra-substituters.
 func nixosRebuildArgs(action, target string) []string {
 	return []string{

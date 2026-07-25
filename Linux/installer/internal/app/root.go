@@ -18,12 +18,6 @@ import (
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/tui"
 )
 
-// Version is the release tag injected at build time via:
-//
-//	go build -ldflags "-X github.com/TakuyaYagam1/MySetup/Linux/installer/internal/app.Version=v0.1.0"
-//
-// When unset (the typical `go run`/`go build` case) we fall back to the VCS
-// revision embedded by the toolchain so binaries are still traceable.
 var Version = ""
 
 func resolveVersion() string {

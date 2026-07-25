@@ -13,9 +13,6 @@ import (
 	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
 )
 
-// fakeRunner records every command invocation without spawning processes.
-// Tests inject it through Options.Runner (or directly into helpers) to assert
-// that the orchestration layer issues the expected sequence of calls.
 type fakeRunner struct {
 	dryRun bool
 	calls  []fakeCall
@@ -44,9 +41,6 @@ func (f *fakeRunner) IsDryRun() bool { return f.dryRun }
 
 var _ run.CommandRunner = (*fakeRunner)(nil)
 
-// validState returns a config.State that passes config.Validate. Tests that
-// drive Run through the full pipeline rely on this baseline; per-test tweaks
-// override individual fields.
 func validState() config.State {
 	state := config.Default()
 	state.Host.Hostname = "TestHost"
@@ -91,9 +85,6 @@ func TestStagingBaseDirAvoidsTempBackedCacheAndHome(t *testing.T) {
 	}
 }
 
-// fakeRepo prepares the minimal directory structure paths.ResolveSources
-// expects. Returns the repo root and a destination dir already populated with
-// a stub hardware-configuration.nix so prepareStagingHostLocal does not abort.
 func fakeRepo(t *testing.T) (repo, dest string) {
 	t.Helper()
 	repo = t.TempDir()
@@ -114,8 +105,6 @@ func fakeRepo(t *testing.T) (repo, dest string) {
 	return repo, dest
 }
 
-// commandSummary renders fake.calls as a multi-line string for substring
-// assertions; this keeps tests readable without bringing in a deep diff lib.
 func commandSummary(calls []fakeCall) string {
 	lines := make([]string, 0, len(calls))
 	for _, c := range calls {

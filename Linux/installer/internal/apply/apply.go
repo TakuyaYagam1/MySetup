@@ -24,10 +24,7 @@ type Options struct {
 	SkipSwitch bool
 	Layout     Layout
 	LockMode   LockMode
-	// Runner is the command executor used during apply. When nil, Run falls
-	// back to run.New(DryRun) so production callers keep the prior default
-	// and tests can inject a recorder without spawning real processes.
-	Runner run.CommandRunner
+	Runner     run.CommandRunner
 }
 
 type applyModes struct {

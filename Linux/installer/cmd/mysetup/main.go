@@ -21,9 +21,6 @@ func run() int {
 		fmt.Fprintln(os.Stderr, "embedded shell runtime manifest is broken:", err)
 		return 1
 	}
-	// signal.NotifyContext lets long-running steps (rsync, nixos-rebuild) abort
-	// promptly on Ctrl+C while still letting our defers (RemoveAll on staging,
-	// temp file cleanup) run before exit.
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	if err := app.NewRootCommand().ExecuteContext(ctx); err != nil {

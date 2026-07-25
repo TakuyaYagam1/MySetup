@@ -16,9 +16,6 @@ const (
 	failureTailMaxBytes = 4096
 )
 
-// CommandRunner is the contract callers depend on to execute external
-// processes. Tests can substitute a fake to record invocations or reshape
-// dry-run behaviour without spawning real processes.
 type CommandRunner interface {
 	Command(ctx context.Context, name string, args ...string) error
 	Output(ctx context.Context, name string, args ...string) (string, error)

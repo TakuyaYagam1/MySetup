@@ -168,12 +168,6 @@ func BootstrapActiveShell(home, hyprDir string) string {
 	return DefaultProfile
 }
 
-// End4SourceFromHomeManager locates the Home Manager-managed end4 hypr profile.
-// It first asks the active HM generation gcroot directly; this is stable and
-// independent of how user symlinks under XDG_CONFIG_HOME were resolved or torn
-// down. Falls back to inspecting ~/.config/quickshell/ii via a single Readlink
-// (not EvalSymlinks) so it works even when ii is itself a chain of symlinks
-// landing in an end4-quickshell-patched store output.
 func End4SourceFromHomeManager(configDir string) (string, error) {
 	home := filepath.Dir(configDir)
 	if source, err := end4SourceFromGCRoot(home); err != nil || source != "" {

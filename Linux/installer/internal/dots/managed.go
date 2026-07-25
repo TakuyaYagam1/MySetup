@@ -1,13 +1,7 @@
-// Package dots manages user-facing dotfiles. This file is the orchestrator
-// between hashing (hash.go), tree comparison (compare.go), and marker/backup
-// metadata (marker.go).
 package dots
 
 import "path/filepath"
 
-// managedSourceAlreadyInstalled returns the source-tree hash plus whether the
-// destination already mirrors that source under a managed marker. Callers use
-// the hash to refresh the marker even when the on-disk tree is identical.
 func managedSourceAlreadyInstalled(src, dst, kind string, excludes map[string]bool) (string, bool, error) {
 	sourceHash, err := sourceTreeHash(src, excludes)
 	if err != nil {

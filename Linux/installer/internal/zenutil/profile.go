@@ -1,4 +1,3 @@
-// Package zenutil exposes shared helpers for locating Zen Browser data on disk.
 package zenutil
 
 import (
@@ -7,9 +6,6 @@ import (
 	"strings"
 )
 
-// FindProfile walks Zen's known profile roots and returns a directory that looks
-// like a usable profile. Profile names containing "default" win; otherwise the
-// first directory becomes the fallback. Returns "" when no profile is found.
 func FindProfile(home string) string {
 	for _, base := range []string{
 		filepath.Join(home, ".zen"),
