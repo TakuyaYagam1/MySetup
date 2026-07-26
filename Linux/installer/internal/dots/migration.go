@@ -25,11 +25,18 @@ func migrateLegacyUserPaths(ctx context.Context, runner run.CommandRunner, home 
 		{filepath.Join(configHome, "mysetup"), filepath.Join(configHome, "wahrwelt")},
 		{filepath.Join(configHome, "hypr", "mysetup"), filepath.Join(configHome, "hypr", "wahrwelt")},
 		{filepath.Join(stateHome, "mysetup"), filepath.Join(stateHome, "wahrwelt")},
-		{filepath.Join(cacheHome, "mysetup"), filepath.Join(cacheHome, "wahrwelt")},
 	} {
 		if err := moveLegacyPath(ctx, runner, pair[0], pair[1]); err != nil {
 			return err
 		}
+	}
+	if err := mergeLegacyCache(
+		ctx,
+		runner,
+		filepath.Join(cacheHome, "mysetup"),
+		filepath.Join(cacheHome, "wahrwelt"),
+	); err != nil {
+		return err
 	}
 
 	for _, path := range []string{
@@ -69,4 +76,29 @@ func moveLegacyPath(ctx context.Context, runner run.CommandRunner, oldPath, newP
 		return err
 	}
 	return runner.Command(ctx, "mv", "--", oldPath, newPath)
+}
+
+func mergeLegacyCache(ctx context.Context, runner run.CommandRunner, oldPath, newPath string) error {
+	oldInfo, err := os.Lstat(oldPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	newInfo, err := os.Lstat(newPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return moveLegacyPath(ctx, runner, oldPath, newPath)
+		}
+		return err
+	}
+	if !oldInfo.IsDir() || oldInfo.Mode()&os.ModeSymlink != 0 ||
+		!newInfo.IsDir() || newInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("wahrwelt migration conflict: cache paths must be directories: %s, %s", oldPath, newPath)
+	}
+	if err := runner.Command(ctx, "rsync", "-a", "--ignore-existing", oldPath+"/", newPath+"/"); err != nil {
+		return err
+	}
+	return runner.Command(ctx, "rm", "-rf", "--", oldPath)
 }

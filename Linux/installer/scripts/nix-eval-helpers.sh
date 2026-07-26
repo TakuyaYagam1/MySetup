@@ -43,7 +43,7 @@ eval_hm_simple() {
             modules = [
               ({ ... }: {
                 home.username = \"user\";
-                home.homeDirectory = \"/tmp/mysetup-home\";
+                home.homeDirectory = \"/tmp/wahrwelt-home\";
                 home.stateVersion = \"26.05\";
               })
               (nixosDir + \"/home/shells/default.nix\")

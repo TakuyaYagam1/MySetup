@@ -29,10 +29,30 @@ in
       $DRY_RUN_CMD ${pkgs.coreutils}/bin/mv -- "$old" "$new"
     }
 
+    merge_cache() {
+      old="$1"
+      new="$2"
+
+      if [ ! -e "$old" ] && [ ! -L "$old" ]; then
+        return 0
+      fi
+      if [ ! -e "$new" ] && [ ! -L "$new" ]; then
+        move_tree "$old" "$new"
+        return
+      fi
+      if [ ! -d "$old" ] || [ -L "$old" ] || [ ! -d "$new" ] || [ -L "$new" ]; then
+        echo "Wahrwelt migration conflict: cache paths must be directories: $old, $new" >&2
+        return 1
+      fi
+
+      $DRY_RUN_CMD ${pkgs.rsync}/bin/rsync -a --ignore-existing "$old/" "$new/"
+      $DRY_RUN_CMD ${pkgs.coreutils}/bin/rm -rf -- "$old"
+    }
+
     move_tree "${configHome}/mysetup" "${configHome}/wahrwelt"
     move_tree "${configHome}/hypr/mysetup" "${configHome}/hypr/wahrwelt"
     move_tree "${stateHome}/mysetup" "${stateHome}/wahrwelt"
-    move_tree "${cacheHome}/mysetup" "${cacheHome}/wahrwelt"
+    merge_cache "${cacheHome}/mysetup" "${cacheHome}/wahrwelt"
 
     for old_link in \
       "${configHome}/hypr/lib/mysetup.lua" \
