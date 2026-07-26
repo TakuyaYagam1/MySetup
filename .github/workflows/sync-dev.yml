@@ -4,6 +4,15 @@ on:
   push:
     branches:
       - main
+  workflow_run:
+    workflows:
+      - Update flake inputs
+      - Update OmniRouter
+      - Update Portainer
+      - Update Caelestia
+      - Update Noctalia
+    types:
+      - completed
   workflow_dispatch:
 
 permissions:
@@ -16,6 +25,7 @@ concurrency:
 
 jobs:
   sync-dev:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
