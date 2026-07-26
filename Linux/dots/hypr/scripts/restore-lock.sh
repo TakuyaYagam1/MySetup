@@ -7,7 +7,7 @@ script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 profile="${1:-}"
 
-if ! mysetup_valid_shell_profile "$profile"; then
+if ! wahrwelt_valid_shell_profile "$profile"; then
   printf 'unknown shell profile: %s\n' "${profile:-empty}" >&2
   exit 1
 fi
@@ -20,13 +20,13 @@ wait_for_profile() {
   for _ in $(seq 1 50); do
     case "$profile" in
       caelestia)
-        pgrep -u "$mysetup_user_name" -f "$mysetup_caelestia_pattern" >/dev/null 2>&1 && return 0
+        pgrep -u "$wahrwelt_user_name" -f "$wahrwelt_caelestia_pattern" >/dev/null 2>&1 && return 0
         ;;
       noctalia)
-        mysetup_noctalia_running && return 0
+        wahrwelt_noctalia_running && return 0
         ;;
       end4)
-        pgrep -u "$mysetup_user_name" -f "$mysetup_end4_pattern" >/dev/null 2>&1 && return 0
+        pgrep -u "$wahrwelt_user_name" -f "$wahrwelt_end4_pattern" >/dev/null 2>&1 && return 0
         ;;
     esac
     sleep 0.1
@@ -42,9 +42,9 @@ case "$profile" in
     hyprctl dispatch 'hl.dsp.global("caelestia:lock")' >/dev/null
     ;;
   noctalia)
-    mysetup_noctalia_action lock
+    wahrwelt_noctalia_action lock
     ;;
   end4)
-    hyprlock -c "$mysetup_hypr_runtime_dir/hyprlock.conf"
+    hyprlock -c "$wahrwelt_hypr_runtime_dir/hyprlock.conf"
     ;;
 esac

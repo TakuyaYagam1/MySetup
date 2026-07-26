@@ -171,7 +171,7 @@ func TestWriteHyprRuntimeShellStateSeedsLegacyRuntimeFiles(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(hyprDir, "scripts"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(hyprDir, "mysetup"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(hyprDir, "wahrwelt"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(hyprDir, "caelestia", "keybinds.lua"), []byte("-- binds\n"), 0o644); err != nil {
@@ -180,7 +180,7 @@ func TestWriteHyprRuntimeShellStateSeedsLegacyRuntimeFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(hyprDir, "caelestia", "launcher.lua"), []byte("-- launcher\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "mysetup", "hyprland.lua"), []byte("hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@120\", position = \"0x0\", scale = \"1\" })\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "wahrwelt", "hyprland.lua"), []byte("hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@120\", position = \"0x0\", scale = \"1\" })\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -209,8 +209,8 @@ func TestWriteHyprRuntimeShellStateSeedsLegacyRuntimeFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	entrypointText := string(entrypoint)
-	if !strings.Contains(entrypointText, "mysetup/hyprland.lua") {
-		t.Fatalf("expected legacy entrypoint to source mysetup config\n%s", entrypointText)
+	if !strings.Contains(entrypointText, "wahrwelt/hyprland.lua") {
+		t.Fatalf("expected legacy entrypoint to source wahrwelt config\n%s", entrypointText)
 	}
 	if !strings.Contains(entrypointText, shellruntime.RuntimeFile(home, "shell-profile.lua")) {
 		t.Fatalf("expected legacy entrypoint to source runtime shell profile\n%s", entrypointText)
@@ -312,19 +312,19 @@ func TestWriteHyprRuntimeShellStateBootstrapsEnd4BeforeProfileExists(t *testing.
 func TestWriteHyprRuntimeShellStateDetectsNoctaliaFromEntrypointWhenStateMissing(t *testing.T) {
 	home := t.TempDir()
 	hyprDir := filepath.Join(home, ".config", "hypr")
-	if err := os.MkdirAll(filepath.Join(hyprDir, "mysetup"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(hyprDir, "wahrwelt"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(hyprDir, "noctalia"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "hyprland.lua"), []byte(`dofile("`+filepath.Join(hyprDir, "mysetup", "hyprland.lua")+`")`+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "hyprland.lua"), []byte(`dofile("`+filepath.Join(hyprDir, "wahrwelt", "hyprland.lua")+`")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(hyprDir, "shell-keybinds.lua"), []byte(`require("noctalia.keybinds")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "mysetup", "hyprland.lua"), []byte("hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@120\", position = \"0x0\", scale = \"1\" })\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "wahrwelt", "hyprland.lua"), []byte("hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@120\", position = \"0x0\", scale = \"1\" })\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(hyprDir, "noctalia", "keybinds.lua"), []byte("-- noctalia binds\n"), 0o644); err != nil {

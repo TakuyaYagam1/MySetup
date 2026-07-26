@@ -1,13 +1,13 @@
 {
   lib,
-  mysetup,
+  wahrwelt,
   wahrweltLib,
   pkgs,
   ...
 }:
 
 let
-  developerOrMore = wahrweltLib.presets.developerOrMore mysetup;
+  developerOrMore = wahrweltLib.presets.developerOrMore wahrwelt;
   batchRenameGui = pkgs.yaziPlugins.mkYaziPlugin {
     pname = "batch-rename-gui.yazi";
     version = "0-unstable-2025-07-08";

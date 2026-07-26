@@ -101,7 +101,7 @@ func IsProfile(value string) bool {
 }
 
 func RuntimeDir(home string) string {
-	return filepath.Join(paths.XDGStateHome(home), "mysetup", "hypr-runtime")
+	return filepath.Join(paths.XDGStateHome(home), "wahrwelt", "hypr-runtime")
 }
 
 func RuntimeFile(home, name string) string {
@@ -132,7 +132,8 @@ func DetectShellFromEntrypoint(entrypointPath, keybindsPath string) string {
 	switch {
 	case strings.Contains(text, "end4/hyprland.lua"):
 		return End4
-	case strings.Contains(text, "mysetup/hyprland.lua"):
+	case strings.Contains(text, "wahrwelt/hyprland.lua"),
+		strings.Contains(text, "mysetup/hyprland.lua"):
 		return DetectShellFromKeybinds(keybindsPath)
 	default:
 		return ""
@@ -157,6 +158,9 @@ func DetectShellFromKeybinds(path string) string {
 
 func BootstrapActiveShell(home, hyprDir string) string {
 	if profile := ReadActiveShell(ActiveShellStatePath(home)); profile != "" {
+		return profile
+	}
+	if profile := ReadActiveShell(paths.LegacyActiveShellStatePath(home)); profile != "" {
 		return profile
 	}
 	if profile := DetectShellFromEntrypoint(RuntimeFile(home, "hyprland.lua"), RuntimeFile(home, "shell-keybinds.lua")); profile != "" {

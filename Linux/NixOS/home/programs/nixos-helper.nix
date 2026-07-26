@@ -1,8 +1,8 @@
-{ mysetup, pkgs, ... }:
+{ wahrwelt, pkgs, ... }:
 
 let
-  cfg = mysetup.host.configDirectory;
-  host = mysetup.host.hostname;
+  cfg = wahrwelt.host.configDirectory;
+  host = wahrwelt.host.hostname;
 
   nixy = pkgs.writeShellApplication {
     name = "nixy";

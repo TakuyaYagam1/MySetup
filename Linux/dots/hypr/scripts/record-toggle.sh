@@ -5,7 +5,7 @@ script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=Linux/dots/hypr/scripts/shell-runtime.sh
 . "$script_dir/shell-runtime.sh"
 
-state_dir="${XDG_RUNTIME_DIR:-/tmp}/mysetup-recording"
+state_dir="${XDG_RUNTIME_DIR:-/tmp}/wahrwelt-recording"
 pid_file="$state_dir/gpu-screen-recorder.pid"
 path_file="$state_dir/gpu-screen-recorder.path"
 log_file="$state_dir/gpu-screen-recorder.log"
@@ -63,11 +63,11 @@ stop_recording() {
 mkdir -p "$state_dir" "$record_dir"
 
 acquire_lock() {
-  if ! mysetup_acquire_lock \
+  if ! wahrwelt_acquire_lock \
     "$lock_dir" \
     "$lock_pid_file" \
     "$lock_owner_file" \
-    "mysetup-record-toggle" \
+    "wahrwelt-record-toggle" \
     '(^|[ /])record-toggle\.sh([[:space:]]|$)' \
     2 \
     0.02; then
@@ -94,10 +94,10 @@ if ! command -v gpu-screen-recorder >/dev/null 2>&1; then
   exit 1
 fi
 
-target="${WAHRWELT_RECORD_TARGET:-${MYSETUP_RECORD_TARGET:-$(focused_monitor)}}"
+target="${WAHRWELT_RECORD_TARGET:-${WAHRWELT_RECORD_TARGET:-$(focused_monitor)}}"
 target="${target:-screen}"
-audio="${WAHRWELT_RECORD_AUDIO:-${MYSETUP_RECORD_AUDIO:-default_output}}"
-fps="${WAHRWELT_RECORD_FPS:-${MYSETUP_RECORD_FPS:-60}}"
+audio="${WAHRWELT_RECORD_AUDIO:-${WAHRWELT_RECORD_AUDIO:-default_output}}"
+fps="${WAHRWELT_RECORD_FPS:-${WAHRWELT_RECORD_FPS:-60}}"
 file="$record_dir/recording-$(date +%Y%m%d-%H%M%S).mp4"
 
 gpu-screen-recorder \

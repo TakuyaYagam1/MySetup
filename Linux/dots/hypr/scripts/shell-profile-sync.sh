@@ -86,21 +86,21 @@ write_regular_file() {
 }
 
 runtime_file() {
-  mysetup_runtime_file "$1"
+  wahrwelt_runtime_file "$1"
 }
 
-ensure_mysetup_entrypoint() {
+ensure_wahrwelt_entrypoint() {
   local dir target
 
   dir="$(hypr_dir)"
-  target="$dir/mysetup/hyprland.lua"
+  target="$dir/wahrwelt/hyprland.lua"
 
   if [ -f "$target" ]; then
     return 0
   fi
 
   mkdir -p -- "$(dirname "$target")"
-  log "mysetup hypr entrypoint missing; rebuild or rerun mysetup apply: $target"
+  log "wahrwelt hypr entrypoint missing; rebuild or rerun wahrwelt apply: $target"
   return 1
 }
 
@@ -177,9 +177,9 @@ local end4_root = hypr_root .. \"/end4\"
 package.path = end4_root .. \"/?.lua;\" .. end4_root .. \"/?/init.lua;\" .. hypr_root .. \"/?.lua;\" .. hypr_root .. \"/?/init.lua;\" .. package.path
 dofile(end4_root .. \"/hyprland.lua\")"
   else
-    ensure_mysetup_entrypoint || return 1
-    target="$dir/mysetup/hyprland.lua"
-    label="mysetup ($profile)"
+    ensure_wahrwelt_entrypoint || return 1
+    target="$dir/wahrwelt/hyprland.lua"
+    label="wahrwelt ($profile)"
     content="-- Active Hyprland profile: $label
 local home = os.getenv(\"HOME\")
 if home == nil then
@@ -189,9 +189,9 @@ end
 local config_home = os.getenv(\"XDG_CONFIG_HOME\") or (home .. \"/.config\")
 local state_home = os.getenv(\"XDG_STATE_HOME\") or (home .. \"/.local/state\")
 local hypr_root = config_home .. \"/hypr\"
-local runtime_root = state_home .. \"/mysetup/hypr-runtime\"
+local runtime_root = state_home .. \"/wahrwelt/hypr-runtime\"
 package.path = hypr_root .. \"/?.lua;\" .. hypr_root .. \"/?/init.lua;\" .. package.path
-dofile(hypr_root .. \"/mysetup/hyprland.lua\")
+dofile(hypr_root .. \"/wahrwelt/hyprland.lua\")
 dofile(runtime_root .. \"/shell-profile.lua\")"
   fi
 
@@ -256,7 +256,7 @@ end
 local config_home = os.getenv(\"XDG_CONFIG_HOME\") or (home .. \"/.config\")
 local state_home = os.getenv(\"XDG_STATE_HOME\") or (home .. \"/.local/state\")
 local hypr_root = config_home .. \"/hypr\"
-local runtime_root = state_home .. \"/mysetup/hypr-runtime\"
+local runtime_root = state_home .. \"/wahrwelt/hypr-runtime\"
 package.path = hypr_root .. \"/?.lua;\" .. hypr_root .. \"/?/init.lua;\" .. package.path
 dofile(runtime_root .. \"/hyprland.lua\")"
 
@@ -275,7 +275,7 @@ prune_legacy_hyprland_runtime_files() {
     "$dir/shell-profile.conf" \
     "$dir/shell-launcher.conf" \
     "$dir/shell-keybinds.conf" \
-    "$dir/mysetup/hyprland.conf" \
+    "$dir/wahrwelt/hyprland.conf" \
     "$(runtime_file hyprland.conf)" \
     "$(runtime_file shell-profile.conf)" \
     "$(runtime_file shell-launcher.conf)" \
@@ -341,7 +341,7 @@ validate_profile_ready() {
     noctalia)
       require_file "shell launcher profile" "$dir/noctalia/launcher.lua" || return 1
       require_file "shell keybind profile" "$dir/noctalia/keybinds.lua" || return 1
-      if ! mysetup_noctalia_command >/dev/null; then
+      if ! wahrwelt_noctalia_command >/dev/null; then
         log "noctalia command not found for profile=$profile"
         return 1
       fi

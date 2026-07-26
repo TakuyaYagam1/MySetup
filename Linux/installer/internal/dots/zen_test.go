@@ -127,7 +127,7 @@ func TestSetupZenThemeSkipsWhenSourceAlreadyInstalled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(chrome, ".mysetup-managed.json"), []byte(managedMarkerWithSourceHash("zen-chrome", sourceHash)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(chrome, ".wahrwelt-managed.json"), []byte(managedMarkerWithSourceHash("zen-chrome", sourceHash)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -161,7 +161,7 @@ func TestSetupZenThemeDoesNotBackupManagedChrome(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(chrome, ".mysetup-managed.json"), []byte(managedMarkerWithSourceHash("zen-chrome", sourceHash)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(chrome, ".wahrwelt-managed.json"), []byte(managedMarkerWithSourceHash("zen-chrome", sourceHash)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -187,7 +187,7 @@ func TestSetupZenThemePreservesSineChromeFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	chrome := t.TempDir()
-	if err := os.WriteFile(filepath.Join(chrome, ".mysetup-managed.json"), []byte(managedMarkerWithSourceHash("zen-chrome", "old-source-hash")), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(chrome, ".wahrwelt-managed.json"), []byte(managedMarkerWithSourceHash("zen-chrome", "old-source-hash")), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

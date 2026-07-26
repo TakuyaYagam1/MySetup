@@ -8,7 +8,7 @@ end
 M.config_home = os.getenv("XDG_CONFIG_HOME") or (M.home .. "/.config")
 M.state_home = os.getenv("XDG_STATE_HOME") or (M.home .. "/.local/state")
 M.hypr = M.config_home .. "/hypr"
-M.runtime = M.state_home .. "/mysetup/hypr-runtime"
+M.runtime = M.state_home .. "/wahrwelt/hypr-runtime"
 
 package.path = M.hypr .. "/?.lua;" .. M.hypr .. "/?/init.lua;" .. package.path
 

@@ -60,7 +60,7 @@ func repairUserWritableTree(ctx context.Context, runner run.CommandRunner, path,
 }
 
 func canWriteDir(path string) bool {
-	file, err := os.CreateTemp(path, ".mysetup-write-test-*")
+	file, err := os.CreateTemp(path, ".wahrwelt-write-test-*")
 	if err != nil {
 		return false
 	}

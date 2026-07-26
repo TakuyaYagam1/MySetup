@@ -25,13 +25,13 @@ matching_pids() {
       pgrep -u "$user_name" -f '(^|[ /])(\.caelestia-wrapped|caelestia)[[:space:]]+resizer([[:space:]]|$)' 2>/dev/null || true
       ;;
     "$noctalia_handle")
-      mysetup_noctalia_pids
+      wahrwelt_noctalia_pids
       ;;
     "$end4_handle")
       {
         pgrep -u "$user_name" -f "$end4_pattern" 2>/dev/null || true
-        for pid in $(mysetup_quickshell_pids); do
-          if mysetup_pid_has_env_regex "$pid" "$end4_env_pattern"; then
+        for pid in $(wahrwelt_quickshell_pids); do
+          if wahrwelt_pid_has_env_regex "$pid" "$end4_env_pattern"; then
             printf '%s\n' "$pid"
           fi
         done

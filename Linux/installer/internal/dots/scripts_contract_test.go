@@ -23,17 +23,17 @@ func TestSharedHyprKeybindsDoNotContainShellSpecificBindings(t *testing.T) {
 		"caelestia resizer pip",
 		"noctalia msg",
 		"app2unit -- $terminal",
-		`mysetup.hypr .. "/scripts/screenshot.sh full"`,
+		`wahrwelt.hypr .. "/scripts/screenshot.sh full"`,
 		"$hypr/scripts/record-toggle.sh",
 	} {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("shared Hypr keybinds must stay shell-neutral; found %q\n%s", forbidden, text)
 		}
 	}
-	if !strings.Contains(text, `mysetup.load_runtime("shell-keybinds.lua")`) {
+	if !strings.Contains(text, `wahrwelt.load_runtime("shell-keybinds.lua")`) {
 		t.Fatalf("shared Hypr keybinds must load the runtime profile layer\n%s", text)
 	}
-	if !strings.Contains(text, `mysetup.load_runtime("shell-launcher.lua")`) {
+	if !strings.Contains(text, `wahrwelt.load_runtime("shell-launcher.lua")`) {
 		t.Fatalf("shared Hypr keybinds must load the runtime launcher layer\n%s", text)
 	}
 }
@@ -66,7 +66,7 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 		"shell-selector.sh toggle",
 		`"app2unit -- " .. v.terminal`,
 		`"app2unit -- " .. v.zed`,
-		`mysetup.hypr .. "/scripts/screenshot.sh full"`,
+		`wahrwelt.hypr .. "/scripts/screenshot.sh full"`,
 		"caelestia clipboard",
 	} {
 		if !strings.Contains(caelestiaProfile, want) {
@@ -74,9 +74,9 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		`mysetup.bind_dispatch("SUPER + SUPER_L", "global caelestia:launcher")`,
-		`mysetup.bind_dispatch("SUPER + mouse:272", "global caelestia:launcherInterrupt", { non_consuming = true })`,
-		`mysetup.bind_dispatch("SUPER + mouse_down", "global caelestia:launcherInterrupt", { non_consuming = true })`,
+		`wahrwelt.bind_dispatch("SUPER + SUPER_L", "global caelestia:launcher")`,
+		`wahrwelt.bind_dispatch("SUPER + mouse:272", "global caelestia:launcherInterrupt", { non_consuming = true })`,
+		`wahrwelt.bind_dispatch("SUPER + mouse_down", "global caelestia:launcherInterrupt", { non_consuming = true })`,
 	} {
 		if !strings.Contains(string(caelestiaLauncher), want) {
 			t.Fatalf("caelestia launcher profile missing %q\n%s", want, string(caelestiaLauncher))
@@ -88,7 +88,7 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 		"shell-selector.sh toggle",
 		`"app2unit -- " .. v.terminal`,
 		`"app2unit -- " .. v.zed`,
-		`mysetup.hypr .. "/scripts/screenshot.sh full"`,
+		`wahrwelt.hypr .. "/scripts/screenshot.sh full"`,
 	} {
 		if !strings.Contains(noctaliaProfile, want) {
 			t.Fatalf("noctalia profile missing %q\n%s", want, noctaliaProfile)
@@ -165,7 +165,7 @@ func TestShellProfilesMatchRuntimeScriptContract(t *testing.T) {
 	if !strings.Contains(string(profilesData), "inherit (shellRuntimeManifest) defaultProfile;") {
 		t.Fatalf("profiles.nix must source defaultProfile from shell runtime manifest\n%s", string(profilesData))
 	}
-	if !strings.Contains(runtime, `mysetup_default_shell_profile="`+manifest.DefaultProfile+`"`) {
+	if !strings.Contains(runtime, `wahrwelt_default_shell_profile="`+manifest.DefaultProfile+`"`) {
 		t.Fatalf("shell-runtime.sh default profile drifted from manifest default %q\n%s", manifest.DefaultProfile, runtime)
 	}
 }
@@ -180,6 +180,36 @@ func manifestProfileIDs(profiles []struct {
 	return ids
 }
 
+func TestFreshHyprAndSelectorAssetsUseOnlyCanonicalBrand(t *testing.T) {
+	for _, root := range []string{
+		"../../../dots/hypr",
+		"../../../NixOS/home/shells/quickshell/wahrwelt-shell-selector",
+	} {
+		err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if strings.Contains(strings.ToLower(entry.Name()), "mysetup") {
+				t.Errorf("fresh managed asset keeps legacy name: %s", path)
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			if strings.Contains(strings.ToLower(string(data)), "mysetup") {
+				t.Errorf("fresh managed asset keeps legacy text: %s", path)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestNoctaliaLauncherScriptIsGuarded(t *testing.T) {
 	data, err := os.ReadFile("../../../dots/hypr/scripts/noctalia-launcher.sh")
 	if err != nil {
@@ -191,10 +221,10 @@ func TestNoctaliaLauncherScriptIsGuarded(t *testing.T) {
 		"interrupt_file=",
 		"lock_dir=",
 		"lock_owner_file=",
-		"mysetup-noctalia-launcher",
+		"wahrwelt-noctalia-launcher",
 		"noctalia-launcher\\.sh",
 		"acquire_lock",
-		"mysetup_noctalia_action launcher-toggle",
+		"wahrwelt_noctalia_action launcher-toggle",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("noctalia launcher wrapper missing %q\n%s", want, text)
@@ -213,20 +243,20 @@ func TestShellSelectorScriptTracksFocusedMonitorAndActiveShell(t *testing.T) {
 	}
 	text := string(data) + string(helper)
 	for _, want := range []string{
-		`state_dir="$runtime_dir/mysetup-shell-selector"`,
+		`state_dir="$runtime_dir/wahrwelt-shell-selector"`,
 		`lock_dir="$state_dir/lock"`,
-		"selector_name=\"mysetup-shell-selector\"",
+		"selector_name=\"wahrwelt-shell-selector\"",
 		"WAHRWELT_SHELL_SELECTOR_MONITOR",
 		"WAHRWELT_ACTIVE_SHELL",
-		"MYSETUP_SHELL_SELECTOR_MONITOR",
-		"MYSETUP_ACTIVE_SHELL",
+		"WAHRWELT_SHELL_SELECTOR_MONITOR",
+		"WAHRWELT_ACTIVE_SHELL",
 		"acquire_lock()",
 		"wait_for_selector_spawn()",
 		"detect_shell_from_processes()",
 		"detect_shell_from_entrypoint()",
-		"mysetup_noctalia_running",
+		"wahrwelt_noctalia_running",
 		"quickshell/ii([/[:space:]]|$)",
-		"mysetup/hyprland.lua",
+		"wahrwelt/hyprland.lua",
 		"hyprctl monitors -j",
 		"active-shell",
 		"start-shell.sh",
@@ -253,13 +283,13 @@ func TestRecordToggleScriptUsesLockAndPidValidation(t *testing.T) {
 		`mkdir "$lock_dir"`,
 		`lock_pid_file=`,
 		`lock_owner_file=`,
-		"mysetup_acquire_lock",
-		"mysetup-record-toggle",
+		"wahrwelt_acquire_lock",
+		"wahrwelt-record-toggle",
 		"record-toggle\\.sh",
 		`ps -p "$pid" -o args=`,
 		"gpu-screen-recorder",
 		"WAHRWELT_RECORD_TARGET",
-		"MYSETUP_RECORD_TARGET",
+		"WAHRWELT_RECORD_TARGET",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("record toggle script missing %q\n%s", want, text)
@@ -288,16 +318,16 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 	}
 	for _, want := range []string{
 		"lock_owner_file=",
-		"mysetup-start-shell",
+		"wahrwelt-start-shell",
 		"shell-runtime.sh",
 		"shell-process.sh",
 		"shell-profile-sync.sh",
 		"shell-runtime-env.sh",
 		"shell-end4-overrides.sh",
-		"mysetup_pid_matches",
-		"mysetup_noctalia_pids()",
-		"mysetup_noctalia_daemon_flag()",
-		`pgrep -u "$mysetup_user_name" -x noctalia`,
+		"wahrwelt_pid_matches",
+		"wahrwelt_noctalia_pids()",
+		"wahrwelt_noctalia_daemon_flag()",
+		`pgrep -u "$wahrwelt_user_name" -x noctalia`,
 		"start-shell\\.sh",
 		"running_count()",
 		"dedupe_shell()",
@@ -366,12 +396,12 @@ func TestRestoreLockScriptStartsProfileBeforeLocking(t *testing.T) {
 	text := string(data)
 	for _, want := range []string{
 		"shell-runtime.sh",
-		"mysetup_valid_shell_profile",
+		"wahrwelt_valid_shell_profile",
 		`"$script_dir/start-shell.sh" "$profile"`,
 		"wait_for_profile()",
 		`hyprctl dispatch 'hl.dsp.global("caelestia:lock")'`,
-		"mysetup_noctalia_action lock",
-		`hyprlock -c "$mysetup_hypr_runtime_dir/hyprlock.conf"`,
+		"wahrwelt_noctalia_action lock",
+		`hyprlock -c "$wahrwelt_hypr_runtime_dir/hyprlock.conf"`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("restore-lock script missing %q\n%s", want, text)
@@ -457,7 +487,7 @@ func TestShellBrandingUsesNixOSLogoOutsideSelector(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	selector, err := os.ReadFile("../../../NixOS/home/shells/quickshell/mysetup-shell-selector/shell.qml")
+	selector, err := os.ReadFile("../../../NixOS/home/shells/quickshell/wahrwelt-shell-selector/shell.qml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -565,7 +595,7 @@ func TestObservabilityGrafanaUsesPersistentSecretFile(t *testing.T) {
 	text := string(data)
 	for _, want := range []string{
 		`grafanaSecretKeyPath = "/var/lib/grafana/secret_key";`,
-		`pkgs.writeShellScript "mysetup-grafana-secret-key"`,
+		`pkgs.writeShellScript "wahrwelt-grafana-secret-key"`,
 		`${pkgs.openssl}/bin/openssl rand -hex 32 > "$secret_key"`,
 		`${pkgs.coreutils}/bin/chmod 0600 "$secret_key"`,
 		`security.secret_key = "$__file{${grafanaSecretKeyPath}}";`,
@@ -587,11 +617,11 @@ func TestInstallerPackageProvidesXKeyboardRules(t *testing.T) {
 	text := string(data)
 	for _, want := range []string{
 		`--set WAHRWELT_XKB_RULES_DIR ${flakePkgs.xkeyboard_config}/share/X11/xkb/rules`,
-		`--set MYSETUP_XKB_RULES_DIR ${flakePkgs.xkeyboard_config}/share/X11/xkb/rules`,
+		`--set WAHRWELT_XKB_RULES_DIR ${flakePkgs.xkeyboard_config}/share/X11/xkb/rules`,
 		`xkeyboard_config`,
 	} {
 		if !strings.Contains(text, want) {
-			t.Fatalf("mysetup package missing XKB rules runtime contract %q\n%s", want, text)
+			t.Fatalf("wahrwelt package missing XKB rules runtime contract %q\n%s", want, text)
 		}
 	}
 }
@@ -661,7 +691,7 @@ func assertNoUnexpectedDuplicateHyprBinds(t *testing.T, rel string, allowed map[
 	}
 
 	seen := map[string]int{}
-	bindRe := regexp.MustCompile(`^(?:mysetup\.)?(?:bind_[a-z]+|bind)\("([^"]+)"`)
+	bindRe := regexp.MustCompile(`^(?:wahrwelt\.)?(?:bind_[a-z]+|bind)\("([^"]+)"`)
 	for lineNo, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "--") {

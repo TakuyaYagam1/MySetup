@@ -98,8 +98,8 @@ func syncHyprDotfiles(ctx context.Context, runner run.CommandRunner, src, dst st
 		"--exclude", "/shell-profile.lua",
 		"--exclude", "/shell-launcher.lua",
 		"--exclude", "/shell-keybinds.lua",
-		"--exclude", "/mysetup/hyprland.lua",
-		"--exclude", "/mysetup/local.lua",
+		"--exclude", "/wahrwelt/hyprland.lua",
+		"--exclude", "/wahrwelt/local.lua",
 		"--exclude", "/runtime/",
 		"--exclude", "/end4/",
 		src+"/", dst+"/")
@@ -109,7 +109,7 @@ func finalizeHyprDestination(ctx context.Context, runner run.CommandRunner, src,
 	if err := ensureUserWritableTree(ctx, runner, dst, state.User.Username); err != nil {
 		return err
 	}
-	if err := writeMarkerWithOwner(ctx, runner, filepath.Join(dst, ".mysetup-managed.json"), "hypr", state.User.Username); err != nil {
+	if err := writeMarkerWithOwner(ctx, runner, filepath.Join(dst, ".wahrwelt-managed.json"), "hypr", state.User.Username); err != nil {
 		return err
 	}
 	if runner.IsDryRun() {

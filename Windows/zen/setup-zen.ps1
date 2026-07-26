@@ -144,7 +144,7 @@ if (-not (Test-Path $themeSrc)) {
 if (Test-SineInstalled $chrome) {
     Write-Host 'Sine already present in profile; skipping download.'
 } else {
-    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("mysetup-sine-" + [guid]::NewGuid().ToString('N'))
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("wahrwelt-sine-" + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force $tmp | Out-Null
     try {
         $fetched = @()

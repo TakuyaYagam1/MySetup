@@ -16,17 +16,17 @@ func checkShellRuntime(out *reportWriter, opts Options) {
 	checkRuntimeConfig(out, "stable hyprland entrypoint", hyprConfigPath(home, "hyprland.lua"), "hypr-runtime/hyprland.lua")
 	checkRuntimeConfig(out, "stable shell launcher entrypoint", hyprConfigPath(home, "shell-profile.lua"), "hypr-runtime/shell-profile.lua")
 	checkShellLauncher(out, hyprRuntimePath(home, "shell-profile.lua"))
-	check(out, "shell selector config", filepath.Join(home, ".config/quickshell/mysetup-shell-selector/shell.qml"))
+	check(out, "shell selector config", filepath.Join(home, ".config/quickshell/wahrwelt-shell-selector/shell.qml"))
 	checkHyprScripts(out, filepath.Join(home, ".config/hypr/scripts"))
 
 	switch profile {
 	case "end4":
 		checkEnd4Profile(out, home)
 	case "caelestia", "noctalia":
-		checkMySetupProfile(out, home, profile)
+		checkWahrweltProfile(out, home, profile)
 	default:
 		out.println("WARN active shell is unknown")
-		checkMySetupProfile(out, home, "caelestia")
+		checkWahrweltProfile(out, home, "caelestia")
 		checkEnd4Profile(out, home)
 	}
 }
@@ -69,9 +69,9 @@ func checkShellLauncher(out *reportWriter, path string) {
 	out.printf("WARN shell launcher does not call start-shell.sh: %s\n", path)
 }
 
-func checkMySetupProfile(out *reportWriter, home, profile string) {
-	checkShellEntrypoint(out, hyprRuntimePath(home, "hyprland.lua"), "mysetup/hyprland.lua", profile)
-	check(out, "mysetup hypr config", hyprConfigPath(home, "mysetup/hyprland.lua"))
+func checkWahrweltProfile(out *reportWriter, home, profile string) {
+	checkShellEntrypoint(out, hyprRuntimePath(home, "hyprland.lua"), "wahrwelt/hyprland.lua", profile)
+	check(out, "wahrwelt hypr config", hyprConfigPath(home, "wahrwelt/hyprland.lua"))
 	checkShellKeybinds(out, hyprRuntimePath(home, "shell-keybinds.lua"), profile)
 }
 
@@ -134,7 +134,7 @@ func checkEnd4Profile(out *reportWriter, home string) {
 	checkRuntimeConfig(out, "end4 hyprlock entrypoint", hyprRuntimePath(home, "hyprlock.conf"), "end4/hyprlock.conf")
 	checkRuntimeConfig(out, "end4 hypridle entrypoint", hyprRuntimePath(home, "hypridle.conf"), "end4/hypridle.conf")
 	check(out, "end4 hypr config", hyprConfigPath(home, "end4/hyprland.lua"))
-	check(out, "end4 mysetup keybinds", hyprConfigPath(home, "end4/mysetup/keybinds.lua"))
+	check(out, "end4 wahrwelt keybinds", hyprConfigPath(home, "end4/wahrwelt/keybinds.lua"))
 	check(out, "end4 quickshell shell", filepath.Join(home, ".config/quickshell/ii/shell.qml"))
 	checkDirectory(out, "end4 runtime config dir", filepath.Join(home, ".config/illogical-impulse"))
 	checkWritableFile(out, "end4 kdeglobals", filepath.Join(home, ".config/kdeglobals"))

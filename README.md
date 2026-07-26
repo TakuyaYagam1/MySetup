@@ -22,11 +22,11 @@ Full keybind reference (every shell, every bind): [GitHub Wiki](https://github.c
 or [`Linux/keybinds.md`](Linux/keybinds.md).
 
 Want your own logo on the GRUB/SDDM/Plymouth boot screens instead of the default one? Drop an
-image in `~/.config/mysetup/boot-theme/` - details in
+image in `~/.config/wahrwelt/boot-theme/` - details in
 [Linux/README.md](Linux/README.md#boot-theme).
 
 Want your own Hyprland keybinds/rules/execs without forking the repo? Everything under
-`~/.config/hypr/` is Home Manager-managed and read-only, but `~/.config/hypr/mysetup/` isn't -
+`~/.config/hypr/` is Home Manager-managed and read-only, but `~/.config/hypr/wahrwelt/` isn't -
 details in
 [Linux/README.md](Linux/README.md#customizing-hyprland-without-forking-the-repo).
 
@@ -90,8 +90,9 @@ square instead of a circle.
 Existing installations remain compatible with the legacy repository URL, flake output, CLI
 name, module namespace, and host constructor. For example,
 `nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- doctor`
-continues to work while the generated host wrapper is migrated to `wahrwelt` on the next apply.
-The `/etc/nixos/mysetup` and `~/.config/mysetup` state paths intentionally remain unchanged.
+continues to work. On the first successful Wahrwelt update, recognized legacy state and
+configuration paths are migrated automatically to `wahrwelt`; compatibility names remain
+available only as source/API aliases.
 
 The installer asks about: Wahrwelt channel, username/password, package preset, display and
 keyboard layout, Secure Boot, GPU type, locale/timezone, CTF tools, and user

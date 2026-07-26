@@ -8,7 +8,7 @@
 
 let
   grafanaSecretKeyPath = "/var/lib/grafana/secret_key";
-  ensureGrafanaSecretKey = pkgs.writeShellScript "mysetup-grafana-secret-key" ''
+  ensureGrafanaSecretKey = pkgs.writeShellScript "wahrwelt-grafana-secret-key" ''
     set -eu
 
     data_dir=/var/lib/grafana
@@ -97,7 +97,7 @@ in
       };
     };
 
-    systemd.services.mysetup-grafana-secret-key = {
+    systemd.services.wahrwelt-grafana-secret-key = {
       description = "Ensure Grafana secret key exists";
       before = [ "grafana.service" ];
       requiredBy = [ "grafana.service" ];

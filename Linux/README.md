@@ -50,8 +50,10 @@ source, then the installer writes a small `/etc/nixos` wrapper that tracks
 Existing hosts do not need a manual migration. The old repository URL, `#mysetup` output,
 `mysetup` executable, `nixosModules.mysetup`, `config.mysetup`, and
 `mysetup.lib.mkMySetupHost` remain supported aliases. The next Wahrwelt apply rewrites a
-recognized generated wrapper to the new `wahrwelt` input and constructor. Persistent paths
-such as `/etc/nixos/mysetup` and `~/.config/mysetup` remain unchanged.
+recognized generated wrapper to the new `wahrwelt` input and constructor. The first
+successful update also moves managed system and user state to the canonical `wahrwelt`
+paths. If both an old and a new path contain conflicting data, migration stops before
+overwriting either one.
 
 This old command is therefore still valid:
 
@@ -141,13 +143,13 @@ sudo nixos-rebuild switch --flake /etc/nixos#NixOS --option max-jobs 4 --option 
 The installer writes machine-local state to:
 
 ```text
-/etc/nixos/mysetup/state.json
+/etc/nixos/wahrwelt/state.json
 ```
 
 The in-progress TUI draft is stored at:
 
 ```text
-$XDG_STATE_HOME/mysetup/draft.json
+$XDG_STATE_HOME/wahrwelt/draft.json
 ```
 
 Plain passwords are never stored in state or draft JSON.
@@ -252,10 +254,10 @@ NixOS module always resolves it through Wahrwelt's own lock either way, so a
 The active Hyprland config is Lua-only and assumes Hyprland 0.55 or newer:
 
 - `~/.config/hypr/hyprland.lua` is the stable entrypoint owned by Home Manager.
-- That file loads `$XDG_STATE_HOME/mysetup/hypr-runtime/hyprland.lua`, which is
+- That file loads `$XDG_STATE_HOME/wahrwelt/hypr-runtime/hyprland.lua`, which is
   rewritten by the shell runtime when switching profiles.
 - Shared Wahrwelt modules live under `Linux/dots/hypr/hyprland/*.lua`,
-  `variables.lua`, `scheme/default.lua`, and `lib/mysetup.lua`.
+  `variables.lua`, `scheme/default.lua`, and `lib/wahrwelt.lua`.
 - Shell-specific binds and launchers live under
   `Linux/dots/hypr/{caelestia,noctalia,end4}/*.lua`.
 - Common runtime fragments are `shell-common-keybinds.lua`,
@@ -289,21 +291,21 @@ have that file.
 
 ### Customizing Hyprland without forking the repo
 
-`~/.config/hypr/mysetup/` is the escape hatch: files there are **not**
+`~/.config/hypr/wahrwelt/` is the escape hatch: files there are **not**
 Home Manager-managed, so they're real, writable, and survive rebuilds. Create
 whichever ones you need (all optional, loaded via `hl` config, same layout
 `end-4/dots-hyprland` itself uses for its own `custom/` folder):
 
-- `mysetup/env.lua` - loads right after the base `hyprland/env.lua`.
-- `mysetup/execs.lua`, `mysetup/general.lua`, `mysetup/rules.lua`,
-  `mysetup/keybinds.lua` - loaded last, after every default bind in this setup
+- `wahrwelt/env.lua` - loads right after the base `hyprland/env.lua`.
+- `wahrwelt/execs.lua`, `wahrwelt/general.lua`, `wahrwelt/rules.lua`,
+  `wahrwelt/keybinds.lua` - loaded last, after every default bind in this setup
   (including the active shell profile's own binds) is already registered.
 
 That last point matters for keybinds specifically: Hyprland does not
 auto-replace a duplicate bind - if you bind an already-used combo again, both
 actions fire. To cleanly override one, `hl.unbind()` it first, then rebind
 ([Hyprland Wiki: Binds](https://wiki.hypr.land/Configuring/Basics/Binds/)).
-`mysetup/keybinds.lua` is pre-seeded on first apply with a commented example
+`wahrwelt/keybinds.lua` is pre-seeded on first apply with a commented example
 of exactly this - replacing the default AmneziaVPN launcher
 (`SUPER + SHIFT + Q`) with your own program:
 
@@ -336,13 +338,13 @@ lives in the [GitHub Wiki](https://github.com/TakuyaYagam1/wahrwelt/wiki) or
 Runtime state:
 
 ```text
-$XDG_STATE_HOME/mysetup/active-shell
+$XDG_STATE_HOME/wahrwelt/active-shell
 ```
 
 Runtime log:
 
 ```text
-$XDG_RUNTIME_DIR/mysetup-shell.log
+$XDG_RUNTIME_DIR/wahrwelt-shell.log
 ```
 
 Manual switch commands:
@@ -369,7 +371,7 @@ Ownership contract:
   bits for Hypr scripts, and immediate runtime bootstrap.
 - Home Manager owns stable Hypr entrypoints, managed Hypr scripts, shell
   selector assets, and shell profile metadata after rebuild.
-- Runtime shell scripts own mutable files under `$XDG_STATE_HOME/mysetup` and
+- Runtime shell scripts own mutable files under `$XDG_STATE_HOME/wahrwelt` and
   may rewrite active-shell fragments during profile switches.
 - User/vendor state remains mutable under shell-specific config/cache paths,
   especially Caelestia/Noctalia JSON and end4 Illogical Impulse settings.
@@ -381,7 +383,7 @@ Customize the GRUB, SDDM, and Plymouth boot logos with your own image.
 Drop your own logo into:
 
 ```text
-~/.config/mysetup/boot-theme/
+~/.config/wahrwelt/boot-theme/
 ```
 
 First apply seeds that directory once with an example `logo.png` (the current
@@ -432,15 +434,17 @@ The installer applies changes defensively:
 5. Runs `nix flake update --flake <staging>` for the default thin wrapper, so
    the installed host owns the important external input revisions in
    `/etc/nixos/flake.lock`. Use `--lock-mode managed` to keep the compatibility
-   behavior of updating only `mysetup` and using Wahrwelt's transitive lock.
+   behavior of updating only the Wahrwelt input and using Wahrwelt's transitive lock.
 6. Runs `nixos-rebuild dry-build` against the staging flake before touching
    `/etc/nixos`.
 7. Backs up `/etc/nixos` to a unique `/etc/nixos.bak.<timestamp>.<pid>.<n>`.
-8. Syncs the thin staging tree to `/etc/nixos` without deleting legacy mirror
-   files.
+8. Syncs the thin staging tree to `/etc/nixos` while preserving migration state.
 9. Applies selected user dotfiles and reloads Hypr when a session is running.
 10. Asks before `nixos-rebuild switch` in TUI mode.
-11. Writes `/etc/nixos/mysetup/state.json` only after switch succeeds.
+11. Writes `/etc/nixos/wahrwelt/state.json` only after switch succeeds.
+12. A one-shot system migration validates and rebuilds the rewritten `/etc/nixos`
+    tree, activates the user-path migration, then removes old MySetup-era
+    `/etc/nixos.bak.*` backups after all post-checks pass.
 
 Use `--layout full` to keep the old full-mirror behavior for debugging or
 migration fallback. Use `--lock-mode managed` with the thin layout when you want
@@ -470,7 +474,7 @@ The default installed layout is intentionally small:
 ├── private/
 │   └── default.nix         # local-only Nix module imports
 ├── secrets/               # optional system sops-nix secrets
-└── mysetup/state.json     # written after successful activation
+└── wahrwelt/state.json    # written after successful activation
 ```
 
 Add NixOS packages, services, and system overrides to `configuration.nix`.
@@ -537,7 +541,7 @@ Linux/NixOS/
 ├── flake.nix
 ├── flake.lock
 ├── modules/
-│   ├── mysetup-options.nix        # `mysetup.*` NixOS options
+│   ├── mysetup-options.nix        # `wahrwelt.*` options + legacy aliases
 │   └── mysetup-stack.nix          # reusable workstation stack
 ├── hosts/NixOS/
 │   ├── default.nix
@@ -564,7 +568,7 @@ Linux/NixOS/
 │   │                              # starship, thunar, vesktop, uwsm, …
 │   ├── secrets/                   # optional sops-nix user secrets
 │   └── shells/
-│       └── quickshell/mysetup-shell-selector/  # Super+Shift+W picker
+│       └── quickshell/wahrwelt-shell-selector/  # Super+Shift+W picker
 ├── pkgs/                          # pure derivations
 │                                  # (omnirouter, sddm-meowrch-theme)
 ├── programs/                      # system-wide program modules
@@ -651,7 +655,9 @@ directly, and each module checks `wahrwelt.packages.preset` at evaluation time.
 ## Recovery
 
 The installer keeps unique `/etc/nixos.bak.<timestamp>.<pid>.<n>` backups
-before replacing `/etc/nixos` (matches Apply Flow step 5).
+before replacing `/etc/nixos`. During the one-time brand migration, old
+MySetup-era backups are removed only after the migrated system passes its build
+and post-checks. Later Wahrwelt applies create fresh backups normally.
 
 To recover manually, pick the most recent backup and roll it forward:
 
@@ -670,7 +676,7 @@ nix run "path:$PWD?dir=Linux/NixOS#wahrwelt" -- doctor
 For shell-switch issues, inspect:
 
 ```bash
-cat "${XDG_RUNTIME_DIR:-/tmp}/mysetup-shell.log"
+cat "${XDG_RUNTIME_DIR:-/tmp}/wahrwelt-shell.log"
 ```
 
 ## Troubleshooting
@@ -679,13 +685,13 @@ Quick triage for the most common breakage paths. If none of these apply,
 run `wahrwelt doctor` and check the relevant log.
 
 - **Shell-swap (Super+Shift+W) does nothing or freezes.** Check
-  `$XDG_STATE_HOME/mysetup/active-shell` (should be one of `caelestia`,
-  `noctalia`, `end4`). Tail `$XDG_RUNTIME_DIR/mysetup-shell.log` while you
+  `$XDG_STATE_HOME/wahrwelt/active-shell` (should be one of `caelestia`,
+  `noctalia`, `end4`). Tail `$XDG_RUNTIME_DIR/wahrwelt-shell.log` while you
   press the binding. Most failures are stale lockfiles under
-  `$XDG_STATE_HOME/mysetup/hypr-runtime/` - remove that directory and retry.
+  `$XDG_STATE_HOME/wahrwelt/hypr-runtime/` - remove that directory and retry.
 - **Hyprland keybinds are listed but do nothing.** Run `hyprctl configerrors`
   first. On Hyprland 0.55+, dispatch commands must use the Lua dispatcher API;
-  Wahrwelt binds should go through `lib/mysetup.lua` helpers or direct
+  Wahrwelt binds should go through `lib/wahrwelt.lua` helpers or direct
   `hl.dsp.*` calls, not old `hyprctl dispatch movewindow l` style strings.
 - **Thunar shows generic icons instead of image previews.** Check that
   `tumbler` is running (`pgrep -f tumbler-1/tumblerd`), that

@@ -19,18 +19,18 @@ case "$action" in
     ;;
 esac
 
-config_home="$mysetup_config_home"
-runtime_dir="$mysetup_runtime_session_dir"
-state_dir="$runtime_dir/mysetup-shell-selector"
-log_file="$mysetup_log_file"
+config_home="$wahrwelt_config_home"
+runtime_dir="$wahrwelt_runtime_session_dir"
+state_dir="$runtime_dir/wahrwelt-shell-selector"
+log_file="$wahrwelt_log_file"
 lock_dir="$state_dir/lock"
 lock_pid_file="$lock_dir/pid"
 lock_owner_file="$lock_dir/owner"
-selector_name="mysetup-shell-selector"
-selector_pattern="$mysetup_selector_pattern"
-end4_pattern="$mysetup_end4_pattern"
-caelestia_pattern="$mysetup_caelestia_pattern"
-active_shell_state="$mysetup_active_shell_state"
+selector_name="wahrwelt-shell-selector"
+selector_pattern="$wahrwelt_selector_pattern"
+end4_pattern="$wahrwelt_end4_pattern"
+caelestia_pattern="$wahrwelt_caelestia_pattern"
+active_shell_state="$wahrwelt_active_shell_state"
 start_shell_script="$config_home/hypr/scripts/start-shell.sh"
 
 mkdir -p "$state_dir"
@@ -42,22 +42,22 @@ log() {
 log "invoked action=${action:-empty} requested_profile=${requested_profile:-empty} monitor_override=${selector_monitor_override:-empty} pid=$$"
 
 noctalia_running() {
-  mysetup_noctalia_running
+  wahrwelt_noctalia_running
 }
 
 acquire_lock() {
-  mysetup_acquire_lock \
+  wahrwelt_acquire_lock \
     "$lock_dir" \
     "$lock_pid_file" \
     "$lock_owner_file" \
-    "mysetup-shell-selector" \
+    "wahrwelt-shell-selector" \
     '(^|[ /])shell-selector\.sh([[:space:]]|$)' \
     20 \
     0.02 || exit 0
 }
 
 read_stored_active_shell() {
-  mysetup_read_active_shell "$active_shell_state"
+  wahrwelt_read_active_shell "$active_shell_state"
 }
 
 detect_shell_from_processes() {
@@ -80,7 +80,7 @@ detect_shell_from_processes() {
 }
 
 detect_shell_from_keybinds() {
-  local keybinds_path="$mysetup_hypr_runtime_dir/shell-keybinds.lua"
+  local keybinds_path="$wahrwelt_hypr_runtime_dir/shell-keybinds.lua"
 
   if [ ! -r "$keybinds_path" ]; then
     keybinds_path="$config_home/hypr/shell-keybinds.lua"
@@ -101,7 +101,7 @@ detect_shell_from_keybinds() {
 }
 
 detect_shell_from_entrypoint() {
-  local entrypoint_path="$mysetup_hypr_runtime_dir/hyprland.lua"
+  local entrypoint_path="$wahrwelt_hypr_runtime_dir/hyprland.lua"
 
   if [ ! -r "$entrypoint_path" ]; then
     entrypoint_path="$config_home/hypr/hyprland.lua"
@@ -113,7 +113,7 @@ detect_shell_from_entrypoint() {
     return 0
   fi
 
-  if grep -q 'mysetup/hyprland.lua' "$entrypoint_path"; then
+  if grep -q 'wahrwelt/hyprland.lua' "$entrypoint_path"; then
     detect_shell_from_keybinds
     return $?
   fi
@@ -182,9 +182,9 @@ start_selector() {
     WAHRWELT_SHELL_SELECTOR_MONITOR="$monitor" \
     WAHRWELT_ACTIVE_SHELL="$active_shell" \
     WAHRWELT_SHELL_SELECTOR_SCRIPT="$config_home/hypr/scripts/shell-selector.sh" \
-    MYSETUP_SHELL_SELECTOR_MONITOR="$monitor" \
-    MYSETUP_ACTIVE_SHELL="$active_shell" \
-    MYSETUP_SHELL_SELECTOR_SCRIPT="$config_home/hypr/scripts/shell-selector.sh" \
+    WAHRWELT_SHELL_SELECTOR_MONITOR="$monitor" \
+    WAHRWELT_ACTIVE_SHELL="$active_shell" \
+    WAHRWELT_SHELL_SELECTOR_SCRIPT="$config_home/hypr/scripts/shell-selector.sh" \
     qs -c "$selector_name" >/dev/null 2>&1 &
 
   wait_for_selector_spawn || true
@@ -193,7 +193,7 @@ start_selector() {
 switch_shell() {
   local profile="$1"
 
-  if ! mysetup_valid_shell_profile "$profile"; then
+  if ! wahrwelt_valid_shell_profile "$profile"; then
     log "rejecting invalid profile switch request: ${profile:-empty}"
     exit 1
   fi

@@ -3,7 +3,7 @@
   homeLibs,
   inputs,
   lib,
-  mysetup,
+  wahrwelt,
   options,
   pkgs,
   ...
@@ -12,7 +12,7 @@
 let
   dotfilesLib = homeLibs.dotfiles;
   trans = homeLibs.transparency;
-  isV4 = mysetup.noctalia.version == "v4";
+  isV4 = wahrwelt.noctalia.version == "v4";
   noctaliaV5Package = inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default;
   noctaliaV4Package = inputs.noctalia-shell.packages.${pkgs.stdenv.hostPlatform.system}.default;
   settingsJson = ./legacy-v4/settings.json;

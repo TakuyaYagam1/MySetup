@@ -28,6 +28,7 @@ let
     ./stylix.nix
     ./theming.nix
     ./programs/boot-theme.nix
+    ./programs/wahrwelt-migration.nix
     ./programs/git.nix
     ./programs/fish.nix
     ./programs/shell-tools.nix

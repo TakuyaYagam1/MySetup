@@ -502,7 +502,7 @@ func TestRunDryRunNoSwitchStopsAfterDryBuildWithoutWritingEtcDotsOrState(t *test
 	dryBuild := strings.Index(out, "sudo nixos-rebuild dry-build --impure --flake ")
 	backup := strings.Index(out, "sudo cp -a")
 	dotsApply := strings.Index(out, "write hypr local config")
-	stateWrite := strings.LastIndex(out, filepath.Join(dest, "mysetup/state.json"))
+	stateWrite := strings.LastIndex(out, filepath.Join(dest, "wahrwelt/state.json"))
 	noSwitch := strings.Index(out, "dry-build passed; --no-switch set")
 	if dryBuild == -1 || noSwitch == -1 {
 		t.Fatalf("expected dry-build and no-switch output, got:\n%s", out)
@@ -524,13 +524,13 @@ func writeMinimalHyprDots(t *testing.T, repo string) {
 	files := map[string]string{
 		"Linux/dots/hypr/hyprland.lua":                 "require(\"hyprland.input\")\nrequire(\"hyprland.keybinds\")\n",
 		"Linux/dots/hypr/hyprland/input.lua":           "hl.config({ input = { kb_layout = \"us\", kb_options = \"grp:alt_shift_toggle\" } })\n",
-		"Linux/dots/hypr/hyprland/keybinds.lua":        "mysetup.load_runtime(\"shell-keybinds.lua\")\n",
+		"Linux/dots/hypr/hyprland/keybinds.lua":        "wahrwelt.load_runtime(\"shell-keybinds.lua\")\n",
 		"Linux/dots/hypr/scripts/start-shell.sh":       "#!/usr/bin/env bash\n",
 		"Linux/dots/hypr/caelestia/keybinds.lua":       "-- binds\n",
 		"Linux/dots/hypr/caelestia/launcher.lua":       "-- launcher\n",
 		"Linux/dots/hypr/shell-common-keybinds.lua":    "-- common\n",
 		"Linux/dots/hypr/shell-workspace-keybinds.lua": "-- workspace\n",
-		"Linux/dots/hypr/lib/mysetup.lua":              "return {}\n",
+		"Linux/dots/hypr/lib/wahrwelt.lua":             "return {}\n",
 		"Linux/dots/hypr/variables.lua":                "return {}\n",
 		"Linux/dots/hypr/scheme/default.lua":           "return {}\n",
 	}
@@ -603,7 +603,7 @@ exec "$@"
 	if !strings.Contains(err.Error(), "nix says no") {
 		t.Fatalf("expected dry-build error details, got:\n%s", err)
 	}
-	if _, statErr := os.Stat(filepath.Join(dest, "mysetup/state.json")); !os.IsNotExist(statErr) {
+	if _, statErr := os.Stat(filepath.Join(dest, "wahrwelt/state.json")); !os.IsNotExist(statErr) {
 		t.Fatalf("state must not be written after failed dry-build, stat err: %v", statErr)
 	}
 }
@@ -1969,9 +1969,9 @@ func TestHomeShellModuleInstallsAllBoundScripts(t *testing.T) {
 	for _, want := range []string{
 		"hyprctl reload",
 		"start-shell.sh >/dev/null 2>&1 || true",
-		"mysetup/active-shell",
-		"mysetup/hypr-runtime",
-		`"quickshell/mysetup-shell-selector"`,
+		"wahrwelt/active-shell",
+		"wahrwelt/hypr-runtime",
+		`"quickshell/wahrwelt-shell-selector"`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("home/shells/default.nix must include %q\n%s", want, text)
@@ -1983,7 +1983,7 @@ func pathsForTest(repo, dest string) paths.Options {
 	return paths.Options{
 		RepoRoot:  repo,
 		NixOSDest: dest,
-		StatePath: filepath.Join(dest, "mysetup", "state.json"),
+		StatePath: filepath.Join(dest, "wahrwelt", "state.json"),
 		DraftPath: filepath.Join(dest, "draft.json"),
 	}
 }

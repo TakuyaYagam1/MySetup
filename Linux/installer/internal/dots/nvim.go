@@ -26,7 +26,7 @@ func syncNvim(ctx context.Context, runner run.CommandRunner, dotsSrc, configDir,
 		return err
 	}
 	if alreadyInstalled {
-		if err := writeMarkerWithOwnerAndSourceHash(ctx, runner, filepath.Join(dst, ".mysetup-managed.json"), "nvim", username, sourceHash); err != nil {
+		if err := writeMarkerWithOwnerAndSourceHash(ctx, runner, filepath.Join(dst, ".wahrwelt-managed.json"), "nvim", username, sourceHash); err != nil {
 			return err
 		}
 		fmt.Printf("Neovim config already exists in %s; skipping sync\n", dst)
@@ -44,7 +44,7 @@ func syncNvim(ctx context.Context, runner run.CommandRunner, dotsSrc, configDir,
 	if err := ensureUserWritableTree(ctx, runner, dst, username); err != nil {
 		return err
 	}
-	if err := writeMarkerWithOwnerAndSourceHash(ctx, runner, filepath.Join(dst, ".mysetup-managed.json"), "nvim", username, sourceHash); err != nil {
+	if err := writeMarkerWithOwnerAndSourceHash(ctx, runner, filepath.Join(dst, ".wahrwelt-managed.json"), "nvim", username, sourceHash); err != nil {
 		return err
 	}
 	return nil

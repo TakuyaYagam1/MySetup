@@ -1,13 +1,13 @@
 {
   lib,
-  mysetup,
+  wahrwelt,
   wahrweltLib,
   pkgs,
   ...
 }:
 
 let
-  desktopOrMore = wahrweltLib.presets.desktopOrMore mysetup;
+  desktopOrMore = wahrweltLib.presets.desktopOrMore wahrwelt;
   nightshift-toggle = pkgs.writeShellScriptBin "nightshift-toggle" ''
     if ${pkgs.procps}/bin/pgrep -x hyprsunset >/dev/null; then
       ${pkgs.procps}/bin/pkill -x hyprsunset

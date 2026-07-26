@@ -27,16 +27,16 @@ func writeHyprLocalConfig(ctx context.Context, runner run.CommandRunner, state c
 
 func writeHyprLocalConfigFiles(state config.State, hyprSourceDir, hyprDir string) error {
 	sourceHyprland := filepath.Join(hyprSourceDir, "hyprland.lua")
-	mysetupHyprland := filepath.Join(hyprDir, "mysetup", "hyprland.lua")
-	localConfig := filepath.Join(hyprDir, "mysetup", "local.lua")
+	wahrweltHyprland := filepath.Join(hyprDir, "wahrwelt", "hyprland.lua")
+	localConfig := filepath.Join(hyprDir, "wahrwelt", "local.lua")
 
-	if err := os.MkdirAll(filepath.Dir(mysetupHyprland), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(wahrweltHyprland), 0o755); err != nil {
 		return err
 	}
-	if err := prepareWritableConfigFile(mysetupHyprland); err != nil {
+	if err := prepareWritableConfigFile(wahrweltHyprland); err != nil {
 		return err
 	}
-	if err := copyRegularFile(sourceHyprland, mysetupHyprland); err != nil {
+	if err := copyRegularFile(sourceHyprland, wahrweltHyprland); err != nil {
 		return err
 	}
 

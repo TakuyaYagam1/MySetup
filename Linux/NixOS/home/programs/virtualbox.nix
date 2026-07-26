@@ -1,18 +1,18 @@
 {
   config,
   lib,
-  mysetup,
+  wahrwelt,
   wahrweltLib,
   pkgs,
   ...
 }:
 
 let
-  personal = wahrweltLib.presets.personal mysetup;
+  personal = wahrweltLib.presets.personal wahrwelt;
   shareName = "VMShare";
   sharePath = "${config.home.homeDirectory}/${shareName}";
   ensureVirtualBoxVMShare = pkgs.writeShellApplication {
-    name = "mysetup-vbox-vmshare";
+    name = "wahrwelt-vbox-vmshare";
     runtimeInputs = with pkgs; [
       coreutils
       virtualbox
@@ -42,7 +42,7 @@ in
 
       Service = {
         Type = "oneshot";
-        ExecStart = "${ensureVirtualBoxVMShare}/bin/mysetup-vbox-vmshare";
+        ExecStart = "${ensureVirtualBoxVMShare}/bin/wahrwelt-vbox-vmshare";
       };
 
       Install.WantedBy = [ "default.target" ];

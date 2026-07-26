@@ -25,7 +25,7 @@ mkdir -p "$last/scripts" "$last/caelestia" "$last/hyprland"
 printf '%s\n' '-- caelestia binds' > "$last/caelestia/keybinds.lua"
 printf '%s\n' '-- caelestia launcher' > "$last/caelestia/launcher.lua"
 printf '%s\n' 'hl.config({ input = { kb_layout = "us", kb_options = "grp:alt_shift_toggle" } })' > "$last/hyprland/input.lua"
-printf '%s\n' 'mysetup.load_runtime("shell-keybinds.lua")' > "$last/hyprland/keybinds.lua"
+printf '%s\n' 'wahrwelt.load_runtime("shell-keybinds.lua")' > "$last/hyprland/keybinds.lua"
 printf '%s\n' '#!/usr/bin/env bash' > "$last/scripts/start-shell.sh"`)
 	writeScript(t, filepath.Join(bin, "chmod"), "exit 0")
 	writeScript(t, filepath.Join(bin, "find"), "exit 27")
@@ -83,8 +83,8 @@ func TestSyncHyprExcludesHomeManagerEnd4Profile(t *testing.T) {
 		"--exclude /hyprland.lua",
 		"--exclude /hyprlock.conf",
 		"--exclude /hypridle.conf",
-		"--exclude /mysetup/hyprland.lua",
-		"--exclude /mysetup/local.lua",
+		"--exclude /wahrwelt/hyprland.lua",
+		"--exclude /wahrwelt/local.lua",
 		"--exclude /runtime/",
 		"--exclude /end4/",
 	} {
@@ -181,12 +181,12 @@ esac`)
 		t.Fatal(err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(hyprDir, "mysetup", "local.lua"))
+	data, err := os.ReadFile(filepath.Join(hyprDir, "wahrwelt", "local.lua"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(data), "hl.monitor") || !strings.Contains(string(data), "kb_layout") {
-		t.Fatalf("expected generated mysetup local Lua config, got:\n%s", data)
+		t.Fatalf("expected generated wahrwelt local Lua config, got:\n%s", data)
 	}
 	for _, want := range []string{
 		"sudo chown -R tester:",
@@ -204,10 +204,10 @@ func writeRequiredHyprSource(t *testing.T, dotsSrc string) {
 	files := map[string]string{
 		"hypr/hyprland.lua":                 "require(\"hyprland.keybinds\")\n",
 		"hypr/hyprland/input.lua":           "hl.config({ input = { kb_layout = \"us\", kb_options = \"grp:alt_shift_toggle\" } })\n",
-		"hypr/hyprland/keybinds.lua":        "mysetup.load_runtime(\"shell-keybinds.lua\")\n",
-		"hypr/shell-common-keybinds.lua":    "mysetup.bind_exec(\"SUPER + SHIFT + W\", mysetup.hypr .. \"/scripts/shell-selector.sh toggle\")\n",
-		"hypr/shell-workspace-keybinds.lua": "mysetup.bind_exec(\"SUPER + 1\", mysetup.hypr .. \"/scripts/wsaction.fish -g workspace 1\")\n",
-		"hypr/lib/mysetup.lua":              "return {}\n",
+		"hypr/hyprland/keybinds.lua":        "wahrwelt.load_runtime(\"shell-keybinds.lua\")\n",
+		"hypr/shell-common-keybinds.lua":    "wahrwelt.bind_exec(\"SUPER + SHIFT + W\", wahrwelt.hypr .. \"/scripts/shell-selector.sh toggle\")\n",
+		"hypr/shell-workspace-keybinds.lua": "wahrwelt.bind_exec(\"SUPER + 1\", wahrwelt.hypr .. \"/scripts/wsaction.fish -g workspace 1\")\n",
+		"hypr/lib/wahrwelt.lua":             "return {}\n",
 		"hypr/variables.lua":                "return {}\n",
 		"hypr/scheme/default.lua":           "return {}\n",
 	}

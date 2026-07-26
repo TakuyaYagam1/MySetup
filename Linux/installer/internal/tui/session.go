@@ -135,15 +135,17 @@ func isDirtySection(selected string) bool {
 }
 
 func loadInitialState(opts paths.Options) (config.State, error) {
-	if _, err := os.Stat(opts.StatePath); err == nil {
-		return config.LoadExisting(opts.StatePath)
+	statePath := opts.ExistingStatePath()
+	if _, err := os.Stat(statePath); err == nil {
+		return config.LoadExisting(statePath)
 	} else if !os.IsNotExist(err) {
-		return config.State{}, fmt.Errorf("stat state %s: %w", opts.StatePath, err)
+		return config.State{}, fmt.Errorf("stat state %s: %w", statePath, err)
 	}
-	if _, err := os.Stat(opts.DraftPath); err == nil {
-		return config.LoadExisting(opts.DraftPath)
+	draftPath := opts.ExistingDraftPath()
+	if _, err := os.Stat(draftPath); err == nil {
+		return config.LoadExisting(draftPath)
 	} else if !os.IsNotExist(err) {
-		return config.State{}, fmt.Errorf("stat draft %s: %w", opts.DraftPath, err)
+		return config.State{}, fmt.Errorf("stat draft %s: %w", draftPath, err)
 	}
 	return config.Default(), nil
 }

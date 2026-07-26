@@ -52,7 +52,7 @@ func TestProfilesMatchNixAndShellRuntime(t *testing.T) {
 		t.Fatalf("profiles.nix must source defaultProfile from shell runtime manifest\n%s", profilesData)
 	}
 	runtime := string(runtimeData)
-	if !strings.Contains(runtime, `mysetup_default_shell_profile="`+DefaultProfile+`"`) {
+	if !strings.Contains(runtime, `wahrwelt_default_shell_profile="`+DefaultProfile+`"`) {
 		t.Fatalf("shell-runtime default profile drifted from manifest default %q\n%s", DefaultProfile, runtime)
 	}
 	for _, profile := range Profiles {
@@ -66,7 +66,7 @@ func TestProfilesMatchNixAndShellRuntime(t *testing.T) {
 func TestManifestProfilesReferenceTrackedAssetsAndDotfiles(t *testing.T) {
 	for _, profile := range ProfileSpecs {
 		for label, rel := range map[string]string{
-			"logo":     filepath.Join("../../../NixOS/home/shells/quickshell/mysetup-shell-selector", profile.Logo),
+			"logo":     filepath.Join("../../../NixOS/home/shells/quickshell/wahrwelt-shell-selector", profile.Logo),
 			"launcher": filepath.Join("../../../dots/hypr", profile.Launcher),
 			"keybinds": filepath.Join("../../../dots/hypr", profile.Keybinds),
 		} {

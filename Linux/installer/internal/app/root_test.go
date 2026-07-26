@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 )
 
 func TestApplyMissingStateFailsClosed(t *testing.T) {
@@ -47,6 +48,38 @@ func TestPrintStateMissingStateFailsClosed(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "state file does not exist") {
 		t.Fatalf("expected missing state error, got %v", err)
+	}
+}
+
+func TestLegacyInstallPathsReportsOnlyExistingManagedPaths(t *testing.T) {
+	home := t.TempDir()
+	dest := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".local", "state"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+
+	legacyState := filepath.Join(dest, "mysetup")
+	legacyConfig := filepath.Join(home, ".config", "hypr", "mysetup")
+	canonicalConfig := filepath.Join(home, ".config", "wahrwelt")
+	for _, path := range []string{legacyState, legacyConfig, canonicalConfig} {
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := legacyInstallPaths(&Options{Options: paths.Options{NixOSDest: dest}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(got, "\n")
+	for _, want := range []string{legacyState, legacyConfig} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected legacy path %q in result %v", want, got)
+		}
+	}
+	if strings.Contains(joined, canonicalConfig) {
+		t.Fatalf("canonical path must not be reported as legacy: %v", got)
 	}
 }
 

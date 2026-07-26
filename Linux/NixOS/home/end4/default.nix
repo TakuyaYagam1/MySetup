@@ -1,7 +1,7 @@
 {
   config,
   lib,
-  mysetup,
+  wahrwelt,
   pkgs,
   ...
 }:
@@ -9,7 +9,7 @@
 {
   _module.args.end4Lib = import ./lib.nix {
     inherit config lib pkgs;
-    mysetupConfig = mysetup;
+    wahrweltConfig = wahrwelt;
   };
 
   imports = [

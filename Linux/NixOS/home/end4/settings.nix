@@ -1,12 +1,12 @@
 {
-  mysetupConfig,
+  wahrweltConfig,
   transparencyDefaults,
 }:
 
 let
-  hypr = mysetupConfig.hypr or { };
-  display = mysetupConfig.display or { };
-  locale = mysetupConfig.locale or { };
+  hypr = wahrweltConfig.hypr or { };
+  display = wahrweltConfig.display or { };
+  locale = wahrweltConfig.locale or { };
 
   transparency = transparencyDefaults;
 

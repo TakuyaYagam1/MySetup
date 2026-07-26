@@ -130,7 +130,11 @@ func removeHomeManagerBackups(ctx context.Context, runner run.CommandRunner, con
 }
 
 func repairActiveEnd4ProfileLink(ctx context.Context, runner run.CommandRunner, home string) error {
-	if shellruntime.ReadActiveShell(shellruntime.ActiveShellStatePath(home)) != shellruntime.End4 {
+	profile := shellruntime.ReadActiveShell(shellruntime.ActiveShellStatePath(home))
+	if profile == "" {
+		profile = shellruntime.ReadActiveShell(paths.LegacyActiveShellStatePath(home))
+	}
+	if profile != shellruntime.End4 {
 		return nil
 	}
 	configDir := filepath.Join(home, ".config")

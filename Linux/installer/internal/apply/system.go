@@ -53,6 +53,7 @@ func syncToEtcArgs(staging, dest string, layout ...Layout) []string {
 	}
 	return []string{
 		"rsync", "-a", "--checksum",
+		"--exclude=/wahrwelt/",
 		"--exclude=/mysetup/",
 		"--exclude=/secrets/",
 		"--exclude=/hashed-password.nix",
@@ -64,6 +65,7 @@ func syncToEtcArgs(staging, dest string, layout ...Layout) []string {
 func syncToEtcFullArgs(staging, dest string) []string {
 	return []string{
 		"rsync", "-a", "--delete", "--checksum",
+		"--exclude=/wahrwelt/",
 		"--exclude=/mysetup/",
 		"--exclude=/secrets/",
 		"--exclude=hardware-configuration.nix",
@@ -110,7 +112,7 @@ func preserveHardware(ctx context.Context, runner run.CommandRunner, dest string
 }
 
 func writeState(ctx context.Context, runner run.CommandRunner, path string, state config.State) error {
-	tmp, err := os.CreateTemp("", "mysetup-state-*")
+	tmp, err := os.CreateTemp("", "wahrwelt-state-*")
 	if err != nil {
 		return err
 	}

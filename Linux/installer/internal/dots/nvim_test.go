@@ -52,7 +52,7 @@ func TestSyncNvimSkipsSyncWhenSourceAlreadyInstalled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dst, ".mysetup-managed.json"), []byte(managedMarkerWithSourceHash("nvim", sourceHash)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dst, ".wahrwelt-managed.json"), []byte(managedMarkerWithSourceHash("nvim", sourceHash)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

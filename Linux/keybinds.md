@@ -333,7 +333,7 @@ points to the upstream config while end4 is active).
 
 | Keys | Action |
 | --- | --- |
-| `Ctrl+Super+Alt+Slash` | Open this keybinds source in editor (`xdg-open .../mysetup/keybinds.conf`) |
+| `Ctrl+Super+Alt+Slash` | Open this keybinds source in editor (`xdg-open ../wahrwelt/keybinds.conf`) |
 
 ### Unbound upstream defaults
 

@@ -14,6 +14,7 @@ _:
     ../system/settings.nix
     ../system/kernel.nix
     ../system/limits.nix
+    ../system/wahrwelt-migration.nix
     ../services/desktop-session.nix
     ../programs/fish.nix
     ../programs/system-tools.nix

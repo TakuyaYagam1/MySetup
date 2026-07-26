@@ -1,4 +1,4 @@
-{ mysetup, pkgs, ... }:
+{ wahrwelt, pkgs, ... }:
 
 {
   programs = {
@@ -7,8 +7,8 @@
       package = pkgs.gitFull;
 
       settings = {
-        user.name = mysetup.git.username;
-        user.email = mysetup.git.email;
+        user.name = wahrwelt.git.username;
+        user.email = wahrwelt.git.email;
         init.defaultBranch = "main";
         pull.rebase = true;
         push.autoSetupRemote = true;

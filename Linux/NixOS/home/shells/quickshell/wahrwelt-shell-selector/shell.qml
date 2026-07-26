@@ -8,9 +8,9 @@ import Quickshell.Wayland
 ShellRoot {
   id: root
 
-  readonly property string targetScreen: Quickshell.env("WAHRWELT_SHELL_SELECTOR_MONITOR") || Quickshell.env("MYSETUP_SHELL_SELECTOR_MONITOR") || ""
-  readonly property string activeShell: Quickshell.env("WAHRWELT_ACTIVE_SHELL") || Quickshell.env("MYSETUP_ACTIVE_SHELL") || "caelestia"
-  readonly property string selectorScript: Quickshell.env("WAHRWELT_SHELL_SELECTOR_SCRIPT") || Quickshell.env("MYSETUP_SHELL_SELECTOR_SCRIPT")
+  readonly property string targetScreen: Quickshell.env("WAHRWELT_SHELL_SELECTOR_MONITOR") || Quickshell.env("WAHRWELT_SHELL_SELECTOR_MONITOR") || ""
+  readonly property string activeShell: Quickshell.env("WAHRWELT_ACTIVE_SHELL") || Quickshell.env("WAHRWELT_ACTIVE_SHELL") || "caelestia"
+  readonly property string selectorScript: Quickshell.env("WAHRWELT_SHELL_SELECTOR_SCRIPT") || Quickshell.env("WAHRWELT_SHELL_SELECTOR_SCRIPT")
 
   property var shellOptions: [
     // WAHRWELT_SHELL_OPTIONS_BEGIN
@@ -86,7 +86,7 @@ ShellRoot {
 
       WlrLayershell.layer: WlrLayer.Overlay
       WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
-      WlrLayershell.namespace: "mysetup-shell-selector-" + modelData.name
+      WlrLayershell.namespace: "wahrwelt-shell-selector-" + modelData.name
       WlrLayershell.exclusionMode: ExclusionMode.Ignore
 
       property int selectedIndex: root.shellIndex(root.activeShell)

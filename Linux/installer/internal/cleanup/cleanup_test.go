@@ -174,7 +174,7 @@ func TestRunRepairsActiveEnd4ProfileLink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stateDir := filepath.Join(home, ".local", "state", "mysetup")
+	stateDir := filepath.Join(home, ".local", "state", "wahrwelt")
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

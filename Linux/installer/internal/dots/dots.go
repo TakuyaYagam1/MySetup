@@ -22,15 +22,14 @@ func Apply(ctx context.Context, opts Options) error {
 	if runner == nil {
 		runner = run.New(opts.DryRun)
 	}
-	home := opts.State.User.HomeDirectory
-	if home == "" {
-		var err error
-		home, err = os.UserHomeDir()
-		if err != nil {
-			return err
-		}
+	home, err := managedHome(opts.State.User.HomeDirectory)
+	if err != nil {
+		return err
 	}
 	configDir := filepath.Join(home, ".config")
+	if err := migrateLegacyUserPaths(ctx, runner, home); err != nil {
+		return err
+	}
 
 	if opts.State.Dots.Wallpapers {
 		if err := copyWallpapers(ctx, runner, opts.Sources.NixOS, home); err != nil {
@@ -59,6 +58,13 @@ func Apply(ctx context.Context, opts Options) error {
 	}
 	refreshThumbnailDaemons(ctx, runner, opts.State.User.Username, home)
 	return nil
+}
+
+func managedHome(configured string) (string, error) {
+	if configured != "" {
+		return configured, nil
+	}
+	return os.UserHomeDir()
 }
 
 func refreshThumbnailDaemons(ctx context.Context, runner run.CommandRunner, username, _ string) {

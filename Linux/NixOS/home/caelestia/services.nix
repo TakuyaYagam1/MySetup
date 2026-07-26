@@ -1,4 +1,4 @@
-{ mysetup, ... }:
+{ wahrwelt, ... }:
 
 {
   caelestiaShellSettings = {
@@ -14,7 +14,7 @@
           to = "YT Music";
         }
       ];
-      inherit (mysetup.locale) weatherLocation;
+      inherit (wahrwelt.locale) weatherLocation;
       useFahrenheit = false;
       useFahrenheitPerformance = false;
       useTwelveHourClock = false;

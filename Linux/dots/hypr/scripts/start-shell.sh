@@ -6,17 +6,17 @@ script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 . "$script_dir/shell-runtime.sh"
 
 requested_profile="${1:-}"
-config_home="$mysetup_config_home"
-runtime_dir="$mysetup_runtime_session_dir"
-persistent_state_file="$mysetup_active_shell_state"
-log_file="$mysetup_log_file"
-lock_dir="$runtime_dir/mysetup-shell.lock"
+config_home="$wahrwelt_config_home"
+runtime_dir="$wahrwelt_runtime_session_dir"
+persistent_state_file="$wahrwelt_active_shell_state"
+log_file="$wahrwelt_log_file"
+lock_dir="$runtime_dir/wahrwelt-shell.lock"
 lock_owner_file="$lock_dir/owner"
-hypr_runtime_dir="$mysetup_hypr_runtime_dir"
-user_name="$mysetup_user_name"
-selector_pattern="$mysetup_selector_pattern"
-end4_pattern="$mysetup_end4_pattern"
-caelestia_pattern="$mysetup_caelestia_pattern"
+hypr_runtime_dir="$wahrwelt_hypr_runtime_dir"
+user_name="$wahrwelt_user_name"
+selector_pattern="$wahrwelt_selector_pattern"
+end4_pattern="$wahrwelt_end4_pattern"
+caelestia_pattern="$wahrwelt_caelestia_pattern"
 selector_handle='__selector__'
 caelestia_handle='__caelestia__'
 caelestia_resizer_handle='__caelestia_resizer__'
@@ -24,7 +24,7 @@ noctalia_handle='__noctalia__'
 end4_handle='__end4__'
 end4_idle_handle='__end4_idle__'
 end4_idle_config="$hypr_runtime_dir/hypridle.conf"
-end4_env_pattern="$mysetup_end4_env_pattern"
+end4_env_pattern="$wahrwelt_end4_env_pattern"
 
 # shellcheck source=Linux/dots/hypr/scripts/shell-runtime-env.sh
 . "$script_dir/shell-runtime-env.sh"
@@ -54,23 +54,23 @@ resolve_profile() {
     stored="$(tr -d '[:space:]' <"$persistent_state_file" 2>/dev/null || true)"
   fi
 
-  if mysetup_valid_shell_profile "$stored"; then
+  if wahrwelt_valid_shell_profile "$stored"; then
     printf '%s' "$stored"
     return 0
   fi
 
-  printf '%s' "$mysetup_default_shell_profile"
+  printf '%s' "$wahrwelt_default_shell_profile"
 }
 
 profile="$(resolve_profile "$requested_profile")"
 
-if ! mysetup_valid_shell_profile "$profile"; then
+if ! wahrwelt_valid_shell_profile "$profile"; then
   log "unknown shell before lock: $profile"
   exit 1
 fi
 
 hypr_dir() {
-  mysetup_hypr_dir_path
+  wahrwelt_hypr_dir_path
 }
 
 acquire_lock() {
@@ -80,14 +80,14 @@ acquire_lock() {
     if mkdir "$lock_dir" 2>/dev/null; then
       printf '%s\n' "$$" >"$lock_dir/pid"
       printf '%s\n' "$profile" >"$lock_dir/profile"
-      printf '%s\n' "mysetup-start-shell" >"$lock_owner_file"
+      printf '%s\n' "wahrwelt-start-shell" >"$lock_owner_file"
       return 0
     fi
 
     lock_owner="$(cat "$lock_owner_file" 2>/dev/null || true)"
     lock_pid="$(cat "$lock_dir/pid" 2>/dev/null || true)"
     lock_profile="$(cat "$lock_dir/profile" 2>/dev/null || true)"
-    if [ "$lock_owner" = "mysetup-start-shell" ] && mysetup_pid_matches "$lock_pid" '(^|[ /])start-shell\.sh([[:space:]]|$)'; then
+    if [ "$lock_owner" = "wahrwelt-start-shell" ] && wahrwelt_pid_matches "$lock_pid" '(^|[ /])start-shell\.sh([[:space:]]|$)'; then
       if [ "$lock_profile" = "$profile" ]; then
         log "another start-shell instance is already running for profile=$profile pid=$lock_pid"
         exit 0
@@ -238,7 +238,7 @@ start_profile_shell() {
 
       local noctalia_cmd
       local noctalia_daemon_flag
-      if noctalia_cmd="$(mysetup_noctalia_command)" && noctalia_daemon_flag="$(mysetup_noctalia_daemon_flag)"; then
+      if noctalia_cmd="$(wahrwelt_noctalia_command)" && noctalia_daemon_flag="$(wahrwelt_noctalia_daemon_flag)"; then
         start_with_retry "noctalia" "$noctalia_handle" "$noctalia_cmd" "$noctalia_daemon_flag" || return 1
       else
         log "noctalia command not found"
@@ -263,7 +263,7 @@ start_profile_shell() {
 }
 
 valid_profile() {
-  mysetup_valid_shell_profile "$1"
+  wahrwelt_valid_shell_profile "$1"
 }
 
 log "requested profile=$profile input=${requested_profile:-auto}"

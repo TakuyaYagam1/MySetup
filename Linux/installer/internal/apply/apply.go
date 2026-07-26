@@ -131,12 +131,12 @@ func createStagingDir() (string, error) {
 
 func stagingBaseDir() string {
 	if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" && !isUnderPath(cacheDir, os.TempDir()) {
-		return filepath.Join(cacheDir, "mysetup", "staging")
+		return filepath.Join(cacheDir, "wahrwelt", "staging")
 	}
 	if homeDir, err := os.UserHomeDir(); err == nil && homeDir != "" && !isUnderPath(homeDir, os.TempDir()) {
-		return filepath.Join(homeDir, ".cache", "mysetup", "staging")
+		return filepath.Join(homeDir, ".cache", "wahrwelt", "staging")
 	}
-	return filepath.Join("/var/tmp", "mysetup-"+strconv.Itoa(os.Getuid()), "staging")
+	return filepath.Join("/var/tmp", "wahrwelt-"+strconv.Itoa(os.Getuid()), "staging")
 }
 
 func isUnderPath(path, parent string) bool {

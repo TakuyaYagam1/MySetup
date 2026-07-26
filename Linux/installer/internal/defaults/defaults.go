@@ -2,7 +2,7 @@ package defaults
 
 const ShaCryptRounds = 656000
 
-const StagingTempPattern = "mysetup-nixos-*"
+const StagingTempPattern = "wahrwelt-nixos-*"
 
 var ExtraSubstituters = []string{
 	"https://nix-community.cachix.org",

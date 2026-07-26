@@ -27,7 +27,7 @@ var sineChromePreservePaths = []string{
 func setupZen(ctx context.Context, runner run.CommandRunner, dotsSrc, home, username string, cfg config.Dots) error {
 	profile := zenutil.FindProfile(home)
 	if profile == "" {
-		fmt.Println("Zen Browser profile not found; launch Zen once and rerun mysetup dots/apply")
+		fmt.Println("Zen Browser profile not found; launch Zen once and rerun wahrwelt dots/apply")
 		return nil
 	}
 	chrome := filepath.Join(profile, "chrome")
@@ -63,7 +63,7 @@ func setupZenTheme(ctx context.Context, runner run.CommandRunner, dotsSrc, chrom
 		return err
 	}
 	if alreadyInstalled {
-		if err := writeMarkerWithOwnerAndSourceHash(ctx, runner, filepath.Join(chrome, ".mysetup-managed.json"), "zen-chrome", username, sourceHash); err != nil {
+		if err := writeMarkerWithOwnerAndSourceHash(ctx, runner, filepath.Join(chrome, ".wahrwelt-managed.json"), "zen-chrome", username, sourceHash); err != nil {
 			return err
 		}
 		fmt.Printf("Zen chrome already exists in %s; skipping sync\n", chrome)
@@ -86,7 +86,7 @@ func setupZenTheme(ctx context.Context, runner run.CommandRunner, dotsSrc, chrom
 	if err := ensureUserWritableTree(ctx, runner, chrome, username); err != nil {
 		return err
 	}
-	return writeMarkerWithOwnerAndSourceHash(ctx, runner, filepath.Join(chrome, ".mysetup-managed.json"), "zen-chrome", username, sourceHash)
+	return writeMarkerWithOwnerAndSourceHash(ctx, runner, filepath.Join(chrome, ".wahrwelt-managed.json"), "zen-chrome", username, sourceHash)
 }
 
 func ensureZenCustomCSSPref(ctx context.Context, runner run.CommandRunner, profile, username string) error {
@@ -148,7 +148,7 @@ func upsertZenCustomCSSPref(text string) string {
 }
 
 func sudoInstallZenUserJS(ctx context.Context, runner run.CommandRunner, target, username, content string, mode os.FileMode) error {
-	temp, err := os.CreateTemp("", "mysetup-zen-user-js-*")
+	temp, err := os.CreateTemp("", "wahrwelt-zen-user-js-*")
 	if err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func setupSineProfile(ctx context.Context, runner run.CommandRunner, chrome, use
 		fmt.Printf("Sine profile files already exist in %s; skipping download\n", chrome)
 		return nil
 	}
-	tmp, err := os.MkdirTemp("", "mysetup-sine-*")
+	tmp, err := os.MkdirTemp("", "wahrwelt-sine-*")
 	if err != nil {
 		return err
 	}

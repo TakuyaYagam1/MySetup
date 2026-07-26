@@ -20,13 +20,18 @@ type Sources struct {
 	Installer string
 }
 
+const (
+	DefaultStatePath = "/etc/nixos/wahrwelt/state.json"
+	LegacyStatePath  = "/etc/nixos/mysetup/state.json"
+)
+
 func DefaultOptions() Options {
 	home, _ := os.UserHomeDir()
 	stateHome := xdgStateHome(home, true)
 	return Options{
 		NixOSDest: "/etc/nixos",
-		StatePath: "/etc/nixos/mysetup/state.json",
-		DraftPath: filepath.Join(stateHome, "mysetup", "draft.json"),
+		StatePath: DefaultStatePath,
+		DraftPath: filepath.Join(stateHome, "wahrwelt", "draft.json"),
 	}
 }
 
@@ -45,7 +50,38 @@ func xdgStateHome(home string, preferEnv bool) string {
 }
 
 func ActiveShellStatePath(home string) string {
+	return filepath.Join(XDGStateHome(home), "wahrwelt", "active-shell")
+}
+
+func LegacyDraftPath(home string) string {
+	return filepath.Join(XDGStateHome(home), "mysetup", "draft.json")
+}
+
+func LegacyActiveShellStatePath(home string) string {
 	return filepath.Join(XDGStateHome(home), "mysetup", "active-shell")
+}
+
+func ExistingFile(primary, legacy string) string {
+	if exists(primary) || legacy == "" || !exists(legacy) {
+		return primary
+	}
+	return legacy
+}
+
+func (o Options) ExistingStatePath() string {
+	if o.StatePath != DefaultStatePath {
+		return o.StatePath
+	}
+	return ExistingFile(o.StatePath, LegacyStatePath)
+}
+
+func (o Options) ExistingDraftPath() string {
+	home, _ := os.UserHomeDir()
+	defaultDraft := filepath.Join(XDGStateHome(home), "wahrwelt", "draft.json")
+	if o.DraftPath != defaultDraft {
+		return o.DraftPath
+	}
+	return ExistingFile(o.DraftPath, LegacyDraftPath(home))
 }
 
 func ResolveSources(repoRoot string) (Sources, error) {

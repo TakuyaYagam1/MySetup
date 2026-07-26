@@ -10,11 +10,11 @@ let
   dotfilesLib = homeLibs.dotfiles;
   shellProfiles = import ./profiles.nix;
   inherit (dotfilesLib) dotsRoot;
-  shellSelectorRoot = ./quickshell/mysetup-shell-selector;
+  shellSelectorRoot = ./quickshell/wahrwelt-shell-selector;
   defaultProfile = shellProfiles.byId.${shellProfiles.defaultProfile};
   hyprDir = "${config.xdg.configHome}/hypr";
-  hyprRuntimeDir = "${config.xdg.stateHome}/mysetup/hypr-runtime";
-  activeShellState = "${config.xdg.stateHome}/mysetup/active-shell";
+  hyprRuntimeDir = "${config.xdg.stateHome}/wahrwelt/hypr-runtime";
+  activeShellState = "${config.xdg.stateHome}/wahrwelt/active-shell";
   stableEntrypoints = dotfilesLib.hyprRuntimeFiles;
   inherit (dotfilesLib) hyprScripts;
   # end4 is installed as one patched tree at hypr/end4. Adding nested
@@ -28,12 +28,12 @@ let
     source = dotsRoot + "/${target}";
   });
 
-  mysetupHyprFiles = {
-    "hypr/mysetup/hyprland.lua" = {
+  wahrweltHyprFiles = {
+    "hypr/wahrwelt/hyprland.lua" = {
       force = true;
       source = dotsRoot + "/hypr/hyprland.lua";
     };
-    "hypr/lib/mysetup.lua" = dotfilesLib.forcedSource (dotsRoot + "/hypr/lib/mysetup.lua");
+    "hypr/lib/wahrwelt.lua" = dotfilesLib.forcedSource (dotsRoot + "/hypr/lib/wahrwelt.lua");
     "hypr/variables.lua" = dotfilesLib.forcedSource (dotsRoot + "/hypr/variables.lua");
     "hypr/scheme/default.lua" = dotfilesLib.forcedSource (dotsRoot + "/hypr/scheme/default.lua");
   }
@@ -92,7 +92,7 @@ let
   );
 
   managedHyprPaths = lib.attrNames (
-    hyprScriptFiles // stableEntrypointFiles // mysetupHyprFiles // commonHyprFiles
+    hyprScriptFiles // stableEntrypointFiles // wahrweltHyprFiles // commonHyprFiles
   );
 
   backupTargets = lib.concatMapStringsSep " \\\n" (
@@ -106,6 +106,8 @@ let
     "${hyprDir}/shell-keybinds.conf"
     "${hyprDir}/mysetup/hyprland.conf"
     "${hyprDir}/mysetup/local.lua"
+    "${hyprDir}/wahrwelt/hyprland.conf"
+    "${hyprDir}/wahrwelt/local.lua"
     "${hyprRuntimeDir}/hyprland.conf"
     "${hyprRuntimeDir}/shell-profile.conf"
     "${hyprRuntimeDir}/shell-launcher.conf"
@@ -120,10 +122,10 @@ in
   xdg.configFile =
     hyprScriptFiles
     // stableEntrypointFiles
-    // mysetupHyprFiles
+    // wahrweltHyprFiles
     // commonHyprFiles
     // {
-      "quickshell/mysetup-shell-selector" = {
+      "quickshell/wahrwelt-shell-selector" = {
         force = true;
         source = shellSelectorSource;
       };
@@ -140,7 +142,7 @@ in
       done
     '';
 
-    pruneMySetupHyprBackups = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
+    pruneWahrweltHyprBackups = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
       for backup in \
         ${backupTargets}
       do
@@ -164,7 +166,7 @@ in
           runtime_dir="${hyprRuntimeDir}"
           active_shell="${activeShellState}"
 
-          $DRY_RUN_CMD mkdir -p "$runtime_dir" "$(dirname "$active_shell")" "${hyprDir}/mysetup"
+          $DRY_RUN_CMD mkdir -p "$runtime_dir" "$(dirname "$active_shell")" "${hyprDir}/wahrwelt"
 
           seed_file() {
             local target="$1"
@@ -175,9 +177,9 @@ in
             fi
           }
 
-          seed_file "$active_shell" "${pkgs.writeText "mysetup-active-shell-default" "${defaultProfile.id}\n"}"
-          seed_file "$runtime_dir/hyprland.lua" "${pkgs.writeText "mysetup-hypr-runtime-default" ''
-            -- Active Hyprland profile: mysetup (${defaultProfile.id})
+          seed_file "$active_shell" "${pkgs.writeText "wahrwelt-active-shell-default" "${defaultProfile.id}\n"}"
+          seed_file "$runtime_dir/hyprland.lua" "${pkgs.writeText "wahrwelt-hypr-runtime-default" ''
+            -- Active Hyprland profile: wahrwelt (${defaultProfile.id})
             local home = os.getenv("HOME")
             if home == nil then
                 error("HOME is not set; cannot locate Wahrwelt Hyprland config")
@@ -186,32 +188,32 @@ in
             local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
             local state_home = os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")
             local hypr_root = config_home .. "/hypr"
-            local runtime_root = state_home .. "/mysetup/hypr-runtime"
+            local runtime_root = state_home .. "/wahrwelt/hypr-runtime"
             package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-            dofile(hypr_root .. "/mysetup/hyprland.lua")
+            dofile(hypr_root .. "/wahrwelt/hyprland.lua")
             dofile(runtime_root .. "/shell-profile.lua")
           ''}"
-          seed_file "$runtime_dir/shell-profile.lua" "${pkgs.writeText "mysetup-shell-profile-default" ''
+          seed_file "$runtime_dir/shell-profile.lua" "${pkgs.writeText "wahrwelt-shell-profile-default" ''
             -- Runtime shell launcher
             hl.on("hyprland.start", function()
                 hl.exec_cmd("${hyprDir}/scripts/start-shell.sh")
             end)
           ''}"
-          seed_file "$runtime_dir/hyprlock.conf" "${pkgs.writeText "mysetup-empty-hyprlock" ""}"
-          seed_file "$runtime_dir/hypridle.conf" "${pkgs.writeText "mysetup-empty-hypridle" ""}"
-          seed_file "$runtime_dir/shell-launcher.lua" "${pkgs.writeText "mysetup-shell-launcher-default" ''
+          seed_file "$runtime_dir/hyprlock.conf" "${pkgs.writeText "wahrwelt-empty-hyprlock" ""}"
+          seed_file "$runtime_dir/hypridle.conf" "${pkgs.writeText "wahrwelt-empty-hypridle" ""}"
+          seed_file "$runtime_dir/shell-launcher.lua" "${pkgs.writeText "wahrwelt-shell-launcher-default" ''
             -- Active shell launcher profile: ${defaultProfile.id}
             require("${defaultProfile.id}.launcher")
           ''}"
-          seed_file "$runtime_dir/shell-keybinds.lua" "${pkgs.writeText "mysetup-shell-keybinds-default" ''
+          seed_file "$runtime_dir/shell-keybinds.lua" "${pkgs.writeText "wahrwelt-shell-keybinds-default" ''
             -- Active shell keybind profile: ${defaultProfile.id}
             require("${defaultProfile.id}.keybinds")
           ''}"
 
-          seed_file "${hyprDir}/mysetup/keybinds.lua" "${pkgs.writeText "mysetup-hypr-local-keybinds-example" ''
+          seed_file "${hyprDir}/wahrwelt/keybinds.lua" "${pkgs.writeText "wahrwelt-hypr-local-keybinds-example" ''
             -- Your own Hyprland keybind overrides go here. This file is NOT
             -- managed by Nix/Home Manager - edit it freely, it survives rebuilds
-            -- and `mysetup update`.
+            -- and `wahrwelt update`.
             --
             -- It loads LAST, after every bind in this setup is already
             -- registered, so hl.unbind() here actually works. Hyprland does not

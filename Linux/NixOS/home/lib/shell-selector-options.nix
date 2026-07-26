@@ -5,7 +5,7 @@
   # between WAHRWELT_SHELL_OPTIONS_BEGIN/END markers in shell.qml.
   buildOptionsFile =
     profiles:
-    pkgs.writeText "mysetup-shell-selector-options.qml" (
+    pkgs.writeText "wahrwelt-shell-selector-options.qml" (
       lib.concatMapStringsSep ",\n" (
         profile:
         "    {\n"
@@ -25,7 +25,7 @@
       selectorRoot,
       optionsFile,
     }:
-    pkgs.runCommand "mysetup-shell-selector" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+    pkgs.runCommand "wahrwelt-shell-selector" { nativeBuildInputs = [ pkgs.python3 ]; } ''
       cp -r ${selectorRoot} "$out"
       chmod -R u+w "$out"
       python3 - "$out/shell.qml" ${optionsFile} <<'PY'

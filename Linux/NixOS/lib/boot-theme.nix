@@ -16,8 +16,8 @@ let
 in
 {
   # Resolves the logo image for a boot-time theme (grub/sddm/plymouth).
-  # Priority: ~/.config/mysetup/boot-theme/<service>.{png,jpg,jpeg}
-  #        -> ~/.config/mysetup/boot-theme/logo.{png,jpg,jpeg}
+  # Priority: ~/.config/wahrwelt/boot-theme/<service>.{png,jpg,jpeg}
+  #        -> ~/.config/wahrwelt/boot-theme/logo.{png,jpg,jpeg}
   #
   # If the boot-theme directory doesn't exist yet (nothing has ever been
   # seeded - the very first apply on a fresh install), `default` is used
@@ -32,9 +32,11 @@ in
       default,
     }:
     let
-      dir = "${homeDirectory}/.config/mysetup/boot-theme";
+      canonicalDir = "${homeDirectory}/.config/wahrwelt/boot-theme";
+      legacyDir = "${homeDirectory}/.config/mysetup/boot-theme";
+      dir = if builtins.pathExists canonicalDir then canonicalDir else legacyDir;
     in
-    if !(builtins.pathExists dir) then
+    if !(builtins.pathExists canonicalDir) && !(builtins.pathExists legacyDir) then
       default
     else
       let

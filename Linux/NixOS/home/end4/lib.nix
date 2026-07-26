@@ -1,7 +1,7 @@
 {
   config ? null,
   lib,
-  mysetupConfig ? import ../../hosts/NixOS/host-vars.nix,
+  wahrweltConfig ? import ../../hosts/NixOS/host-vars.nix,
   pkgs,
 }:
 
@@ -9,7 +9,7 @@ let
   homeLibs = import ../lib { inherit lib pkgs; };
   dotfilesLib = homeLibs.dotfiles;
   settings = import ./settings.nix {
-    inherit mysetupConfig;
+    inherit wahrweltConfig;
     transparencyDefaults = homeLibs.transparency.perShell.end4;
   };
   runtime = (import ../../lib/package-sets.nix { inherit lib pkgs; }).runtime.end4;

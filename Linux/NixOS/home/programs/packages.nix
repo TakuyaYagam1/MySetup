@@ -1,6 +1,6 @@
 {
   lib,
-  mysetup,
+  wahrwelt,
   wahrweltLib,
   pkgs,
   pkgs-stable ? pkgs,
@@ -15,16 +15,16 @@ let
 in
 {
   config = lib.mkMerge [
-    (wahrweltLib.mkIfPresetOrMore "minimal" mysetup {
+    (wahrweltLib.mkIfPresetOrMore "minimal" wahrwelt {
       home.packages = home.media ++ packageSets.runtime.waylandTools;
     })
-    (wahrweltLib.mkIfPresetOrMore "desktop" mysetup {
+    (wahrweltLib.mkIfPresetOrMore "desktop" wahrwelt {
       home.packages = home.desktop ++ home.misc;
     })
-    (wahrweltLib.mkIfPresetOrMore "developer" mysetup {
+    (wahrweltLib.mkIfPresetOrMore "developer" wahrwelt {
       home.packages = home.apiTools ++ home.containers ++ home.dev;
     })
-    (lib.mkIf (wahrweltLib.presets.personal mysetup) {
+    (lib.mkIf (wahrweltLib.presets.personal wahrwelt) {
       home.packages = home.personal ++ home.games;
     })
   ];

@@ -66,7 +66,7 @@ func TestCreateStagingDirUsesUserCacheOutsideTmp(t *testing.T) {
 		_ = os.RemoveAll(staging)
 	})
 
-	wantPrefix := filepath.Join(cache, "mysetup", "staging") + string(filepath.Separator)
+	wantPrefix := filepath.Join(cache, "wahrwelt", "staging") + string(filepath.Separator)
 	if !strings.HasPrefix(staging, wantPrefix) {
 		t.Fatalf("staging dir must use user cache, got %q want prefix %q", staging, wantPrefix)
 	}
@@ -79,7 +79,7 @@ func TestStagingBaseDirAvoidsTempBackedCacheAndHome(t *testing.T) {
 	t.Setenv("HOME", filepath.Join(tmp, "home"))
 
 	got := stagingBaseDir()
-	wantPrefix := filepath.Join("/var/tmp", "mysetup-")
+	wantPrefix := filepath.Join("/var/tmp", "wahrwelt-")
 	if !strings.HasPrefix(got, wantPrefix) {
 		t.Fatalf("temp-backed cache/home must fall back to /var/tmp, got %q", got)
 	}
@@ -155,7 +155,7 @@ func TestRunDryRunSkipSwitchHonoursInjectedRunner(t *testing.T) {
 	}
 }
 
-func TestRunManagedThinLockUpdatesOnlyMySetup(t *testing.T) {
+func TestRunManagedThinLockUpdatesOnlyWahrwelt(t *testing.T) {
 	repo, dest := fakeRepo(t)
 	fake := &fakeRunner{dryRun: true}
 

@@ -11,6 +11,10 @@ import (
 )
 
 const managedMarkerVersion = 2
+const (
+	managedMarkerName       = ".wahrwelt-managed.json"
+	legacyManagedMarkerName = ".mysetup-managed.json"
+)
 
 type managedMarkerFile struct {
 	Manager    string `json:"manager"`
@@ -55,14 +59,20 @@ func InspectManagedRoot(target, kind string) (ManagedRootInspection, error) {
 		return inspection, nil
 	}
 
-	markerPath := filepath.Join(target, ".mysetup-managed.json")
+	markerPath := filepath.Join(target, managedMarkerName)
 	markerInfo, err := os.Lstat(markerPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			inspection.Status = ManagedRootUnmanaged
-			return inspection, nil
+			markerPath = filepath.Join(target, legacyManagedMarkerName)
+			markerInfo, err = os.Lstat(markerPath)
+			if os.IsNotExist(err) {
+				inspection.Status = ManagedRootUnmanaged
+				return inspection, nil
+			}
 		}
-		return inspection, fmt.Errorf("stat managed marker for %s: %w", target, err)
+		if err != nil {
+			return inspection, fmt.Errorf("stat managed marker for %s: %w", target, err)
+		}
 	}
 	if markerInfo.Mode()&os.ModeSymlink != 0 || !markerInfo.Mode().IsRegular() {
 		inspection.Status = ManagedRootInvalidMark
@@ -108,7 +118,7 @@ func writeMarkerWithOwnerAndSourceHash(ctx context.Context, runner run.CommandRu
 }
 
 func sudoInstallMarker(ctx context.Context, runner run.CommandRunner, target, kind, username, sourceHash string) error {
-	temp, err := os.CreateTemp("", "mysetup-managed-marker-*")
+	temp, err := os.CreateTemp("", "wahrwelt-managed-marker-*")
 	if err != nil {
 		return err
 	}
@@ -159,7 +169,7 @@ func managedMarker(kind string) string {
 
 func managedMarkerWithSourceHash(kind, sourceHash string) string {
 	marker := managedMarkerFile{
-		Manager:    "mysetup",
+		Manager:    "wahrwelt",
 		Kind:       kind,
 		Version:    managedMarkerVersion,
 		SourceHash: sourceHash,
@@ -167,7 +177,7 @@ func managedMarkerWithSourceHash(kind, sourceHash string) string {
 	data, err := json.MarshalIndent(marker, "", "  ")
 	if err != nil {
 		return fmt.Sprintf(
-			"{\n  \"manager\": \"mysetup\",\n  \"kind\": %q,\n  \"version\": %d,\n  \"sourceHash\": %q\n}\n",
+			"{\n  \"manager\": \"wahrwelt\",\n  \"kind\": %q,\n  \"version\": %d,\n  \"sourceHash\": %q\n}\n",
 			kind, managedMarkerVersion, sourceHash,
 		)
 	}
@@ -187,7 +197,7 @@ func readManagedMarker(path string) (managedMarkerFile, bool) {
 	if err := json.Unmarshal(data, &marker); err != nil {
 		return marker, false
 	}
-	if marker.Manager != "mysetup" || marker.Version != managedMarkerVersion {
+	if (marker.Manager != "wahrwelt" && marker.Manager != "mysetup") || marker.Version != managedMarkerVersion {
 		return marker, false
 	}
 	return marker, true

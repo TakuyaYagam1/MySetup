@@ -130,8 +130,32 @@ func TestDefaultOptionsStillHonorsProcessXDGStateHome(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", stateHome)
 
 	opts := DefaultOptions()
-	if got, want := opts.DraftPath, filepath.Join(stateHome, "mysetup", "draft.json"); got != want {
+	if got, want := opts.DraftPath, filepath.Join(stateHome, "wahrwelt", "draft.json"); got != want {
 		t.Fatalf("expected process XDG state home in default options %q, got %q", want, got)
+	}
+}
+
+func TestDefaultOptionsUseCanonicalWahrweltPaths(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	opts := DefaultOptions()
+	if opts.StatePath != DefaultStatePath {
+		t.Fatalf("expected canonical state path %q, got %q", DefaultStatePath, opts.StatePath)
+	}
+	if got, want := ActiveShellStatePath("/home/tester"), "/home/tester/.local/state/wahrwelt/active-shell"; got != want {
+		t.Fatalf("expected canonical active shell path %q, got %q", want, got)
+	}
+}
+
+func TestExistingStatePathFallsBackToLegacyDefault(t *testing.T) {
+	dir := t.TempDir()
+	canonical := filepath.Join(dir, "wahrwelt", "state.json")
+	legacy := filepath.Join(dir, "mysetup", "state.json")
+	mkdir(t, filepath.Dir(legacy))
+	write(t, legacy)
+
+	opts := Options{StatePath: canonical}
+	if got := ExistingFile(opts.StatePath, legacy); got != legacy {
+		t.Fatalf("expected legacy state fallback %q, got %q", legacy, got)
 	}
 }
 

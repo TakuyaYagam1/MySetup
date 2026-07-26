@@ -9,7 +9,7 @@
 let
   dotfilesSource = inputs.end4-dotfiles;
   inherit (end4Lib) dotfilesLib runtimeEnv settings;
-  mysetupHyprSource = dotfilesLib.dotsRoot + "/hypr/end4";
+  wahrweltHyprSource = dotfilesLib.dotsRoot + "/hypr/end4";
   end4WindowOpacity = settings.window.opacity;
   luaString = value: builtins.toJSON (toString value);
   luaEnvLines = lib.concatStringsSep "\n" (
@@ -47,10 +47,10 @@ let
             cp -r ${dotfilesSource}/dots/.config/hypr $out
             chmod -R +w $out
             find $out -type f -name '*.sh' -exec chmod +x {} +
-            mkdir -p $out/mysetup
-            cp ${mysetupHyprSource}/keybinds.lua $out/mysetup/keybinds.lua
-            cp ${mysetupHyprSource}/launcher.lua $out/launcher.lua
-            chmod -R u+w $out/mysetup
+            mkdir -p $out/wahrwelt
+            cp ${wahrweltHyprSource}/keybinds.lua $out/wahrwelt/keybinds.lua
+            cp ${wahrweltHyprSource}/launcher.lua $out/launcher.lua
+            chmod -R u+w $out/wahrwelt
 
             cat > $out/hyprland/env.lua <<'EOF'
         ${luaEnvLines}
@@ -146,7 +146,7 @@ let
             }
         })
 
-        hl.curve("mysetupStandard", {
+        hl.curve("wahrweltStandard", {
             type = "bezier",
             points = { { 0.2, 0 }, { 0, 1 } }
         })
@@ -154,7 +154,7 @@ let
             leaf = "workspaces",
             enabled = true,
             speed = 5,
-            bezier = "mysetupStandard",
+            bezier = "wahrweltStandard",
             style = "slide"
         })
         EOF
@@ -168,7 +168,7 @@ let
             cat > "$out/custom/keybinds.lua" <<'EOF'
         local home = os.getenv("HOME")
         local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-        dofile(config_home .. "/hypr/end4/mysetup/keybinds.lua")
+        dofile(config_home .. "/hypr/end4/wahrwelt/keybinds.lua")
         EOF
 
             # Rewrite legacy ~/.config/hypr/* paths to the end4 namespace so end-4

@@ -6,14 +6,14 @@
 }:
 
 let
-  bootThemeDir = "${config.home.homeDirectory}/.config/mysetup/boot-theme";
+  bootThemeDir = "${config.home.homeDirectory}/.config/wahrwelt/boot-theme";
   seededMarker = "${bootThemeDir}/.seeded";
-  readme = pkgs.writeText "mysetup-boot-theme-readme" ''
+  readme = pkgs.writeText "wahrwelt-boot-theme-readme" ''
     Wahrwelt boot theme overrides
     ============================
 
     Drop a PNG or JPG image in this directory to customize the GRUB, SDDM,
-    and Plymouth boot logos. Changes need `mysetup apply` / `nixos-rebuild
+    and Plymouth boot logos. Changes need `wahrwelt apply` / `nixos-rebuild
     switch` to take effect; GRUB and Plymouth only become visible after a
     reboot (they render before Linux is running).
 
@@ -30,7 +30,7 @@ let
   '';
 in
 {
-  home.activation.mysetupSeedBootTheme = homeLibs.shellSeed.mkSeedActivation {
+  home.activation.wahrweltSeedBootTheme = homeLibs.shellSeed.mkSeedActivation {
     dirs = [ bootThemeDir ];
     body = ''
       if [ ! -e "${seededMarker}" ]; then

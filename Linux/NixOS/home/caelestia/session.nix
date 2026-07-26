@@ -1,4 +1,4 @@
-{ mysetup, ... }:
+{ wahrwelt, ... }:
 
 {
   caelestiaShellSettings.session = {
@@ -16,7 +16,7 @@
         "pkill"
         "-KILL"
         "-u"
-        mysetup.user.username
+        wahrwelt.user.username
       ];
       shutdown = [
         "systemctl"

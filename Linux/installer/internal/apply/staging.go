@@ -101,6 +101,7 @@ func copyNixOS(ctx context.Context, runner run.CommandRunner, src, dst string, d
 		args = append(args, "--delete")
 	}
 	args = append(args,
+		"--exclude=/wahrwelt/",
 		"--exclude=/mysetup/",
 		"--exclude=/secrets/",
 		"--exclude=hosts/NixOS/hardware-configuration.nix",

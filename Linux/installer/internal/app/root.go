@@ -72,6 +72,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(cleanupCommand(&opts))
 	root.AddCommand(rollbackCommand(&opts))
 	root.AddCommand(printStateCommand(&opts))
+	root.AddCommand(migrateCommand(&opts))
 
 	return root
 }
@@ -121,7 +122,7 @@ func applyCommand(opts *Options) *cobra.Command {
 		Use:   "apply",
 		Short: "Apply saved state to /etc/nixos and user dotfiles",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			state, err := config.LoadExisting(opts.StatePath)
+			state, err := config.LoadExisting(opts.ExistingStatePath())
 			if err != nil {
 				return err
 			}
@@ -158,7 +159,7 @@ func doctorCommand(opts *Options) *cobra.Command {
 		Use:   "doctor",
 		Short: "Check current Wahrwelt installation health",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			state, err := loadDoctorState(opts.StatePath)
+			state, err := loadDoctorState(opts.ExistingStatePath())
 			if err != nil {
 				return err
 			}
@@ -183,7 +184,7 @@ func cleanupCommand(opts *Options) *cobra.Command {
 		Use:   "cleanup",
 		Short: "Clean safe managed leftovers",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			state, err := loadDoctorState(opts.StatePath)
+			state, err := loadDoctorState(opts.ExistingStatePath())
 			if err != nil {
 				return err
 			}
@@ -202,7 +203,7 @@ func printStateCommand(opts *Options) *cobra.Command {
 		Use:   "print-state",
 		Short: "Print the saved machine state as JSON",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			state, err := config.LoadExisting(opts.StatePath)
+			state, err := config.LoadExisting(opts.ExistingStatePath())
 			if err != nil {
 				return err
 			}

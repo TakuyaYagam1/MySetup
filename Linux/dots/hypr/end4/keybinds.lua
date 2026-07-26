@@ -1,10 +1,10 @@
-local mysetup = require("lib.mysetup")
+local wahrwelt = require("lib.wahrwelt")
 local v = require("variables")
 
 hl.unbind("CTRL + SUPER + ALT + Slash")
-mysetup.bind_exec(
+wahrwelt.bind_exec(
 	"CTRL + SUPER + ALT + Slash",
-	"xdg-open " .. mysetup.hypr .. "/end4/mysetup/keybinds.lua",
+	"xdg-open " .. wahrwelt.hypr .. "/end4/wahrwelt/keybinds.lua",
 	{ description = "Wahrwelt: Edit end4 keybinds" }
 )
 
@@ -28,8 +28,8 @@ end
 require("shell-common-keybinds")
 require("shell-workspace-keybinds")
 
-mysetup.bind_exec(v.kbNextWs, mysetup.hypr .. "/scripts/wsaction.fish workspace +1")
-mysetup.bind_exec(v.kbPrevWs, mysetup.hypr .. "/scripts/wsaction.fish workspace -1")
+wahrwelt.bind_exec(v.kbNextWs, wahrwelt.hypr .. "/scripts/wsaction.fish workspace +1")
+wahrwelt.bind_exec(v.kbPrevWs, wahrwelt.hypr .. "/scripts/wsaction.fish workspace -1")
 
 for _, keys in ipairs({
 	"SUPER + F",
@@ -41,9 +41,9 @@ end
 
 hl.bind(v.kbMoveWindow, hl.dsp.window.drag(), { mouse = true })
 hl.bind(v.kbResizeWindow, hl.dsp.window.resize(), { mouse = true })
-mysetup.bind_dispatch(v.kbCloseWindow, "killactive")
-mysetup.bind_dispatch(v.kbToggleWindowFloating, "togglefloating")
-mysetup.bind_dispatch(v.kbPinWindow, "pin")
-mysetup.bind_dispatch(v.kbWindowFullscreen, "fullscreen 0")
-mysetup.bind_dispatch("SUPER + CTRL + Return", "fullscreen 0")
-mysetup.bind_dispatch(v.kbWindowBorderedFullscreen, "fullscreen 1")
+wahrwelt.bind_dispatch(v.kbCloseWindow, "killactive")
+wahrwelt.bind_dispatch(v.kbToggleWindowFloating, "togglefloating")
+wahrwelt.bind_dispatch(v.kbPinWindow, "pin")
+wahrwelt.bind_dispatch(v.kbWindowFullscreen, "fullscreen 0")
+wahrwelt.bind_dispatch("SUPER + CTRL + Return", "fullscreen 0")
+wahrwelt.bind_dispatch(v.kbWindowBorderedFullscreen, "fullscreen 1")

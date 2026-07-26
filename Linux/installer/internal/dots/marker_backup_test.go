@@ -43,7 +43,7 @@ func TestBackupIfUnmanagedTrustsOnlyValidMarker(t *testing.T) {
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(target, ".mysetup-managed.json"), []byte(`{"manager":"other","kind":"hypr","version":2}`+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(target, ".wahrwelt-managed.json"), []byte(`{"manager":"other","kind":"hypr","version":2}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -67,7 +67,7 @@ func TestBackupIfUnmanagedTreatsMarkerSymlinkAsUnmanaged(t *testing.T) {
 	if err := os.WriteFile(externalMarker, []byte(managedMarker("hypr")), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(externalMarker, filepath.Join(target, ".mysetup-managed.json")); err != nil {
+	if err := os.Symlink(externalMarker, filepath.Join(target, ".wahrwelt-managed.json")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -89,7 +89,7 @@ func TestBackupIfUnmanagedTreatsRootSymlinkAsUnmanaged(t *testing.T) {
 	if err := os.MkdirAll(outside, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeMarker(run.Runner{}, filepath.Join(outside, ".mysetup-managed.json"), "hypr"); err != nil {
+	if err := writeMarker(run.Runner{}, filepath.Join(outside, ".wahrwelt-managed.json"), "hypr"); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(outside, target); err != nil {
@@ -112,7 +112,7 @@ func TestBackupIfUnmanagedBacksUpMarkerWithWrongKind(t *testing.T) {
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeMarker(run.Runner{}, filepath.Join(target, ".mysetup-managed.json"), "nvim"); err != nil {
+	if err := writeMarker(run.Runner{}, filepath.Join(target, ".wahrwelt-managed.json"), "nvim"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -132,7 +132,7 @@ func TestBackupIfUnmanagedSkipsValidMarker(t *testing.T) {
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeMarker(run.Runner{}, filepath.Join(target, ".mysetup-managed.json"), "hypr"); err != nil {
+	if err := writeMarker(run.Runner{}, filepath.Join(target, ".wahrwelt-managed.json"), "hypr"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -148,7 +148,7 @@ func TestBackupIfUnmanagedSkipsValidMarker(t *testing.T) {
 }
 
 func TestWriteMarkerReplacesStaleReadOnlyMarker(t *testing.T) {
-	target := filepath.Join(t.TempDir(), ".mysetup-managed.json")
+	target := filepath.Join(t.TempDir(), ".wahrwelt-managed.json")
 	if err := os.WriteFile(target, []byte("stale\n"), 0o400); err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestWriteMarkerReplacesSymlinkWithoutFollowingIt(t *testing.T) {
 	if err := os.WriteFile(outside, []byte("outside\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	target := filepath.Join(dir, ".mysetup-managed.json")
+	target := filepath.Join(dir, ".wahrwelt-managed.json")
 	if err := os.Symlink(outside, target); err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestWriteMarkerWithOwnerFallsBackToSudoInstallOnPermissionDenied(t *testing
 
 	var out bytes.Buffer
 	runner := run.Runner{Stdout: &out, Stderr: &out}
-	err := writeMarkerWithOwner(context.Background(), runner, filepath.Join(dir, ".mysetup-managed.json"), "hypr", "tester")
+	err := writeMarkerWithOwner(context.Background(), runner, filepath.Join(dir, ".wahrwelt-managed.json"), "hypr", "tester")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,9 +228,9 @@ func TestWriteMarkerWithOwnerFallsBackToSudoInstallOnPermissionDenied(t *testing
 	}
 	log := string(logData)
 	for _, want := range []string{
-		"rm -f -- " + filepath.Join(dir, ".mysetup-managed.json"),
+		"rm -f -- " + filepath.Join(dir, ".wahrwelt-managed.json"),
 		"install -D -m 644 -o tester ",
-		filepath.Join(dir, ".mysetup-managed.json"),
+		filepath.Join(dir, ".wahrwelt-managed.json"),
 	} {
 		if !strings.Contains(log, want) {
 			t.Fatalf("expected sudo fallback command %q, got:\n%s\nstdout:\n%s", want, log, out.String())
@@ -305,5 +305,17 @@ func TestEnsureUserWritableTreeRepairsNestedReadonlyStoreModes(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected writable repair command %q, got:\n%s", want, got)
 		}
+	}
+}
+
+func TestReadManagedMarkerAcceptsLegacyManagerDuringMigration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".mysetup-managed.json")
+	data := `{"manager":"mysetup","kind":"hypr","version":2}` + "\n"
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	marker, ok := readManagedMarker(path)
+	if !ok || marker.Kind != "hypr" {
+		t.Fatalf("expected legacy marker to remain recognized, got %#v ok=%t", marker, ok)
 	}
 }

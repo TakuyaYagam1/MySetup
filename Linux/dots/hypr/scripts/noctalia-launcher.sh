@@ -5,7 +5,7 @@ script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=Linux/dots/hypr/scripts/shell-runtime.sh
 . "$script_dir/shell-runtime.sh"
 
-state_dir="${XDG_RUNTIME_DIR:-/tmp}/mysetup-noctalia-launcher"
+state_dir="${XDG_RUNTIME_DIR:-/tmp}/wahrwelt-noctalia-launcher"
 active_file="$state_dir/active"
 interrupt_file="$state_dir/interrupted"
 lock_dir="$state_dir/lock"
@@ -15,11 +15,11 @@ lock_owner_file="$lock_dir/owner"
 mkdir -p "$state_dir"
 
 acquire_lock() {
-  mysetup_acquire_lock \
+  wahrwelt_acquire_lock \
     "$lock_dir" \
     "$lock_pid_file" \
     "$lock_owner_file" \
-    "mysetup-noctalia-launcher" \
+    "wahrwelt-noctalia-launcher" \
     '(^|[ /])noctalia-launcher\.sh([[:space:]]|$)' \
     20 \
     0.02 || exit 0
@@ -40,7 +40,7 @@ case "${1:-release}" in
     ;;
   release)
     if [ -e "$active_file" ] && [ ! -e "$interrupt_file" ]; then
-      mysetup_noctalia_action launcher-toggle >/dev/null 2>&1 || true
+      wahrwelt_noctalia_action launcher-toggle >/dev/null 2>&1 || true
     fi
     rm -f "$active_file" "$interrupt_file"
     ;;

@@ -7,7 +7,10 @@ func managedSourceAlreadyInstalled(src, dst, kind string, excludes map[string]bo
 	if err != nil {
 		return "", false, err
 	}
-	marker, ok := readManagedMarker(filepath.Join(dst, ".mysetup-managed.json"))
+	marker, ok := readManagedMarker(filepath.Join(dst, managedMarkerName))
+	if !ok {
+		marker, ok = readManagedMarker(filepath.Join(dst, legacyManagedMarkerName))
+	}
 	if !ok || marker.Kind != kind {
 		return sourceHash, false, nil
 	}

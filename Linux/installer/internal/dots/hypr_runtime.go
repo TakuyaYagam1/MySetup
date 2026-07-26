@@ -50,7 +50,7 @@ func removeLegacyHyprlandRuntimeFiles(home, hyprDir string) error {
 		filepath.Join(hyprDir, "shell-profile.conf"),
 		filepath.Join(hyprDir, "shell-launcher.conf"),
 		filepath.Join(hyprDir, "shell-keybinds.conf"),
-		filepath.Join(hyprDir, "mysetup", "hyprland.conf"),
+		filepath.Join(hyprDir, "wahrwelt", "hyprland.conf"),
 		shellruntime.RuntimeFile(home, "hyprland.conf"),
 		shellruntime.RuntimeFile(home, "shell-profile.conf"),
 		shellruntime.RuntimeFile(home, "shell-launcher.conf"),
@@ -81,7 +81,7 @@ func writeLegacyRuntimeShellState(hyprDir, shellKeybinds, hyprland, hyprlock, hy
 	if err := writeShellKeybindsConfig(shellKeybinds, hyprDir, profile); err != nil {
 		return err
 	}
-	if err := writeMySetupHyprEntrypointConfig(hyprland, shellLauncher, fmt.Sprintf("mysetup (%s)", profile)); err != nil {
+	if err := writeWahrweltHyprEntrypointConfig(hyprland, shellLauncher, fmt.Sprintf("wahrwelt (%s)", profile)); err != nil {
 		return err
 	}
 	if err := writeShellManagedRuntimePlaceholder(hyprlock, "Hyprlock", profile, "Caelestia and Noctalia use shell-native lock flows."); err != nil {
@@ -188,7 +188,7 @@ func writeShellLauncherBindingsConfig(path, hyprDir, profile string) error {
 	return writeRuntimeConfigFile(path, content)
 }
 
-func writeMySetupHyprEntrypointConfig(path, shellProfile, label string) error {
+func writeWahrweltHyprEntrypointConfig(path, shellProfile, label string) error {
 	content := fmt.Sprintf(`-- Active Hyprland profile: %s
 local home = os.getenv("HOME")
 if home == nil then
@@ -198,9 +198,9 @@ end
 local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
 local state_home = os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")
 local hypr_root = config_home .. "/hypr"
-local runtime_root = state_home .. "/mysetup/hypr-runtime"
+local runtime_root = state_home .. "/wahrwelt/hypr-runtime"
 package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-dofile(hypr_root .. "/mysetup/hyprland.lua")
+dofile(hypr_root .. "/wahrwelt/hyprland.lua")
 dofile(%q)
 -- runtime_root is kept for parity with shell-profile-sync generated entrypoints.
 local _ = runtime_root

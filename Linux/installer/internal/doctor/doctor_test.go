@@ -101,7 +101,7 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 	if err := os.MkdirAll(runtimeDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(hyprDir, "mysetup"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(hyprDir, "wahrwelt"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(paths.ActiveShellStatePath(state.User.HomeDirectory), []byte("caelestia\n"), 0o644); err != nil {
@@ -116,19 +116,19 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(runtimeDir, "shell-profile.lua"), []byte(`hl.on("hyprland.start", function() hl.exec_cmd("/home/user/.config/hypr/scripts/start-shell.sh") end)`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(runtimeDir, "hyprland.lua"), []byte(`dofile("/home/user/.config/hypr/mysetup/hyprland.lua")`+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(runtimeDir, "hyprland.lua"), []byte(`dofile("/home/user/.config/hypr/wahrwelt/hyprland.lua")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "mysetup", "hyprland.lua"), []byte("hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@120\", position = \"0x0\", scale = \"1\" })\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "wahrwelt", "hyprland.lua"), []byte("hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@120\", position = \"0x0\", scale = \"1\" })\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(runtimeDir, "shell-keybinds.lua"), []byte(`require("caelestia.keybinds")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(state.User.HomeDirectory, ".config/quickshell", "mysetup-shell-selector"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(state.User.HomeDirectory, ".config/quickshell", "wahrwelt-shell-selector"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(state.User.HomeDirectory, ".config/quickshell", "mysetup-shell-selector", "shell.qml"), []byte("ShellRoot {}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(state.User.HomeDirectory, ".config/quickshell", "wahrwelt-shell-selector", "shell.qml"), []byte("ShellRoot {}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, script := range requiredHyprScripts() {
@@ -149,7 +149,7 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 	report, err := Report(context.Background(), Options{
 		Paths: paths.Options{
 			NixOSDest: dir,
-			StatePath: filepath.Join(dir, "mysetup/state.json"),
+			StatePath: filepath.Join(dir, "wahrwelt/state.json"),
 		},
 		State: state,
 	})
@@ -207,9 +207,9 @@ func TestReportUsesEnd4ProfileChecks(t *testing.T) {
 		filepath.Join(runtimeDir, "hyprlock.conf"):                                                               "source=~/.config/hypr/end4/hyprlock.conf\n",
 		filepath.Join(runtimeDir, "hypridle.conf"):                                                               "source=~/.config/hypr/end4/hypridle.conf\n",
 		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/hyprland.lua"):                                "require(\"hyprland.env\")\n",
-		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/mysetup/keybinds.lua"):                        "mysetup.bind_exec(\"SUPER + R\", \"~/.config/hypr/scripts/record-toggle.sh\")\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/wahrwelt/keybinds.lua"):                       "wahrwelt.bind_exec(\"SUPER + R\", \"~/.config/hypr/scripts/record-toggle.sh\")\n",
 		filepath.Join(state.User.HomeDirectory, ".config/quickshell/ii/shell.qml"):                               "ShellRoot {}\n",
-		filepath.Join(state.User.HomeDirectory, ".config/quickshell/mysetup-shell-selector/shell.qml"):           "ShellRoot {}\n",
+		filepath.Join(state.User.HomeDirectory, ".config/quickshell/wahrwelt-shell-selector/shell.qml"):          "ShellRoot {}\n",
 		filepath.Join(state.User.HomeDirectory, ".config/illogical-impulse/config.json"):                         "{}\n",
 		filepath.Join(state.User.HomeDirectory, ".config/kdeglobals"):                                            "[General]\n",
 		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/hyprland/scripts/launch_first_available.sh"):  "#!/bin/sh\n",
@@ -244,7 +244,7 @@ func TestReportUsesEnd4ProfileChecks(t *testing.T) {
 	report, err := Report(context.Background(), Options{
 		Paths: paths.Options{
 			NixOSDest: dir,
-			StatePath: filepath.Join(dir, "mysetup/state.json"),
+			StatePath: filepath.Join(dir, "wahrwelt/state.json"),
 		},
 		State: state,
 	})
@@ -259,7 +259,7 @@ func TestReportUsesEnd4ProfileChecks(t *testing.T) {
 		"OK   end4 hyprlock entrypoint:",
 		"OK   end4 hypridle entrypoint:",
 		"OK   end4 hypr config:",
-		"OK   end4 mysetup keybinds:",
+		"OK   end4 wahrwelt keybinds:",
 		"OK   end4 quickshell shell:",
 		"OK   end4 runtime config dir:",
 		"OK   end4 runtime config:",
