@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 )
 
 func TestBackupIfUnmanagedReturnsMarkerStatError(t *testing.T) {

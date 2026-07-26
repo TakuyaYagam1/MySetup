@@ -311,7 +311,7 @@ Interrupt is wired for: catchall keys, all mouse buttons
 
 Bindings specific to **end-4 / Illogical Impulse**, layered on top of Common.
 The end4 profile uses upstream end-4 dotfiles patched by
-`Linux/NixOS/home/end4/patches/hypr.nix` and overlays MySetup-specific
+`Linux/NixOS/home/end4/patches/hypr.nix` and overlays Wahrwelt-specific
 keybinds from `Linux/dots/hypr/end4/keybinds.conf`.
 
 > Sources: `Linux/dots/hypr/end4/keybinds.conf`,
@@ -320,7 +320,7 @@ keybinds from `Linux/dots/hypr/end4/keybinds.conf`.
 ### Launcher
 
 End4 ships its own QuickShell launcher tied to **Super long-press** via
-upstream `end-4/dots-hyprland`. MySetup leaves the upstream wiring alone -
+upstream `end-4/dots-hyprland`. Wahrwelt leaves the upstream wiring alone -
 no per-shell launcher.conf is needed (`Linux/dots/hypr/end4/launcher.conf`
 is intentionally empty; the active `$hypr/shell-launcher.conf` symlink
 points to the upstream config while end4 is active).
@@ -329,7 +329,7 @@ points to the upstream config while end4 is active).
 | --- | --- |
 | `Super` long-press | Open end4 launcher (handled by upstream IPC) |
 
-### MySetup overrides
+### Wahrwelt overrides
 
 | Keys | Action |
 | --- | --- |
@@ -338,7 +338,7 @@ points to the upstream config while end4 is active).
 ### Unbound upstream defaults
 
 These upstream end-4 bindings are explicitly cleared before sourcing the
-shared MySetup set, to avoid double-binds and conflicts:
+shared Wahrwelt set, to avoid double-binds and conflicts:
 
 | Cleared |
 | --- |
@@ -387,6 +387,6 @@ section above for the resulting set.
   shortcuts come from the upstream `end-4/dots-hyprland` config. They are
   not duplicated here - refer to the upstream wiki for shell-internal
   bindings: <https://end-4.github.io/dots-hyprland-wiki/>.
-- MySetup keeps end4 mutable runtime settings under
+- Wahrwelt keeps end4 mutable runtime settings under
   `~/.config/illogical-impulse`, so shell-side JSON changes can persist
   without a rebuild.

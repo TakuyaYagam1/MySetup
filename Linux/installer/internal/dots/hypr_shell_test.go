@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/shellruntime"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/shellruntime"
 )
 
 func TestWriteShellLauncherConfigWritesRuntimeLauncher(t *testing.T) {
@@ -407,7 +407,7 @@ func TestWriteHyprRuntimeShellStateSeedsEnd4RuntimeFilesWhenProfileExists(t *tes
 	}
 	entrypointText := string(entrypoint)
 	if strings.Contains(entrypointText, shellruntime.RuntimeFile(home, "shell-profile.lua")) {
-		t.Fatalf("end4 entrypoint should not source MySetup shell profile\n%s", entrypointText)
+		t.Fatalf("end4 entrypoint should not source Wahrwelt shell profile\n%s", entrypointText)
 	}
 	if strings.Contains(entrypointText, filepath.Join(hyprDir, "runtime", "shell-profile.lua")) {
 		t.Fatalf("end4 entrypoint should not source old hypr runtime path\n%s", entrypointText)

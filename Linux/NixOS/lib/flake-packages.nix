@@ -17,27 +17,30 @@ let
   dotsSource = layout.dots;
   installerSource = layout.installer;
 
-  mysetupRuntimeSource = flakePkgs.runCommand "mysetup-runtime-source" { } ''
+  wahrweltRuntimeSource = flakePkgs.runCommand "wahrwelt-runtime-source" { } ''
     mkdir -p "$out"
     cp -a ${nixosSource} "$out/NixOS"
     cp -a ${dotsSource} "$out/dots"
     cp -a ${installerSource} "$out/installer"
   '';
 
-  mysetup = flakePkgs.buildGoModule {
-    pname = "mysetup";
+  wahrwelt = flakePkgs.buildGoModule {
+    pname = "wahrwelt";
     version = "0.1.0";
     src = installerSource;
-    subPackages = [ "cmd/mysetup" ];
-    vendorHash = "sha256-3BLXjtDy2dsq7A12BmAkoOQbu/hYkhVm4GKCtqYglTo=";
+    subPackages = [ "cmd/wahrwelt" ];
+    vendorHash = "sha256-owIDnnxJBzzo9Jdn+Avn0bRBXMQPnfYzxh8/5viBw+Y=";
     nativeBuildInputs = [ flakePkgs.makeWrapper ];
     ldflags = [
       "-s"
       "-w"
     ];
     postInstall = ''
-      wrapProgram $out/bin/mysetup \
-        --set MYSETUP_REPO_ROOT ${mysetupRuntimeSource}/NixOS \
+      ln -s wahrwelt $out/bin/mysetup
+      wrapProgram $out/bin/wahrwelt \
+        --set WAHRWELT_REPO_ROOT ${wahrweltRuntimeSource}/NixOS \
+        --set MYSETUP_REPO_ROOT ${wahrweltRuntimeSource}/NixOS \
+        --set WAHRWELT_XKB_RULES_DIR ${flakePkgs.xkeyboard_config}/share/X11/xkb/rules \
         --set MYSETUP_XKB_RULES_DIR ${flakePkgs.xkeyboard_config}/share/X11/xkb/rules \
         --prefix PATH : ${
           flakePkgs.lib.makeBinPath (
@@ -65,25 +68,34 @@ let
 
   packages = {
     omnirouter = flakePkgs.callPackage ../pkgs/omnirouter.nix { };
-    inherit mysetup;
-    default = mysetup;
+    inherit wahrwelt;
+    mysetup = wahrwelt;
+    default = wahrwelt;
   };
 
   checks = {
-    inherit mysetup;
+    inherit wahrwelt;
+    mysetup = wahrwelt;
+  };
+
+  wahrweltApp = {
+    type = "app";
+    program = "${packages.wahrwelt}/bin/wahrwelt";
+    meta.description = "Run the Wahrwelt NixOS installer";
   };
 
   mysetupApp = {
     type = "app";
     program = "${packages.mysetup}/bin/mysetup";
-    meta.description = "Run the MySetup NixOS installer";
+    meta.description = "Run the legacy MySetup-compatible NixOS installer entrypoint";
   };
 in
 {
   inherit checks packages;
 
   apps = {
+    wahrwelt = wahrweltApp;
     mysetup = mysetupApp;
-    default = mysetupApp;
+    default = wahrweltApp;
   };
 }

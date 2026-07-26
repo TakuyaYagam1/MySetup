@@ -6,8 +6,8 @@
 }:
 
 let
-  gpu = config.mysetup.hardware.gpu or "amd";
-  nixCfg = config.mysetup.nix;
+  gpu = config.wahrwelt.hardware.gpu or "amd";
+  nixCfg = config.wahrwelt.nix;
   commonGraphicsPackages = with pkgs; [
     libvdpau-va-gl
     mesa

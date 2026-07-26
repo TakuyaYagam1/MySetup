@@ -6,6 +6,30 @@ import (
 	"testing"
 )
 
+func TestXKBRuleFilesPreferWahrweltEnvironmentAndKeepLegacyFallback(t *testing.T) {
+	wahrwelt := filepath.Join(t.TempDir(), "wahrwelt-rules")
+	legacy := filepath.Join(t.TempDir(), "mysetup-rules")
+	t.Setenv("WAHRWELT_XKB_RULES_DIR", wahrwelt)
+	t.Setenv("MYSETUP_XKB_RULES_DIR", legacy)
+	t.Setenv("XDG_DATA_DIRS", "")
+
+	files := xkbLayoutRuleFiles()
+	wantPrefix := []string{
+		filepath.Join(wahrwelt, "base.lst"),
+		filepath.Join(wahrwelt, "evdev.lst"),
+		filepath.Join(legacy, "base.lst"),
+		filepath.Join(legacy, "evdev.lst"),
+	}
+	if len(files) < len(wantPrefix) {
+		t.Fatalf("XKB rule file list too short: %#v", files)
+	}
+	for index, want := range wantPrefix {
+		if files[index] != want {
+			t.Fatalf("XKB rule priority at index %d = %q, want %q; all files: %#v", index, files[index], want, files)
+		}
+	}
+}
+
 func TestDiscoverXKBLayoutsFromRulesFile(t *testing.T) {
 	dir := t.TempDir()
 	rules := filepath.Join(dir, "base.lst")

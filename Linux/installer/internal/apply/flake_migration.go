@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
 )
 
 const (
@@ -203,10 +203,14 @@ func migrateGeneratedThinFlake(text string, state config.State) (string, bool) {
 	updated = syncOptionalInput(updated, desired.Personal, codexInput, claudeCodeInput, codexFollows, claudeCodeFollows)
 	updated = syncOptionalInput(updated, desired.SecureBoot, lanzabooteInput, neovimNightlyOverlayInputAnchor, lanzabooteFollows, neovimNightlyOverlayFollowsAnchor)
 
-	desiredMySetupURL := config.MySetupFlakeURL(state.Source.Channel)
-	for _, flakeURL := range config.KnownMySetupFlakeURLs() {
-		updated = strings.ReplaceAll(updated, flakeURL, desiredMySetupURL)
+	desiredWahrweltURL := config.WahrweltFlakeURL(state.Source.Channel)
+	for _, flakeURL := range config.KnownWahrweltFlakeURLs() {
+		updated = strings.ReplaceAll(updated, flakeURL, desiredWahrweltURL)
 	}
+	updated = strings.Replace(updated, "    mysetup = {", "    wahrwelt = {", 1)
+	updated = strings.Replace(updated, "    mysetup.url =", "    wahrwelt.url =", 1)
+	updated = strings.Replace(updated, "outputs = { mysetup, ... }:", "outputs = { wahrwelt, ... }:", 1)
+	updated = strings.ReplaceAll(updated, "mysetup.lib.mkMySetupHost", "wahrwelt.lib.mkWahrweltHost")
 
 	return updated, updated != text
 }

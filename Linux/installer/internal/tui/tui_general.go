@@ -3,7 +3,7 @@ package tui
 import (
 	"github.com/charmbracelet/huh"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
 )
 
 func editGeneral(s *session) error {
@@ -26,8 +26,8 @@ func runGeneralForm(s *session, errors generalFormErrors) error {
 			Description(fieldDescription("NixOS host name and flake target, for example NixOS.", errors.hostname)).
 			Value(&s.state.Host.Hostname),
 		huh.NewSelect[string]().
-			Title("MySetup channel").
-			Description(fieldDescription("Which MySetup branch the installed /etc/nixos wrapper follows.", errors.sourceChannel)).
+			Title("Wahrwelt channel").
+			Description(fieldDescription("Which Wahrwelt branch the installed /etc/nixos wrapper follows.", errors.sourceChannel)).
 			Options(sourceChannelOptions()...).
 			Value(&s.state.Source.Channel),
 		huh.NewInput().

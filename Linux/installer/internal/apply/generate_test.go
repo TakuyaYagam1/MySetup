@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 )
 
 func TestHostVarsNixContainsFeatureFlags(t *testing.T) {
@@ -110,7 +110,7 @@ func TestHostVarsNixContainsWallpaperFlag(t *testing.T) {
 	}
 }
 
-func TestFlakeNixUsesIndependentThinMySetupWrapper(t *testing.T) {
+func TestFlakeNixUsesIndependentThinWahrweltWrapper(t *testing.T) {
 	state := config.Default()
 	state.Host.Hostname = "workstation"
 
@@ -132,8 +132,8 @@ func TestFlakeNixUsesIndependentThinMySetupWrapper(t *testing.T) {
 		`url = "github:noctalia-dev/noctalia/v5.0.0-beta.4";`,
 		`noctalia-shell = {`,
 		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
-		`mysetup = {`,
-		`url = "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS";`,
+		`wahrwelt = {`,
+		`url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS";`,
 		`inputs.nixpkgs.follows = "nixpkgs";`,
 		`inputs.home-manager.follows = "home-manager";`,
 		`inputs.nix-index-database.follows = "nix-index-database";`,
@@ -142,7 +142,7 @@ func TestFlakeNixUsesIndependentThinMySetupWrapper(t *testing.T) {
 		`inputs.noctalia-shell.follows = "noctalia-shell";`,
 		`inputs.stylix.follows = "stylix";`,
 		`hostname = "workstation";`,
-		`mysetup.lib.mkMySetupHost`,
+		`wahrwelt.lib.mkWahrweltHost`,
 		`hostVars = ./host-vars.nix;`,
 		`hardware = ./hardware-configuration.nix;`,
 		`extraModules = [ ./configuration.nix ];`,
@@ -162,7 +162,7 @@ func TestFlakeNixUsesIndependentThinMySetupWrapper(t *testing.T) {
 	}
 }
 
-func TestFlakeNixSupportsManagedThinMySetupWrapper(t *testing.T) {
+func TestFlakeNixSupportsManagedThinWahrweltWrapper(t *testing.T) {
 	state := config.Default()
 	state.Host.Hostname = "workstation"
 
@@ -172,9 +172,9 @@ func TestFlakeNixSupportsManagedThinMySetupWrapper(t *testing.T) {
 	}
 	for _, want := range []string{
 		`# lock mode: managed`,
-		`mysetup.url = "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS";`,
+		`wahrwelt.url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS";`,
 		`hostname = "workstation";`,
-		`mysetup.lib.mkMySetupHost`,
+		`wahrwelt.lib.mkWahrweltHost`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("managed thin flake missing %q\n%s", want, out)
@@ -190,7 +190,23 @@ func TestFlakeNixSupportsManagedThinMySetupWrapper(t *testing.T) {
 	}
 }
 
-func TestFlakeNixUsesDevelopmentMySetupChannel(t *testing.T) {
+func TestGeneratedWahrweltWrapperIsRecognizedForInPlaceUpdates(t *testing.T) {
+	state := config.Default()
+	state.Host.Hostname = "workstation"
+
+	text, err := FlakeNix(state, LockModeIndependent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isThinWrapperFlake(text) {
+		t.Fatal("generated Wahrwelt flake should be recognized as a thin wrapper")
+	}
+	if !isGeneratedMySetupWrapperFlake(text) {
+		t.Fatal("generated Wahrwelt flake should be recognized as an installer-managed wrapper")
+	}
+}
+
+func TestFlakeNixUsesDevelopmentWahrweltChannel(t *testing.T) {
 	state := config.Default()
 	state.Source.Channel = config.SourceChannelDevelopment
 	state.Host.Hostname = "workstation"
@@ -201,11 +217,11 @@ func TestFlakeNixUsesDevelopmentMySetupChannel(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(out, `github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS`) {
+			if !strings.Contains(out, `github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS`) {
 				t.Fatalf("development channel must point at dev branch\n%s", out)
 			}
-			if strings.Contains(out, `github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS`) {
-				t.Fatalf("development channel must not keep stable MySetup URL\n%s", out)
+			if strings.Contains(out, `github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS`) {
+				t.Fatalf("development channel must not keep stable Wahrwelt URL\n%s", out)
 			}
 		})
 	}
@@ -221,7 +237,7 @@ func TestFlakeNixCarriesBothNoctaliaInputsForV4Selection(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`url = "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS";`,
+		`url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS";`,
 		`url = "github:noctalia-dev/noctalia/v5.0.0-beta.4";`,
 		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
 	} {
@@ -329,11 +345,11 @@ func TestFlakeNixManagedModeIgnoresPresetAndFeatureToggles(t *testing.T) {
 	}
 	for _, forbidden := range []string{`claude-code`, `codex`, `lanzaboote`, `nixpkgs.url`} {
 		if strings.Contains(out, forbidden) {
-			t.Fatalf("managed mode must stay a single mysetup input regardless of preset/toggles, found %q\n%s", forbidden, out)
+			t.Fatalf("managed mode must stay a single Wahrwelt input regardless of preset/toggles, found %q\n%s", forbidden, out)
 		}
 	}
-	if !strings.Contains(out, `mysetup.url = "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS";`) {
-		t.Fatalf("managed mode must keep the single mysetup input\n%s", out)
+	if !strings.Contains(out, `wahrwelt.url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS";`) {
+		t.Fatalf("managed mode must keep the single Wahrwelt input\n%s", out)
 	}
 }
 
@@ -343,7 +359,7 @@ func TestThinTemplatesExposeSystemAndHomeOverrides(t *testing.T) {
 	}
 	if strings.Contains(ConfigurationNix(), "Edit this configuration file") ||
 		strings.Contains(ConfigurationNix(), "services.desktopManager.plasma6") {
-		t.Fatalf("configuration.nix template must stay a clean MySetup override\n%s", ConfigurationNix())
+		t.Fatalf("configuration.nix template must stay a clean Wahrwelt override\n%s", ConfigurationNix())
 	}
 	if !strings.Contains(ConfigurationNix(), "./private") {
 		t.Fatalf("configuration.nix template must import private defaults\n%s", ConfigurationNix())
@@ -1046,7 +1062,7 @@ func TestMigrateGeneratedThinFlakeRewritesLegacyNoctaliaV4MySetupURL(t *testing.
 		t.Fatal("expected generated thin flake migration to rewrite v4-selected wrapper")
 	}
 	for _, want := range []string{
-		`github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS`,
+		`github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS`,
 		`github:noctalia-dev/noctalia`,
 		`github:noctalia-dev/noctalia-shell/v4.7.7`,
 	} {
@@ -1056,6 +1072,7 @@ func TestMigrateGeneratedThinFlakeRewritesLegacyNoctaliaV4MySetupURL(t *testing.
 	}
 	for _, forbidden := range []string{
 		`github:TakuyaYagam1/MySetup/noctalia-v4?dir=Linux/NixOS`,
+		`mysetup.lib.mkMySetupHost`,
 	} {
 		if strings.Contains(migrated, forbidden) {
 			t.Fatalf("migrated flake kept stale value %q\n%s", forbidden, migrated)
@@ -1317,7 +1334,10 @@ func TestPrepareThinHostLocalPreservesGeneratedThinWrapper(t *testing.T) {
     };
 }
 `
-	wantFlake := strings.ReplaceAll(existingFlake, "github:TakuyaYagam1/MySetup?dir=Linux/NixOS", "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS")
+	wantFlake, changed := migrateGeneratedThinFlake(existingFlake, config.Default())
+	if !changed {
+		t.Fatal("expected legacy generated wrapper to migrate to Wahrwelt")
+	}
 	for path, content := range map[string]string{
 		filepath.Join(staging, "flake.nix"):               "new generated wrapper\n",
 		filepath.Join(dest, "hardware-configuration.nix"): "hardware\n",
@@ -1659,7 +1679,7 @@ func TestFlakeCanUseInstalledInstallerSource(t *testing.T) {
 	}
 }
 
-func TestFlakeMySetupWrapperCanRunFromRemoteSource(t *testing.T) {
+func TestFlakeWahrweltWrapperCanRunFromRemoteSource(t *testing.T) {
 	data, err := os.ReadFile("../../../NixOS/flake.nix")
 	if err != nil {
 		t.Fatal(err)
@@ -1670,11 +1690,12 @@ func TestFlakeMySetupWrapperCanRunFromRemoteSource(t *testing.T) {
 	}
 	text := string(data) + string(packages)
 	for _, want := range []string{
-		"mysetupRuntimeSource",
+		"wahrweltRuntimeSource",
 		`cp -a ${nixosSource} "$out/NixOS"`,
 		`cp -a ${dotsSource} "$out/dots"`,
 		`cp -a ${installerSource} "$out/installer"`,
-		"--set MYSETUP_REPO_ROOT ${mysetupRuntimeSource}/NixOS",
+		"--set WAHRWELT_REPO_ROOT ${wahrweltRuntimeSource}/NixOS",
+		"--set MYSETUP_REPO_ROOT ${wahrweltRuntimeSource}/NixOS",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("flake mysetup wrapper missing remote source support %q\n%s", want, text)
@@ -1690,6 +1711,7 @@ func TestInnerNixOSFlakeUsesSelfForOmniRouterOverlay(t *testing.T) {
 	text := string(data)
 	for _, want := range []string{
 		"inputsForModules = inputs // {",
+		"wahrwelt = self;",
 		"mysetup = self;",
 	} {
 		if !strings.Contains(text, want) {
@@ -1697,7 +1719,7 @@ func TestInnerNixOSFlakeUsesSelfForOmniRouterOverlay(t *testing.T) {
 		}
 	}
 	if strings.Contains(text, `mysetup.url = "github:TakuyaYagam1/MySetup";`) {
-		t.Fatalf("NixOS flake must not pin a nested MySetup input for OmniRouter updates\n%s", text)
+		t.Fatalf("NixOS flake must not pin a nested legacy MySetup input for OmniRouter updates\n%s", text)
 	}
 }
 

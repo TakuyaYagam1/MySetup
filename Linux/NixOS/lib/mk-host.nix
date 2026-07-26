@@ -1,7 +1,7 @@
 {
   home-manager,
   inputs,
-  mysetupLib,
+  wahrweltLib,
   nixpkgs,
   nixpkgs-stable,
 }:
@@ -36,7 +36,7 @@ let
   flakeModules = import ./flake-modules.nix {
     inherit
       inputs
-      mysetupLib
+      wahrweltLib
       overlays
       pkgs-stable
       ;
@@ -50,7 +50,7 @@ let
     { lib, ... }:
     {
       networking.hostName = lib.mkDefault hostname;
-      mysetup = hostVarsValue;
+      wahrwelt = hostVarsValue;
     };
 
   extraOverlaysModule = {
@@ -70,7 +70,7 @@ let
   homeExtraModule =
     { config, lib, ... }:
     lib.mkIf (homeExtraModules != [ ]) {
-      home-manager.users.${config.mysetup.user.username}.imports = homeExtraModules;
+      home-manager.users.${config.wahrwelt.user.username}.imports = homeExtraModules;
     };
 in
 nixpkgs.lib.nixosSystem {
@@ -79,13 +79,14 @@ nixpkgs.lib.nixosSystem {
   specialArgs = {
     inherit
       inputs
-      mysetupLib
+      wahrweltLib
       pkgs-stable
       ;
+    mysetupLib = wahrweltLib;
   };
 
   modules = [
-    flakeModules.mysetupModule
+    flakeModules.wahrweltModule
     hostModule
   ]
   ++ optionalPath hardware

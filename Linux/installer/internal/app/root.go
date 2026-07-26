@@ -8,14 +8,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/apply"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/cleanup"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/doctor"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/rollback"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/secrets"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/tui"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/apply"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/cleanup"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/doctor"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/rollback"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/secrets"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/tui"
 )
 
 var Version = ""
@@ -44,8 +44,8 @@ func NewRootCommand() *cobra.Command {
 	opts := Options{Options: paths.DefaultOptions()}
 
 	root := &cobra.Command{
-		Use:     "mysetup",
-		Short:   "Catppuccin Macchiato TUI installer for MySetup",
+		Use:     "wahrwelt",
+		Short:   "Catppuccin Macchiato TUI installer for Wahrwelt",
 		Version: resolveVersion(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return tui.Run(cmd.Context(), tui.Options{
@@ -57,7 +57,7 @@ func NewRootCommand() *cobra.Command {
 		},
 	}
 
-	root.PersistentFlags().StringVar(&opts.RepoRoot, "repo", "", "MySetup repository root")
+	root.PersistentFlags().StringVar(&opts.RepoRoot, "repo", "", "Wahrwelt repository root")
 	root.PersistentFlags().StringVar(&opts.NixOSDest, "dest", opts.NixOSDest, "NixOS destination directory")
 	root.PersistentFlags().StringVar(&opts.StatePath, "state", opts.StatePath, "machine-local state file")
 	root.PersistentFlags().StringVar(&opts.DraftPath, "draft", opts.DraftPath, "user draft state file")
@@ -80,7 +80,7 @@ func rollbackCommand(opts *Options) *cobra.Command {
 	var backupPath string
 	cmd := &cobra.Command{
 		Use:   "rollback",
-		Short: "Restore /etc/nixos from a previous mysetup backup",
+		Short: "Restore /etc/nixos from a previous Wahrwelt backup",
 		Long: "Picks the most recent <dest>.bak.* directory (or --backup <path>) " +
 			"and rsync --delete's it back into the destination. Does not roll the " +
 			"active system generation; run `sudo nixos-rebuild switch --rollback` for that.",
@@ -148,7 +148,7 @@ func applyCommand(opts *Options) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&noSwitch, "no-switch", false, "stop after dry-build without switching or writing activated state")
-	cmd.Flags().StringVar(&sourceChannel, "source-channel", "", "override saved MySetup channel: stable or development")
+	cmd.Flags().StringVar(&sourceChannel, "source-channel", "", "override saved Wahrwelt channel: stable or development")
 	cmd.Flags().StringVar(&userPasswordFile, "user-password-file", "", "read initial user password from file for hashed-password.nix")
 	return cmd
 }
@@ -156,7 +156,7 @@ func applyCommand(opts *Options) *cobra.Command {
 func doctorCommand(opts *Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
-		Short: "Check current MySetup installation health",
+		Short: "Check current Wahrwelt installation health",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			state, err := loadDoctorState(opts.StatePath)
 			if err != nil {

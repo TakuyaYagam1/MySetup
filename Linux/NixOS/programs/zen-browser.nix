@@ -1,13 +1,13 @@
 {
   config,
-  mysetupLib,
+  wahrweltLib,
   pkgs,
   ...
 }:
 
 let
-  mysetupPkgs = pkgs.mysetup or { };
-  zen-pkg = mysetupPkgs.zen-browser or pkgs.zen-browser;
+  wahrweltPkgs = pkgs.wahrwelt or (pkgs.mysetup or { });
+  zen-pkg = wahrweltPkgs.zen-browser or pkgs.zen-browser;
 
   sineCfgJs = pkgs.writeText "sine-config.js" ''
     unlockPref("xpinstall.signatures.required");
@@ -49,7 +49,7 @@ let
   '';
 in
 {
-  config = mysetupLib.mkIfPresetOrMore "desktop" config.mysetup {
+  config = wahrweltLib.mkIfPresetOrMore "desktop" config.wahrwelt {
     environment.systemPackages = [ zen-with-sine ];
   };
 }

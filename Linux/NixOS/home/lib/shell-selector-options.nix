@@ -2,7 +2,7 @@
 
 {
   # Build a QML fragment listing shell profile entries; suitable for inserting
-  # between MYSETUP_SHELL_OPTIONS_BEGIN/END markers in shell.qml.
+  # between WAHRWELT_SHELL_OPTIONS_BEGIN/END markers in shell.qml.
   buildOptionsFile =
     profiles:
     pkgs.writeText "mysetup-shell-selector-options.qml" (
@@ -34,8 +34,8 @@
 
       target = Path(sys.argv[1])
       options = Path(sys.argv[2]).read_text().rstrip()
-      begin = "    // MYSETUP_SHELL_OPTIONS_BEGIN"
-      end = "    // MYSETUP_SHELL_OPTIONS_END"
+      begin = "    // WAHRWELT_SHELL_OPTIONS_BEGIN"
+      end = "    // WAHRWELT_SHELL_OPTIONS_END"
       text = target.read_text()
       prefix, rest = text.split(begin, 1)
       _, suffix = rest.split(end, 1)

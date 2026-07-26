@@ -1,5 +1,5 @@
 {
-  mkMySetupHost,
+  mkWahrweltHost,
   system,
 }:
 
@@ -18,7 +18,7 @@ let
   };
 in
 {
-  nixosConfigurations.${hostname} = mkMySetupHost {
+  nixosConfigurations.${hostname} = mkWahrweltHost {
     inherit system;
     inherit hostname;
     hostVars = hostVarsPath;

@@ -10,7 +10,7 @@
       trusted-users = [
         "root"
         "@wheel"
-        config.mysetup.user.username
+        config.wahrwelt.user.username
       ];
 
       # Optional private netrc for GitHub API auth during flake input updates.
@@ -47,9 +47,9 @@
       ];
 
       sandbox = true;
-      max-jobs = config.mysetup.nix.maxJobs;
-      cores = config.mysetup.nix.cores;
-      auto-optimise-store = config.mysetup.host.autoOptimiseStore;
+      max-jobs = config.wahrwelt.nix.maxJobs;
+      cores = config.wahrwelt.nix.cores;
+      auto-optimise-store = config.wahrwelt.host.autoOptimiseStore;
       warn-dirty = false;
     };
 
@@ -59,17 +59,17 @@
 
     # Persistent fallback when programs.nh.clean is disabled.
     gc = {
-      automatic = config.mysetup.host.autoGarbageCollector && !config.programs.nh.clean.enable;
+      automatic = config.wahrwelt.host.autoGarbageCollector && !config.programs.nh.clean.enable;
       persistent = true;
       dates = "weekly";
-      options = "--delete-older-than ${config.mysetup.nix.gcRetention}";
+      options = "--delete-older-than ${config.wahrwelt.nix.gcRetention}";
     };
 
     daemonCPUSchedPolicy = "idle";
     daemonIOSchedClass = "idle";
 
     optimise = {
-      automatic = config.mysetup.host.autoOptimiseStore;
+      automatic = config.wahrwelt.host.autoOptimiseStore;
       dates = [ "weekly" ];
     };
   };

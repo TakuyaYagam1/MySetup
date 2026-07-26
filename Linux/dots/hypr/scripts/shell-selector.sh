@@ -179,6 +179,9 @@ start_selector() {
   log "starting selector monitor=${monitor:-auto} active=${active_shell:-unknown}"
 
   env \
+    WAHRWELT_SHELL_SELECTOR_MONITOR="$monitor" \
+    WAHRWELT_ACTIVE_SHELL="$active_shell" \
+    WAHRWELT_SHELL_SELECTOR_SCRIPT="$config_home/hypr/scripts/shell-selector.sh" \
     MYSETUP_SHELL_SELECTOR_MONITOR="$monitor" \
     MYSETUP_ACTIVE_SHELL="$active_shell" \
     MYSETUP_SHELL_SELECTOR_SCRIPT="$config_home/hypr/scripts/shell-selector.sh" \

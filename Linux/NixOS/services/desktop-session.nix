@@ -1,14 +1,14 @@
 {
   config,
   lib,
-  mysetupLib,
+  wahrweltLib,
   pkgs,
   ...
 }:
 
 let
-  inherit (mysetupLib) presets;
-  cfg = config.mysetup;
+  inherit (wahrweltLib) presets;
+  cfg = config.wahrwelt;
   desktopOrMore = presets.desktopOrMore cfg;
 in
 {

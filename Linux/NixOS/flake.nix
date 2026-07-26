@@ -100,9 +100,10 @@
 
       inputsForModules = inputs // {
         mysetup = self;
+        wahrwelt = self;
       };
 
-      mysetupLib = import ./lib/mysetup.nix {
+      wahrweltLib = import ./lib/mysetup.nix {
         inherit (nixpkgs) lib;
       };
 
@@ -124,7 +125,7 @@
 
           flakeModules = import ./lib/flake-modules.nix {
             inherit
-              mysetupLib
+              wahrweltLib
               overlays
               pkgs-stable
               ;
@@ -141,10 +142,10 @@
 
       defaultContext = mkSystemContext system;
 
-      mkMySetupHost = import ./lib/mk-host.nix {
+      mkWahrweltHost = import ./lib/mk-host.nix {
         inherit
           home-manager
-          mysetupLib
+          wahrweltLib
           nixpkgs
           nixpkgs-stable
           ;
@@ -156,24 +157,29 @@
       };
 
       hosts = import ./lib/hosts.nix {
-        inherit mkMySetupHost system;
+        inherit mkWahrweltHost system;
       };
     in
     {
       lib = {
-        inherit mkMySetupHost;
-        mysetup = mysetupLib;
+        inherit mkWahrweltHost;
+        mkMySetupHost = mkWahrweltHost;
+        inherit wahrweltLib;
+        mysetupLib = wahrweltLib;
+        wahrwelt = wahrweltLib;
+        mysetup = wahrweltLib;
       };
 
       nixosModules = rec {
-        mysetup = defaultContext.flakeModules.mysetupModule;
-        default = mysetup;
+        wahrwelt = defaultContext.flakeModules.wahrweltModule;
+        mysetup = wahrwelt;
+        default = wahrwelt;
       };
 
       packages.${system} = flakeOutputs.packages;
       checks.${system} = flakeOutputs.checks;
       apps.${system} = flakeOutputs.apps;
-      formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt;
+      formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-tree;
     }
     // hosts;
 }

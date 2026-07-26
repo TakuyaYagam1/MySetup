@@ -23,7 +23,7 @@ func (m sectionModel) View() string {
 
 func renderSidebar(m sectionModel, width, height int) string {
 	sidebar := stringsBuilder(func(b *builder) {
-		b.line(sidebarText(width, titleStyle.Render(" MySetup")))
+		b.line(sidebarText(width, titleStyle.Render(" Wahrwelt")))
 		b.line(sidebarText(width, mutedStyle.Render("Catppuccin Macchiato installer")))
 		b.line("")
 		for i, section := range sections {
@@ -54,7 +54,7 @@ func renderContent(m sectionModel, width, height int) string {
 
 func selectedSection(m sectionModel) string {
 	if m.cursor < 0 || m.cursor >= len(sections) {
-		return "MySetup"
+		return "Wahrwelt"
 	}
 	return sections[m.cursor]
 }

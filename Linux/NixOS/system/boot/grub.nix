@@ -1,13 +1,13 @@
 {
   config,
-  mysetupLib,
+  wahrweltLib,
   pkgs,
   ...
 }:
 
 let
-  grubLogo = mysetupLib.bootTheme.resolveLogo {
-    homeDirectory = config.mysetup.user.homeDirectory;
+  grubLogo = wahrweltLib.bootTheme.resolveLogo {
+    homeDirectory = config.wahrwelt.user.homeDirectory;
     service = "grub";
     default = ../../themes/grub-theme/logo.png;
   };

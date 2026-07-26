@@ -1,6 +1,6 @@
 {
   inputs,
-  mysetupLib,
+  wahrweltLib,
   pkgs-stable,
 }:
 
@@ -12,14 +12,16 @@
     useUserPackages = true;
     backupFileExtension = "backup";
     overwriteBackup = true;
-    users.${config.mysetup.user.username} = import ../home/home.nix;
+    users.${config.wahrwelt.user.username} = import ../home/home.nix;
     extraSpecialArgs = {
       inherit
         inputs
-        mysetupLib
+        wahrweltLib
         pkgs-stable
         ;
-      inherit (config) mysetup;
+      inherit (config) wahrwelt;
+      mysetup = config.wahrwelt;
+      mysetupLib = wahrweltLib;
     };
   };
 }

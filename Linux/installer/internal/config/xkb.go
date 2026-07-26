@@ -22,9 +22,11 @@ func AvailableXKBLayouts() []XKBLayout {
 
 func xkbLayoutRuleFiles() []string {
 	ruleDirs := []string{}
-	for _, dir := range filepath.SplitList(os.Getenv("MYSETUP_XKB_RULES_DIR")) {
-		if dir != "" {
-			ruleDirs = appendUnique(ruleDirs, dir)
+	for _, name := range []string{"WAHRWELT_XKB_RULES_DIR", "MYSETUP_XKB_RULES_DIR"} {
+		for _, dir := range filepath.SplitList(os.Getenv(name)) {
+			if dir != "" {
+				ruleDirs = appendUnique(ruleDirs, dir)
+			}
 		}
 	}
 	for _, dataDir := range filepath.SplitList(os.Getenv("XDG_DATA_DIRS")) {

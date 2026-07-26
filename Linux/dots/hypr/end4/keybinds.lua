@@ -5,7 +5,7 @@ hl.unbind("CTRL + SUPER + ALT + Slash")
 mysetup.bind_exec(
 	"CTRL + SUPER + ALT + Slash",
 	"xdg-open " .. mysetup.hypr .. "/end4/mysetup/keybinds.lua",
-	{ description = "MySetup: Edit end4 keybinds" }
+	{ description = "Wahrwelt: Edit end4 keybinds" }
 )
 
 for _, keys in ipairs({

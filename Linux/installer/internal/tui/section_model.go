@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
 )
 
 type sectionModel struct {
@@ -33,7 +33,7 @@ var keys = struct {
 
 func summary(s config.State, secrets config.Secrets, existingSecrets secretAvailability, statePath string) string {
 	return fmt.Sprintf(`Host: %s
-MySetup channel: %s
+Wahrwelt channel: %s
 Noctalia version: %s
 User: %s (%s)
 Packages: %s

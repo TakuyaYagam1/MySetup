@@ -1,11 +1,11 @@
 {
   config,
-  mysetupLib,
+  wahrweltLib,
   ...
 }:
 
 {
-  config = mysetupLib.mkIfPresetOrMore "desktop" config.mysetup {
+  config = wahrweltLib.mkIfPresetOrMore "desktop" config.wahrwelt {
     programs.hyprland = {
       enable = true;
       xwayland.enable = true;

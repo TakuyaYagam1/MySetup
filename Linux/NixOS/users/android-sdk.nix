@@ -1,11 +1,11 @@
 {
   config,
-  mysetupLib,
+  wahrweltLib,
   ...
 }:
 
 {
-  config = mysetupLib.mkIfPresetOrMore "personal" config.mysetup {
+  config = wahrweltLib.mkIfPresetOrMore "personal" config.wahrwelt {
     system.userActivationScripts.android-adb-fix.text = ''
       ADB_DIR="$HOME/Android/Sdk/platform-tools"
       ADB_LINK="$ADB_DIR/adb"

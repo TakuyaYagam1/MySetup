@@ -6,7 +6,7 @@ let
     if builtins.pathExists path then
       path
     else
-      throw "MySetup layout error: missing ${label} at ${toString path}";
+      throw "Wahrwelt layout error: missing ${label} at ${toString path}";
 
   firstExisting =
     label: candidates:
@@ -16,7 +16,7 @@ let
     if matches != [ ] then
       builtins.head matches
     else
-      throw "MySetup layout error: missing ${label}; tried ${builtins.concatStringsSep ", " (map toString candidates)}";
+      throw "Wahrwelt layout error: missing ${label}; tried ${builtins.concatStringsSep ", " (map toString candidates)}";
 
 in
 {

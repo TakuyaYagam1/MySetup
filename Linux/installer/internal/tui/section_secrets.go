@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 )
 
 type secretPresence string

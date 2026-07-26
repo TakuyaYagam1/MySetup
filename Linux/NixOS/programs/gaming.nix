@@ -1,13 +1,13 @@
 {
   config,
   lib,
-  mysetupLib,
+  wahrweltLib,
   ...
 }:
 
 let
-  desktopEnabled = mysetupLib.presets.desktopOrMore config.mysetup;
-  gamingEnabled = mysetupLib.presets.personal config.mysetup;
+  desktopEnabled = wahrweltLib.presets.desktopOrMore config.wahrwelt;
+  gamingEnabled = wahrweltLib.presets.personal config.wahrwelt;
 in
 {
   config = lib.mkMerge [

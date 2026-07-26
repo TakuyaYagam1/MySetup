@@ -9,7 +9,7 @@
 let
   dotfilesLib = homeLibs.dotfiles;
   trans = homeLibs.transparency;
-  mysetupPkgs = pkgs.mysetup or { };
+  wahrweltPkgs = pkgs.wahrwelt or (pkgs.mysetup or { });
   shellJson = pkgs.writeText "caelestia-shell.json" (builtins.toJSON config.caelestiaShellSettings);
 in
 {
@@ -33,7 +33,7 @@ in
   config = {
     programs.caelestia = {
       enable = true;
-      package = mysetupPkgs.caelestia-shell or pkgs.caelestia-shell;
+      package = wahrweltPkgs.caelestia-shell or pkgs.caelestia-shell;
 
       systemd = {
         enable = false;
@@ -83,7 +83,7 @@ in
       };
 
       packages = [
-        (mysetupPkgs.quickshell or pkgs.quickshell)
+        (wahrweltPkgs.quickshell or pkgs.quickshell)
         # caelestia-shell uses xmllint to resolve XKB layout descriptions.
         pkgs.libxml2
       ];

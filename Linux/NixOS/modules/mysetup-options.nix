@@ -20,7 +20,7 @@ let
       inherit default;
     };
 
-  mysetupType = types.submodule {
+  wahrweltType = types.submodule {
     options = {
       host = mkOption {
         type = types.submodule {
@@ -192,9 +192,13 @@ let
   };
 in
 {
-  options.mysetup = mkOption {
-    type = mysetupType;
+  imports = [
+    (lib.mkAliasOptionModule [ "mysetup" ] [ "wahrwelt" ])
+  ];
+
+  options.wahrwelt = mkOption {
+    type = wahrweltType;
     default = { };
-    description = "Canonical MySetup host/user configuration.";
+    description = "Canonical Wahrwelt host/user configuration.";
   };
 }

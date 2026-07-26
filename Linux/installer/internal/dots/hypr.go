@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/shellruntime"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/shellruntime"
 )
 
 func syncHypr(ctx context.Context, runner run.CommandRunner, dotsSrc, configDir string, state config.State) error {

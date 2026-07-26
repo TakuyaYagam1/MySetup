@@ -14,19 +14,21 @@ NIX_CACHE_ARGS := --option extra-substituters "$(NIX_CACHE_SUBSTITUTERS)" --opti
 ##@ Build & run
 
 .PHONY: build
-build: ## Build mysetup into ./bin/mysetup
+build: ## Build wahrwelt and the legacy mysetup alias
 	@mkdir -p bin
-	go build -trimpath -o bin/mysetup ./cmd/mysetup
+	go build -trimpath -o bin/wahrwelt ./cmd/wahrwelt
+	ln -sfn wahrwelt bin/mysetup
 
 .PHONY: install
-install: build ## Install ./bin/mysetup into $$HOME/.local/bin
+install: build ## Install wahrwelt and the legacy mysetup alias into $$HOME/.local/bin
 	@install -d "$$HOME/.local/bin"
-	install -m 0755 bin/mysetup "$$HOME/.local/bin/mysetup"
-	@echo "installed: $$HOME/.local/bin/mysetup"
+	install -m 0755 bin/wahrwelt "$$HOME/.local/bin/wahrwelt"
+	ln -sfn wahrwelt "$$HOME/.local/bin/mysetup"
+	@echo "installed: $$HOME/.local/bin/wahrwelt (legacy alias: mysetup)"
 
 .PHONY: run
 run: ## Run the installer
-	go run ./cmd/mysetup
+	go run ./cmd/wahrwelt
 
 .PHONY: dev-deps
 dev-deps: ## Download module dependencies into the local cache
@@ -86,11 +88,13 @@ cover: ## Unit-test coverage report (HTML)
 ##@ Nix
 
 .PHONY: nix-build
-nix-build: ## Build the mysetup flake package
+nix-build: ## Build Wahrwelt and its legacy mysetup flake alias
+	nix build $(NIX_CACHE_ARGS) --no-link --no-write-lock-file "path:$(REPO_ROOT)?dir=Linux/NixOS#wahrwelt"
 	nix build $(NIX_CACHE_ARGS) --no-link --no-write-lock-file "path:$(REPO_ROOT)?dir=Linux/NixOS#mysetup"
 
 .PHONY: nix-package-eval
-nix-package-eval: ## Eval mysetup through the repository-root flake path
+nix-package-eval: ## Eval Wahrwelt and its legacy mysetup package alias
+	nix eval $(NIX_CACHE_ARGS) --no-write-lock-file --impure --raw --expr 'let flake = builtins.getFlake "path:$(REPO_ROOT)?dir=Linux/NixOS"; in flake.packages.x86_64-linux.wahrwelt.pname' >/dev/null
 	nix eval $(NIX_CACHE_ARGS) --no-write-lock-file --impure --raw --expr 'let flake = builtins.getFlake "path:$(REPO_ROOT)?dir=Linux/NixOS"; in flake.packages.x86_64-linux.mysetup.pname' >/dev/null
 
 NIX_HM_ENV := NIXOS_DIR='$(NIXOS_DIR)' \
@@ -113,12 +117,13 @@ nix-profile-eval: ## Eval Home Manager imports for every package preset
 		done'
 
 .PHONY: nix-installed-mirror-build
-nix-installed-mirror-build: ## Build mysetup from an /etc/nixos-style temporary mirror
+nix-installed-mirror-build: ## Build Wahrwelt and its legacy alias from an /etc/nixos-style mirror
 	@tmp="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmp"' EXIT; \
 	rsync -a ../NixOS/ "$$tmp"/; \
 	rsync -a ../dots/ "$$tmp"/dots/; \
 	rsync -a --exclude=/bin/ --exclude=/tmp/ --exclude=/coverage.out --exclude=/coverage.html ./ "$$tmp"/installer/; \
+	nix build $(NIX_CACHE_ARGS) --no-link --no-write-lock-file "path:$$tmp#wahrwelt"; \
 	nix build $(NIX_CACHE_ARGS) --no-link --no-write-lock-file "path:$$tmp#mysetup"
 
 .PHONY: check

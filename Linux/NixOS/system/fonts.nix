@@ -1,7 +1,7 @@
 {
   config,
   lib,
-  mysetupLib,
+  wahrweltLib,
   pkgs,
   pkgs-stable,
   ...
@@ -17,7 +17,7 @@ let
   };
 in
 {
-  config = mysetupLib.mkIfPresetOrMore "desktop" config.mysetup {
+  config = wahrweltLib.mkIfPresetOrMore "desktop" config.wahrwelt {
     fonts = {
       enableDefaultPackages = true;
 

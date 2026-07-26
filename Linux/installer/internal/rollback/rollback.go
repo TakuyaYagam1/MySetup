@@ -10,8 +10,8 @@ import (
 
 	"github.com/charmbracelet/huh"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 )
 
 type Options struct {
@@ -51,7 +51,7 @@ func Run(ctx context.Context, opts Options) error {
 		runner = run.New(opts.DryRun)
 	}
 
-	fmt.Println("== MySetup rollback ==")
+	fmt.Println("== Wahrwelt rollback ==")
 	fmt.Printf("backup: %s\n", backup)
 	fmt.Printf("target: %s\n", dest)
 

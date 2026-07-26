@@ -1,8 +1,8 @@
 { end4Lib, pkgs, ... }:
 
 let
-  mysetupPkgs = pkgs.mysetup or { };
-  qsPackage = mysetupPkgs.quickshell or pkgs.quickshell;
+  wahrweltPkgs = pkgs.wahrwelt or (pkgs.mysetup or { });
+  qsPackage = wahrweltPkgs.quickshell or pkgs.quickshell;
 in
 {
   home.packages = [

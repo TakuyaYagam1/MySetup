@@ -9,11 +9,11 @@ import (
 
 	"github.com/charmbracelet/huh"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/apply"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/cleanup"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/doctor"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/apply"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/cleanup"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/doctor"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 )
 
 var errBackToSections = errors.New("back to section selector")
@@ -200,7 +200,7 @@ func runCleanup(ctx context.Context, s *session) error {
 	if err := newForm(
 		huh.NewConfirm().
 			Title("Cleanup").
-			Description(report + "\nOnly safe MySetup-managed leftovers are touched.\nThis removes preview wallpapers and Noctalia wallpaper cache files.").
+			Description(report + "\nOnly safe Wahrwelt-managed leftovers are touched.\nThis removes preview wallpapers and Noctalia wallpaper cache files.").
 			Value(&confirm),
 	).Run(); err != nil {
 		return err

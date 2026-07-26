@@ -9,7 +9,6 @@ INSTALLER_DIR := $(abspath installer)
 
 NIX_RUN := nix run --no-write-lock-file nixpkgs\#
 
-NIXFMT := $(NIX_RUN)nixfmt --
 STATIX := $(NIX_RUN)statix --
 DEADNIX := $(NIX_RUN)deadnix --
 SHFMT := $(NIX_RUN)shfmt --
@@ -90,12 +89,12 @@ lint-nix-deadnix: ## deadnix dead-code check (fails on findings)
 	$(DEADNIX) --fail $(NIXOS_DIR)
 
 .PHONY: fmt-nix
-fmt-nix: ## nixfmt across NixOS/
-	@$(NIX_FIND) | xargs -0 -r $(NIXFMT)
+fmt-nix: ## nixfmt-tree across NixOS/
+	cd $(REPO_ROOT) && nix fmt Linux/NixOS
 
 .PHONY: fmt-check-nix
-fmt-check-nix: ## nixfmt --check across NixOS/
-	@$(NIX_FIND) | xargs -0 -r $(NIXFMT) --check
+fmt-check-nix: ## Check Nix formatting with nixfmt-tree
+	cd $(REPO_ROOT) && nix fmt -- --ci Linux/NixOS
 
 .PHONY: nix-syntax
 nix-syntax: ## Parse all .nix files for syntax errors

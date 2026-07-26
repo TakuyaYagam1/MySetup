@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 )
 
 type systemWriteResult struct {
@@ -87,7 +87,7 @@ func lockStagingFlake(ctx context.Context, runner run.CommandRunner, staging str
 		"update",
 	}
 	if lockMode == LockModeManaged {
-		args = append(args, "mysetup")
+		args = append(args, "wahrwelt")
 	}
 	args = append(args, "--flake", "path:"+staging)
 	return runner.Command(ctx, "nix", args...)

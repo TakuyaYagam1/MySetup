@@ -6,7 +6,7 @@
 }:
 
 {
-  config = lib.mkIf ((config.mysetup.hardware.gpu or "amd") == "nvidia") {
+  config = lib.mkIf ((config.wahrwelt.hardware.gpu or "amd") == "nvidia") {
     services.xserver.videoDrivers = [ "nvidia" ];
 
     hardware.nvidia = {

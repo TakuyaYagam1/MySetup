@@ -59,29 +59,33 @@ func TestValidateRejectsBadSourceChannel(t *testing.T) {
 	}
 }
 
-func TestMySetupFlakeURLChannels(t *testing.T) {
+func TestWahrweltFlakeURLChannels(t *testing.T) {
 	tests := map[string]string{
-		SourceChannelStable:      "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS",
-		SourceChannelDevelopment: "github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS",
-		"":                       "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS",
+		SourceChannelStable:      "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS",
+		SourceChannelDevelopment: "github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS",
+		"":                       "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS",
 	}
 	for channel, want := range tests {
-		if got := MySetupFlakeURL(channel); got != want {
-			t.Fatalf("MySetupFlakeURL(%q) = %q, want %q", channel, got, want)
+		if got := WahrweltFlakeURL(channel); got != want {
+			t.Fatalf("WahrweltFlakeURL(%q) = %q, want %q", channel, got, want)
 		}
 	}
 }
 
-func TestKnownMySetupFlakeURLsIncludeLegacyStableURL(t *testing.T) {
-	urls := KnownMySetupFlakeURLs()
+func TestKnownWahrweltFlakeURLsIncludeCurrentAndLegacyURLs(t *testing.T) {
+	urls := KnownWahrweltFlakeURLs()
 	for _, want := range []string{
+		"github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS",
+		"github:TakuyaYagam1/wahrwelt?dir=Linux/NixOS",
+		"github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS",
+		"github:TakuyaYagam1/wahrwelt/noctalia-v4?dir=Linux/NixOS",
 		"github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS",
 		"github:TakuyaYagam1/MySetup?dir=Linux/NixOS",
 		"github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS",
 		"github:TakuyaYagam1/MySetup/noctalia-v4?dir=Linux/NixOS",
 	} {
 		if !containsString(urls, want) {
-			t.Fatalf("known MySetup URLs must include %q, got %#v", want, urls)
+			t.Fatalf("known Wahrwelt URLs must include %q, got %#v", want, urls)
 		}
 	}
 }
@@ -226,6 +230,14 @@ func TestPackagePresetChoicesMatchNixContracts(t *testing.T) {
 	}
 	if !regexp.MustCompile(`type = types\.enum presetNames;`).MatchString(string(optionsNix)) {
 		t.Fatalf("mysetup-options.nix must reuse presetNames from preset-names.nix\n%s", optionsNix)
+	}
+	for _, want := range []string{
+		`(lib.mkAliasOptionModule [ "mysetup" ] [ "wahrwelt" ])`,
+		`options.wahrwelt = mkOption`,
+	} {
+		if !strings.Contains(string(optionsNix), want) {
+			t.Fatalf("Wahrwelt must be canonical and mysetup must remain its legacy option alias; missing %q\n%s", want, optionsNix)
+		}
 	}
 }
 

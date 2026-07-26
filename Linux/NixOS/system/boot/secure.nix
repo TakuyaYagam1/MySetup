@@ -1,7 +1,7 @@
 { config, lib, ... }:
 
 {
-  config = lib.mkIf config.mysetup.features.secureBoot {
+  config = lib.mkIf config.wahrwelt.features.secureBoot {
     boot = {
       loader = {
         grub.enable = lib.mkForce false;

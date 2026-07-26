@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: NixOS installation guide
-    url: https://github.com/TakuyaYagam1/MySetup/blob/main/Linux/README.md
+    url: https://github.com/TakuyaYagam1/wahrwelt/blob/main/Linux/README.md
     about: Read the platform README before opening an issue.
   - name: Windows installation guide
-    url: https://github.com/TakuyaYagam1/MySetup/blob/main/Windows/README.md
+    url: https://github.com/TakuyaYagam1/wahrwelt/blob/main/Windows/README.md
     about: Komorebi + YASB setup notes and required path edits.

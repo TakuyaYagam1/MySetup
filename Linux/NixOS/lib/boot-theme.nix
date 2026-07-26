@@ -47,7 +47,7 @@ in
         shared
       else
         throw ''
-          MySetup boot-theme: ${dir} exists but has neither
+          Wahrwelt boot-theme: ${dir} exists but has neither
           ${service}.{png,jpg,jpeg} nor logo.{png,jpg,jpeg}. Add one of
           them, or delete the whole boot-theme directory to fall back to
           the built-in default.

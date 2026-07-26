@@ -94,10 +94,10 @@ if ! command -v gpu-screen-recorder >/dev/null 2>&1; then
   exit 1
 fi
 
-target="${MYSETUP_RECORD_TARGET:-$(focused_monitor)}"
+target="${WAHRWELT_RECORD_TARGET:-${MYSETUP_RECORD_TARGET:-$(focused_monitor)}}"
 target="${target:-screen}"
-audio="${MYSETUP_RECORD_AUDIO:-default_output}"
-fps="${MYSETUP_RECORD_FPS:-60}"
+audio="${WAHRWELT_RECORD_AUDIO:-${MYSETUP_RECORD_AUDIO:-default_output}}"
+fps="${WAHRWELT_RECORD_FPS:-${MYSETUP_RECORD_FPS:-60}}"
 file="$record_dir/recording-$(date +%Y%m%d-%H%M%S).mp4"
 
 gpu-screen-recorder \

@@ -14,11 +14,11 @@ Always reproduce on `main` before reporting.
 
 **Do not open a public issue for security problems.**
 
-Use [GitHub Security Advisories](https://github.com/TakuyaYagam1/MySetup/security/advisories/new)
+Use [GitHub Security Advisories](https://github.com/TakuyaYagam1/wahrwelt/security/advisories/new)
 to report privately. That is the preferred channel - it creates an encrypted, maintainer-only
 thread and lets us coordinate a fix before disclosure.
 
-If you cannot use the advisory form, email `skr1ms13666@gmail.com` with `[mysetup-security]`
+If you cannot use the advisory form, email `skr1ms13666@gmail.com` with `[wahrwelt-security]`
 in the subject line. PGP is not currently published.
 
 Please include:

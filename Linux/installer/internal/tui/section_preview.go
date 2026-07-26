@@ -3,7 +3,7 @@ package tui
 import (
 	"fmt"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
 )
 
 func sectionPreview(m sectionModel) []string {
@@ -41,7 +41,7 @@ func sectionPreview(m sectionModel) []string {
 func previewGeneral(s config.State) []string {
 	return previewSettings(
 		previewSetting("Hostname", "Flake target and networking host name.", s.Host.Hostname),
-		previewSetting("MySetup channel", "Branch followed by the installed /etc/nixos wrapper.", sourceChannelLabel(s.Source.Channel)),
+		previewSetting("Wahrwelt channel", "Branch followed by the installed /etc/nixos wrapper.", sourceChannelLabel(s.Source.Channel)),
 		previewSetting("Noctalia version", "Selects the current v5 shell integration or the preserved legacy v4 config seed.", noctaliaVersionLabel(s.Noctalia.Version)),
 		previewSetting("State version", "NixOS compatibility baseline for this machine.", s.Host.StateVersion),
 	)
@@ -121,7 +121,7 @@ func previewPasswords(m sectionModel) []string {
 
 func previewCleanup() []string {
 	return previewSettings(
-		previewSettingWithLabel("Managed cleanup", "Removes MySetup-managed stale files and caches.", "action", "explicit"),
+		previewSettingWithLabel("Managed cleanup", "Removes Wahrwelt-managed stale files and caches.", "action", "explicit"),
 		previewSettingWithLabel("Backups", "Unmanaged configs are backed up before removal candidates are touched.", "status", "enabled"),
 	)
 }

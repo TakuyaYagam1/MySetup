@@ -1,7 +1,7 @@
 {
   config,
   lib,
-  mysetupLib,
+  wahrweltLib,
   ...
 }:
 
@@ -27,13 +27,13 @@ let
   ];
 in
 {
-  users.users.${config.mysetup.user.username} = {
+  users.users.${config.wahrwelt.user.username} = {
     isNormalUser = true;
-    description = config.mysetup.user.fullName;
+    description = config.wahrwelt.user.fullName;
     extraGroups =
       baseGroups
-      ++ lib.optionals (mysetupLib.presets.developerOrMore config.mysetup) developerGroups
-      ++ lib.optionals (mysetupLib.presets.personal config.mysetup) personalGroups
-      ++ lib.optionals config.mysetup.features.ctfTools ctfGroups;
+      ++ lib.optionals (wahrweltLib.presets.developerOrMore config.wahrwelt) developerGroups
+      ++ lib.optionals (wahrweltLib.presets.personal config.wahrwelt) personalGroups
+      ++ lib.optionals config.wahrwelt.features.ctfTools ctfGroups;
   };
 }

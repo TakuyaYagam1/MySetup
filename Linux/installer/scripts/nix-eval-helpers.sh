@@ -26,13 +26,13 @@ _nix_eval() {
 
 # eval_hm_simple <attribute>
 # Evaluates a Home Manager configuration that imports only the shared shells
-# module (no mysetup specialArgs). Useful for sanity-checking activation
+# module (no Wahrwelt specialArgs). Useful for sanity-checking activation
 # scripts and the runtime entrypoint files.
 eval_hm_simple() {
     local attr="$1"
     _nix_eval "
         let
-          nixosDir = builtins.getEnv \"MYSETUP_NIXOS_DIR\";
+          nixosDir = builtins.getEnv \"WAHRWELT_NIXOS_DIR\";
           flake = builtins.getFlake (\"path:\" + nixosDir);
           system = \"x86_64-linux\";
           pkgs = import flake.inputs.nixpkgs { inherit system; config.allowUnfree = true; };
@@ -55,7 +55,7 @@ eval_hm_simple() {
 }
 
 # eval_hm_full <preset|""> <attribute>
-# Evaluates the full home/home.nix module with mysetup, mysetupLib and the
+# Evaluates the full home/home.nix module with wahrwelt, wahrweltLib and the
 # stable package set wired through extraSpecialArgs. When <preset> is
 # non-empty, the host-vars defaults are overridden so the chosen preset is
 # selected; otherwise the host-vars defaults are used as-is.
@@ -63,33 +63,35 @@ eval_hm_full() {
     local preset="$1"
     local attr="$2"
 
-    MYSETUP_PRESET_OVERRIDE="${preset}" _nix_eval "
+    WAHRWELT_PRESET_OVERRIDE="${preset}" _nix_eval "
         let
-          nixosDir = builtins.getEnv \"MYSETUP_NIXOS_DIR\";
-          presetOverride = builtins.getEnv \"MYSETUP_PRESET_OVERRIDE\";
+          nixosDir = builtins.getEnv \"WAHRWELT_NIXOS_DIR\";
+          presetOverride = builtins.getEnv \"WAHRWELT_PRESET_OVERRIDE\";
           flake = builtins.getFlake (\"path:\" + nixosDir);
           system = \"x86_64-linux\";
           pkgs = import flake.inputs.nixpkgs { inherit system; config.allowUnfree = true; };
           lib = pkgs.lib;
-          mysetupLib = import (nixosDir + \"/lib/mysetup.nix\") { inherit lib; };
+          wahrweltLib = import (nixosDir + \"/lib/mysetup.nix\") { inherit lib; };
           pkgsStable = import flake.inputs.nixpkgs-stable {
             localSystem = system;
             config.allowUnfree = true;
             config.permittedInsecurePackages = [ \"python3.12-pypdf2-3.0.1\" ];
           };
-          baseMysetup = import (nixosDir + \"/hosts/NixOS/host-vars.nix\");
-          mysetup =
+          baseWahrwelt = import (nixosDir + \"/hosts/NixOS/host-vars.nix\");
+          wahrwelt =
             if presetOverride == \"\"
-            then baseMysetup
-            else baseMysetup // {
-              packages = baseMysetup.packages // { preset = presetOverride; };
+            then baseWahrwelt
+            else baseWahrwelt // {
+              packages = baseWahrwelt.packages // { preset = presetOverride; };
             };
           hm = flake.inputs.home-manager.lib.homeManagerConfiguration {
             inherit pkgs;
             modules = [ (nixosDir + \"/home/home.nix\") ];
             extraSpecialArgs = {
               inputs = flake.inputs;
-              inherit mysetupLib mysetup;
+              inherit wahrweltLib wahrwelt;
+              mysetupLib = wahrweltLib;
+              mysetup = wahrwelt;
               pkgs-stable = pkgsStable;
             };
           };
@@ -98,4 +100,5 @@ eval_hm_full() {
 }
 
 # Export so subshells inherit and the Nix expression can read it via getEnv.
+export WAHRWELT_NIXOS_DIR="${NIXOS_DIR}"
 export MYSETUP_NIXOS_DIR="${NIXOS_DIR}"

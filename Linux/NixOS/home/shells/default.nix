@@ -180,7 +180,7 @@ in
             -- Active Hyprland profile: mysetup (${defaultProfile.id})
             local home = os.getenv("HOME")
             if home == nil then
-                error("HOME is not set; cannot locate MySetup Hyprland config")
+                error("HOME is not set; cannot locate Wahrwelt Hyprland config")
             end
 
             local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")

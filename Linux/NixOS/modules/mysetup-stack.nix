@@ -14,5 +14,5 @@
     ELECTRON_OZONE_PLATFORM_HINT = "wayland";
   };
 
-  system.stateVersion = config.mysetup.host.stateVersion;
+  system.stateVersion = config.wahrwelt.host.stateVersion;
 }

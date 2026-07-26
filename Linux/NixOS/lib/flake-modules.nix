@@ -1,18 +1,19 @@
 {
   inputs,
-  mysetupLib,
+  wahrweltLib,
   overlays,
   pkgs-stable,
 }:
 
-{
-  mysetupModule = import ../modules/mysetup-stack.nix;
+rec {
+  wahrweltModule = import ../modules/mysetup-stack.nix;
+  mysetupModule = wahrweltModule;
 
   overlaysModule = _: {
     nixpkgs.overlays = [
       overlays.flakePackagesOverlay
       overlays.valkeyNoCheckOverlay
-      overlays.omnirouterFromMySetupOverlay
+      overlays.omnirouterFromWahrweltOverlay
       overlays.pipxTestCompatibilityOverlay
     ];
   };
@@ -20,7 +21,7 @@
   homeManagerModule = import ./flake-home-module.nix {
     inherit
       inputs
-      mysetupLib
+      wahrweltLib
       pkgs-stable
       ;
   };

@@ -1,5 +1,5 @@
 {
-  description = "Reusable MySetup shell modules and installer entrypoint";
+  description = "Reusable Wahrwelt shell modules and installer entrypoint";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -99,7 +99,7 @@
         nixosRoot = ./Linux/NixOS;
       };
 
-      mysetupLib = import ./Linux/NixOS/lib/mysetup.nix {
+      wahrweltLib = import ./Linux/NixOS/lib/mysetup.nix {
         inherit lib;
       };
 
@@ -111,7 +111,7 @@
         {
           config,
           lib,
-          mysetup,
+          wahrwelt,
           pkgs,
           ...
         }:
@@ -123,7 +123,7 @@
           imports = [
             inputs.caelestia-shell.homeManagerModules.default
             (
-              if mysetup.noctalia.version == "v4" then
+              if wahrwelt.noctalia.version == "v4" then
                 inputs.noctalia-shell.homeModules.default
               else
                 inputs.noctalia.homeModules.default
@@ -135,9 +135,9 @@
           ];
 
           home = {
-            username = lib.mkDefault mysetup.user.username;
-            homeDirectory = lib.mkDefault mysetup.user.homeDirectory;
-            stateVersion = lib.mkDefault mysetup.host.stateVersion;
+            username = lib.mkDefault wahrwelt.user.username;
+            homeDirectory = lib.mkDefault wahrwelt.user.homeDirectory;
+            stateVersion = lib.mkDefault wahrwelt.host.stateVersion;
           };
 
           programs.waybar.enable = lib.mkForce false;
@@ -156,7 +156,7 @@
             home-manager.nixosModules.home-manager
           ];
 
-          mysetup = {
+          wahrwelt = {
             host = {
               hostname = lib.mkDefault config.networking.hostName;
               stateVersion = lib.mkDefault config.system.stateVersion;
@@ -170,7 +170,7 @@
               weatherLocation = lib.mkDefault "";
             };
             git = {
-              username = lib.mkDefault config.mysetup.user.username;
+              username = lib.mkDefault config.wahrwelt.user.username;
               email = lib.mkDefault "";
             };
             packages.preset = lib.mkDefault "desktop";
@@ -208,10 +208,10 @@
 
           services.dbus.enable = lib.mkDefault true;
 
-          users.users.${config.mysetup.user.username} = {
+          users.users.${config.wahrwelt.user.username} = {
             isNormalUser = lib.mkDefault true;
-            description = lib.mkDefault config.mysetup.user.fullName;
-            home = lib.mkDefault config.mysetup.user.homeDirectory;
+            description = lib.mkDefault config.wahrwelt.user.fullName;
+            home = lib.mkDefault config.wahrwelt.user.homeDirectory;
           };
 
           xdg.portal = {
@@ -235,10 +235,12 @@
             useUserPackages = lib.mkDefault true;
             backupFileExtension = lib.mkDefault "backup";
             overwriteBackup = lib.mkDefault true;
-            users.${config.mysetup.user.username} = shellHomeModule;
+            users.${config.wahrwelt.user.username} = shellHomeModule;
             extraSpecialArgs = {
-              inherit inputs mysetupLib;
-              inherit (config) mysetup;
+              inherit inputs wahrweltLib;
+              inherit (config) wahrwelt;
+              mysetup = config.wahrwelt;
+              mysetupLib = wahrweltLib;
             };
           };
         };
@@ -249,12 +251,17 @@
           inherit layout nixpkgs system;
         };
 
-      mysetupPackageFor = system: (installerOutputsFor system).packages.mysetup;
+      wahrweltPackageFor = system: (installerOutputsFor system).packages.wahrwelt;
       omnirouterPackageFor = system: (installerOutputsFor system).packages.omnirouter;
+      wahrweltAppFor = system: {
+        type = "app";
+        program = "${wahrweltPackageFor system}/bin/wahrwelt";
+        meta.description = "Run the Wahrwelt NixOS installer";
+      };
       mysetupAppFor = system: {
         type = "app";
-        program = "${mysetupPackageFor system}/bin/mysetup";
-        meta.description = "Run the MySetup NixOS installer";
+        program = "${wahrweltPackageFor system}/bin/mysetup";
+        meta.description = "Run the legacy MySetup-compatible NixOS installer entrypoint";
       };
 
       linuxNixosOutputs = (import ./Linux/NixOS/flake.nix).outputs inputs;
@@ -270,7 +277,7 @@
                 { ... }:
                 {
                   system.stateVersion = "26.05";
-                  mysetup.user = {
+                  wahrwelt.user = {
                     username = "alice";
                     fullName = "Alice";
                     homeDirectory = "/home/alice";
@@ -289,38 +296,42 @@
         valkeyNoCheck = shellOverlays.valkeyNoCheckOverlay;
       };
 
-      homeManagerModules = rec {
-        shells = shellHomeModule;
-        default = shells;
-      };
-
       nixosModules = rec {
-        mysetup = linuxNixosOutputs.nixosModules.mysetup;
-        workstation = mysetup;
+        wahrwelt = linuxNixosOutputs.nixosModules.wahrwelt;
+        mysetup = wahrwelt;
+        workstation = wahrwelt;
         shells = shellsNixosModule;
         default = shells;
       };
 
       lib = (linuxNixosOutputs.lib or { }) // {
-        inherit mysetupLib;
+        inherit wahrweltLib;
+        mysetupLib = wahrweltLib;
+        homeManagerModules = rec {
+          shells = shellHomeModule;
+          default = shells;
+        };
       };
 
       packages = forSystems (system: {
-        mysetup = mysetupPackageFor system;
+        wahrwelt = wahrweltPackageFor system;
+        mysetup = self.packages.${system}.wahrwelt;
         omnirouter = omnirouterPackageFor system;
-        default = self.packages.${system}.mysetup;
+        default = self.packages.${system}.wahrwelt;
       });
 
       apps = forSystems (system: {
+        wahrwelt = wahrweltAppFor system;
         mysetup = mysetupAppFor system;
-        default = self.apps.${system}.mysetup;
+        default = self.apps.${system}.wahrwelt;
       });
 
       checks = forSystems (system: {
+        wahrwelt = self.packages.${system}.wahrwelt;
         mysetup = self.packages.${system}.mysetup;
         "shells-module" = shellModuleCheckFor system;
       });
 
-      formatter = forSystems (system: nixpkgs.legacyPackages.${system}.nixfmt);
+      formatter = forSystems (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
     };
 }

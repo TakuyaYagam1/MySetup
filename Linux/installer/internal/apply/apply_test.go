@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 )
 
 type fakeRunner struct {
@@ -144,8 +144,8 @@ func TestRunDryRunSkipSwitchHonoursInjectedRunner(t *testing.T) {
 	if !strings.Contains(commands, "nix --extra-experimental-features nix-command flakes flake update --flake") {
 		t.Errorf("expected independent thin layout to update the full local lock before dry-build; got:\n%s", commands)
 	}
-	if strings.Contains(commands, "flake update mysetup --flake") {
-		t.Errorf("independent lock mode must not update only mysetup; got:\n%s", commands)
+	if strings.Contains(commands, "flake update wahrwelt --flake") {
+		t.Errorf("independent lock mode must not update only Wahrwelt; got:\n%s", commands)
 	}
 	if !strings.Contains(commands, "nixos-rebuild dry-build") {
 		t.Errorf("expected nixos-rebuild dry-build call; got:\n%s", commands)
@@ -177,8 +177,8 @@ func TestRunManagedThinLockUpdatesOnlyMySetup(t *testing.T) {
 	}
 
 	commands := commandSummary(fake.calls)
-	if !strings.Contains(commands, "nix --extra-experimental-features nix-command flakes flake update mysetup --flake") {
-		t.Errorf("expected managed thin layout to update only mysetup before dry-build; got:\n%s", commands)
+	if !strings.Contains(commands, "nix --extra-experimental-features nix-command flakes flake update wahrwelt --flake") {
+		t.Errorf("expected managed thin layout to update only Wahrwelt before dry-build; got:\n%s", commands)
 	}
 }
 

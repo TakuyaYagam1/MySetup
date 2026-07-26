@@ -17,10 +17,12 @@ let
     _final: prev:
     let
       shellPackages = shellPackagesFor { inherit prev; };
+      wahrweltPackages = (prev.wahrwelt or (prev.mysetup or { })) // shellPackages;
     in
     shellPackages
     // {
-      mysetup = (prev.mysetup or { }) // shellPackages;
+      wahrwelt = wahrweltPackages;
+      mysetup = wahrweltPackages;
     };
 
   valkeyNoCheckOverlay = _final: prev: {

@@ -3,14 +3,14 @@
   pkgs,
   inputs,
   lib,
-  mysetup,
-  mysetupLib,
+  wahrwelt,
+  wahrweltLib,
   ...
 }:
 
 let
-  desktopOrMore = mysetupLib.presets.desktopOrMore mysetup;
-  mysetupPkgs = pkgs.mysetup or { };
+  desktopOrMore = wahrweltLib.presets.desktopOrMore wahrwelt;
+  wahrweltPkgs = pkgs.wahrwelt or (pkgs.mysetup or { });
   homeLibs = import ./lib { inherit lib pkgs; };
   avatarSource =
     if builtins.pathExists ./avatar.jpg then ./avatar.jpg else ../themes/sddm-theme/icons/logo.png;
@@ -50,7 +50,7 @@ let
   shellImports = [
     inputs.caelestia-shell.homeManagerModules.default
     (
-      if mysetup.noctalia.version == "v4" then
+      if wahrwelt.noctalia.version == "v4" then
         inputs.noctalia-shell.homeModules.default
       else
         inputs.noctalia.homeModules.default
@@ -67,13 +67,13 @@ in
   imports = coreImports ++ lib.optionals desktopOrMore shellImports;
 
   home = {
-    inherit (mysetup.user) username homeDirectory;
-    inherit (mysetup.host) stateVersion;
+    inherit (wahrwelt.user) username homeDirectory;
+    inherit (wahrwelt.host) stateVersion;
 
     # AccountsService consumers (GNOME/KDE) read this; SDDM uses /etc/sddm/faces/ instead.
     file.".face".source = avatarSource;
 
-    activation.copyWallpapers = lib.mkIf mysetup.wallpapers.enable (
+    activation.copyWallpapers = lib.mkIf wahrwelt.wallpapers.enable (
       lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         WALLS_SRC="${./../Wallpapers}"
         WALLS_DST="${config.home.homeDirectory}/Pictures/Wallpapers"
@@ -93,7 +93,7 @@ in
 
   programs.neovim = {
     enable = true;
-    package = mysetupPkgs.neovim or pkgs.neovim;
+    package = wahrweltPkgs.neovim or pkgs.neovim;
     withRuby = true;
     withPython3 = true;
     plugins = [

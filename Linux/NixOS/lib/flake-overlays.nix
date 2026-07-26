@@ -18,20 +18,24 @@ let
         burpsuitepro = prev.callPackage ../pkgs/burpsuitepro.nix { };
         firefox-legacy = prev.callPackage ../pkgs/firefox-legacy.nix { };
       };
+      wahrweltPackages = (prev.wahrwelt or (prev.mysetup or { })) // flakePackages;
     in
     flakePackages
     // {
-      mysetup = (prev.mysetup or { }) // flakePackages;
+      wahrwelt = wahrweltPackages;
+      mysetup = wahrweltPackages;
     };
 in
-{
+rec {
   inherit flakePackagesOverlay;
   inherit (shellOverlays) valkeyNoCheckOverlay;
 
-  omnirouterFromMySetupOverlay = _final: prev: {
+  omnirouterFromWahrweltOverlay = _final: prev: {
     omnirouter =
-      inputs.mysetup.packages.${system}.omnirouter or (prev.callPackage ../pkgs/omnirouter.nix { });
+      inputs.wahrwelt.packages.${system}.omnirouter or (prev.callPackage ../pkgs/omnirouter.nix { });
   };
+
+  omnirouterFromMySetupOverlay = omnirouterFromWahrweltOverlay;
 
   pipxTestCompatibilityOverlay = _final: prev: {
     pipx = prev.pipx.overridePythonAttrs (old: {

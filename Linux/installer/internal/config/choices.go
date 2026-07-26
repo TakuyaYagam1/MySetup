@@ -7,9 +7,10 @@ const (
 	NoctaliaVersionV4 = "v4"
 	NoctaliaVersionV5 = "v5"
 
-	legacyNoctaliaV4MySetupFlakeURL = "github:TakuyaYagam1/MySetup/noctalia-v4?dir=Linux/NixOS"
-	noctaliaFlakeURLV5              = "github:noctalia-dev/noctalia/v5.0.0-beta.4"
-	noctaliaShellFlakeURLV4         = "github:noctalia-dev/noctalia-shell/v4.7.7"
+	legacyNoctaliaV4WahrweltFlakeURL    = "github:TakuyaYagam1/wahrwelt/noctalia-v4?dir=Linux/NixOS"
+	legacyNoctaliaV4MySetupRepoFlakeURL = "github:TakuyaYagam1/MySetup/noctalia-v4?dir=Linux/NixOS"
+	noctaliaFlakeURLV5                  = "github:noctalia-dev/noctalia/v5.0.0-beta.4"
+	noctaliaShellFlakeURLV4             = "github:noctalia-dev/noctalia-shell/v4.7.7"
 
 	caelestiaShellFlakeURL = "github:caelestia-dots/shell/v2.2.0"
 	caelestiaCliFlakeURL   = "github:caelestia-dots/cli/v1.1.2"
@@ -54,21 +55,25 @@ func IsNoctaliaVersion(value string) bool {
 	return oneOf(value, NoctaliaVersions...)
 }
 
-func MySetupFlakeURL(channel string) string {
+func WahrweltFlakeURL(channel string) string {
 	switch channel {
 	case SourceChannelDevelopment:
-		return "github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS"
+		return "github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS"
 	default:
-		return "github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS"
+		return "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS"
 	}
 }
 
-func KnownMySetupFlakeURLs() []string {
+func KnownWahrweltFlakeURLs() []string {
 	return []string{
-		MySetupFlakeURL(SourceChannelStable),
+		WahrweltFlakeURL(SourceChannelStable),
+		"github:TakuyaYagam1/wahrwelt?dir=Linux/NixOS",
+		WahrweltFlakeURL(SourceChannelDevelopment),
+		legacyNoctaliaV4WahrweltFlakeURL,
+		"github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS",
 		"github:TakuyaYagam1/MySetup?dir=Linux/NixOS",
-		MySetupFlakeURL(SourceChannelDevelopment),
-		legacyNoctaliaV4MySetupFlakeURL,
+		"github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS",
+		legacyNoctaliaV4MySetupRepoFlakeURL,
 	}
 }
 

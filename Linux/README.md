@@ -1,6 +1,6 @@
 # NixOS Configuration
 
-NixOS + Hyprland configuration managed by the `mysetup` Go TUI/CLI installer.
+NixOS + Hyprland configuration managed by the `wahrwelt` Go TUI/CLI installer.
 Hyprland itself is configured through Lua for Hyprland 0.55+; this setup no
 longer maintains a `hyprland.conf` fallback.
 
@@ -37,51 +37,65 @@ Or run directly from GitHub without cloning first. This opens the interactive
 TUI and uses the stable `main` branch by default:
 
 ```bash
-nix run --refresh 'github:TakuyaYagam1/MySetup'
+nix run --refresh 'github:TakuyaYagam1/wahrwelt'
 ```
 
 This is the normal thin apply path. Nix fetches the repository source into
-`/nix/store`, the wrapped installer points `MYSETUP_REPO_ROOT` at that immutable
+`/nix/store`, the wrapped installer points `WAHRWELT_REPO_ROOT` at that immutable
 source, then the installer writes a small `/etc/nixos` wrapper that tracks
-`github:TakuyaYagam1/MySetup/main?dir=Linux/NixOS` by default.
+`github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS` by default.
+
+### Legacy MySetup compatibility
+
+Existing hosts do not need a manual migration. The old repository URL, `#mysetup` output,
+`mysetup` executable, `nixosModules.mysetup`, `config.mysetup`, and
+`mysetup.lib.mkMySetupHost` remain supported aliases. The next Wahrwelt apply rewrites a
+recognized generated wrapper to the new `wahrwelt` input and constructor. Persistent paths
+such as `/etc/nixos/mysetup` and `~/.config/mysetup` remain unchanged.
+
+This old command is therefore still valid:
+
+```bash
+nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- doctor
+```
 
 To test the latest fixes before they are merged to `main`, run the TUI from the
-`dev` branch and select `General -> MySetup channel -> development` before
+`dev` branch and select `General -> Wahrwelt channel -> development` before
 applying:
 
 ```bash
-nix run --refresh 'github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS#mysetup' -- tui
+nix run --refresh 'github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS#wahrwelt' -- tui
 ```
 
-The TUI `General` section includes `MySetup channel`. Keep `stable` to track the
+The TUI `General` section includes `Wahrwelt channel`. Keep `stable` to track the
 `main` branch after install, or select `development` to generate a wrapper that
-tracks `github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS`.
+tracks `github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS`.
 
 Nix caches the resolved source for ~1 hour (`tarball-ttl` default). If you just
 pushed a commit and want the new HEAD right now, keep `--refresh` in the command.
 For a cached stable TUI launch, `--refresh` is optional:
 
 ```bash
-nix run 'github:TakuyaYagam1/MySetup'
+nix run 'github:TakuyaYagam1/wahrwelt'
 ```
 
 For reproducible installs, pin a commit, branch, or tag:
 
 ```bash
 # Specific commit (full SHA):
-nix run 'github:TakuyaYagam1/MySetup/<commit>'
+nix run 'github:TakuyaYagam1/wahrwelt/<commit>'
 
 # Specific branch (e.g. dev):
-nix run 'github:TakuyaYagam1/MySetup/dev'
+nix run 'github:TakuyaYagam1/wahrwelt/dev'
 ```
 
 Fresh install through `/mnt` is not supported in v1. Run this on an already
 booted NixOS system with an existing `/etc/nixos/hardware-configuration.nix`.
-On first adoption from a stock NixOS/KDE install, MySetup replaces the active
+On first adoption from a stock NixOS/KDE install, Wahrwelt replaces the active
 `/etc/nixos/configuration.nix` with a clean host-local override file. The old
 tree is kept in the `/etc/nixos.bak.<timestamp>.<pid>.<n>` backup made before
 writing `/etc/nixos`. VPN/proxy tools such as Amnezia are only a network
-workaround before running MySetup; they are not required in the bootstrap
+workaround before running Wahrwelt; they are not required in the bootstrap
 `configuration.nix`.
 
 Nix may ask whether to allow the flake app to use additional substituters. That
@@ -96,7 +110,7 @@ The first full build can still be large because this config includes multiple
 Wayland shells, Qt/QML packages, desktop apps, and optional CTF/development
 stacks.
 
-MySetup's low-RAM bootstrap path uses conservative build settings so 8 GB RAM
+Wahrwelt's low-RAM bootstrap path uses conservative build settings so 8 GB RAM
 machines do not get killed by OOM during rebuilds: `max-jobs = 1`, `cores = 2`,
 zram swap is enabled, and the existing `/var/lib/swapfile` remains a disk
 fallback. On Btrfs, NixOS creates the managed swapfile with
@@ -109,7 +123,7 @@ itself. This is a non-interactive apply path and will not open the TUI:
 
 ```bash
 nix run --refresh --option max-jobs 1 --option cores 2 \
-  'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- \
+  'github:TakuyaYagam1/wahrwelt?dir=Linux/NixOS#wahrwelt' -- \
   apply --lock-mode managed
 ```
 
@@ -161,7 +175,7 @@ sops /etc/nixos/secrets/secrets.yaml
 ```
 
 Put the public age key into `/etc/nixos/secrets/.sops.yaml`. In the default thin
-layout, `mkMySetupHost` automatically wires `/etc/nixos/secrets/secrets.yaml`
+layout, `mkWahrweltHost` automatically wires `/etc/nixos/secrets/secrets.yaml`
 into sops-nix when that file exists. The legacy full layout still supports
 `hosts/NixOS/secrets/sops.nix`.
 
@@ -195,7 +209,7 @@ Secret files must be regular files, non-symlinks, and not group/world readable.
 ## What The Installer Handles
 
 - Host/user settings: hostname, username, full name, home directory.
-- MySetup channel: stable/main branch or development/dev branch for the
+- Wahrwelt channel: stable/main branch or development/dev branch for the
   generated thin wrapper.
 - Git identity: `user.name` and `user.email` for Home Manager Git config.
 - Locale/region fields: timezone, locale, console keymap, weather location.
@@ -223,14 +237,14 @@ breakdown is in the [root README](../README.md#package-presets); in short:
   IDEs, AI CLIs, and games. This is the heaviest build.
 
 How it works under the hood: `hosts/NixOS/default.nix` imports every local
-module, and each module turns itself on or off based on `mysetup.packages.preset`.
+module, and each module turns itself on or off based on `wahrwelt.packages.preset`.
 That way all four presets run through the same code path.
 
 The generated wrapper `flake.nix` (independent lock mode) also trims its own
 input list to match the preset and feature flags: `claude-code`/`codex` appear
 only for `personal`, and `lanzaboote` only when Secure Boot is on. This just
 controls whether `/etc/nixos/flake.lock` tracks that input directly - the
-NixOS module always resolves it through MySetup's own lock either way, so a
+NixOS module always resolves it through Wahrwelt's own lock either way, so a
 `minimal` install never fails to build just because an input was left out.
 
 ## Hyprland Lua Runtime
@@ -240,7 +254,7 @@ The active Hyprland config is Lua-only and assumes Hyprland 0.55 or newer:
 - `~/.config/hypr/hyprland.lua` is the stable entrypoint owned by Home Manager.
 - That file loads `$XDG_STATE_HOME/mysetup/hypr-runtime/hyprland.lua`, which is
   rewritten by the shell runtime when switching profiles.
-- Shared MySetup modules live under `Linux/dots/hypr/hyprland/*.lua`,
+- Shared Wahrwelt modules live under `Linux/dots/hypr/hyprland/*.lua`,
   `variables.lua`, `scheme/default.lua`, and `lib/mysetup.lua`.
 - Shell-specific binds and launchers live under
   `Linux/dots/hypr/{caelestia,noctalia,end4}/*.lua`.
@@ -316,7 +330,7 @@ The QuickShell selector opens on the focused monitor and switches between:
 - `end4` / Illogical Impulse
 
 The full per-shell keybind reference (common + caelestia + noctalia + end4)
-lives in the [GitHub Wiki](https://github.com/TakuyaYagam1/MySetup/wiki) or
+lives in the [GitHub Wiki](https://github.com/TakuyaYagam1/wahrwelt/wiki) or
 [`Linux/keybinds.md`](keybinds.md).
 
 Runtime state:
@@ -391,11 +405,11 @@ is auto-resized to 320x320 (its theme layout is hand-calibrated for that
 size); SDDM and Plymouth accept any aspect ratio.
 
 Reading these files requires `--impure` on `nixos-rebuild` (they live outside
-the flake source, under `$HOME`) - `nixos-update` and `mysetup apply` already
+the flake source, under `$HOME`) - `nixos-update` and `wahrwelt apply` already
 pass it. Running `nixos-rebuild` yourself for something else? Add `--impure`
 or these overrides silently fall back to the built-in default.
 
-Takes effect on the next `mysetup apply` / `nixos-rebuild switch`. SDDM shows
+Takes effect on the next `wahrwelt apply` / `nixos-rebuild switch`. SDDM shows
 the new avatar at the next login screen; GRUB and Plymouth render before Linux
 even starts, so you need an actual reboot to see them - `switch` alone
 prepares the files but can't repaint a bootloader or splash screen that's
@@ -409,7 +423,7 @@ The installer applies changes defensively:
 2. Writes generated `host-vars.nix`, `configuration.nix`, and `home.nix`
    templates when they do not already exist.
 3. Preserves host-local `hardware-configuration.nix`, `hashed-password.nix`,
-   `private/`, and `secrets/`. Existing MySetup thin installs also keep
+   `private/`, and `secrets/`. Existing legacy MySetup thin installs also keep
    `flake.lock`, `configuration.nix`, and `home.nix`; generated wrapper
    `flake.nix` files may be regenerated to pick up the selected lock mode.
    Stock NixOS or legacy non-thin configs are replaced with the generated thin
@@ -418,7 +432,7 @@ The installer applies changes defensively:
 5. Runs `nix flake update --flake <staging>` for the default thin wrapper, so
    the installed host owns the important external input revisions in
    `/etc/nixos/flake.lock`. Use `--lock-mode managed` to keep the compatibility
-   behavior of updating only `mysetup` and using MySetup's transitive lock.
+   behavior of updating only `mysetup` and using Wahrwelt's transitive lock.
 6. Runs `nixos-rebuild dry-build` against the staging flake before touching
    `/etc/nixos`.
 7. Backs up `/etc/nixos` to a unique `/etc/nixos.bak.<timestamp>.<pid>.<n>`.
@@ -430,11 +444,11 @@ The installer applies changes defensively:
 
 Use `--layout full` to keep the old full-mirror behavior for debugging or
 migration fallback. Use `--lock-mode managed` with the thin layout when you want
-the host to track only the MySetup commit while reusing MySetup's tested
+the host to track only the Wahrwelt commit while reusing Wahrwelt's tested
 transitive dependency lock.
 
 Rollback is intentionally scoped to `/etc/nixos`. If user dotfile sync fails
-after partial writes under `~/.config`, run `mysetup doctor` and re-apply or
+after partial writes under `~/.config`, run `wahrwelt doctor` and re-apply or
 clean those user-level files separately.
 
 `/etc/nixos` is the canonical activation target. Building a full system
@@ -470,27 +484,27 @@ local modules to `private/default.nix`, which includes commented examples for
 
 ```bash
 # Local checkout: open the interactive TUI.
-nix run "path:$PWD?dir=Linux/NixOS#mysetup"
-nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- tui
+nix run "path:$PWD?dir=Linux/NixOS#wahrwelt"
+nix run "path:$PWD?dir=Linux/NixOS#wahrwelt" -- tui
 
 # Remote stable/main: open the interactive TUI.
-nix run --refresh 'github:TakuyaYagam1/MySetup'
+nix run --refresh 'github:TakuyaYagam1/wahrwelt'
 
 # Remote latest/dev: open the interactive TUI, then select the development channel.
-nix run --refresh 'github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS#mysetup' -- tui
+nix run --refresh 'github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS#wahrwelt' -- tui
 
 # Read-only inspection commands.
-nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- doctor
-nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- print-state
+nix run "path:$PWD?dir=Linux/NixOS#wahrwelt" -- doctor
+nix run "path:$PWD?dir=Linux/NixOS#wahrwelt" -- print-state
 
 # Non-interactive apply commands. These use saved state and do not open the TUI.
-nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --no-switch
-nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --source-channel development --no-switch
-nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --lock-mode managed --no-switch
-nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --layout full --no-switch
+nix run "path:$PWD?dir=Linux/NixOS#wahrwelt" -- apply --no-switch
+nix run "path:$PWD?dir=Linux/NixOS#wahrwelt" -- apply --source-channel development --no-switch
+nix run "path:$PWD?dir=Linux/NixOS#wahrwelt" -- apply --lock-mode managed --no-switch
+nix run "path:$PWD?dir=Linux/NixOS#wahrwelt" -- apply --layout full --no-switch
 
 # Managed cleanup.
-nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- cleanup
+nix run "path:$PWD?dir=Linux/NixOS#wahrwelt" -- cleanup
 ```
 
 `apply --no-switch` is a validation mode: it stages the build and stops after
@@ -503,7 +517,7 @@ and it avoids host-local side effects such as password hashing or writing
 `/etc/nixos`:
 
 ```bash
-nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- apply --dry-run --no-switch
+nix run "path:$PWD?dir=Linux/NixOS#wahrwelt" -- apply --dry-run --no-switch
 ```
 
 Useful checks after changing installer or shell integration:
@@ -513,7 +527,7 @@ Useful checks after changing installer or shell integration:
 | `make -C Linux/installer check` | Before pushing or applying - full local CI: lint, fmt-check, hypr-bind-check, shell-check, tests, nix evals. |
 | `make -C Linux/installer shell-check` | After editing Hypr scripts, JSON, or Python patch sources under `Linux/dots/hypr/`. |
 | `make -C Linux/installer nix-hm-eval` | After touching `home/`, end4 runtime-env, or shell-profile imports - evaluates the runtime shell module and all-on home-manager imports including end4. |
-| `make -C Linux/installer nix-installed-mirror-build` | After flake changes that affect an already-installed system - builds `mysetup` from an `/etc/nixos`-style temporary mirror. |
+| `make -C Linux/installer nix-installed-mirror-build` | After flake changes that affect an already-installed system - builds `wahrwelt` and the legacy `mysetup` alias from an `/etc/nixos`-style temporary mirror. |
 | `make all` (run from `Linux/`) | Aggregate: delegates to installer Makefile + `statix` + `deadnix` + json-lint. |
 
 ## Configuration Structure
@@ -533,7 +547,7 @@ Linux/NixOS/
 │   └── hardware-configuration.nix # host-local, preserved from /etc/nixos
 ├── lib/                           # flake glue: layout, hosts, packages,
 │   │                              # overlays, modules, presets, ports,
-│   │                              # mysetupLib helpers
+│   │                              # wahrweltLib helpers
 │   └── package-sets/              # per-preset package set definitions
 ├── profiles/                      # base / desktop / developer / features
 │                                  # import layers (composed in hosts/NixOS)
@@ -581,8 +595,9 @@ Linux/dots/
 └── zen/
     └── chrome/                    # Zen Browser Catppuccin chrome
 
-Linux/installer/                   # Go TUI/CLI (`mysetup`)
-├── cmd/mysetup/                   # binary entrypoint
+Linux/installer/                   # Go TUI/CLI (`wahrwelt`, legacy `mysetup` alias)
+├── cmd/wahrwelt/                  # primary binary entrypoint
+├── cmd/mysetup/                   # legacy source entrypoint
 ├── internal/                      # app, apply, cleanup, config, defaults,
 │                                  # doctor, dots, paths, rollback, run,
 │                                  # secrets, shellruntime, tui, zenutil
@@ -622,7 +637,7 @@ the other half:
   `users.defaultUserShell`) plus `home/programs/fish.nix` (aliases,
   abbreviations, functions, integrations like `direnv` / `zoxide`).
 
-Preset gating (`mysetupLib.mkIfPresetOrMore "desktop" config.mysetup`) decides
+Preset gating (`wahrweltLib.mkIfPresetOrMore "desktop" config.wahrwelt`) decides
 **whether** a NixOS module is active per host preset
 (`minimal -> desktop -> developer -> personal`). Home-manager packages use the
 same preset helpers via `home/programs/packages.nix`.
@@ -631,7 +646,7 @@ Compositional note: there is no separate `profiles/personal.nix` file. The
 `personal` preset is just `developer` + `desktop` + everything gated on
 `presets.personal` (e.g. games in `home/programs/packages.nix`).
 `hosts/NixOS/default.nix` imports `profiles/{base,desktop,developer,features}.nix`
-directly, and each module checks `mysetup.packages.preset` at evaluation time.
+directly, and each module checks `wahrwelt.packages.preset` at evaluation time.
 
 ## Recovery
 
@@ -649,7 +664,7 @@ sudo nixos-rebuild switch --flake /etc/nixos#NixOS
 Run Doctor for checks and recovery hints:
 
 ```bash
-nix run "path:$PWD?dir=Linux/NixOS#mysetup" -- doctor
+nix run "path:$PWD?dir=Linux/NixOS#wahrwelt" -- doctor
 ```
 
 For shell-switch issues, inspect:
@@ -661,7 +676,7 @@ cat "${XDG_RUNTIME_DIR:-/tmp}/mysetup-shell.log"
 ## Troubleshooting
 
 Quick triage for the most common breakage paths. If none of these apply,
-run `mysetup doctor` and check the relevant log.
+run `wahrwelt doctor` and check the relevant log.
 
 - **Shell-swap (Super+Shift+W) does nothing or freezes.** Check
   `$XDG_STATE_HOME/mysetup/active-shell` (should be one of `caelestia`,
@@ -670,7 +685,7 @@ run `mysetup doctor` and check the relevant log.
   `$XDG_STATE_HOME/mysetup/hypr-runtime/` - remove that directory and retry.
 - **Hyprland keybinds are listed but do nothing.** Run `hyprctl configerrors`
   first. On Hyprland 0.55+, dispatch commands must use the Lua dispatcher API;
-  MySetup binds should go through `lib/mysetup.lua` helpers or direct
+  Wahrwelt binds should go through `lib/mysetup.lua` helpers or direct
   `hl.dsp.*` calls, not old `hyprctl dispatch movewindow l` style strings.
 - **Thunar shows generic icons instead of image previews.** Check that
   `tumbler` is running (`pgrep -f tumbler-1/tumblerd`), that
@@ -691,9 +706,9 @@ run `mysetup doctor` and check the relevant log.
   `sudo nixos-rebuild switch --flake /etc/nixos#NixOS`. The dry-build already
   passed; this usually means the live system could not restart part of the
   desktop/session stack cleanly.
-- **`sudo nixos-rebuild switch` works locally but `mysetup apply` fails.**
+- **`sudo nixos-rebuild switch` works locally but `wahrwelt apply` fails.**
   The installer wraps switch with stricter checks (dry-build, password
-  hash, dots mirror). Run `nix run "path:$PWD?dir=Linux/NixOS#mysetup" --
+  hash, dots mirror). Run `nix run "path:$PWD?dir=Linux/NixOS#wahrwelt" --
   doctor` to see which precondition is missing.
 
 ## Maintenance
@@ -708,13 +723,13 @@ sudo nixos-rebuild switch --flake .#NixOS
 
 Default thin installs use an independent host lock: `/etc/nixos/flake.lock`
 owns nixpkgs, Home Manager, Stylix, Quickshell, shell flakes, and the selected
-MySetup source revision. The `stable` channel uses the `main` branch; the
+Wahrwelt source revision. The `stable` channel uses the `main` branch; the
 `development` channel uses `dev`. Managed thin installs update only the
-`mysetup` input and reuse the transitive lock shipped by MySetup.
+`wahrwelt` input and reuse the transitive lock shipped by Wahrwelt.
 
 Existing generated thin wrappers migrate to the independent lock shape on the
-next `mysetup apply`; a plain `nix flake update` only changes `flake.lock`, not
-the wrapper `flake.nix` structure. The same `mysetup apply` also reconciles
+next `wahrwelt apply`; a plain `nix flake update` only changes `flake.lock`, not
+the wrapper `flake.nix` structure. The same `wahrwelt apply` also reconciles
 `claude-code`/`codex`/`lanzaboote` toward whatever the current preset and
 feature flags call for - changing the package preset or toggling Secure Boot
 and re-running the installer adds or removes just those input blocks on the

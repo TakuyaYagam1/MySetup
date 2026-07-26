@@ -1,15 +1,15 @@
 {
   config,
   lib,
-  mysetupLib,
+  wahrweltLib,
   pkgs,
   ...
 }:
 
 let
-  cfg = config.mysetup;
-  developerOrMore = mysetupLib.presets.developerOrMore cfg;
-  personal = mysetupLib.presets.personal cfg;
+  cfg = config.wahrwelt;
+  developerOrMore = wahrweltLib.presets.developerOrMore cfg;
+  personal = wahrweltLib.presets.personal cfg;
   virtioWinIso = pkgs.runCommand "virtio-win.iso" { nativeBuildInputs = [ pkgs.xorriso ]; } ''
     xorriso -as mkisofs -iso-level 3 -J -R -V virtio-win -o "$out" ${pkgs.virtio-win}
   '';
@@ -21,7 +21,7 @@ in
         docker = {
           enable = true;
           daemon.settings = {
-            inherit (mysetupLib.defaults) dns;
+            inherit (wahrweltLib.defaults) dns;
             log-driver = "journald";
           };
         };

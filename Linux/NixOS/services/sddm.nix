@@ -1,6 +1,6 @@
 {
   config,
-  mysetupLib,
+  wahrweltLib,
   pkgs,
   ...
 }:
@@ -12,13 +12,14 @@ let
   cursorSize = "24";
 in
 {
-  config = mysetupLib.mkIfPresetOrMore "desktop" config.mysetup {
-    environment.etc."sddm/faces/${config.mysetup.user.username}.face.icon".source =
-      mysetupLib.bootTheme.resolveLogo {
-        homeDirectory = config.mysetup.user.homeDirectory;
-        service = "sddm";
-        default = ../themes/sddm-theme/icons/logo.png;
-      };
+  config = wahrweltLib.mkIfPresetOrMore "desktop" config.wahrwelt {
+    environment.etc."sddm/faces/${config.wahrwelt.user.username}.face.icon".source =
+      wahrweltLib.bootTheme.resolveLogo
+        {
+          homeDirectory = config.wahrwelt.user.homeDirectory;
+          service = "sddm";
+          default = ../themes/sddm-theme/icons/logo.png;
+        };
 
     services.gnome.gnome-keyring.enable = true;
     security.pam.services.sddm.enableGnomeKeyring = true;

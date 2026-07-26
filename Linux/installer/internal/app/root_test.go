@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
 )
 
 func TestApplyMissingStateFailsClosed(t *testing.T) {
@@ -160,6 +160,7 @@ func TestMakeCheckRunsRepoRootPackageEval(t *testing.T) {
 	for _, want := range []string{
 		"nix-package-eval",
 		`builtins.getFlake "path:$(REPO_ROOT)?dir=Linux/NixOS"`,
+		"flake.packages.x86_64-linux.wahrwelt.pname",
 		"flake.packages.x86_64-linux.mysetup.pname",
 	} {
 		if !strings.Contains(text, want) {
@@ -174,10 +175,10 @@ func TestReadmeUsesRepoRootFlakePathForLocalRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	if strings.Contains(text, "nix run ./Linux/NixOS#mysetup") {
+	if strings.Contains(text, "nix run ./Linux/NixOS#wahrwelt") {
 		t.Fatalf("README should not recommend local ./Linux/NixOS flake path\n%s", text)
 	}
-	if !strings.Contains(text, `nix run "path:$PWD?dir=Linux/NixOS#mysetup"`) {
+	if !strings.Contains(text, `nix run "path:$PWD?dir=Linux/NixOS#wahrwelt"`) {
 		t.Fatalf("README should document repo-root path flake local run\n%s", text)
 	}
 }
@@ -195,6 +196,7 @@ func TestMakeCheckRunsInstalledMirrorBuild(t *testing.T) {
 		`rsync -a ../dots/ "$$tmp"/dots/`,
 		`rsync -a --exclude=/bin/ --exclude=/tmp/ --exclude=/coverage.out --exclude=/coverage.html ./ "$$tmp"/installer/`,
 		`NIX_CACHE_ARGS := --option extra-substituters`,
+		`nix build $(NIX_CACHE_ARGS) --no-link --no-write-lock-file "path:$$tmp#wahrwelt"`,
 		`nix build $(NIX_CACHE_ARGS) --no-link --no-write-lock-file "path:$$tmp#mysetup"`,
 	} {
 		if !strings.Contains(text, want) {

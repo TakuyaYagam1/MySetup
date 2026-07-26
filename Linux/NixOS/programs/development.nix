@@ -1,12 +1,12 @@
 {
   config,
-  mysetupLib,
+  wahrweltLib,
   pkgs,
   ...
 }:
 
 {
-  config = mysetupLib.mkIfPresetOrMore "developer" config.mysetup {
+  config = wahrweltLib.mkIfPresetOrMore "developer" config.wahrwelt {
     programs.nix-ld = {
       enable = true;
       libraries = with pkgs; [

@@ -60,7 +60,7 @@ launchers (e.g. Antigravity, v2rayN) can stay in `whkdrc`.
 2. Navigate to the Windows config directory:
 
    ```powershell
-   cd MySetup\Windows
+   cd wahrwelt\Windows
    ```
 
 3. Run the installation script:

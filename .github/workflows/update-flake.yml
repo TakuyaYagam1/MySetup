@@ -60,11 +60,14 @@ jobs:
       - name: Build public shell module check
         run: nix build --no-link --print-build-logs .#checks.x86_64-linux.shells-module
 
-      - name: Build public mysetup package
-        run: nix build .#mysetup --print-build-logs
+      - name: Build public Wahrwelt package
+        run: nix build .#wahrwelt --print-build-logs
 
-      - name: Smoke-test public mysetup binary
-        run: ./result/bin/mysetup --help
+      - name: Smoke-test public Wahrwelt and legacy binaries
+        run: |
+          ./result/bin/wahrwelt --help
+          ./result/bin/mysetup --help
+          nix build --no-link .#mysetup --print-build-logs
 
       - name: Build patched end4 Hypr config
         working-directory: Linux/NixOS
@@ -74,13 +77,16 @@ jobs:
         working-directory: Linux/NixOS
         run: nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.programs.caelestia.package'
 
-      - name: Build NixOS mysetup package
+      - name: Build NixOS Wahrwelt package
         working-directory: Linux/NixOS
-        run: nix build .#mysetup --print-build-logs
+        run: nix build .#wahrwelt --print-build-logs
 
-      - name: Smoke-test NixOS mysetup binary
+      - name: Smoke-test NixOS Wahrwelt and legacy binaries
         working-directory: Linux/NixOS
-        run: ./result/bin/mysetup --help
+        run: |
+          ./result/bin/wahrwelt --help
+          ./result/bin/mysetup --help
+          nix build --no-link .#mysetup --print-build-logs
 
       - name: Check for changes
         id: check
@@ -118,11 +124,15 @@ jobs:
 
             - `nix flake check --no-build`
             - `nix build --no-link --print-build-logs .#checks.x86_64-linux.shells-module`
-            - `nix build .#mysetup --print-build-logs`
+            - `nix build .#wahrwelt --print-build-logs`
+            - `nix build --no-link .#mysetup --print-build-logs`
+            - `./result/bin/wahrwelt --help`
             - `./result/bin/mysetup --help`
             - `nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.xdg.configFile."hypr/end4".source'`
             - `nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.programs.caelestia.package'`
-            - `nix build .#mysetup --print-build-logs`
+            - `nix build .#wahrwelt --print-build-logs`
+            - `nix build --no-link .#mysetup --print-build-logs`
+            - `./result/bin/wahrwelt --help`
             - `./result/bin/mysetup --help`
 
       - name: Merge pull request

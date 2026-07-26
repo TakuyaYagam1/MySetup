@@ -75,6 +75,47 @@ func TestResolveSourcesExplicitRepoDoesNotFallback(t *testing.T) {
 	}
 }
 
+func TestResolveSourcesPrefersWahrweltEnvironmentOverLegacyMySetup(t *testing.T) {
+	root := t.TempDir()
+	wahrwelt := filepath.Join(root, "wahrwelt")
+	legacy := filepath.Join(root, "mysetup")
+	for _, source := range []string{wahrwelt, legacy} {
+		mkdir(t, filepath.Join(source, "Linux", "NixOS"))
+		mkdir(t, filepath.Join(source, "Linux", "dots"))
+		mkdir(t, filepath.Join(source, "Linux", "installer"))
+		write(t, filepath.Join(source, "Linux", "NixOS", "flake.nix"))
+	}
+	t.Setenv("WAHRWELT_REPO_ROOT", wahrwelt)
+	t.Setenv("MYSETUP_REPO_ROOT", legacy)
+
+	src, err := ResolveSources("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if src.RepoRoot != wahrwelt {
+		t.Fatalf("WAHRWELT_REPO_ROOT must take precedence: got %q, want %q", src.RepoRoot, wahrwelt)
+	}
+}
+
+func TestResolveSourcesFallsBackToLegacyMySetupEnvironment(t *testing.T) {
+	root := t.TempDir()
+	legacy := filepath.Join(root, "mysetup")
+	mkdir(t, filepath.Join(legacy, "Linux", "NixOS"))
+	mkdir(t, filepath.Join(legacy, "Linux", "dots"))
+	mkdir(t, filepath.Join(legacy, "Linux", "installer"))
+	write(t, filepath.Join(legacy, "Linux", "NixOS", "flake.nix"))
+	t.Setenv("WAHRWELT_REPO_ROOT", "")
+	t.Setenv("MYSETUP_REPO_ROOT", legacy)
+
+	src, err := ResolveSources("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if src.RepoRoot != legacy {
+		t.Fatalf("legacy MYSETUP_REPO_ROOT should remain supported: got %q, want %q", src.RepoRoot, legacy)
+	}
+}
+
 func TestXDGStateHomeUsesExplicitHomeOverProcessEnv(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", filepath.Join(t.TempDir(), "state"))
 

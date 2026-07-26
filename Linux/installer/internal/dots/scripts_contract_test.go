@@ -216,6 +216,8 @@ func TestShellSelectorScriptTracksFocusedMonitorAndActiveShell(t *testing.T) {
 		`state_dir="$runtime_dir/mysetup-shell-selector"`,
 		`lock_dir="$state_dir/lock"`,
 		"selector_name=\"mysetup-shell-selector\"",
+		"WAHRWELT_SHELL_SELECTOR_MONITOR",
+		"WAHRWELT_ACTIVE_SHELL",
 		"MYSETUP_SHELL_SELECTOR_MONITOR",
 		"MYSETUP_ACTIVE_SHELL",
 		"acquire_lock()",
@@ -256,6 +258,8 @@ func TestRecordToggleScriptUsesLockAndPidValidation(t *testing.T) {
 		"record-toggle\\.sh",
 		`ps -p "$pid" -o args=`,
 		"gpu-screen-recorder",
+		"WAHRWELT_RECORD_TARGET",
+		"MYSETUP_RECORD_TARGET",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("record toggle script missing %q\n%s", want, text)
@@ -382,8 +386,8 @@ func TestEnd4HyprPatchDisablesUpstreamShellLifecycle(t *testing.T) {
 	}
 	text := string(data)
 	for _, want := range []string{
-		"MySetup start-shell owns end4 QuickShell",
-		"MySetup start-shell owns end4 hypridle",
+		"Wahrwelt start-shell owns end4 QuickShell",
+		"Wahrwelt start-shell owns end4 hypridle",
 		`/^    hl\.exec_cmd("qs -c \$qsConfig")$/`,
 		`/^    hl\.exec_cmd("hypridle")$/`,
 	} {
@@ -582,6 +586,7 @@ func TestInstallerPackageProvidesXKeyboardRules(t *testing.T) {
 	}
 	text := string(data)
 	for _, want := range []string{
+		`--set WAHRWELT_XKB_RULES_DIR ${flakePkgs.xkeyboard_config}/share/X11/xkb/rules`,
 		`--set MYSETUP_XKB_RULES_DIR ${flakePkgs.xkeyboard_config}/share/X11/xkb/rules`,
 		`xkeyboard_config`,
 	} {

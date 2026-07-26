@@ -1,13 +1,13 @@
 {
   lib,
   mysetup,
-  mysetupLib,
+  wahrweltLib,
   ...
 }:
 
 let
-  desktopOrMore = mysetupLib.presets.desktopOrMore mysetup;
-  developerOrMore = mysetupLib.presets.developerOrMore mysetup;
+  desktopOrMore = wahrweltLib.presets.desktopOrMore mysetup;
+  developerOrMore = wahrweltLib.presets.developerOrMore mysetup;
 
   browser = [ "zen.desktop" ];
   editor = [ "code.desktop" ];

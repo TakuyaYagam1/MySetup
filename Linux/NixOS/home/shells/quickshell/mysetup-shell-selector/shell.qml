@@ -8,12 +8,12 @@ import Quickshell.Wayland
 ShellRoot {
   id: root
 
-  readonly property string targetScreen: Quickshell.env("MYSETUP_SHELL_SELECTOR_MONITOR") || ""
-  readonly property string activeShell: Quickshell.env("MYSETUP_ACTIVE_SHELL") || "caelestia"
-  readonly property string selectorScript: Quickshell.env("MYSETUP_SHELL_SELECTOR_SCRIPT")
+  readonly property string targetScreen: Quickshell.env("WAHRWELT_SHELL_SELECTOR_MONITOR") || Quickshell.env("MYSETUP_SHELL_SELECTOR_MONITOR") || ""
+  readonly property string activeShell: Quickshell.env("WAHRWELT_ACTIVE_SHELL") || Quickshell.env("MYSETUP_ACTIVE_SHELL") || "caelestia"
+  readonly property string selectorScript: Quickshell.env("WAHRWELT_SHELL_SELECTOR_SCRIPT") || Quickshell.env("MYSETUP_SHELL_SELECTOR_SCRIPT")
 
   property var shellOptions: [
-    // MYSETUP_SHELL_OPTIONS_BEGIN
+    // WAHRWELT_SHELL_OPTIONS_BEGIN
     {
       id: "noctalia",
       title: "noctalia",
@@ -35,7 +35,7 @@ ShellRoot {
       surface: "#1d2122",
       logo: Qt.resolvedUrl("assets/illogical-impulse.svg")
     }
-    // MYSETUP_SHELL_OPTIONS_END
+    // WAHRWELT_SHELL_OPTIONS_END
   ]
 
   readonly property var visibleScreens: {

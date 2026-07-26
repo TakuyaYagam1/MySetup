@@ -2,7 +2,7 @@ local M = {}
 
 M.home = os.getenv("HOME")
 if M.home == nil then
-	error("HOME is not set; cannot locate MySetup Hyprland config")
+	error("HOME is not set; cannot locate Wahrwelt Hyprland config")
 end
 
 M.config_home = os.getenv("XDG_CONFIG_HOME") or (M.home .. "/.config")

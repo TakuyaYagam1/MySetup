@@ -55,10 +55,12 @@ func ResolveSources(repoRoot string) (Sources, error) {
 		if ok {
 			return src, nil
 		}
-		return Sources{}, fmt.Errorf("explicit repository root is not a MySetup source tree: %s", repoRoot)
+		return Sources{}, fmt.Errorf("explicit repository root is not a Wahrwelt source tree: %s", repoRoot)
 	}
-	if env := os.Getenv("MYSETUP_REPO_ROOT"); env != "" {
-		candidates = append(candidates, env)
+	for _, name := range []string{"WAHRWELT_REPO_ROOT", "MYSETUP_REPO_ROOT"} {
+		if env := os.Getenv(name); env != "" {
+			candidates = append(candidates, env)
+		}
 	}
 	if cwd, err := os.Getwd(); err == nil {
 		for dir := cwd; ; dir = filepath.Dir(dir) {
@@ -77,7 +79,7 @@ func ResolveSources(repoRoot string) (Sources, error) {
 			return src, nil
 		}
 	}
-	return Sources{}, fmt.Errorf("could not locate repository root; run from MySetup root or pass --repo")
+	return Sources{}, fmt.Errorf("could not locate repository root; run from Wahrwelt root or pass --repo")
 }
 
 func resolveCandidate(candidate string) (Sources, bool) {

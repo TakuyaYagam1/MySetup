@@ -12,8 +12,8 @@ body:
         unstructured "it doesn't work" reports will be closed.
 
         Read the relevant platform README before submitting:
-        - [Linux/README.md](https://github.com/TakuyaYagam1/MySetup/blob/main/Linux/README.md)
-        - [Windows/README.md](https://github.com/TakuyaYagam1/MySetup/blob/main/Windows/README.md)
+        - [Linux/README.md](https://github.com/TakuyaYagam1/wahrwelt/blob/main/Linux/README.md)
+        - [Windows/README.md](https://github.com/TakuyaYagam1/wahrwelt/blob/main/Windows/README.md)
 
   - type: dropdown
     id: platform
@@ -47,7 +47,7 @@ body:
     attributes:
       label: What happened?
       description: Describe the actual behavior.
-      placeholder: When I ran `nix run github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup` it crashed with...
+      placeholder: When I ran `nix run github:TakuyaYagam1/wahrwelt?dir=Linux/NixOS#wahrwelt` it crashed with...
     validations:
       required: true
 

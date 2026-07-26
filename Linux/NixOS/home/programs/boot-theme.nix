@@ -9,7 +9,7 @@ let
   bootThemeDir = "${config.home.homeDirectory}/.config/mysetup/boot-theme";
   seededMarker = "${bootThemeDir}/.seeded";
   readme = pkgs.writeText "mysetup-boot-theme-readme" ''
-    MySetup boot theme overrides
+    Wahrwelt boot theme overrides
     ============================
 
     Drop a PNG or JPG image in this directory to customize the GRUB, SDDM,

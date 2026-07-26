@@ -1,12 +1,12 @@
 {
   config,
-  mysetupLib,
+  wahrweltLib,
   pkgs,
   ...
 }:
 
 {
-  config = mysetupLib.mkIfPresetOrMore "desktop" config.mysetup {
+  config = wahrweltLib.mkIfPresetOrMore "desktop" config.wahrwelt {
     programs.thunar = {
       enable = true;
       plugins = with pkgs; [

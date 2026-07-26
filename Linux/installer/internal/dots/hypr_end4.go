@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/shellruntime"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/shellruntime"
 )
 
 func restoreActiveEnd4Profile(ctx context.Context, runner run.CommandRunner, configDir, hyprDir, activeProfile string) error {

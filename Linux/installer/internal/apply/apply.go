@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/defaults"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/dots"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/run"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/defaults"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/dots"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 )
 
 type Options struct {
@@ -45,7 +45,7 @@ func normalizeApplyModes(layout Layout, lockMode LockMode) (applyModes, error) {
 }
 
 func printApplyHeader(src paths.Sources, dest string, modes applyModes) {
-	fmt.Println("== MySetup apply ==")
+	fmt.Println("== Wahrwelt apply ==")
 	fmt.Printf("source: %s\n", src.RepoRoot)
 	fmt.Printf("target: %s\n", dest)
 	fmt.Printf("layout: %s\n", modes.layout)

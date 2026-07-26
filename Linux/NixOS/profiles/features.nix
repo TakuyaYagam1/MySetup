@@ -24,7 +24,7 @@ in
     ../services/observability.nix
   ];
 
-  config = lib.mkIf config.mysetup.features.ctfTools {
+  config = lib.mkIf config.wahrwelt.features.ctfTools {
     environment.systemPackages = lib.flatten (lib.attrValues packageSets.ctf);
     programs.wireshark.enable = true;
   };

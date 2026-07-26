@@ -1,14 +1,14 @@
 {
   config,
-  mysetupLib,
+  wahrweltLib,
   pkgs,
   lib,
   ...
 }:
 
 let
-  plymouthLogo = mysetupLib.bootTheme.resolveLogo {
-    homeDirectory = config.mysetup.user.homeDirectory;
+  plymouthLogo = wahrweltLib.bootTheme.resolveLogo {
+    homeDirectory = config.wahrwelt.user.homeDirectory;
     service = "plymouth";
     default = ../../themes/plymouth-theme/assets/logo.png;
   };

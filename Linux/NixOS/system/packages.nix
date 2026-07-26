@@ -1,15 +1,15 @@
 {
   config,
   lib,
-  mysetupLib,
+  wahrweltLib,
   pkgs,
   pkgs-stable,
   ...
 }:
 
 let
-  inherit (mysetupLib) presets;
-  cfg = config.mysetup;
+  inherit (wahrweltLib) presets;
+  cfg = config.wahrwelt;
   packageSets = import ../lib/package-sets.nix {
     inherit
       lib

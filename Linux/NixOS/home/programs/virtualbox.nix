@@ -2,13 +2,13 @@
   config,
   lib,
   mysetup,
-  mysetupLib,
+  wahrweltLib,
   pkgs,
   ...
 }:
 
 let
-  personal = mysetupLib.presets.personal mysetup;
+  personal = wahrweltLib.presets.personal mysetup;
   shareName = "VMShare";
   sharePath = "${config.home.homeDirectory}/${shareName}";
   ensureVirtualBoxVMShare = pkgs.writeShellApplication {

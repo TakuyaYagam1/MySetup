@@ -1,4 +1,4 @@
-# My Setup
+# Wahrwelt
 
 > **! READ THE README FOR YOUR PLATFORM BEFORE DOING ANYTHING !**
 >
@@ -18,7 +18,7 @@ Personal system configuration for Linux (NixOS + Hyprland) and Windows (Komorebi
 Three interchangeable Hyprland shells - **caelestia**, **noctalia**, **end-4** - swap between them at
 runtime, no reinstall needed. Details: [Linux/README.md](Linux/README.md#runtime-shells).
 
-Full keybind reference (every shell, every bind): [GitHub Wiki](https://github.com/TakuyaYagam1/MySetup/wiki)
+Full keybind reference (every shell, every bind): [GitHub Wiki](https://github.com/TakuyaYagam1/wahrwelt/wiki)
 or [`Linux/keybinds.md`](Linux/keybinds.md).
 
 Want your own logo on the GRUB/SDDM/Plymouth boot screens instead of the default one? Drop an
@@ -79,15 +79,21 @@ square instead of a circle.
 
 | Scenario | Command |
 | --- | --- |
-| Install (stable `main`, opens TUI) | `nix run --refresh 'github:TakuyaYagam1/MySetup'` |
-| Install (latest `dev`, opens TUI) | `nix run --refresh 'github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS#mysetup' -- tui` |
-| Install with more build cores (match your CPU's thread count via `nproc`, not just the `4 4` example below - and keep `max-jobs` low regardless of core count on machines with less than ~16GB RAM, since each job builds independently and OOM doesn't check core count), stable `main`, opens TUI | `nix run --refresh --option max-jobs 4 --option cores 4 'github:TakuyaYagam1/MySetup'` |
-| Install with more build cores (same caveats as above), latest `dev`, opens TUI | `nix run --refresh --option max-jobs 4 --option cores 4 'github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS#mysetup' -- tui` |
-| Reapply saved config, no TUI | `nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- apply` |
-| Inspect / repair an installed host | `nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- doctor` |
+| Install (stable `main`, opens TUI) | `nix run --refresh 'github:TakuyaYagam1/wahrwelt'` |
+| Install (latest `dev`, opens TUI) | `nix run --refresh 'github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS#wahrwelt' -- tui` |
+| Install with more build cores (match your CPU's thread count via `nproc`, not just the `4 4` example below - and keep `max-jobs` low regardless of core count on machines with less than ~16GB RAM, since each job builds independently and OOM doesn't check core count), stable `main`, opens TUI | `nix run --refresh --option max-jobs 4 --option cores 4 'github:TakuyaYagam1/wahrwelt'` |
+| Install with more build cores (same caveats as above), latest `dev`, opens TUI | `nix run --refresh --option max-jobs 4 --option cores 4 'github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS#wahrwelt' -- tui` |
+| Reapply saved config, no TUI | `nix run --refresh 'github:TakuyaYagam1/wahrwelt?dir=Linux/NixOS#wahrwelt' -- apply` |
+| Inspect / repair an installed host | `nix run --refresh 'github:TakuyaYagam1/wahrwelt?dir=Linux/NixOS#wahrwelt' -- doctor` |
 | Update an already-installed system | `nixos-update` |
 
-The installer asks about: MySetup channel, username/password, package preset, display and
+Existing installations remain compatible with the legacy repository URL, flake output, CLI
+name, module namespace, and host constructor. For example,
+`nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- doctor`
+continues to work while the generated host wrapper is migrated to `wahrwelt` on the next apply.
+The `/etc/nixos/mysetup` and `~/.config/mysetup` state paths intentionally remain unchanged.
+
+The installer asks about: Wahrwelt channel, username/password, package preset, display and
 keyboard layout, Secure Boot, GPU type, locale/timezone, CTF tools, and user
 dotfiles. Full flag reference (`--layout`, `--lock-mode`, low-RAM bootstrap, flake module usage
 for external hosts, etc.) is in [Linux/README.md](Linux/README.md).
@@ -110,8 +116,8 @@ Presets are **cumulative** - each tier includes everything below it and adds mor
 > `yasb/config.yaml` before running the installer.
 
 ```powershell
-git clone https://github.com/TakuyaYagam1/MySetup.git
-cd MySetup\Windows
+git clone https://github.com/TakuyaYagam1/wahrwelt.git
+cd wahrwelt\Windows
 .\install.ps1
 ```
 
@@ -131,8 +137,8 @@ projects - these dots would not exist without them:
 - [anotherhadi/nixy](https://github.com/anotherhadi/nixy) - reference NixOS workstation config
   used for ideas around Home Manager modules, MIME defaults, and Nix utility wiring.
 - [PortSwigger/mcp-server](https://github.com/PortSwigger/mcp-server) - official Burp Suite MCP
-  extension. MySetup does not package it; install it from upstream if you need Burp MCP access.
-- [LaurieWired/GhidraMCP](https://github.com/LaurieWired/GhidraMCP) - Ghidra MCP bridge. MySetup
+  extension. Wahrwelt does not package it; install it from upstream if you need Burp MCP access.
+- [LaurieWired/GhidraMCP](https://github.com/LaurieWired/GhidraMCP) - Ghidra MCP bridge. Wahrwelt
   does not package it; install it from upstream if you need Ghidra MCP access.
 
 Additional thanks to [@outfoxxed](https://github.com/outfoxxed) for

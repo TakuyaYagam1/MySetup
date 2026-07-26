@@ -72,11 +72,11 @@ let
             strict_patch_line "$out/hyprland/execs.lua" \
               '    hl.exec_cmd("qs -c $qsConfig")' \
               '/^    hl\.exec_cmd("qs -c \$qsConfig")$/d' \
-              'MySetup start-shell owns end4 QuickShell lifecycle'
+              'Wahrwelt start-shell owns end4 QuickShell lifecycle'
             strict_patch_line "$out/hyprland/execs.lua" \
               '    hl.exec_cmd("hypridle")' \
               '/^    hl\.exec_cmd("hypridle")$/d' \
-              'MySetup start-shell owns end4 hypridle lifecycle'
+              'Wahrwelt start-shell owns end4 hypridle lifecycle'
 
             cat > "$out/monitors.conf" <<'EOF'
         ${lib.concatMapStringsSep "\n" (r: "monitor = ${r}") settings.monitor.rules}

@@ -8,9 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/zenutil"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/zenutil"
 )
 
 type Options struct {
@@ -35,7 +35,7 @@ func Run(ctx context.Context, opts Options) error {
 func Report(ctx context.Context, opts Options) (string, error) {
 	_ = ctx
 	out := &reportWriter{}
-	out.println("== MySetup doctor ==")
+	out.println("== Wahrwelt doctor ==")
 	check(out, "state", opts.Paths.StatePath)
 	checkAny(
 		out,

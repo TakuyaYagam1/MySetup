@@ -1,6 +1,6 @@
 package app
 
-import "github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
+import "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 
 type Options struct {
 	paths.Options

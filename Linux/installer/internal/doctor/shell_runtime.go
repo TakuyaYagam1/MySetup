@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/shellruntime"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/shellruntime"
 )
 
 func checkShellRuntime(out *reportWriter, opts Options) {

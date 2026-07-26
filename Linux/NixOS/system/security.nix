@@ -25,7 +25,7 @@
       # Let the primary user run nixos-rebuild without re-entering sudo password.
       extraRules = [
         {
-          users = [ config.mysetup.user.username ];
+          users = [ config.wahrwelt.user.username ];
           commands = [
             {
               command = "/run/current-system/sw/bin/nixos-rebuild";

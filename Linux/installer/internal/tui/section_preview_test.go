@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/paths"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 )
 
 func TestFormatBool(t *testing.T) {

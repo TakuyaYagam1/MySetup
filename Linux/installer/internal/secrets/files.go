@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/TakuyaYagam1/MySetup/Linux/installer/internal/config"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
 )
 
 const MaxSecretFileBytes = 64 * 1024

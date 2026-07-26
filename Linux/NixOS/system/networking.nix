@@ -1,13 +1,13 @@
 {
   config,
-  mysetupLib,
+  wahrweltLib,
   pkgs,
   ...
 }:
 
 {
   networking = {
-    hostName = config.mysetup.host.hostname;
+    hostName = config.wahrwelt.host.hostname;
 
     networkmanager = {
       enable = true;
@@ -21,7 +21,7 @@
       ];
     };
 
-    nameservers = mysetupLib.defaults.dns;
+    nameservers = wahrweltLib.defaults.dns;
 
     firewall = {
       enable = true;

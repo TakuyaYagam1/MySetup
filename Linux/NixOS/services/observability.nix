@@ -1,7 +1,7 @@
 {
   config,
   lib,
-  mysetupLib,
+  wahrweltLib,
   pkgs,
   ...
 }:
@@ -27,14 +27,14 @@ let
   '';
 in
 {
-  config = lib.mkIf config.mysetup.features.observability {
+  config = lib.mkIf config.wahrwelt.features.observability {
     services = {
       grafana = {
         enable = true;
         settings = {
           server = {
             http_addr = "127.0.0.1";
-            http_port = mysetupLib.ports.grafana;
+            http_port = wahrweltLib.ports.grafana;
             domain = "localhost";
           };
 
@@ -44,7 +44,7 @@ in
 
       prometheus = {
         enable = true;
-        port = mysetupLib.ports.prometheus;
+        port = wahrweltLib.ports.prometheus;
         scrapeConfigs = [
           {
             job_name = "node";
@@ -60,14 +60,14 @@ in
         exporters.node = {
           enable = true;
           enabledCollectors = [ "systemd" ];
-          port = mysetupLib.ports.prometheusNodeExporter;
+          port = wahrweltLib.ports.prometheusNodeExporter;
         };
       };
 
       loki = {
         enable = true;
         configuration = {
-          server.http_listen_port = mysetupLib.ports.loki;
+          server.http_listen_port = wahrweltLib.ports.loki;
           auth_enabled = false;
 
           common = {
