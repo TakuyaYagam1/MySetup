@@ -587,6 +587,30 @@ func TestShellSeedFiltersDoNotUseJQTrueFallback(t *testing.T) {
 	}
 }
 
+func TestWindowOpacityIsNotMultipliedByFoot(t *testing.T) {
+	footData, err := os.ReadFile("../../../NixOS/home/programs/foot.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rulesData, err := os.ReadFile("../../../dots/hypr/hyprland/rules.lua")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	foot := string(footData)
+	rules := string(rulesData)
+	if !strings.Contains(foot, `alpha = lib.mkForce 1.0;`) {
+		t.Fatalf("Foot must leave window opacity to Hyprland instead of multiplying it\n%s", foot)
+	}
+	if !strings.Contains(rules, `opacity = tostring(v.windowOpacity) .. " override"`) {
+		t.Fatalf("Hyprland global window opacity rule is missing\n%s", rules)
+	}
+	opaqueFootRule := regexp.MustCompile(`class = "[^"]*\bfoot\b[^"]*".*opaque = true`)
+	if opaqueFootRule.MatchString(rules) {
+		t.Fatalf("Foot must use the same blur and opacity path as other windows\n%s", rules)
+	}
+}
+
 func TestObservabilityGrafanaUsesPersistentSecretFile(t *testing.T) {
 	data, err := os.ReadFile("../../../NixOS/services/observability.nix")
 	if err != nil {
