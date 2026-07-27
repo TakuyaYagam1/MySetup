@@ -104,7 +104,7 @@ jobs:
         if: steps.compare.outputs.should_update == 'true'
         run: |
           nix --extra-experimental-features 'nix-command flakes' flake lock
-          nix --extra-experimental-features 'nix-command flakes' flake lock --flake "$FLAKE"
+          nix --extra-experimental-features 'nix-command flakes' flake lock "$FLAKE"
 
       - name: Verify both flakes evaluate
         if: steps.compare.outputs.should_update == 'true'
