@@ -41,7 +41,8 @@ local M = {
 	windowGapsOut = 40,
 	singleWindowGapsOut = 20,
 
-	windowOpacity = 0.85,
+	windowOpacity = 0.75,
+	footWindowOpacity = 0.85,
 	windowRounding = 10,
 	windowBorderSize = 3,
 

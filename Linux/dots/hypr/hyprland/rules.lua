@@ -1,6 +1,7 @@
 local v = require("variables")
 
 hl.window_rule({ match = { fullscreen = false }, opacity = tostring(v.windowOpacity) .. " override" })
+hl.window_rule({ match = { class = "foot" }, opacity = tostring(v.footWindowOpacity) .. " override" })
 
 hl.window_rule({ match = { class = "equibop|org\\.quickshell|imv|swappy" }, opaque = true })
 hl.window_rule({ match = { float = true, xwayland = false }, center = true })

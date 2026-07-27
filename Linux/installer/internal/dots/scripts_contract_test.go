@@ -596,14 +596,28 @@ func TestWindowOpacityIsNotMultipliedByFoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	variablesData, err := os.ReadFile("../../../dots/hypr/variables.lua")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	foot := string(footData)
 	rules := string(rulesData)
+	variables := string(variablesData)
 	if !strings.Contains(foot, `alpha = lib.mkForce 1.0;`) {
 		t.Fatalf("Foot must leave window opacity to Hyprland instead of multiplying it\n%s", foot)
 	}
+	if !strings.Contains(variables, `windowOpacity = 0.75,`) {
+		t.Fatalf("Hyprland application opacity must stay at the tuned value\n%s", variables)
+	}
+	if !strings.Contains(variables, `footWindowOpacity = 0.85,`) {
+		t.Fatalf("Foot compositor opacity must stay independently tunable\n%s", variables)
+	}
 	if !strings.Contains(rules, `opacity = tostring(v.windowOpacity) .. " override"`) {
 		t.Fatalf("Hyprland global window opacity rule is missing\n%s", rules)
+	}
+	if !strings.Contains(rules, `match = { class = "foot" }, opacity = tostring(v.footWindowOpacity) .. " override"`) {
+		t.Fatalf("Foot must retain its dedicated compositor opacity\n%s", rules)
 	}
 	opaqueFootRule := regexp.MustCompile(`class = "[^"]*\bfoot\b[^"]*".*opaque = true`)
 	if opaqueFootRule.MatchString(rules) {
