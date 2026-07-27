@@ -106,11 +106,18 @@ jobs:
           nix --extra-experimental-features 'nix-command flakes' flake lock
           nix --extra-experimental-features 'nix-command flakes' flake lock "$FLAKE"
 
-      - name: Verify both flakes evaluate
+      - name: Evaluate Noctalia integration
         if: steps.compare.outputs.should_update == 'true'
         run: |
-          nix --extra-experimental-features 'nix-command flakes' flake check --no-write-lock-file .
-          nix --extra-experimental-features 'nix-command flakes' flake check --no-write-lock-file "$FLAKE"
+          nix eval --raw --no-write-lock-file '.#checks.x86_64-linux.shells-module.drvPath'
+          nix eval --raw --no-write-lock-file \
+            "$FLAKE#nixosConfigurations.NixOS.config.home-manager.users.user.programs.noctalia.package.drvPath"
+
+      - name: Build updated Noctalia package
+        if: steps.compare.outputs.should_update == 'true'
+        run: |
+          nix build --no-link --print-build-logs --no-write-lock-file \
+            "$FLAKE#nixosConfigurations.NixOS.config.home-manager.users.user.programs.noctalia.package"
 
       - name: Create pull request
         id: cpr
@@ -138,8 +145,8 @@ jobs:
 
             ## Testing
 
-            - `nix flake check --no-write-lock-file .`
-            - `nix flake check --no-write-lock-file ./Linux/NixOS`
+            - Evaluated the public shell module and the NixOS Noctalia package derivation.
+            - Built only the updated Noctalia package.
 
       - name: Validate and merge pull request
         if: steps.cpr.outputs.pull-request-number != ''

@@ -110,7 +110,7 @@ jobs:
         if: steps.compare.outputs.should_update == 'true'
         run: |
           set +e
-          output="$(nix build --no-write-lock-file "$FLAKE#omnirouter" 2>&1)"
+          output="$(nix build --no-link --no-write-lock-file "$FLAKE#omnirouter" 2>&1)"
           set -e
 
           got="$(printf '%s\n' "$output" | sed -nE 's/.*got:[[:space:]]*(sha256-[A-Za-z0-9+\\/=]+).*/\1/p' | tail -1)"
@@ -127,11 +127,7 @@ jobs:
       - name: Verify build
         if: steps.compare.outputs.should_update == 'true'
         run: |
-          nix build --no-write-lock-file "$FLAKE#omnirouter"
-
-      - name: Drop nix build artifact before PR commit
-        if: steps.compare.outputs.should_update == 'true'
-        run: rm -f result result-*
+          nix build --no-link --print-build-logs --no-write-lock-file "$FLAKE#omnirouter"
 
       - name: Create pull request
         id: cpr
@@ -160,7 +156,7 @@ jobs:
 
             ## Testing
 
-            - `nix build --no-write-lock-file "$FLAKE#omnirouter"`
+            - `nix build --no-link --print-build-logs --no-write-lock-file "$FLAKE#omnirouter"`
 
       - name: Validate and merge pull request
         if: steps.cpr.outputs.pull-request-number != ''
