@@ -14,8 +14,7 @@ jobs:
   update-portainer:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     env:
       FLAKE: ./Linux/NixOS
       PORTAINER_NIX: Linux/NixOS/services/portainer.nix
@@ -133,9 +132,9 @@ jobs:
       - name: Create pull request
         id: cpr
         if: steps.compare.outputs.should_update == 'true'
-        uses: peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.WAHRWELT_AUTOMATION_TOKEN }}
           commit-message: "chore(nix): update portainer"
           branch: "update-portainer"
           delete-branch: true
@@ -156,13 +155,9 @@ jobs:
             - Confirmed `portainer/portainer-ce:${{ steps.release.outputs.version }}` exists on Docker Hub.
             - `nix eval` with `mysetup.features.portainer` force-enabled resolves the expected image string.
 
-      - name: Merge pull request
+      - name: Validate and merge pull request
         if: steps.cpr.outputs.pull-request-number != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.WAHRWELT_AUTOMATION_TOKEN }}
           PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
-        run: |
-          if gh pr merge "$PR_NUMBER" --squash --delete-branch; then
-            exit 0
-          fi
-          gh pr merge "$PR_NUMBER" --auto --squash --delete-branch
+        run: bash .github/scripts/merge-automation-pr.sh "$PR_NUMBER"

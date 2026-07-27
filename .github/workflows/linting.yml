@@ -2,10 +2,6 @@ name: Linting
 
 on:
   pull_request:
-    paths:
-      - "Linux/**"
-      - ".github/dependabot.yml"
-      - ".github/workflows/**"
   push:
     branches:
       - main

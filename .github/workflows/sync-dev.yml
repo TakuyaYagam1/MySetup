@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: sync-dev-with-main
@@ -35,7 +35,14 @@ jobs:
           fetch-depth: 0
 
       - name: Fast-forward dev to main
+        env:
+          GH_TOKEN: ${{ secrets.WAHRWELT_AUTOMATION_TOKEN }}
         run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::WAHRWELT_AUTOMATION_TOKEN is not configured"
+            exit 1
+          fi
+
           git fetch origin dev main
 
           main_sha="$(git rev-parse origin/main)"
@@ -51,7 +58,11 @@ jobs:
             exit 1
           fi
 
-          git push origin "$main_sha:refs/heads/dev"
+          gh api \
+            --method PATCH \
+            "repos/${GITHUB_REPOSITORY}/git/refs/heads/dev" \
+            -f "sha=$main_sha" \
+            -F "force=false" >/dev/null
 
           git fetch origin dev main
           synced_dev_sha="$(git rev-parse origin/dev)"
