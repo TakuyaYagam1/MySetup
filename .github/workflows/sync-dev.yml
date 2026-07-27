@@ -17,7 +17,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 concurrency:
   group: sync-dev-with-main
@@ -27,43 +26,37 @@ jobs:
   sync-dev:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
+          ref: main
           fetch-depth: 0
 
-      - name: Check for pending diff
-        id: diff
+      - name: Fast-forward dev to main
         run: |
           git fetch origin dev main
-          if git diff --quiet origin/dev origin/main; then
-            echo "has_diff=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_diff=true" >> "$GITHUB_OUTPUT"
-          fi
 
-      - name: Open sync pull request
-        id: pr
-        if: steps.diff.outputs.has_diff == 'true'
-        run: |
-          existing="$(gh pr list --base dev --head main --state open --json number --jq '.[0].number // empty')"
-          if [ -n "$existing" ]; then
-            echo "number=$existing" >> "$GITHUB_OUTPUT"
-          else
-            url="$(gh pr create --base dev --head main \
-              --title "chore: sync dev with main" \
-              --body "Automated sync: merges main into dev so dev never falls behind main's CI-driven release bumps (update-flake, update-omnirouter, update-portainer, update-caelestia, update-noctalia).")"
-            echo "number=${url##*/}" >> "$GITHUB_OUTPUT"
-          fi
+          main_sha="$(git rev-parse origin/main)"
+          dev_sha="$(git rev-parse origin/dev)"
 
-      - name: Merge sync pull request
-        if: steps.diff.outputs.has_diff == 'true'
-        run: |
-          if gh pr merge "${{ steps.pr.outputs.number }}" --squash; then
+          if [ "$dev_sha" = "$main_sha" ]; then
+            echo "dev is already synchronized with main"
             exit 0
           fi
-          gh pr merge "${{ steps.pr.outputs.number }}" --auto --squash
+
+          if ! git merge-base --is-ancestor "$dev_sha" "$main_sha"; then
+            echo "::error::dev has commits that are not in main; refusing to overwrite divergent history"
+            exit 1
+          fi
+
+          git push origin "$main_sha:refs/heads/dev"
+
+          git fetch origin dev main
+          synced_dev_sha="$(git rev-parse origin/dev)"
+          synced_main_sha="$(git rev-parse origin/main)"
+          if [ "$synced_dev_sha" != "$synced_main_sha" ]; then
+            echo "::error::dev and main differ after synchronization"
+            exit 1
+          fi
