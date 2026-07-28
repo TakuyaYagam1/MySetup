@@ -116,6 +116,10 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       url = "github:sadjow/codex-cli-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    codex-desktop-linux = {
+      url = "github:ilysenko/codex-desktop-linux";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 {{ end }}
     neovim-nightly-overlay = {
       url = "github:nix-community/neovim-nightly-overlay";
@@ -156,6 +160,7 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
 {{ if eq .Packages.Preset "personal" }}
       inputs.claude-code.follows = "claude-code";
       inputs.codex.follows = "codex";
+      inputs.codex-desktop-linux.follows = "codex-desktop-linux";
 {{ end }}
       inputs.neovim-nightly-overlay.follows = "neovim-nightly-overlay";
 {{ if .Features.SecureBoot }}

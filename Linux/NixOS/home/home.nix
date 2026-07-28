@@ -25,6 +25,7 @@ let
   ];
   coreImports = [
     inputs.stylix.homeModules.stylix
+    inputs.codex-desktop-linux.homeManagerModules.default
     ./stylix.nix
     ./theming.nix
     ./programs/boot-theme.nix
@@ -36,6 +37,7 @@ let
     ./programs/btop.nix
     ./programs/starship.nix
     ./programs/cava.nix
+    ./programs/codex-desktop.nix
     ./programs/fastfetch.nix
     ./programs/mimeapps.nix
     ./programs/nightshift.nix

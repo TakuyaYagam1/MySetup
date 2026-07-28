@@ -35,6 +35,11 @@ const (
       inputs.nixpkgs.follows = "nixpkgs";
     };
 `
+	codexDesktopLinuxInput = `    codex-desktop-linux = {
+      url = "github:ilysenko/codex-desktop-linux";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+`
 	lanzabooteInput = `    lanzaboote = {
       url = "github:nix-community/lanzaboote";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -44,6 +49,8 @@ const (
 	claudeCodeFollows = `      inputs.claude-code.follows = "claude-code";
 `
 	codexFollows = `      inputs.codex.follows = "codex";
+`
+	codexDesktopLinuxFollows = `      inputs.codex-desktop-linux.follows = "codex-desktop-linux";
 `
 	lanzabooteFollows = `      inputs.lanzaboote.follows = "lanzaboote";
 `
@@ -139,6 +146,7 @@ func migrateGeneratedThinFlake(text string, state config.State) (string, bool) {
 	desired := desiredFlakeInputsFromState(state)
 	updated = syncOptionalInput(updated, desired.Personal, claudeCodeInput, zenBrowserInputAnchor, claudeCodeFollows, zenBrowserFollowsAnchor)
 	updated = syncOptionalInput(updated, desired.Personal, codexInput, claudeCodeInput, codexFollows, claudeCodeFollows)
+	updated = syncOptionalInput(updated, desired.Personal, codexDesktopLinuxInput, codexInput, codexDesktopLinuxFollows, codexFollows)
 	updated = syncOptionalInput(updated, desired.SecureBoot, lanzabooteInput, neovimNightlyOverlayInputAnchor, lanzabooteFollows, neovimNightlyOverlayFollowsAnchor)
 
 	desiredWahrweltURL := config.WahrweltFlakeURL(state.Source.Channel)

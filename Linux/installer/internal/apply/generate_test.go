@@ -265,6 +265,8 @@ func TestFlakeNixOmitsPersonalOnlyAndOptionalInputsForNonPersonalPresets(t *test
 				`inputs.claude-code.follows = "claude-code";`,
 				`codex = {`,
 				`inputs.codex.follows = "codex";`,
+				`codex-desktop-linux = {`,
+				`inputs.codex-desktop-linux.follows = "codex-desktop-linux";`,
 				`lanzaboote = {`,
 				`inputs.lanzaboote.follows = "lanzaboote";`,
 			} {
@@ -289,7 +291,7 @@ func TestFlakeNixOmitsPersonalOnlyAndOptionalInputsForNonPersonalPresets(t *test
 	}
 }
 
-func TestFlakeNixIncludesClaudeCodeAndCodexOnlyForPersonalPreset(t *testing.T) {
+func TestFlakeNixIncludesPersonalAIInputsOnlyForPersonalPreset(t *testing.T) {
 	for _, tc := range []struct {
 		preset string
 		want   bool
@@ -308,10 +310,12 @@ func TestFlakeNixIncludesClaudeCodeAndCodexOnlyForPersonalPreset(t *testing.T) {
 				t.Fatal(err)
 			}
 			got := strings.Contains(out, `claude-code = {`) && strings.Contains(out, `codex = {`) &&
+				strings.Contains(out, `codex-desktop-linux = {`) &&
 				strings.Contains(out, `inputs.claude-code.follows = "claude-code";`) &&
-				strings.Contains(out, `inputs.codex.follows = "codex";`)
+				strings.Contains(out, `inputs.codex.follows = "codex";`) &&
+				strings.Contains(out, `inputs.codex-desktop-linux.follows = "codex-desktop-linux";`)
 			if got != tc.want {
-				t.Fatalf("preset %q: claude-code/codex pair present=%v, want=%v\n%s", tc.preset, got, tc.want, out)
+				t.Fatalf("preset %q: personal AI inputs present=%v, want=%v\n%s", tc.preset, got, tc.want, out)
 			}
 		})
 	}
@@ -1158,7 +1162,7 @@ func TestMigrateGeneratedThinFlakeRemovesHostOwnedCaelestiaInputs(t *testing.T) 
 	}
 }
 
-func TestMigrateGeneratedThinFlakeRemovesClaudeCodeCodexWhenPresetNoLongerPersonal(t *testing.T) {
+func TestMigrateGeneratedThinFlakeRemovesPersonalAIInputsWhenPresetNoLongerPersonal(t *testing.T) {
 	before := config.Default()
 	before.Packages.Preset = "personal"
 	old, err := FlakeNix(before, LockModeIndependent)
@@ -1177,6 +1181,8 @@ func TestMigrateGeneratedThinFlakeRemovesClaudeCodeCodexWhenPresetNoLongerPerson
 		`inputs.claude-code.follows = "claude-code";`,
 		`codex = {`,
 		`inputs.codex.follows = "codex";`,
+		`codex-desktop-linux = {`,
+		`inputs.codex-desktop-linux.follows = "codex-desktop-linux";`,
 	} {
 		if strings.Contains(migrated, forbidden) {
 			t.Fatalf("migrated flake kept %q after preset dropped out of personal\n%s", forbidden, migrated)
@@ -1184,7 +1190,7 @@ func TestMigrateGeneratedThinFlakeRemovesClaudeCodeCodexWhenPresetNoLongerPerson
 	}
 }
 
-func TestMigrateGeneratedThinFlakeAddsClaudeCodeCodexWhenPresetBecomesPersonal(t *testing.T) {
+func TestMigrateGeneratedThinFlakeAddsPersonalAIInputsWhenPresetBecomesPersonal(t *testing.T) {
 	before := config.Default()
 	before.Packages.Preset = "minimal"
 	old, err := FlakeNix(before, LockModeIndependent)
@@ -1203,6 +1209,8 @@ func TestMigrateGeneratedThinFlakeAddsClaudeCodeCodexWhenPresetBecomesPersonal(t
 		`inputs.claude-code.follows = "claude-code";`,
 		`codex = {`,
 		`inputs.codex.follows = "codex";`,
+		`codex-desktop-linux = {`,
+		`inputs.codex-desktop-linux.follows = "codex-desktop-linux";`,
 	} {
 		if !strings.Contains(migrated, want) {
 			t.Fatalf("migrated flake missing %q after preset became personal\n%s", want, migrated)
@@ -1211,9 +1219,11 @@ func TestMigrateGeneratedThinFlakeAddsClaudeCodeCodexWhenPresetBecomesPersonal(t
 	zenBrowserIdx := strings.Index(migrated, `zen-browser = {`)
 	claudeCodeIdx := strings.Index(migrated, `claude-code = {`)
 	codexIdx := strings.Index(migrated, `codex = {`)
+	codexDesktopLinuxIdx := strings.Index(migrated, `codex-desktop-linux = {`)
 	neovimIdx := strings.Index(migrated, `neovim-nightly-overlay = {`)
-	if zenBrowserIdx >= claudeCodeIdx || claudeCodeIdx >= codexIdx || codexIdx >= neovimIdx {
-		t.Fatalf("expected claude-code/codex inserted between zen-browser and neovim-nightly-overlay\n%s", migrated)
+	if zenBrowserIdx >= claudeCodeIdx || claudeCodeIdx >= codexIdx ||
+		codexIdx >= codexDesktopLinuxIdx || codexDesktopLinuxIdx >= neovimIdx {
+		t.Fatalf("expected personal AI inputs inserted between zen-browser and neovim-nightly-overlay\n%s", migrated)
 	}
 }
 
@@ -1279,7 +1289,12 @@ func TestMigrateGeneratedThinFlakeIsIdempotentWhenDesiredStateAlreadyMatches(t *
 	if firstPass != secondPass {
 		t.Fatalf("expected repeated migration with unchanged state to be byte-identical\nfirst:\n%s\nsecond:\n%s", firstPass, secondPass)
 	}
-	for _, block := range []string{`claude-code = {`, `codex = {`, `lanzaboote = {`} {
+	for _, block := range []string{
+		`claude-code = {`,
+		`codex = {`,
+		`codex-desktop-linux = {`,
+		`lanzaboote = {`,
+	} {
 		if count := strings.Count(secondPass, block); count != 1 {
 			t.Fatalf("expected exactly one %q block after repeated migration, got %d\n%s", block, count, secondPass)
 		}

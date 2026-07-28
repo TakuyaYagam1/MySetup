@@ -30,8 +30,7 @@ nix run "path:$PWD"
 ```
 
 Use the repository root flake for local runs. It exposes the installer as the
-default app and keeps the public flake inputs limited to the reusable shell
-stack.
+default app and carries the reusable shell and workstation inputs.
 
 Or run directly from GitHub without cloning first. This opens the interactive
 TUI and uses the stable `main` branch by default:
@@ -236,18 +235,31 @@ breakdown is in the [root README](../README.md#package-presets); in short:
 - `developer`: `desktop` plus developer/API/container tooling (VS Code, API
   clients).
 - `personal`: `developer` plus the full private-workstation load - extra apps,
-  IDEs, AI CLIs, and games. This is the heaviest build.
+  IDEs, AI CLIs, ChatGPT Desktop for Linux, and games. This is the heaviest
+  build.
 
 How it works under the hood: `hosts/NixOS/default.nix` imports every local
 module, and each module turns itself on or off based on `wahrwelt.packages.preset`.
 That way all four presets run through the same code path.
 
 The generated wrapper `flake.nix` (independent lock mode) also trims its own
-input list to match the preset and feature flags: `claude-code`/`codex` appear
-only for `personal`, and `lanzaboote` only when Secure Boot is on. This just
-controls whether `/etc/nixos/flake.lock` tracks that input directly - the
-NixOS module always resolves it through Wahrwelt's own lock either way, so a
-`minimal` install never fails to build just because an input was left out.
+input list to match the preset and feature flags: `claude-code`, `codex`, and
+`codex-desktop-linux` appear only for `personal`, and `lanzaboote` only when
+Secure Boot is on. This just controls whether `/etc/nixos/flake.lock` tracks
+that input directly - the NixOS module always resolves it through Wahrwelt's
+own lock either way, so a `minimal` install never fails to build just because
+an input was left out.
+
+### ChatGPT Desktop settings
+
+The `personal` preset installs the unofficial
+[`ilysenko/codex-desktop-linux`](https://github.com/ilysenko/codex-desktop-linux)
+Nix package and points its launcher at the Codex CLI from this configuration.
+The app still owns its runtime settings under `~/.config/codex-desktop`; that
+directory is deliberately not declared through Home Manager
+`xdg.configFile`, so its files stay writable and survive NixOS rebuilds without
+becoming read-only `/nix/store` symlinks. The separate `~/.codex` CLI
+configuration is also left untouched.
 
 ## Hyprland Lua Runtime
 
@@ -736,10 +748,10 @@ Wahrwelt source revision. The `stable` channel uses the `main` branch; the
 Existing generated thin wrappers migrate to the independent lock shape on the
 next `wahrwelt apply`; a plain `nix flake update` only changes `flake.lock`, not
 the wrapper `flake.nix` structure. The same `wahrwelt apply` also reconciles
-`claude-code`/`codex`/`lanzaboote` toward whatever the current preset and
-feature flags call for - changing the package preset or toggling Secure Boot
-and re-running the installer adds or removes just those input blocks on the
-existing `flake.nix`.
+`claude-code`/`codex`/`codex-desktop-linux`/`lanzaboote` toward whatever the
+current preset and feature flags call for - changing the package preset or
+toggling Secure Boot and re-running the installer adds or removes just those
+input blocks on the existing `flake.nix`.
 
 Garbage collection:
 
