@@ -188,11 +188,11 @@
     },
     "crane": {
       "locked": {
-        "lastModified": 1784407669,
-        "narHash": "sha256-gcFMcRjw0ZSn380Rx2QLlU1goUQeSrKX/DF12omI6+o=",
+        "lastModified": 1784564969,
+        "narHash": "sha256-TkTWNhJV/8Wk3czlbz4bwHZkFCaCHPsOy+oJe4PUiXg=",
         "owner": "ipetkov",
         "repo": "crane",
-        "rev": "1316b7d278ad77a16aec024b71d971366e123bec",
+        "rev": "7930f6c291de6f83c257839d434592aa085f290a",
         "type": "github"
       },
       "original": {
@@ -204,11 +204,11 @@
     "end4-dotfiles": {
       "flake": false,
       "locked": {
-        "lastModified": 1784951842,
-        "narHash": "sha256-ZmFOQbgAnloGyEfUcSYrlEv9QAig0VebYHgkIaZCtcs=",
+        "lastModified": 1785144061,
+        "narHash": "sha256-zRzRiDx21X7xEaBmsdDOAFEJJSNGguP2H532PiTGPbE=",
         "ref": "refs/heads/main",
-        "rev": "1a9ffb78f0c272a45f82342587dc3bec72762233",
-        "revCount": 6287,
+        "rev": "aed4d1ec63f584905c28d2a678db5845579fdafc",
+        "revCount": 6289,
         "submodules": true,
         "type": "git",
         "url": "https://github.com/end-4/dots-hyprland"
@@ -403,11 +403,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1785119578,
-        "narHash": "sha256-3VMVuOJ6fK+RNOXVmqusqUwQ1sDfPeddNKaM2JR/4Y0=",
+        "lastModified": 1785168662,
+        "narHash": "sha256-kGJTc0oEUQuEwV66lSlMxYtOEtpk9N/HS43k+rFAvs8=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "e83dffa86cccb6237fe194d4eeb47f41557749d1",
+        "rev": "cbb77679b3d992c8b62f884cd3a84af534a28621",
         "type": "github"
       },
       "original": {
@@ -426,11 +426,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1784568171,
-        "narHash": "sha256-t17AqLEhPG6m27ipkp8mJd8Ug0XkdANFDVsgyIFBZcQ=",
+        "lastModified": 1785142311,
+        "narHash": "sha256-2hj+F0SxJ9tVtJSGQpoO53vtrXxbeqURz65tkmm15GE=",
         "owner": "nix-community",
         "repo": "lanzaboote",
-        "rev": "f4b0aef3dba28677a5ca4b3416827aade60b5a0b",
+        "rev": "683b7f72db7202e4ad037c58fac53b3f7c12f980",
         "type": "github"
       },
       "original": {
@@ -602,11 +602,11 @@
     },
     "nixpkgs-stable": {
       "locked": {
-        "lastModified": 1785002762,
-        "narHash": "sha256-Y0BbgB3BLLHEUK88g4oSp3DerIx7rCX0iwICKJcY7/c=",
+        "lastModified": 1785104993,
+        "narHash": "sha256-eKbrvPoAOFutbYMdbB3r5EQVmFxKv24iKqHPPUXA0gM=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "f7a2e428f5d71c47a5a938a3c5ad7138bb291093",
+        "rev": "8623c4c20aa4ca2f5fb81510d2944066c3fb0d96",
         "type": "github"
       },
       "original": {
@@ -818,11 +818,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1784438913,
-        "narHash": "sha256-NYF7ZM5ip0u+w1pBFDpIGEbrbgN/wpnLFAmBkWkYMXw=",
+        "lastModified": 1785044261,
+        "narHash": "sha256-ehF/c4fLdgmNu7YXEClnmwhoBYddhYIVoSQpsZoorC4=",
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "afacd6819d3765a05814ee8e3de74c77d42ac799",
+        "rev": "fe2124391e739e7b3e8720cd8a73f06edd0aceba",
         "type": "github"
       },
       "original": {
