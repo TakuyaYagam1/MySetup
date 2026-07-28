@@ -19,24 +19,16 @@ func HostVarsNix(s config.State) (string, error) {
 
 type flakeTemplateData struct {
 	config.State
-	LockMode          LockMode
-	WahrweltURL       string
-	NoctaliaV5URL     string
-	NoctaliaV4URL     string
-	CaelestiaShellURL string
-	CaelestiaCliURL   string
+	LockMode    LockMode
+	WahrweltURL string
 }
 
 func FlakeNix(s config.State, lockMode LockMode) (string, error) {
 	var out bytes.Buffer
 	if err := flakeTemplate.Execute(&out, flakeTemplateData{
-		State:             s,
-		LockMode:          lockMode,
-		WahrweltURL:       config.WahrweltFlakeURL(s.Source.Channel),
-		NoctaliaV5URL:     config.NoctaliaV5FlakeURL(),
-		NoctaliaV4URL:     config.NoctaliaV4FlakeURL(),
-		CaelestiaShellURL: config.CaelestiaShellFlakeURL(),
-		CaelestiaCliURL:   config.CaelestiaCliFlakeURL(),
+		State:       s,
+		LockMode:    lockMode,
+		WahrweltURL: config.WahrweltFlakeURL(s.Source.Channel),
 	}); err != nil {
 		return "", fmt.Errorf("render flake.nix: %w", err)
 	}
@@ -102,28 +94,8 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    caelestia-shell = {
-      url = {{ nixString .CaelestiaShellURL }};
-      inputs = {
-        caelestia-cli.follows = "caelestia-cli";
-        nixpkgs.follows = "nixpkgs";
-        quickshell.follows = "quickshell";
-      };
-    };
-    caelestia-cli = {
-      url = {{ nixString .CaelestiaCliURL }};
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     quickshell = {
       url = "github:outfoxxed/quickshell";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    noctalia = {
-      url = {{ nixString .NoctaliaV5URL }};
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    noctalia-shell = {
-      url = {{ nixString .NoctaliaV4URL }};
       inputs.nixpkgs.follows = "nixpkgs";
     };
     end4-dotfiles = {
@@ -178,11 +150,7 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.nixpkgs-stable.follows = "nixpkgs-stable";
       inputs.home-manager.follows = "home-manager";
-      inputs.caelestia-shell.follows = "caelestia-shell";
-      inputs.caelestia-cli.follows = "caelestia-cli";
       inputs.quickshell.follows = "quickshell";
-      inputs.noctalia.follows = "noctalia";
-      inputs.noctalia-shell.follows = "noctalia-shell";
       inputs.end4-dotfiles.follows = "end4-dotfiles";
       inputs.zen-browser.follows = "zen-browser";
 {{ if eq .Packages.Preset "personal" }}

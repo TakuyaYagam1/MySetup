@@ -124,22 +124,12 @@ func TestFlakeNixUsesIndependentThinWahrweltWrapper(t *testing.T) {
 		`home-manager = {`,
 		`nix-index-database = {`,
 		`quickshell = {`,
-		`caelestia-shell = {`,
-		`url = "github:caelestia-dots/shell/v2.2.0";`,
-		`caelestia-cli = {`,
-		`url = "github:caelestia-dots/cli/v1.1.2";`,
-		`noctalia = {`,
-		`url = "github:noctalia-dev/noctalia/v5.0.0-beta.4";`,
-		`noctalia-shell = {`,
-		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
 		`wahrwelt = {`,
 		`url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS";`,
 		`inputs.nixpkgs.follows = "nixpkgs";`,
 		`inputs.home-manager.follows = "home-manager";`,
 		`inputs.nix-index-database.follows = "nix-index-database";`,
 		`inputs.quickshell.follows = "quickshell";`,
-		`inputs.noctalia.follows = "noctalia";`,
-		`inputs.noctalia-shell.follows = "noctalia-shell";`,
 		`inputs.stylix.follows = "stylix";`,
 		`hostname = "workstation";`,
 		`wahrwelt.lib.mkWahrweltHost`,
@@ -155,6 +145,14 @@ func TestFlakeNixUsesIndependentThinWahrweltWrapper(t *testing.T) {
 	for _, forbidden := range []string{
 		`github:a-h/templ`,
 		`inputs.templ.follows`,
+		`caelestia-shell = {`,
+		`caelestia-cli = {`,
+		`noctalia = {`,
+		`noctalia-shell = {`,
+		`inputs.caelestia-shell.follows`,
+		`inputs.caelestia-cli.follows`,
+		`inputs.noctalia.follows`,
+		`inputs.noctalia-shell.follows`,
 	} {
 		if strings.Contains(out, forbidden) {
 			t.Fatalf("thin flake must not keep legacy input %q\n%s", forbidden, out)
@@ -227,7 +225,7 @@ func TestFlakeNixUsesDevelopmentWahrweltChannel(t *testing.T) {
 	}
 }
 
-func TestFlakeNixCarriesBothNoctaliaInputsForV4Selection(t *testing.T) {
+func TestFlakeNixDelegatesNoctaliaInputsForV4Selection(t *testing.T) {
 	state := config.Default()
 	state.Noctalia.Version = config.NoctaliaVersionV4
 	state.Host.Hostname = "workstation"
@@ -236,13 +234,17 @@ func TestFlakeNixCarriesBothNoctaliaInputsForV4Selection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{
-		`url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS";`,
-		`url = "github:noctalia-dev/noctalia/v5.0.0-beta.4";`,
-		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
+	if !strings.Contains(out, `url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS";`) {
+		t.Fatalf("independent wrapper must keep its Wahrwelt source\n%s", out)
+	}
+	for _, forbidden := range []string{
+		`noctalia = {`,
+		`noctalia-shell = {`,
+		`inputs.noctalia.follows`,
+		`inputs.noctalia-shell.follows`,
 	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("independent wrapper missing %q\n%s", want, out)
+		if strings.Contains(out, forbidden) {
+			t.Fatalf("independent wrapper must delegate release-managed input %q to Wahrwelt\n%s", forbidden, out)
 		}
 	}
 }
@@ -273,9 +275,7 @@ func TestFlakeNixOmitsPersonalOnlyAndOptionalInputsForNonPersonalPresets(t *test
 			for _, want := range []string{
 				`nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";`,
 				`home-manager = {`,
-				`caelestia-shell = {`,
 				`quickshell = {`,
-				`noctalia = {`,
 				`zen-browser = {`,
 				`neovim-nightly-overlay = {`,
 				`stylix = {`,
@@ -945,12 +945,6 @@ func TestMigrateGeneratedThinFlakeRemovesOnlyKnownLegacyInputs(t *testing.T) {
 		t.Fatal("expected generated thin flake migration to report a change")
 	}
 	for _, want := range []string{
-		`noctalia = {`,
-		`url = "github:noctalia-dev/noctalia/v5.0.0-beta.4";`,
-		`inputs.noctalia.follows = "noctalia";`,
-		`noctalia-shell = {`,
-		`url = "github:noctalia-dev/noctalia-shell/v4.7.7";`,
-		`inputs.noctalia-shell.follows = "noctalia-shell";`,
 		`custom-overlay = {`,
 		`inputs.custom-overlay.follows = "custom-overlay";`,
 	} {
@@ -961,6 +955,10 @@ func TestMigrateGeneratedThinFlakeRemovesOnlyKnownLegacyInputs(t *testing.T) {
 	for _, forbidden := range []string{
 		`github:a-h/templ`,
 		`inputs.templ.follows`,
+		`noctalia = {`,
+		`noctalia-shell = {`,
+		`inputs.noctalia.follows`,
+		`inputs.noctalia-shell.follows`,
 	} {
 		if strings.Contains(migrated, forbidden) {
 			t.Fatalf("migrated flake kept legacy input %q\n%s", forbidden, migrated)
@@ -1022,19 +1020,13 @@ func TestMigrateGeneratedThinFlakeRemovesLegacyZapretDiscordYoutubeInput(t *test
 		`zapret-discord-youtube = {`,
 		`github:kartavkun/zapret-discord-youtube`,
 		`inputs.zapret-discord-youtube.follows`,
+		`noctalia = {`,
+		`noctalia-shell = {`,
+		`inputs.noctalia.follows`,
+		`inputs.noctalia-shell.follows`,
 	} {
 		if strings.Contains(migrated, forbidden) {
-			t.Fatalf("migrated flake kept retired zapret-discord-youtube input %q\n%s", forbidden, migrated)
-		}
-	}
-	for _, want := range []string{
-		`noctalia = {`,
-		`inputs.noctalia.follows = "noctalia";`,
-		`noctalia-shell = {`,
-		`inputs.noctalia-shell.follows = "noctalia-shell";`,
-	} {
-		if !strings.Contains(migrated, want) {
-			t.Fatalf("migrated flake lost unrelated input %q\n%s", want, migrated)
+			t.Fatalf("migrated flake kept retired input %q\n%s", forbidden, migrated)
 		}
 	}
 }
@@ -1061,18 +1053,14 @@ func TestMigrateGeneratedThinFlakeRewritesLegacyNoctaliaV4MySetupURL(t *testing.
 	if !changed {
 		t.Fatal("expected generated thin flake migration to rewrite v4-selected wrapper")
 	}
-	for _, want := range []string{
-		`github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS`,
-		`github:noctalia-dev/noctalia`,
-		`github:noctalia-dev/noctalia-shell/v4.7.7`,
-	} {
-		if !strings.Contains(migrated, want) {
-			t.Fatalf("migrated flake missing %q\n%s", want, migrated)
-		}
+	if !strings.Contains(migrated, `github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS`) {
+		t.Fatalf("migrated flake missing current Wahrwelt source\n%s", migrated)
 	}
 	for _, forbidden := range []string{
 		`github:TakuyaYagam1/MySetup/noctalia-v4?dir=Linux/NixOS`,
 		`mysetup.lib.mkMySetupHost`,
+		`github:noctalia-dev/noctalia`,
+		`inputs.noctalia.follows`,
 	} {
 		if strings.Contains(migrated, forbidden) {
 			t.Fatalf("migrated flake kept stale value %q\n%s", forbidden, migrated)
@@ -1080,7 +1068,7 @@ func TestMigrateGeneratedThinFlakeRewritesLegacyNoctaliaV4MySetupURL(t *testing.
 	}
 }
 
-func TestMigrateGeneratedThinFlakeUpdatesStaleNoctaliaURLInPlace(t *testing.T) {
+func TestMigrateGeneratedThinFlakeRemovesHostOwnedNoctaliaInputs(t *testing.T) {
 	old := `{
   description = "Host-local MySetup NixOS wrapper";
 
@@ -1111,18 +1099,19 @@ func TestMigrateGeneratedThinFlakeUpdatesStaleNoctaliaURLInPlace(t *testing.T) {
 	if !changed {
 		t.Fatal("expected generated thin flake migration to report a change")
 	}
-	if strings.Count(migrated, "noctalia = {") != 1 {
-		t.Fatalf("expected exactly one noctalia input block, got:\n%s", migrated)
-	}
-	if strings.Contains(migrated, "v5.0.0-beta1") {
-		t.Fatalf("migrated flake kept stale noctalia pin\n%s", migrated)
-	}
-	if !strings.Contains(migrated, `url = "github:noctalia-dev/noctalia/v5.0.0-beta.4";`) {
-		t.Fatalf("migrated flake missing updated noctalia url\n%s", migrated)
+	for _, forbidden := range []string{
+		`noctalia = {`,
+		`noctalia-shell = {`,
+		`inputs.noctalia.follows`,
+		`inputs.noctalia-shell.follows`,
+	} {
+		if strings.Contains(migrated, forbidden) {
+			t.Fatalf("migrated flake kept host-owned Noctalia input %q\n%s", forbidden, migrated)
+		}
 	}
 }
 
-func TestMigrateGeneratedThinFlakeUpdatesStaleCaelestiaURLsInPlace(t *testing.T) {
+func TestMigrateGeneratedThinFlakeRemovesHostOwnedCaelestiaInputs(t *testing.T) {
 	old := `{
   description = "Host-local MySetup NixOS wrapper";
 
@@ -1157,23 +1146,14 @@ func TestMigrateGeneratedThinFlakeUpdatesStaleCaelestiaURLsInPlace(t *testing.T)
 	if !changed {
 		t.Fatal("expected generated thin flake migration to report a change")
 	}
-	if strings.Count(migrated, "caelestia-shell = {") != 1 || strings.Count(migrated, "caelestia-cli = {") != 1 {
-		t.Fatalf("expected exactly one caelestia-shell and one caelestia-cli input block, got:\n%s", migrated)
-	}
-	for _, want := range []string{
-		`url = "github:caelestia-dots/shell/v2.2.0";`,
-		`url = "github:caelestia-dots/cli/v1.1.2";`,
-	} {
-		if !strings.Contains(migrated, want) {
-			t.Fatalf("migrated flake missing pinned caelestia url %q\n%s", want, migrated)
-		}
-	}
 	for _, forbidden := range []string{
-		`url = "github:caelestia-dots/shell";`,
-		`url = "github:caelestia-dots/cli";`,
+		`caelestia-shell = {`,
+		`caelestia-cli = {`,
+		`inputs.caelestia-shell.follows`,
+		`inputs.caelestia-cli.follows`,
 	} {
 		if strings.Contains(migrated, forbidden) {
-			t.Fatalf("migrated flake kept unpinned caelestia url %q\n%s", forbidden, migrated)
+			t.Fatalf("migrated flake kept host-owned Caelestia input %q\n%s", forbidden, migrated)
 		}
 	}
 }

@@ -8,18 +8,6 @@ import (
 )
 
 const (
-	legacyNoctaliaV4Input = `    noctalia-shell = {
-      url = "github:noctalia-dev/noctalia-shell/v4.7.7";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-`
-
-	quickshellInput = `    quickshell = {
-      url = "github:outfoxxed/quickshell";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-`
-
 	legacyTemplInput = `    templ = {
       url = "github:a-h/templ";
       inputs = {
@@ -77,34 +65,7 @@ const (
 )
 
 var noctaliaV5InputPattern = regexp.MustCompile(`    noctalia = \{\n      url = "[^"\n]*";\n      inputs\.nixpkgs\.follows = "nixpkgs";\n    \};\n`)
-
-func currentNoctaliaV5Input() string {
-	return `    noctalia = {
-      url = "` + config.NoctaliaV5FlakeURL() + `";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-`
-}
-
-func currentCaelestiaShellInput() string {
-	return `    caelestia-shell = {
-      url = "` + config.CaelestiaShellFlakeURL() + `";
-      inputs = {
-        caelestia-cli.follows = "caelestia-cli";
-        nixpkgs.follows = "nixpkgs";
-        quickshell.follows = "quickshell";
-      };
-    };
-`
-}
-
-func currentCaelestiaCliInput() string {
-	return `    caelestia-cli = {
-      url = "` + config.CaelestiaCliFlakeURL() + `";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-`
-}
+var noctaliaV4InputPattern = regexp.MustCompile(`    noctalia-shell = \{\n      url = "[^"\n]*";\n      inputs\.nixpkgs\.follows = "nixpkgs";\n    \};\n`)
 
 var caelestiaShellInputPattern = regexp.MustCompile(`    caelestia-shell = \{\n      url = "[^"\n]*";\n      inputs = \{\n        caelestia-cli\.follows = "caelestia-cli";\n        nixpkgs\.follows = "nixpkgs";\n        quickshell\.follows = "quickshell";\n      \};\n    \};\n`)
 var caelestiaCliInputPattern = regexp.MustCompile(`    caelestia-cli = \{\n      url = "[^"\n]*";\n      inputs\.nixpkgs\.follows = "nixpkgs";\n    \};\n`)
@@ -154,48 +115,25 @@ func migrateGeneratedThinFlake(text string, state config.State) (string, bool) {
 	updated = strings.Replace(updated, legacyZapretDiscordYoutubeInput, "", 1)
 	updated = strings.Replace(updated, legacyZapretDiscordYoutubeFollows, "", 1)
 
-	switch {
-	case noctaliaV5InputPattern.MatchString(updated):
-		updated = noctaliaV5InputPattern.ReplaceAllString(updated, currentNoctaliaV5Input())
-	case strings.Contains(updated, legacyNoctaliaV4Input):
-		updated = strings.Replace(updated, legacyNoctaliaV4Input, currentNoctaliaV5Input()+legacyNoctaliaV4Input, 1)
-	default:
-		updated = insertAfterFirst(updated, quickshellInput, currentNoctaliaV5Input())
+	for _, pattern := range []*regexp.Regexp{
+		caelestiaShellInputPattern,
+		caelestiaCliInputPattern,
+		noctaliaV5InputPattern,
+		noctaliaV4InputPattern,
+	} {
+		updated = pattern.ReplaceAllString(updated, "")
 	}
-	if !strings.Contains(updated, legacyNoctaliaV4Input) {
-		updated = insertAfterFirst(updated, currentNoctaliaV5Input(), legacyNoctaliaV4Input)
-	}
-
-	if caelestiaShellInputPattern.MatchString(updated) {
-		updated = caelestiaShellInputPattern.ReplaceAllString(updated, currentCaelestiaShellInput())
-	}
-	if caelestiaCliInputPattern.MatchString(updated) {
-		updated = caelestiaCliInputPattern.ReplaceAllString(updated, currentCaelestiaCliInput())
-	}
-
-	if !strings.Contains(updated, `      inputs.noctalia.follows = "noctalia";`) {
-		if strings.Contains(updated, `      inputs.noctalia-shell.follows = "noctalia-shell";`) {
-			updated = strings.Replace(
-				updated,
-				`      inputs.noctalia-shell.follows = "noctalia-shell";`,
-				`      inputs.noctalia.follows = "noctalia";
-      inputs.noctalia-shell.follows = "noctalia-shell";`,
-				1,
-			)
-		} else {
-			updated = insertAfterFirst(updated, `      inputs.quickshell.follows = "quickshell";
-`, `      inputs.noctalia.follows = "noctalia";
-`)
-		}
-	}
-	if !strings.Contains(updated, `      inputs.noctalia-shell.follows = "noctalia-shell";`) {
-		updated = strings.Replace(
-			updated,
-			`      inputs.noctalia.follows = "noctalia";`,
-			`      inputs.noctalia.follows = "noctalia";
-      inputs.noctalia-shell.follows = "noctalia-shell";`,
-			1,
-		)
+	for _, follows := range []string{
+		`      inputs.caelestia-shell.follows = "caelestia-shell";
+`,
+		`      inputs.caelestia-cli.follows = "caelestia-cli";
+`,
+		`      inputs.noctalia.follows = "noctalia";
+`,
+		`      inputs.noctalia-shell.follows = "noctalia-shell";
+`,
+	} {
+		updated = strings.ReplaceAll(updated, follows, "")
 	}
 
 	desired := desiredFlakeInputsFromState(state)

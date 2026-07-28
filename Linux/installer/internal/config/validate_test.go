@@ -90,24 +90,6 @@ func TestKnownWahrweltFlakeURLsIncludeCurrentAndLegacyURLs(t *testing.T) {
 	}
 }
 
-func TestNoctaliaFlakeURLs(t *testing.T) {
-	if got := NoctaliaV5FlakeURL(); got != "github:noctalia-dev/noctalia/v5.0.0-beta.4" {
-		t.Fatalf("NoctaliaV5FlakeURL() = %q", got)
-	}
-	if got := NoctaliaV4FlakeURL(); got != "github:noctalia-dev/noctalia-shell/v4.7.7" {
-		t.Fatalf("NoctaliaV4FlakeURL() = %q", got)
-	}
-}
-
-func TestCaelestiaFlakeURLs(t *testing.T) {
-	if got := CaelestiaShellFlakeURL(); got != "github:caelestia-dots/shell/v2.2.0" {
-		t.Fatalf("CaelestiaShellFlakeURL() = %q", got)
-	}
-	if got := CaelestiaCliFlakeURL(); got != "github:caelestia-dots/cli/v1.1.2" {
-		t.Fatalf("CaelestiaCliFlakeURL() = %q", got)
-	}
-}
-
 func TestValidateRejectsBadNoctaliaVersion(t *testing.T) {
 	state := Default()
 	state.Noctalia.Version = "v6"

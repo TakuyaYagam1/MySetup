@@ -9,11 +9,6 @@ const (
 
 	legacyNoctaliaV4WahrweltFlakeURL    = "github:TakuyaYagam1/wahrwelt/noctalia-v4?dir=Linux/NixOS"
 	legacyNoctaliaV4MySetupRepoFlakeURL = "github:TakuyaYagam1/MySetup/noctalia-v4?dir=Linux/NixOS"
-	noctaliaFlakeURLV5                  = "github:noctalia-dev/noctalia/v5.0.0-beta.4"
-	noctaliaShellFlakeURLV4             = "github:noctalia-dev/noctalia-shell/v4.7.7"
-
-	caelestiaShellFlakeURL = "github:caelestia-dots/shell/v2.2.0"
-	caelestiaCliFlakeURL   = "github:caelestia-dots/cli/v1.1.2"
 )
 
 var SourceChannels = []string{
@@ -75,22 +70,6 @@ func KnownWahrweltFlakeURLs() []string {
 		"github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS",
 		legacyNoctaliaV4MySetupRepoFlakeURL,
 	}
-}
-
-func NoctaliaV5FlakeURL() string {
-	return noctaliaFlakeURLV5
-}
-
-func NoctaliaV4FlakeURL() string {
-	return noctaliaShellFlakeURLV4
-}
-
-func CaelestiaShellFlakeURL() string {
-	return caelestiaShellFlakeURL
-}
-
-func CaelestiaCliFlakeURL() string {
-	return caelestiaCliFlakeURL
 }
 
 func IsPackagePreset(value string) bool {
