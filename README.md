@@ -137,10 +137,6 @@ projects - these dots would not exist without them:
   default runtime profile.
 - [anotherhadi/nixy](https://github.com/anotherhadi/nixy) - reference NixOS workstation config
   used for ideas around Home Manager modules, MIME defaults, and Nix utility wiring.
-- [PortSwigger/mcp-server](https://github.com/PortSwigger/mcp-server) - official Burp Suite MCP
-  extension. Wahrwelt does not package it; install it from upstream if you need Burp MCP access.
-- [LaurieWired/GhidraMCP](https://github.com/LaurieWired/GhidraMCP) - Ghidra MCP bridge. Wahrwelt
-  does not package it; install it from upstream if you need Ghidra MCP access.
 
 Additional thanks to [@outfoxxed](https://github.com/outfoxxed) for
 [QuickShell](https://github.com/outfoxxed/quickshell), which all three shell profiles depend on,
