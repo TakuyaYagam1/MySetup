@@ -176,10 +176,9 @@ in
         printf '%s\n' '\  /\  /| | | || | | || |\ \ \  /\  /| |___ | |____  | |'
         printf '%s\n' ' \/  \/ \_| |_/\_| |_/\_| \_| \/  \/ \____/ \_____/  \_/'
         set_color normal
-        set -l fastfetch_padding (math --scale=0 "($COLUMNS - 37) / 2")
-        if test $fastfetch_padding -lt 0
-            set fastfetch_padding 0
-        end
+        set -l wahrwelt_banner_width 58
+        set -l fastfetch_width 37
+        set -l fastfetch_padding (math --scale=0 "($wahrwelt_banner_width - $fastfetch_width) / 2")
         command -v fastfetch >/dev/null 2>&1 && fastfetch --key-padding-left $fastfetch_padding
       '';
 

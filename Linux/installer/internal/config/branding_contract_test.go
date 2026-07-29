@@ -48,15 +48,17 @@ func TestWahrweltDoomBannerIsSharedByFishAndNeovim(t *testing.T) {
 	}
 }
 
-func TestFishGreetingCentersFastfetchForCurrentTerminalWidth(t *testing.T) {
+func TestFishGreetingCentersFastfetchUnderWahrweltBanner(t *testing.T) {
 	fish := readBrandingContractFile(t, "../../../NixOS/home/programs/fish.nix")
 
 	for _, snippet := range []string{
-		`set -l fastfetch_padding (math --scale=0 "($COLUMNS - 37) / 2")`,
+		"set -l wahrwelt_banner_width 58",
+		"set -l fastfetch_width 37",
+		`set -l fastfetch_padding (math --scale=0 "($wahrwelt_banner_width - $fastfetch_width) / 2")`,
 		"fastfetch --key-padding-left $fastfetch_padding",
 	} {
 		if !strings.Contains(fish, snippet) {
-			t.Fatalf("Fish greeting must dynamically center Fastfetch using %q\n%s", snippet, fish)
+			t.Fatalf("Fish greeting must center Fastfetch under the Wahrwelt banner using %q\n%s", snippet, fish)
 		}
 	}
 }
