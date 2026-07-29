@@ -4,15 +4,6 @@ on:
   push:
     branches:
       - main
-  workflow_run:
-    workflows:
-      - Update flake inputs
-      - Update OmniRouter
-      - Update Portainer
-      - Update Caelestia
-      - Update Noctalia
-    types:
-      - completed
   workflow_dispatch:
 
 permissions:
@@ -24,7 +15,6 @@ concurrency:
 
 jobs:
   sync-dev:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
 
     steps:
@@ -53,9 +43,14 @@ jobs:
             exit 0
           fi
 
+          if git merge-base --is-ancestor "$main_sha" "$dev_sha"; then
+            echo "::warning::dev already contains main and has additional commits; preserving dev"
+            exit 0
+          fi
+
           if ! git merge-base --is-ancestor "$dev_sha" "$main_sha"; then
-            echo "::error::dev has commits that are not in main; refusing to overwrite divergent history"
-            exit 1
+            echo "::warning::dev and main have diverged; preserving dev-only commits"
+            exit 0
           fi
 
           gh api \
