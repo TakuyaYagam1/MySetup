@@ -48,6 +48,19 @@ func TestWahrweltDoomBannerIsSharedByFishAndNeovim(t *testing.T) {
 	}
 }
 
+func TestFishGreetingCentersFastfetchForCurrentTerminalWidth(t *testing.T) {
+	fish := readBrandingContractFile(t, "../../../NixOS/home/programs/fish.nix")
+
+	for _, snippet := range []string{
+		`set -l fastfetch_padding (math --scale=0 "($COLUMNS - 37) / 2")`,
+		"fastfetch --key-padding-left $fastfetch_padding",
+	} {
+		if !strings.Contains(fish, snippet) {
+			t.Fatalf("Fish greeting must dynamically center Fastfetch using %q\n%s", snippet, fish)
+		}
+	}
+}
+
 func readBrandingContractFile(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)
