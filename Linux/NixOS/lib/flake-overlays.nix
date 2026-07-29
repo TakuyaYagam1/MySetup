@@ -37,6 +37,7 @@ let
       developerPackages =
         if developerOrMore then
           {
+            claude-desktop = prev.callPackage ../pkgs/claude-desktop.nix { };
             claude-code = inputs.claude-code.packages.${system}.default;
             codex = inputs.codex.packages.${system}.default;
           }

@@ -1,5 +1,60 @@
-_:
+{
+  lib,
+  wahrwelt,
+  wahrweltLib,
+  ...
+}:
 
+let
+  personal = wahrweltLib.presets.personal wahrwelt;
+  chatGPTExtensionArgs = ''
+    set -l chatgpt_root "$HOME/.config/google-chrome/Default/Extensions/hehggadaopoacecdllhhajmbjkdcmajg"
+    set -l chatgpt_extension
+    set -l extension_args
+
+    if test -d "$chatgpt_root"
+        set chatgpt_extension (
+            command find "$chatgpt_root" -mindepth 1 -maxdepth 1 -type d \
+                | sort -V \
+                | tail -n 1
+        )
+    end
+
+    if test -n "$chatgpt_extension"; and test -f "$chatgpt_extension/manifest.json"
+        set extension_args "--load-extension=$chatgpt_extension"
+    end
+  '';
+  # On-demand launchers for the chrome-devtools MCP server. The debug port is a
+  # live credential (full control of the profile's cookies/sessions), so these are
+  # NOT auto-started: the port only exists while the window is open. Chromium
+  # defaults to 9222 (matches the MCP's default --browser-url) and Chrome to 9223,
+  # deliberately different so both can run at once without a port/profile-lock
+  # collision - override either with CHROME_DEBUG_PORT if the MCP is pinned
+  # elsewhere. Isolated --user-data-dir is mandatory - Chrome >=136 ignores
+  # --remote-debugging-port on the default profile. The port binds to loopback by
+  # default; never add --remote-debugging-address.
+  personalDebugFunctions = {
+    chrome-debug = ''
+      set -l port 9223
+      set -q CHROME_DEBUG_PORT; and set port $CHROME_DEBUG_PORT
+      ${chatGPTExtensionArgs}
+      google-chrome-stable \
+          --remote-debugging-port=$port \
+          --user-data-dir="$HOME/.chrome-debug-profile" \
+          $extension_args $argv
+    '';
+
+    chromium-debug = ''
+      set -l port 9222
+      set -q CHROME_DEBUG_PORT; and set port $CHROME_DEBUG_PORT
+      ${chatGPTExtensionArgs}
+      chromium \
+          --remote-debugging-port=$port \
+          --user-data-dir="$HOME/.chromium-debug-profile" \
+          $extension_args $argv
+    '';
+  };
+in
 {
   programs.fish = {
     enable = true;
@@ -112,12 +167,14 @@ _:
 
     functions = {
       fish_greeting = ''
+        # TAAG font: Doom
         set_color brcyan
-        echo '    _______         __                         '
-        echo '   |_     _|.---.-.|  |--.--.--.--.--.---.-.   '
-        echo '     |   |  |  _  ||    <|  |  |  |  |  _  |   '
-        echo '     |___|  |___._||__|__|_____|___  |___._|   '
-        echo '                               |_____|         '
+        printf '%s\n' ' _    _   ___   _   _ ______  _    _  _____  _      _____'
+        printf '%s\n' '| |  | | / _ \ | | | || ___ \| |  | ||  ___|| |    |_   _|'
+        printf '%s\n' '| |  | |/ /_\ \| |_| || |_/ /| |  | || |__  | |      | |'
+        printf '%s\n' '| |/\| ||  _  ||  _  ||    / | |/\| ||  __| | |      | |'
+        printf '%s\n' '\  /\  /| | | || | | || |\ \ \  /\  /| |___ | |____  | |'
+        printf '%s\n' ' \/  \/ \_| |_/\_| |_/\_| \_| \/  \/ \____/ \_____/  \_/'
         set_color normal
         command -v fastfetch >/dev/null 2>&1 && fastfetch --key-padding-left 5
       '';
@@ -155,31 +212,7 @@ _:
         set pass $argv[3]
         /run/wrappers/bin/sudo nmcli dev wifi connect "$ssid" password "$pass"
       '';
-
-      # On-demand launchers for the chrome-devtools MCP server. The debug port is a
-      # live credential (full control of the profile's cookies/sessions), so these are
-      # NOT auto-started: the port only exists while the window is open. Chromium
-      # defaults to 9222 (matches the MCP's default --browser-url) and Chrome to 9223,
-      # deliberately different so both can run at once without a port/profile-lock
-      # collision - override either with CHROME_DEBUG_PORT if the MCP is pinned
-      # elsewhere. Isolated --user-data-dir is mandatory - Chrome >=136 ignores
-      # --remote-debugging-port on the default profile. The port binds to loopback by
-      # default; never add --remote-debugging-address.
-      chrome-debug = ''
-        set -l port 9223
-        set -q CHROME_DEBUG_PORT; and set port $CHROME_DEBUG_PORT
-        google-chrome-stable \
-            --remote-debugging-port=$port \
-            --user-data-dir="$HOME/.chrome-debug-profile" $argv
-      '';
-
-      chromium-debug = ''
-        set -l port 9222
-        set -q CHROME_DEBUG_PORT; and set port $CHROME_DEBUG_PORT
-        chromium \
-            --remote-debugging-port=$port \
-            --user-data-dir="$HOME/.chromium-debug-profile" $argv
-      '';
-    };
+    }
+    // lib.optionalAttrs personal personalDebugFunctions;
   };
 }

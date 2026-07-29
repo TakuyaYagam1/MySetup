@@ -1,0 +1,222 @@
+name: Update Claude Desktop
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Specific Claude Desktop version (optional)"
+        required: false
+        type: string
+  schedule:
+    - cron: "23 4 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-claude-desktop
+  cancel-in-progress: false
+
+jobs:
+  update-claude-desktop:
+    runs-on: ubuntu-latest
+    env:
+      APT_ROOT: https://downloads.claude.ai/claude-desktop/apt/stable
+      EXPECTED_FINGERPRINT: 31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
+      SOURCE_NIX: Linux/NixOS/pkgs/claude-desktop-source.nix
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31.11.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Verify signed APT metadata and resolve release
+        id: release
+        env:
+          REQUESTED_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$tmp_dir"' EXIT
+
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --output "$tmp_dir/key.asc" \
+            https://downloads.claude.ai/claude-desktop/key.asc
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --output "$tmp_dir/InRelease" \
+            https://downloads.claude.ai/claude-desktop/apt/stable/dists/stable/InRelease
+
+          fingerprint="$(
+            gpg --batch --show-keys --with-colons "$tmp_dir/key.asc" \
+              | awk -F: '$1 == "fpr" { print $10; exit }'
+          )"
+          if [ "$fingerprint" != "$EXPECTED_FINGERPRINT" ]; then
+            echo "::error::Unexpected Anthropic signing key fingerprint: $fingerprint"
+            exit 1
+          fi
+
+          gpg --batch --yes --dearmor \
+            --output "$tmp_dir/key.gpg" "$tmp_dir/key.asc"
+          gpgv --keyring "$tmp_dir/key.gpg" "$tmp_dir/InRelease"
+
+          packages_path="main/binary-amd64/Packages"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --output "$tmp_dir/Packages" \
+            "$APT_ROOT/dists/stable/$packages_path"
+
+          packages_sha="$(
+            awk -v path="$packages_path" '
+              $1 == "SHA256:" { in_sha256 = 1; next }
+              /^[A-Z][A-Za-z0-9-]*:/ { in_sha256 = 0 }
+              in_sha256 && $3 == path { print $1; exit }
+            ' "$tmp_dir/InRelease"
+          )"
+          if ! [[ "$packages_sha" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::Signed InRelease does not contain a valid SHA256 for $packages_path"
+            exit 1
+          fi
+          printf '%s  %s\n' "$packages_sha" "$tmp_dir/Packages" | sha256sum --check -
+
+          records="$(
+            awk '
+              BEGIN { RS = ""; FS = "\n" }
+              {
+                package = version = architecture = filename = sha256 = ""
+                for (i = 1; i <= NF; i++) {
+                  if ($i ~ /^Package: /) package = substr($i, 10)
+                  else if ($i ~ /^Version: /) version = substr($i, 10)
+                  else if ($i ~ /^Architecture: /) architecture = substr($i, 15)
+                  else if ($i ~ /^Filename: /) filename = substr($i, 11)
+                  else if ($i ~ /^SHA256: /) sha256 = substr($i, 9)
+                }
+                if (package == "claude-desktop" && architecture == "amd64")
+                  print version "\t" filename "\t" sha256
+              }
+            ' "$tmp_dir/Packages"
+          )"
+
+          if [ -n "$REQUESTED_VERSION" ]; then
+            record="$(printf '%s\n' "$records" | awk -F '\t' -v version="$REQUESTED_VERSION" '$1 == version { print; exit }')"
+          else
+            record="$(printf '%s\n' "$records" | sort -V | tail -1)"
+          fi
+
+          IFS=$'\t' read -r version filename sha256 <<< "$record"
+          if [ -z "$version" ]; then
+            echo "::error::Claude Desktop version was not found in signed APT metadata"
+            exit 1
+          fi
+          if ! [[ "$filename" =~ ^pool/main/c/claude-desktop/claude-desktop_[0-9A-Za-z.+:~_-]+_amd64\.deb$ ]]; then
+            echo "::error::Unexpected Claude Desktop package path: $filename"
+            exit 1
+          fi
+          if ! [[ "$sha256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::Invalid Claude Desktop SHA256 in signed Packages metadata"
+            exit 1
+          fi
+
+          {
+            echo "version=$version"
+            echo "url=$APT_ROOT/$filename"
+            echo "sha256=$sha256"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Compare versions
+        id: compare
+        env:
+          REQUESTED_VERSION: ${{ github.event.inputs.version }}
+          TARGET_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          current="$(sed -n -E 's/^[[:space:]]*version = "([^"]+)";/\1/p' "$SOURCE_NIX")"
+          if [ -z "$current" ]; then
+            echo "::error::Could not read current Claude Desktop version"
+            exit 1
+          fi
+
+          if [ "$current" = "$TARGET_VERSION" ]; then
+            echo "should_update=false" >> "$GITHUB_OUTPUT"
+            echo "Claude Desktop is already on $current"
+            exit 0
+          fi
+
+          if [ -z "$REQUESTED_VERSION" ] && ! dpkg --compare-versions "$TARGET_VERSION" gt "$current"; then
+            echo "should_update=false" >> "$GITHUB_OUTPUT"
+            echo "Signed APT version $TARGET_VERSION is not newer than packaged $current"
+            exit 0
+          fi
+
+          echo "should_update=true" >> "$GITHUB_OUTPUT"
+          echo "Updating Claude Desktop: $current -> $TARGET_VERSION"
+
+      - name: Patch source metadata
+        if: steps.compare.outputs.should_update == 'true'
+        env:
+          TARGET_HASH_HEX: ${{ steps.release.outputs.sha256 }}
+          TARGET_URL: ${{ steps.release.outputs.url }}
+          TARGET_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          target_hash="$(nix hash convert --hash-algo sha256 --to sri "$TARGET_HASH_HEX")"
+          sed -i -E \
+            's|version = "[^"]+";|version = "'"$TARGET_VERSION"'";|' \
+            "$SOURCE_NIX"
+          sed -i -E \
+            's|url = "[^"]+";|url = "'"$TARGET_URL"'";|' \
+            "$SOURCE_NIX"
+          sed -i -E \
+            's|hash = "sha256-[^"]+";|hash = "'"$target_hash"'";|' \
+            "$SOURCE_NIX"
+
+          git diff --check
+          changed="$(git diff --name-only)"
+          if [ "$changed" != "$SOURCE_NIX" ]; then
+            echo "::error::Updater changed files outside $SOURCE_NIX"
+            printf '%s\n' "$changed"
+            exit 1
+          fi
+
+      - name: Build updated Claude Desktop package
+        if: steps.compare.outputs.should_update == 'true'
+        run: |
+          nix build --no-link --print-build-logs --no-write-lock-file \
+            '.#claude-desktop'
+
+      - name: Create pull request
+        id: cpr
+        if: steps.compare.outputs.should_update == 'true'
+        uses: peter-evans/create-pull-request@v8.1.1
+        with:
+          token: ${{ secrets.WAHRWELT_AUTOMATION_TOKEN }}
+          commit-message: "chore(nix): update claude desktop"
+          branch: update-claude-desktop
+          delete-branch: true
+          add-paths: |
+            Linux/NixOS/pkgs/claude-desktop-source.nix
+          title: "chore(nix): update Claude Desktop to ${{ steps.release.outputs.version }}"
+          body: |
+            ## What
+
+            Updates the pinned official Claude Desktop Linux package to `${{ steps.release.outputs.version }}`.
+
+            ## Verification
+
+            - Verified Anthropic's pinned signing-key fingerprint.
+            - Verified the APT `InRelease` signature.
+            - Verified the `Packages` file against its signed SHA256.
+            - Built the updated Wahrwelt package with the signed package SHA256.
+
+      - name: Validate and merge pull request
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.WAHRWELT_AUTOMATION_TOKEN }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+        run: bash .github/scripts/merge-automation-pr.sh "$PR_NUMBER"

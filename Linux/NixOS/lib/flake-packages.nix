@@ -67,6 +67,7 @@ let
   };
 
   packages = {
+    claude-desktop = flakePkgs.callPackage ../pkgs/claude-desktop.nix { };
     omnirouter = flakePkgs.callPackage ../pkgs/omnirouter.nix { };
     inherit wahrwelt;
     mysetup = wahrwelt;

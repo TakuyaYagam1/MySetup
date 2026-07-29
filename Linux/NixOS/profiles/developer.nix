@@ -2,6 +2,7 @@ _:
 
 {
   imports = [
+    ../services/claude-desktop.nix
     ../services/databases.nix
     ../services/virtualization.nix
     ../programs/development.nix

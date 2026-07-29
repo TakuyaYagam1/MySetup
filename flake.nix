@@ -257,6 +257,7 @@
 
       wahrweltPackageFor = system: (installerOutputsFor system).packages.wahrwelt;
       omnirouterPackageFor = system: (installerOutputsFor system).packages.omnirouter;
+      claudeDesktopPackageFor = system: (installerOutputsFor system).packages.claude-desktop;
       wahrweltAppFor = system: {
         type = "app";
         program = "${wahrweltPackageFor system}/bin/wahrwelt";
@@ -318,6 +319,7 @@
       };
 
       packages = forSystems (system: {
+        claude-desktop = claudeDesktopPackageFor system;
         wahrwelt = wahrweltPackageFor system;
         mysetup = self.packages.${system}.wahrwelt;
         omnirouter = omnirouterPackageFor system;

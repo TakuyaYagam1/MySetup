@@ -23,6 +23,7 @@
   ];
   dev = with pkgs; [
     vscode
+    claude-desktop
     claude-code
     codex
   ];
