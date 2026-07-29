@@ -52,11 +52,24 @@ jobs:
         working-directory: Linux/NixOS
         run: nix flake update
 
+      - name: Update preset flake inputs
+        run: |
+          for preset in minimal desktop developer personal; do
+            nix flake update "path:${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/${preset}"
+          done
+
       - name: Check public flake
         run: nix flake check --no-build
 
       - name: Build public shell module check
         run: nix build --no-link --print-build-logs .#checks.x86_64-linux.shells-module
+
+      - name: Check preset flakes
+        run: |
+          for preset in minimal desktop developer personal; do
+            nix flake check --no-build --no-write-lock-file \
+              "path:${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/${preset}"
+          done
 
       - name: Build public Wahrwelt package
         run: nix build .#wahrwelt --print-build-logs
@@ -90,7 +103,10 @@ jobs:
         id: check
         working-directory: ${{ github.workspace }}
         run: |
-          if git diff --exit-code flake.lock Linux/NixOS/flake.lock > /dev/null; then
+          if git diff --exit-code \
+            flake.lock \
+            Linux/NixOS/flake.lock \
+            Linux/NixOS/presets/*/flake.lock > /dev/null; then
             echo "modified=false" >> "$GITHUB_OUTPUT"
           else
             echo "modified=true" >> "$GITHUB_OUTPUT"
@@ -108,11 +124,15 @@ jobs:
           add-paths: |
             flake.lock
             Linux/NixOS/flake.lock
+            Linux/NixOS/presets/minimal/flake.lock
+            Linux/NixOS/presets/desktop/flake.lock
+            Linux/NixOS/presets/developer/flake.lock
+            Linux/NixOS/presets/personal/flake.lock
           title: "chore(nix): update flake locks"
           body: |
             ## What
 
-            Updates root and NixOS flake locks after scheduled input refresh.
+            Updates root, full NixOS, and preset-specific flake locks after scheduled input refresh.
 
             ## Why
 
@@ -122,6 +142,7 @@ jobs:
 
             - `nix flake check --no-build`
             - `nix build --no-link --print-build-logs .#checks.x86_64-linux.shells-module`
+            - preset `nix flake check --no-build --no-write-lock-file`
             - `nix build .#wahrwelt --print-build-logs`
             - `nix build --no-link .#mysetup --print-build-logs`
             - `./result/bin/wahrwelt --help`

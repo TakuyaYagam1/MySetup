@@ -4,6 +4,7 @@
   wahrweltLib,
   nixpkgs,
   nixpkgs-stable,
+  preset ? "full",
 }:
 
 {
@@ -16,10 +17,20 @@
   extraModules ? [ ],
   homeExtraModules ? [ ],
   extraOverlays ? [ ],
+  hostInputs ? { },
 }:
 
 let
   inherit (nixpkgs) lib;
+
+  supportedHostInputNames = [ "lanzaboote" ];
+  unsupportedHostInputNames = builtins.filter (name: !(builtins.elem name supportedHostInputNames)) (
+    builtins.attrNames hostInputs
+  );
+  effectiveInputs =
+    assert lib.assertMsg (unsupportedHostInputNames == [ ])
+      "Wahrwelt received unsupported host inputs: ${builtins.concatStringsSep ", " unsupportedHostInputNames}";
+    inputs // lib.optionalAttrs (hostInputs ? lanzaboote) { inherit (hostInputs) lanzaboote; };
 
   pkgs-stable = import nixpkgs-stable {
     localSystem = system;
@@ -30,21 +41,33 @@ let
   };
 
   overlays = import ./flake-overlays.nix {
-    inherit inputs system;
+    inputs = effectiveInputs;
+    inherit preset system;
   };
 
   flakeModules = import ./flake-modules.nix {
     inherit
-      inputs
       wahrweltLib
       overlays
       pkgs-stable
       ;
+    inputs = effectiveInputs;
   };
 
   hostVarsValue = if builtins.isAttrs hostVars then hostVars else import hostVars;
+  secureBoot = hostVarsValue.features.secureBoot or false;
   optionalPath = path: lib.optional (path != null && builtins.pathExists path) path;
   secretsFile = if secretsDir == null then null else secretsDir + "/secrets.yaml";
+  lanzabooteModules =
+    if !secureBoot then
+      [ ]
+    else if effectiveInputs ? lanzaboote then
+      [
+        effectiveInputs.lanzaboote.nixosModules.lanzaboote
+        ../system/boot/secure.nix
+      ]
+    else
+      throw "Wahrwelt Secure Boot requires the host-owned lanzaboote input";
 
   hostModule =
     { lib, ... }:
@@ -78,10 +101,10 @@ nixpkgs.lib.nixosSystem {
 
   specialArgs = {
     inherit
-      inputs
       wahrweltLib
       pkgs-stable
       ;
+    inputs = effectiveInputs;
     mysetupLib = wahrweltLib;
   };
 
@@ -95,10 +118,12 @@ nixpkgs.lib.nixosSystem {
     flakeModules.overlaysModule
     extraOverlaysModule
 
-    inputs.lanzaboote.nixosModules.lanzaboote
-    inputs.nix-snapd.nixosModules.default
-    inputs.stylix.nixosModules.stylix
-    inputs.sops-nix.nixosModules.sops
+  ]
+  ++ lanzabooteModules
+  ++ [
+    effectiveInputs.nix-snapd.nixosModules.default
+    effectiveInputs.stylix.nixosModules.stylix
+    effectiveInputs.sops-nix.nixosModules.sops
     sopsModule
 
     home-manager.nixosModules.home-manager

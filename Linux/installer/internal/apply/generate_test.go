@@ -125,7 +125,7 @@ func TestFlakeNixUsesIndependentThinWahrweltWrapper(t *testing.T) {
 		`nix-index-database = {`,
 		`quickshell = {`,
 		`wahrwelt = {`,
-		`url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS";`,
+		`url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS/presets/personal";`,
 		`inputs.nixpkgs.follows = "nixpkgs";`,
 		`inputs.home-manager.follows = "home-manager";`,
 		`inputs.nix-index-database.follows = "nix-index-database";`,
@@ -170,7 +170,7 @@ func TestFlakeNixSupportsManagedThinWahrweltWrapper(t *testing.T) {
 	}
 	for _, want := range []string{
 		`# lock mode: managed`,
-		`wahrwelt.url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS";`,
+		`wahrwelt.url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS/presets/personal";`,
 		`hostname = "workstation";`,
 		`wahrwelt.lib.mkWahrweltHost`,
 	} {
@@ -215,13 +215,46 @@ func TestFlakeNixUsesDevelopmentWahrweltChannel(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(out, `github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS`) {
+			if !strings.Contains(out, `github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS/presets/personal`) {
 				t.Fatalf("development channel must point at dev branch\n%s", out)
 			}
-			if strings.Contains(out, `github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS`) {
+			if strings.Contains(out, `github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS/presets/personal`) {
 				t.Fatalf("development channel must not keep stable Wahrwelt URL\n%s", out)
 			}
 		})
+	}
+}
+
+func TestFlakeNixUsesPresetEntrypointAndHostOwnedSecureBootInput(t *testing.T) {
+	state := config.Default()
+	state.Source.Channel = config.SourceChannelDevelopment
+	state.Packages.Preset = "developer"
+	state.Features.SecureBoot = true
+
+	out, err := FlakeNix(state, LockModeIndependent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`# preset: developer`,
+		`url = "github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS/presets/developer";`,
+		`outputs = inputs@{ wahrwelt, ... }:`,
+		`lanzaboote = {`,
+		`hostInputs = { inherit (inputs) lanzaboote; };`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("preset wrapper missing %q\n%s", want, out)
+		}
+	}
+	for _, forbidden := range []string{
+		`claude-code = {`,
+		`codex = {`,
+		`codex-desktop-linux = {`,
+		`inputs.lanzaboote.follows = "lanzaboote";`,
+	} {
+		if strings.Contains(out, forbidden) {
+			t.Fatalf("preset wrapper must delegate %q to the preset flake\n%s", forbidden, out)
+		}
 	}
 }
 
@@ -234,7 +267,7 @@ func TestFlakeNixDelegatesNoctaliaInputsForV4Selection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, `url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS";`) {
+	if !strings.Contains(out, `url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS/presets/personal";`) {
 		t.Fatalf("independent wrapper must keep its Wahrwelt source\n%s", out)
 	}
 	for _, forbidden := range []string{
@@ -249,7 +282,7 @@ func TestFlakeNixDelegatesNoctaliaInputsForV4Selection(t *testing.T) {
 	}
 }
 
-func TestFlakeNixOmitsPersonalOnlyAndOptionalInputsForNonPersonalPresets(t *testing.T) {
+func TestFlakeNixScopesHostOwnedInputsByPreset(t *testing.T) {
 	for _, preset := range []string{"minimal", "desktop", "developer"} {
 		t.Run(preset, func(t *testing.T) {
 			state := config.Default()
@@ -262,13 +295,9 @@ func TestFlakeNixOmitsPersonalOnlyAndOptionalInputsForNonPersonalPresets(t *test
 			}
 			for _, forbidden := range []string{
 				`claude-code = {`,
-				`inputs.claude-code.follows = "claude-code";`,
 				`codex = {`,
-				`inputs.codex.follows = "codex";`,
 				`codex-desktop-linux = {`,
-				`inputs.codex-desktop-linux.follows = "codex-desktop-linux";`,
 				`lanzaboote = {`,
-				`inputs.lanzaboote.follows = "lanzaboote";`,
 			} {
 				if strings.Contains(out, forbidden) {
 					t.Fatalf("%s preset must not include %q\n%s", preset, forbidden, out)
@@ -277,45 +306,48 @@ func TestFlakeNixOmitsPersonalOnlyAndOptionalInputsForNonPersonalPresets(t *test
 			for _, want := range []string{
 				`nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";`,
 				`home-manager = {`,
-				`quickshell = {`,
-				`zen-browser = {`,
 				`neovim-nightly-overlay = {`,
 				`stylix = {`,
 				`nix-index-database = {`,
+				`# preset: ` + preset,
+				`?dir=Linux/NixOS/presets/` + preset,
 			} {
 				if !strings.Contains(out, want) {
 					t.Fatalf("%s preset must keep baseline input %q\n%s", preset, want, out)
+				}
+			}
+			for _, desktopInput := range []string{`quickshell = {`, `zen-browser = {`} {
+				got := strings.Contains(out, desktopInput)
+				want := preset != "minimal"
+				if got != want {
+					t.Fatalf("%s preset: desktop input %q present=%v, want=%v\n%s", preset, desktopInput, got, want, out)
 				}
 			}
 		})
 	}
 }
 
-func TestFlakeNixIncludesPersonalAIInputsOnlyForPersonalPreset(t *testing.T) {
-	for _, tc := range []struct {
-		preset string
-		want   bool
-	}{
-		{"minimal", false},
-		{"desktop", false},
-		{"developer", false},
-		{"personal", true},
-	} {
-		t.Run(tc.preset, func(t *testing.T) {
+func TestFlakeNixDelegatesAIInputsToDeveloperOrPersonalPresetFlake(t *testing.T) {
+	for _, preset := range config.PackagePresets {
+		t.Run(preset, func(t *testing.T) {
 			state := config.Default()
-			state.Packages.Preset = tc.preset
+			state.Packages.Preset = preset
 
 			out, err := FlakeNix(state, LockModeIndependent)
 			if err != nil {
 				t.Fatal(err)
 			}
-			got := strings.Contains(out, `claude-code = {`) && strings.Contains(out, `codex = {`) &&
-				strings.Contains(out, `codex-desktop-linux = {`) &&
-				strings.Contains(out, `inputs.claude-code.follows = "claude-code";`) &&
-				strings.Contains(out, `inputs.codex.follows = "codex";`) &&
-				strings.Contains(out, `inputs.codex-desktop-linux.follows = "codex-desktop-linux";`)
-			if got != tc.want {
-				t.Fatalf("preset %q: personal AI inputs present=%v, want=%v\n%s", tc.preset, got, tc.want, out)
+			for _, forbidden := range []string{
+				`claude-code = {`,
+				`codex = {`,
+				`codex-desktop-linux = {`,
+				`inputs.claude-code.follows`,
+				`inputs.codex.follows`,
+				`inputs.codex-desktop-linux.follows`,
+			} {
+				if strings.Contains(out, forbidden) {
+					t.Fatalf("preset %q must delegate AI input %q to its child flake\n%s", preset, forbidden, out)
+				}
 			}
 		})
 	}
@@ -330,14 +362,18 @@ func TestFlakeNixIncludesLanzabooteOnlyWhenSecureBootEnabled(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := strings.Contains(out, `lanzaboote = {`) && strings.Contains(out, `inputs.lanzaboote.follows = "lanzaboote";`)
+		got := strings.Contains(out, `lanzaboote = {`) &&
+			strings.Contains(out, `hostInputs = { inherit (inputs) lanzaboote; };`)
 		if got != enabled {
 			t.Fatalf("SecureBoot=%v: lanzaboote present=%v, want=%v\n%s", enabled, got, enabled, out)
+		}
+		if strings.Contains(out, `inputs.lanzaboote.follows = "lanzaboote";`) {
+			t.Fatalf("Lanzaboote is host-owned and must not be followed by Wahrwelt\n%s", out)
 		}
 	}
 }
 
-func TestFlakeNixManagedModeIgnoresPresetAndFeatureToggles(t *testing.T) {
+func TestFlakeNixManagedModeKeepsOnlyWahrweltAndRequiredSecureBootInput(t *testing.T) {
 	state := config.Default()
 	state.Packages.Preset = "personal"
 	state.Features.SecureBoot = true
@@ -347,13 +383,19 @@ func TestFlakeNixManagedModeIgnoresPresetAndFeatureToggles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{`claude-code`, `codex`, `lanzaboote`, `nixpkgs.url`} {
+	for _, forbidden := range []string{`claude-code`, `codex`, `nixpkgs.url`} {
 		if strings.Contains(out, forbidden) {
 			t.Fatalf("managed mode must stay a single Wahrwelt input regardless of preset/toggles, found %q\n%s", forbidden, out)
 		}
 	}
-	if !strings.Contains(out, `wahrwelt.url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS";`) {
-		t.Fatalf("managed mode must keep the single Wahrwelt input\n%s", out)
+	for _, want := range []string{
+		`wahrwelt.url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS/presets/personal";`,
+		`lanzaboote = {`,
+		`hostInputs = { inherit (inputs) lanzaboote; };`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("managed mode missing %q\n%s", want, out)
+		}
 	}
 }
 
@@ -895,7 +937,16 @@ func TestGeneratedWrapperDetectionAcceptsNoctaliaV4URL(t *testing.T) {
 	}
 }
 
-func TestMigrateGeneratedThinFlakeRemovesOnlyKnownLegacyInputs(t *testing.T) {
+func mustMigrateGeneratedThinFlake(t *testing.T, text string, state config.State) (string, bool) {
+	t.Helper()
+	migrated, changed, err := migrateGeneratedThinFlake(text, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return migrated, changed
+}
+
+func TestMigrateGeneratedThinFlakeCanonicallyRegeneratesInstallerOwnedWrapper(t *testing.T) {
 	old := `{
   description = "Host-local MySetup NixOS wrapper";
 
@@ -944,29 +995,16 @@ func TestMigrateGeneratedThinFlakeRemovesOnlyKnownLegacyInputs(t *testing.T) {
 }
 `
 
-	migrated, changed := migrateGeneratedThinFlake(old, config.Default())
+	migrated, changed := mustMigrateGeneratedThinFlake(t, old, config.Default())
 	if !changed {
 		t.Fatal("expected generated thin flake migration to report a change")
 	}
-	for _, want := range []string{
-		`custom-overlay = {`,
-		`inputs.custom-overlay.follows = "custom-overlay";`,
-	} {
-		if !strings.Contains(migrated, want) {
-			t.Fatalf("migrated flake missing %q\n%s", want, migrated)
-		}
+	want, err := FlakeNix(config.Default(), LockModeIndependent)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, forbidden := range []string{
-		`github:a-h/templ`,
-		`inputs.templ.follows`,
-		`noctalia = {`,
-		`noctalia-shell = {`,
-		`inputs.noctalia.follows`,
-		`inputs.noctalia-shell.follows`,
-	} {
-		if strings.Contains(migrated, forbidden) {
-			t.Fatalf("migrated flake kept legacy input %q\n%s", forbidden, migrated)
-		}
+	if migrated != want {
+		t.Fatalf("installer-owned wrapper must be canonically regenerated\nwant:\n%s\ngot:\n%s", want, migrated)
 	}
 }
 
@@ -1016,7 +1054,7 @@ func TestMigrateGeneratedThinFlakeRemovesLegacyZapretDiscordYoutubeInput(t *test
 }
 `
 
-	migrated, changed := migrateGeneratedThinFlake(old, config.Default())
+	migrated, changed := mustMigrateGeneratedThinFlake(t, old, config.Default())
 	if !changed {
 		t.Fatal("expected generated thin flake migration to report a change")
 	}
@@ -1053,7 +1091,7 @@ func TestMigrateGeneratedThinFlakeRewritesLegacyNoctaliaV4MySetupURL(t *testing.
 }
 `
 
-	migrated, changed := migrateGeneratedThinFlake(old, config.Default())
+	migrated, changed := mustMigrateGeneratedThinFlake(t, old, config.Default())
 	if !changed {
 		t.Fatal("expected generated thin flake migration to rewrite v4-selected wrapper")
 	}
@@ -1099,7 +1137,7 @@ func TestMigrateGeneratedThinFlakeRemovesHostOwnedNoctaliaInputs(t *testing.T) {
 }
 `
 
-	migrated, changed := migrateGeneratedThinFlake(old, config.Default())
+	migrated, changed := mustMigrateGeneratedThinFlake(t, old, config.Default())
 	if !changed {
 		t.Fatal("expected generated thin flake migration to report a change")
 	}
@@ -1146,7 +1184,7 @@ func TestMigrateGeneratedThinFlakeRemovesHostOwnedCaelestiaInputs(t *testing.T) 
 }
 `
 
-	migrated, changed := migrateGeneratedThinFlake(old, config.Default())
+	migrated, changed := mustMigrateGeneratedThinFlake(t, old, config.Default())
 	if !changed {
 		t.Fatal("expected generated thin flake migration to report a change")
 	}
@@ -1172,7 +1210,7 @@ func TestMigrateGeneratedThinFlakeRemovesPersonalAIInputsWhenPresetNoLongerPerso
 
 	after := config.Default()
 	after.Packages.Preset = "minimal"
-	migrated, changed := migrateGeneratedThinFlake(old, after)
+	migrated, changed := mustMigrateGeneratedThinFlake(t, old, after)
 	if !changed {
 		t.Fatal("expected migration to report a change when preset drops out of personal")
 	}
@@ -1190,7 +1228,7 @@ func TestMigrateGeneratedThinFlakeRemovesPersonalAIInputsWhenPresetNoLongerPerso
 	}
 }
 
-func TestMigrateGeneratedThinFlakeAddsPersonalAIInputsWhenPresetBecomesPersonal(t *testing.T) {
+func TestMigrateGeneratedThinFlakeSwitchesToPersonalEntrypointWithoutHostOwnedAIInputs(t *testing.T) {
 	before := config.Default()
 	before.Packages.Preset = "minimal"
 	old, err := FlakeNix(before, LockModeIndependent)
@@ -1200,30 +1238,26 @@ func TestMigrateGeneratedThinFlakeAddsPersonalAIInputsWhenPresetBecomesPersonal(
 
 	after := config.Default()
 	after.Packages.Preset = "personal"
-	migrated, changed := migrateGeneratedThinFlake(old, after)
+	migrated, changed := mustMigrateGeneratedThinFlake(t, old, after)
 	if !changed {
 		t.Fatal("expected migration to report a change when preset becomes personal")
 	}
 	for _, want := range []string{
-		`claude-code = {`,
-		`inputs.claude-code.follows = "claude-code";`,
-		`codex = {`,
-		`inputs.codex.follows = "codex";`,
-		`codex-desktop-linux = {`,
-		`inputs.codex-desktop-linux.follows = "codex-desktop-linux";`,
+		`# preset: personal`,
+		`github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS/presets/personal`,
 	} {
 		if !strings.Contains(migrated, want) {
 			t.Fatalf("migrated flake missing %q after preset became personal\n%s", want, migrated)
 		}
 	}
-	zenBrowserIdx := strings.Index(migrated, `zen-browser = {`)
-	claudeCodeIdx := strings.Index(migrated, `claude-code = {`)
-	codexIdx := strings.Index(migrated, `codex = {`)
-	codexDesktopLinuxIdx := strings.Index(migrated, `codex-desktop-linux = {`)
-	neovimIdx := strings.Index(migrated, `neovim-nightly-overlay = {`)
-	if zenBrowserIdx >= claudeCodeIdx || claudeCodeIdx >= codexIdx ||
-		codexIdx >= codexDesktopLinuxIdx || codexDesktopLinuxIdx >= neovimIdx {
-		t.Fatalf("expected personal AI inputs inserted between zen-browser and neovim-nightly-overlay\n%s", migrated)
+	for _, forbidden := range []string{
+		`claude-code = {`,
+		`codex = {`,
+		`codex-desktop-linux = {`,
+	} {
+		if strings.Contains(migrated, forbidden) {
+			t.Fatalf("migrated flake must delegate %q to the personal entrypoint\n%s", forbidden, migrated)
+		}
 	}
 }
 
@@ -1238,12 +1272,16 @@ func TestMigrateGeneratedThinFlakeAddsAndRemovesLanzabooteWithSecureBootToggle(t
 
 		after := config.Default()
 		after.Features.SecureBoot = true
-		migrated, changed := migrateGeneratedThinFlake(old, after)
+		migrated, changed := mustMigrateGeneratedThinFlake(t, old, after)
 		if !changed {
 			t.Fatal("expected migration to report a change when Secure Boot is enabled")
 		}
-		if !strings.Contains(migrated, `lanzaboote = {`) || !strings.Contains(migrated, `inputs.lanzaboote.follows = "lanzaboote";`) {
+		if !strings.Contains(migrated, `lanzaboote = {`) ||
+			!strings.Contains(migrated, `hostInputs = { inherit (inputs) lanzaboote; };`) {
 			t.Fatalf("migrated flake missing lanzaboote after enabling Secure Boot\n%s", migrated)
+		}
+		if strings.Contains(migrated, `inputs.lanzaboote.follows = "lanzaboote";`) {
+			t.Fatalf("migrated flake must keep Lanzaboote host-owned\n%s", migrated)
 		}
 	})
 
@@ -1257,11 +1295,12 @@ func TestMigrateGeneratedThinFlakeAddsAndRemovesLanzabooteWithSecureBootToggle(t
 
 		after := config.Default()
 		after.Features.SecureBoot = false
-		migrated, changed := migrateGeneratedThinFlake(old, after)
+		migrated, changed := mustMigrateGeneratedThinFlake(t, old, after)
 		if !changed {
 			t.Fatal("expected migration to report a change when Secure Boot is disabled")
 		}
-		if strings.Contains(migrated, `lanzaboote = {`) || strings.Contains(migrated, `inputs.lanzaboote.follows = "lanzaboote";`) {
+		if strings.Contains(migrated, `lanzaboote = {`) ||
+			strings.Contains(migrated, `hostInputs = { inherit (inputs) lanzaboote; };`) {
 			t.Fatalf("migrated flake kept lanzaboote after disabling Secure Boot\n%s", migrated)
 		}
 	})
@@ -1277,26 +1316,24 @@ func TestMigrateGeneratedThinFlakeIsIdempotentWhenDesiredStateAlreadyMatches(t *
 		t.Fatal(err)
 	}
 
-	firstPass, changed := migrateGeneratedThinFlake(old, state)
+	firstPass, changed := mustMigrateGeneratedThinFlake(t, old, state)
 	if changed {
 		t.Fatalf("expected no change migrating a freshly-generated flake against the same state it was generated for\n%s", firstPass)
 	}
 
-	secondPass, changedAgain := migrateGeneratedThinFlake(firstPass, state)
+	secondPass, changedAgain := mustMigrateGeneratedThinFlake(t, firstPass, state)
 	if changedAgain {
 		t.Fatalf("expected second migration pass to be a no-op\n%s", secondPass)
 	}
 	if firstPass != secondPass {
 		t.Fatalf("expected repeated migration with unchanged state to be byte-identical\nfirst:\n%s\nsecond:\n%s", firstPass, secondPass)
 	}
-	for _, block := range []string{
-		`claude-code = {`,
-		`codex = {`,
-		`codex-desktop-linux = {`,
-		`lanzaboote = {`,
-	} {
-		if count := strings.Count(secondPass, block); count != 1 {
-			t.Fatalf("expected exactly one %q block after repeated migration, got %d\n%s", block, count, secondPass)
+	if count := strings.Count(secondPass, `lanzaboote = {`); count != 1 {
+		t.Fatalf("expected exactly one Lanzaboote block after repeated migration, got %d\n%s", count, secondPass)
+	}
+	for _, forbidden := range []string{`claude-code = {`, `codex = {`, `codex-desktop-linux = {`} {
+		if strings.Contains(secondPass, forbidden) {
+			t.Fatalf("expected AI input %q to stay delegated after repeated migration\n%s", forbidden, secondPass)
 		}
 	}
 }
@@ -1329,7 +1366,7 @@ func TestPrepareThinHostLocalPreservesGeneratedThinWrapper(t *testing.T) {
     };
 }
 `
-	wantFlake, changed := migrateGeneratedThinFlake(existingFlake, config.Default())
+	wantFlake, changed := mustMigrateGeneratedThinFlake(t, existingFlake, config.Default())
 	if !changed {
 		t.Fatal("expected legacy generated wrapper to migrate to Wahrwelt")
 	}
@@ -1653,6 +1690,10 @@ func TestFlakeCanUseInstalledInstallerSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	presetFlake, err := os.ReadFile("../../../NixOS/lib/preset-flake.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
 	layout, err := os.ReadFile("../../../NixOS/lib/layout.nix")
 	if err != nil {
 		t.Fatal(err)
@@ -1661,9 +1702,9 @@ func TestFlakeCanUseInstalledInstallerSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(data) + string(layout) + string(packages)
+	text := string(data) + string(presetFlake) + string(layout) + string(packages)
 	for _, want := range []string{
-		"layout = import ./lib/layout.nix",
+		"layout = import ./layout.nix",
 		"installerSource = layout.installer",
 		`(nixosRoot + "/installer")`,
 		`(nixosRoot + "/../installer")`,
@@ -1703,7 +1744,11 @@ func TestInnerNixOSFlakeUsesSelfForOmniRouterOverlay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(data)
+	presetFlake, err := os.ReadFile("../../../NixOS/lib/preset-flake.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data) + string(presetFlake)
 	for _, want := range []string{
 		"inputsForModules = inputs // {",
 		"wahrwelt = self;",

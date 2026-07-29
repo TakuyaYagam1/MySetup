@@ -42,7 +42,8 @@ nix run --refresh 'github:TakuyaYagam1/wahrwelt'
 This is the normal thin apply path. Nix fetches the repository source into
 `/nix/store`, the wrapped installer points `WAHRWELT_REPO_ROOT` at that immutable
 source, then the installer writes a small `/etc/nixos` wrapper that tracks
-`github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS` by default.
+the selected `github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS/presets/<preset>`
+entrypoint by default.
 
 ### Legacy MySetup compatibility
 
@@ -70,7 +71,7 @@ nix run --refresh 'github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS#wahrwelt' --
 
 The TUI `General` section includes `Wahrwelt channel`. Keep `stable` to track the
 `main` branch after install, or select `development` to generate a wrapper that
-tracks `github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS`.
+tracks `github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS/presets/<preset>`.
 
 Nix caches the resolved source for ~1 hour (`tarball-ttl` default). If you just
 pushed a commit and want the new HEAD right now, keep `--refresh` in the command.
@@ -232,27 +233,30 @@ breakdown is in the [root README](../README.md#package-presets); in short:
 - `desktop`: the first preset with a graphical session. Adds the SDDM login
   screen, Hyprland, the runtime shells, and everyday GUI apps (browser, chat,
   office, media, file manager).
-- `developer`: `desktop` plus developer/API/container tooling (VS Code, API
-  clients).
+- `developer`: `desktop` plus developer/API/container tooling, Claude Code,
+  Codex CLI, and Codex Desktop.
 - `personal`: `developer` plus the full private-workstation load - extra apps,
-  IDEs, AI CLIs, ChatGPT Desktop for Linux, and games. This is the heaviest
-  build.
+  IDEs, additional AI tools, and games. This is the heaviest build.
 
 How it works under the hood: `hosts/NixOS/default.nix` imports every local
 module, and each module turns itself on or off based on `wahrwelt.packages.preset`.
 That way all four presets run through the same code path.
 
-The generated wrapper `flake.nix` (independent lock mode) also trims its own
-input list to match the preset and feature flags: `claude-code`, `codex`, and
-`codex-desktop-linux` appear only for `personal`, and `lanzaboote` only when
-Secure Boot is on. This just controls whether `/etc/nixos/flake.lock` tracks
-that input directly - the NixOS module always resolves it through Wahrwelt's
-own lock either way, so a `minimal` install never fails to build just because
-an input was left out.
+Each preset has a public flake and its own lock under
+`Linux/NixOS/presets/<preset>`. `minimal` contains only core inputs,
+`desktop` adds the graphical shell graph, and `developer`/`personal` add the
+Claude Code, Codex CLI, and Codex Desktop inputs. The old `Linux/NixOS` flake
+remains the full compatibility entrypoint.
+
+The generated wrapper `flake.nix` points at the selected preset flake.
+Independent mode keeps moving core inputs host-owned and adds
+Quickshell/end4/Zen only for desktop or higher. AI inputs stay owned by the
+developer/personal preset lock. Lanzaboote is injected by the host wrapper only
+when Secure Boot is enabled, so it never pollutes the preset locks.
 
 ### ChatGPT Desktop settings
 
-The `personal` preset installs the unofficial
+The `developer` and `personal` presets install the unofficial
 [`ilysenko/codex-desktop-linux`](https://github.com/ilysenko/codex-desktop-linux)
 Nix package and points its launcher at the Codex CLI from this configuration.
 The app still owns its runtime settings under `~/.config/codex-desktop`; that
@@ -552,6 +556,8 @@ Useful checks after changing installer or shell integration:
 Linux/NixOS/
 ├── flake.nix
 ├── flake.lock
+├── presets/                       # minimal / desktop / developer / personal
+│   └── <preset>/                  # public flake.nix + isolated flake.lock
 ├── modules/
 │   ├── mysetup-options.nix        # `wahrwelt.*` options + legacy aliases
 │   └── mysetup-stack.nix          # reusable workstation stack
@@ -743,15 +749,15 @@ Default thin installs use an independent host lock: `/etc/nixos/flake.lock`
 owns nixpkgs, Home Manager, Stylix, Quickshell, shell flakes, and the selected
 Wahrwelt source revision. The `stable` channel uses the `main` branch; the
 `development` channel uses `dev`. Managed thin installs update only the
-`wahrwelt` input and reuse the transitive lock shipped by Wahrwelt.
+`wahrwelt` input (plus host-owned Lanzaboote when Secure Boot is enabled) and
+reuse the selected preset's transitive lock shipped by Wahrwelt.
 
-Existing generated thin wrappers migrate to the independent lock shape on the
-next `wahrwelt apply`; a plain `nix flake update` only changes `flake.lock`, not
-the wrapper `flake.nix` structure. The same `wahrwelt apply` also reconciles
-`claude-code`/`codex`/`codex-desktop-linux`/`lanzaboote` toward whatever the
-current preset and feature flags call for - changing the package preset or
-toggling Secure Boot and re-running the installer adds or removes just those
-input blocks on the existing `flake.nix`.
+Existing recognized installer-generated wrappers are canonically regenerated
+on the next `wahrwelt apply`, preserving the selected channel and lock mode
+while switching to the matching preset entrypoint. A plain `nixos-update`
+continues to update `/etc/nixos/flake.lock` and rebuild normally. Changing the
+preset or toggling Secure Boot requires one `wahrwelt apply` so the wrapper
+structure can be regenerated; unrecognized user-owned flakes are preserved.
 
 Garbage collection:
 

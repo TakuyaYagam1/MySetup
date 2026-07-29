@@ -139,7 +139,11 @@ func copyExistingThinFlake(dest, target string, state config.State) (bool, error
 	}
 	text := string(data)
 	if isGeneratedMySetupWrapperFlake(text) {
-		if migrated, changed := migrateGeneratedThinFlake(text, state); changed {
+		migrated, changed, err := migrateGeneratedThinFlake(text, state)
+		if err != nil {
+			return false, fmt.Errorf("regenerate generated Wahrwelt wrapper: %w", err)
+		}
+		if changed {
 			info, err := os.Stat(source)
 			if err != nil {
 				return false, err

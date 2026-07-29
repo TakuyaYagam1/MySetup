@@ -10,6 +10,7 @@
 
 let
   desktopOrMore = wahrweltLib.presets.desktopOrMore wahrwelt;
+  developerOrMore = wahrweltLib.presets.developerOrMore wahrwelt;
   wahrweltPkgs = pkgs.wahrwelt or (pkgs.mysetup or { });
   homeLibs = import ./lib { inherit lib pkgs; };
   avatarSource =
@@ -25,7 +26,6 @@ let
   ];
   coreImports = [
     inputs.stylix.homeModules.stylix
-    inputs.codex-desktop-linux.homeManagerModules.default
     ./stylix.nix
     ./theming.nix
     ./programs/boot-theme.nix
@@ -37,7 +37,6 @@ let
     ./programs/btop.nix
     ./programs/starship.nix
     ./programs/cava.nix
-    ./programs/codex-desktop.nix
     ./programs/fastfetch.nix
     ./programs/mimeapps.nix
     ./programs/nightshift.nix
@@ -49,6 +48,10 @@ let
     ./programs/yazi.nix
     ./programs/vesktop.nix
     ./programs/packages.nix
+  ];
+  developerImports = [
+    inputs.codex-desktop-linux.homeManagerModules.default
+    ./programs/codex-desktop.nix
   ];
   shellImports = [
     inputs.caelestia-shell.homeManagerModules.default
@@ -67,7 +70,10 @@ in
 {
   _module.args.homeLibs = homeLibs;
 
-  imports = coreImports ++ lib.optionals desktopOrMore shellImports;
+  imports =
+    coreImports
+    ++ lib.optionals desktopOrMore shellImports
+    ++ lib.optionals developerOrMore developerImports;
 
   home = {
     inherit (wahrwelt.user) username homeDirectory;

@@ -43,3 +43,10 @@ jobs:
 
       - name: Run linting + tests
         run: make -C Linux all
+
+      - name: Evaluate preset NixOS hosts
+        run: |
+          for preset in minimal desktop developer personal; do
+            nix eval --raw --no-write-lock-file \
+              "path:${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/${preset}#checks.x86_64-linux.preset-host.drvPath"
+          done

@@ -59,8 +59,17 @@ func WahrweltFlakeURL(channel string) string {
 	}
 }
 
+func WahrweltPresetFlakeURL(channel, preset string) string {
+	branch := "main"
+	if channel == SourceChannelDevelopment {
+		branch = "dev"
+	}
+	return "github:TakuyaYagam1/wahrwelt/" + branch + "?dir=Linux/NixOS/presets/" + preset
+}
+
 func KnownWahrweltFlakeURLs() []string {
-	return []string{
+	urls := make([]string, 0, 8+2*len(PackagePresets))
+	urls = append(urls,
 		WahrweltFlakeURL(SourceChannelStable),
 		"github:TakuyaYagam1/wahrwelt?dir=Linux/NixOS",
 		WahrweltFlakeURL(SourceChannelDevelopment),
@@ -69,7 +78,15 @@ func KnownWahrweltFlakeURLs() []string {
 		"github:TakuyaYagam1/MySetup?dir=Linux/NixOS",
 		"github:TakuyaYagam1/MySetup/dev?dir=Linux/NixOS",
 		legacyNoctaliaV4MySetupRepoFlakeURL,
+	)
+	for _, preset := range PackagePresets {
+		urls = append(
+			urls,
+			WahrweltPresetFlakeURL(SourceChannelStable, preset),
+			WahrweltPresetFlakeURL(SourceChannelDevelopment, preset),
+		)
 	}
+	return urls
 }
 
 func IsPackagePreset(value string) bool {

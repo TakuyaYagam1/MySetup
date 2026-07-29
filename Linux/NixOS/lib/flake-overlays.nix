@@ -1,23 +1,48 @@
 {
   inputs,
   system,
+  preset ? "full",
 }:
 
 let
+  desktopOrMore = builtins.elem preset [
+    "desktop"
+    "developer"
+    "personal"
+    "full"
+  ];
+  developerOrMore = builtins.elem preset [
+    "developer"
+    "personal"
+    "full"
+  ];
   shellOverlays = import ./shell-overlays.nix { inherit inputs; };
 
   flakePackagesOverlay =
     _final: prev:
     let
-      shellPackages = shellOverlays.shellPackagesFor { inherit prev system; };
-      flakePackages = shellPackages // {
-        claude-code = inputs.claude-code.packages.${system}.default;
-        codex = inputs.codex.packages.${system}.default;
+      corePackages = {
         neovim = inputs.neovim-nightly-overlay.packages.${system}.default;
-        zen-browser = inputs.zen-browser.packages.${system}.default;
         burpsuitepro = prev.callPackage ../pkgs/burpsuitepro.nix { };
         firefox-legacy = prev.callPackage ../pkgs/firefox-legacy.nix { };
       };
+      desktopPackages =
+        if desktopOrMore then
+          shellOverlays.shellPackagesFor { inherit prev system; }
+          // {
+            zen-browser = inputs.zen-browser.packages.${system}.default;
+          }
+        else
+          { };
+      developerPackages =
+        if developerOrMore then
+          {
+            claude-code = inputs.claude-code.packages.${system}.default;
+            codex = inputs.codex.packages.${system}.default;
+          }
+        else
+          { };
+      flakePackages = corePackages // desktopPackages // developerPackages;
       wahrweltPackages = (prev.wahrwelt or (prev.mysetup or { })) // flakePackages;
     in
     flakePackages

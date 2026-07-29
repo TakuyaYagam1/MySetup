@@ -23,6 +23,8 @@
   ];
   dev = with pkgs; [
     vscode
+    claude-code
+    codex
   ];
   personal = with pkgs; [
     google-chrome
@@ -43,8 +45,6 @@
     qtcreator
     antigravity-ide
     gemini-cli
-    claude-code
-    codex
     ollama
     opencode
     opencode-claude-auth

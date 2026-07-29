@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"reflect"
 	"regexp"
@@ -69,6 +70,40 @@ func TestWahrweltFlakeURLChannels(t *testing.T) {
 		if got := WahrweltFlakeURL(channel); got != want {
 			t.Fatalf("WahrweltFlakeURL(%q) = %q, want %q", channel, got, want)
 		}
+	}
+}
+
+func TestWahrweltPresetFlakeURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		channel string
+		preset  string
+		want    string
+	}{
+		{
+			name:    "stable minimal",
+			channel: SourceChannelStable,
+			preset:  "minimal",
+			want:    "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS/presets/minimal",
+		},
+		{
+			name:    "development developer",
+			channel: SourceChannelDevelopment,
+			preset:  "developer",
+			want:    "github:TakuyaYagam1/wahrwelt/dev?dir=Linux/NixOS/presets/developer",
+		},
+		{
+			name:   "default channel personal",
+			preset: "personal",
+			want:   "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS/presets/personal",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := WahrweltPresetFlakeURL(test.channel, test.preset); got != test.want {
+				t.Fatalf("WahrweltPresetFlakeURL(%q, %q) = %q, want %q", test.channel, test.preset, got, test.want)
+			}
+		})
 	}
 }
 
@@ -220,6 +255,57 @@ func TestPackagePresetChoicesMatchNixContracts(t *testing.T) {
 		if !strings.Contains(string(optionsNix), want) {
 			t.Fatalf("Wahrwelt must be canonical and mysetup must remain its legacy option alias; missing %q\n%s", want, optionsNix)
 		}
+	}
+}
+
+func TestPackagePresetsHaveDedicatedFlakeEntrypoints(t *testing.T) {
+	for _, preset := range PackagePresets {
+		entrypoint := "../../../NixOS/presets/" + preset + "/flake.nix"
+		if _, err := os.Stat(entrypoint); err != nil {
+			t.Errorf("package preset %q must have a dedicated flake entrypoint at %s: %v", preset, entrypoint, err)
+		}
+	}
+}
+
+func TestPackagePresetLocksContainOnlyTheirDependencyTier(t *testing.T) {
+	type lockFile struct {
+		Nodes map[string]json.RawMessage `json:"nodes"`
+	}
+	requiredByPreset := map[string][]string{
+		"minimal":   {"nixpkgs", "home-manager", "neovim-nightly-overlay"},
+		"desktop":   {"caelestia-shell", "noctalia", "quickshell", "zen-browser"},
+		"developer": {"caelestia-shell", "noctalia", "claude-code", "codex", "codex-desktop-linux"},
+		"personal":  {"caelestia-shell", "noctalia", "claude-code", "codex", "codex-desktop-linux"},
+	}
+	forbiddenByPreset := map[string][]string{
+		"minimal":   {"caelestia-shell", "noctalia", "quickshell", "zen-browser", "claude-code", "codex", "codex-desktop-linux", "lanzaboote"},
+		"desktop":   {"claude-code", "codex", "codex-desktop-linux", "lanzaboote"},
+		"developer": {"lanzaboote"},
+		"personal":  {"lanzaboote"},
+	}
+
+	for _, preset := range PackagePresets {
+		t.Run(preset, func(t *testing.T) {
+			path := "../../../NixOS/presets/" + preset + "/flake.lock"
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var lock lockFile
+			if err := json.Unmarshal(data, &lock); err != nil {
+				t.Fatalf("parse %s: %v", path, err)
+			}
+			for _, name := range requiredByPreset[preset] {
+				if _, ok := lock.Nodes[name]; !ok {
+					t.Errorf("%s lock must include %q", preset, name)
+				}
+			}
+			for _, name := range forbiddenByPreset[preset] {
+				if _, ok := lock.Nodes[name]; ok {
+					t.Errorf("%s lock must not include %q", preset, name)
+				}
+			}
+		})
 	}
 }
 

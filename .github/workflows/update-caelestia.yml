@@ -103,7 +103,13 @@ jobs:
       - name: Patch flake inputs
         if: steps.compare.outputs.should_update == 'true'
         run: |
-          for f in flake.nix Linux/NixOS/flake.nix; do
+          for f in \
+            flake.nix \
+            Linux/NixOS/flake.nix \
+            Linux/NixOS/lib/preset-inputs.nix \
+            Linux/NixOS/presets/desktop/flake.nix \
+            Linux/NixOS/presets/developer/flake.nix \
+            Linux/NixOS/presets/personal/flake.nix; do
             if [ "${{ steps.resolve.outputs.shell_should }}" = "true" ]; then
               sed -i -E 's|url = "github:caelestia-dots/shell(/[^"]*)?"|url = "github:caelestia-dots/shell/v${{ steps.resolve.outputs.shell_target }}"|' "$f"
             fi
@@ -117,6 +123,10 @@ jobs:
         run: |
           nix --extra-experimental-features 'nix-command flakes' flake lock
           nix --extra-experimental-features 'nix-command flakes' flake lock "$FLAKE"
+          for preset in desktop developer personal; do
+            nix --extra-experimental-features 'nix-command flakes' flake lock \
+              "path:${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/${preset}"
+          done
 
       - name: Evaluate Caelestia integration
         if: steps.compare.outputs.should_update == 'true'
@@ -146,11 +156,18 @@ jobs:
             flake.lock
             Linux/NixOS/flake.nix
             Linux/NixOS/flake.lock
+            Linux/NixOS/lib/preset-inputs.nix
+            Linux/NixOS/presets/desktop/flake.nix
+            Linux/NixOS/presets/desktop/flake.lock
+            Linux/NixOS/presets/developer/flake.nix
+            Linux/NixOS/presets/developer/flake.lock
+            Linux/NixOS/presets/personal/flake.nix
+            Linux/NixOS/presets/personal/flake.lock
           title: "chore(nix): update caelestia-shell/cli"
           body: |
             ## What
 
-            Pins `caelestia-shell` to `v${{ steps.resolve.outputs.shell_target }}` and `caelestia-cli` to `v${{ steps.resolve.outputs.cli_target }}` (only the ones that actually changed), in both the root flake and `Linux/NixOS`.
+            Pins `caelestia-shell` to `v${{ steps.resolve.outputs.shell_target }}` and `caelestia-cli` to `v${{ steps.resolve.outputs.cli_target }}` (only the ones that actually changed), in the root, full NixOS, and desktop-or-higher preset flakes.
 
             ## Why
 

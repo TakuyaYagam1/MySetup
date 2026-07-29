@@ -4,7 +4,6 @@ _:
   imports = [
     ../system/boot/grub.nix
     ../system/boot/plymouth.nix
-    ../system/boot/secure.nix
     ../system/locale.nix
     ../system/networking.nix
     ../system/security.nix

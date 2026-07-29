@@ -10,7 +10,7 @@ let
   wahrweltPkgs = pkgs.wahrwelt or (pkgs.mysetup or { });
 in
 {
-  config = lib.mkIf (wahrweltLib.presets.personal wahrwelt) {
+  config = lib.mkIf (wahrweltLib.presets.developerOrMore wahrwelt) {
     programs.codexDesktopLinux = {
       enable = true;
       cliPackage = wahrweltPkgs.codex;
