@@ -53,7 +53,7 @@ end4) via `source = $hypr/shell-common-keybinds.conf` and
 | `Super+Shift+V` | VS Code |
 | `Super+Shift+Z` | Zed |
 | `Super+Shift+D` | DataGrip |
-| `Super+Shift+A` | Antigravity (Gemini CLI) |
+| `Super+Shift+A` | Antigravity IDE (`antigravity-ide`) |
 | `Super+Shift+Q` | AmneziaVPN |
 | `Super+Shift, v2rayN` | v2rayN |
 | `Super+Shift+B` | Vesktop (Discord) |

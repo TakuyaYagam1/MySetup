@@ -105,6 +105,43 @@ func TestShellKeybindProfilesUseExpectedLaunchers(t *testing.T) {
 	}
 }
 
+func TestAntigravityKeybindUsesInstalledExecutable(t *testing.T) {
+	data, err := os.ReadFile("../../../dots/hypr/variables.lua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `antigravity = "antigravity-ide"`) {
+		t.Fatalf("Antigravity keybind must use the installed antigravity-ide executable\n%s", string(data))
+	}
+
+	docs, err := os.ReadFile("../../../keybinds.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(docs), "| `Super+Shift+A` | Antigravity IDE (`antigravity-ide`) |") {
+		t.Fatalf("keybinds.md must document the installed Antigravity IDE executable\n%s", string(docs))
+	}
+}
+
+func TestCodexDesktopLauncherUsesCodexAppName(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/home/programs/codex-desktop.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		`"Name=ChatGPT"`,
+		`"Name=Codex App"`,
+		`"${codexDesktopBase}/bin/codex-desktop"`,
+		`"$out/bin/codex-desktop"`,
+		"package = codexDesktopPackage;",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("Codex Desktop launcher rename contract missing %q\n%s", want, text)
+		}
+	}
+}
+
 func TestHyprKeybindFilesDoNotContainUnexpectedDuplicateChords(t *testing.T) {
 	allowed := map[string]bool{
 		"hyprland/keybinds.lua|CTRL+SUPER+ALT+Backslash": true,
