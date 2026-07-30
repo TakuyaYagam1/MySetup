@@ -26,32 +26,39 @@ let
   '';
   # On-demand launchers for the chrome-devtools MCP server. The debug port is a
   # live credential (full control of the profile's cookies/sessions), so these are
-  # NOT auto-started: the port only exists while the window is open. Chromium
-  # defaults to 9222 (matches the MCP's default --browser-url) and Chrome to 9223,
-  # deliberately different so both can run at once without a port/profile-lock
-  # collision - override either with CHROME_DEBUG_PORT if the MCP is pinned
-  # elsewhere. Isolated --user-data-dir is mandatory - Chrome >=136 ignores
-  # --remote-debugging-port on the default profile. The port binds to loopback by
-  # default; never add --remote-debugging-address.
+  # NOT auto-started: the port only exists while the window is open. Both launchers
+  # use Chromium because branded Google Chrome ignores --load-extension since 137.
+  # Their deliberately separate ports and profiles let two MCP servers run without
+  # a port or profile-lock collision. CHROME_DEBUG_PORT can still override either
+  # port for an externally pinned MCP. The port binds to loopback by default;
+  # never add --remote-debugging-address.
   personalDebugFunctions = {
-    chrome-debug = ''
-      set -l port 9223
-      set -q CHROME_DEBUG_PORT; and set port $CHROME_DEBUG_PORT
-      ${chatGPTExtensionArgs}
-      google-chrome-stable \
-          --remote-debugging-port=$port \
-          --user-data-dir="$HOME/.chrome-debug-profile" \
-          $extension_args $argv
-    '';
-
-    chromium-debug = ''
+    chromium-9222 = ''
       set -l port 9222
       set -q CHROME_DEBUG_PORT; and set port $CHROME_DEBUG_PORT
       ${chatGPTExtensionArgs}
       chromium \
           --remote-debugging-port=$port \
-          --user-data-dir="$HOME/.chromium-debug-profile" \
+          --user-data-dir="$HOME/.chromium-debug-9222-profile" \
           $extension_args $argv
+    '';
+
+    chromium-9223 = ''
+      set -l port 9223
+      set -q CHROME_DEBUG_PORT; and set port $CHROME_DEBUG_PORT
+      ${chatGPTExtensionArgs}
+      chromium \
+          --remote-debugging-port=$port \
+          --user-data-dir="$HOME/.chromium-debug-9223-profile" \
+          $extension_args $argv
+    '';
+
+    chromium-debug = ''
+      chromium-9222 $argv
+    '';
+
+    chrome-debug = ''
+      chromium-9223 $argv
     '';
   };
 in

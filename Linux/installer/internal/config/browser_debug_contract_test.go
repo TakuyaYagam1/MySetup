@@ -30,7 +30,12 @@ func TestBrowserDebugFishFunctionsArePersonalOnly(t *testing.T) {
 	}
 
 	personalFunctions := source[personalStart:configStart]
-	for _, name := range []string{"chrome-debug = ''", "chromium-debug = ''"} {
+	for _, name := range []string{
+		"chromium-9222 = ''",
+		"chromium-9223 = ''",
+		"chromium-debug = ''",
+		"chrome-debug = ''",
+	} {
 		if !strings.Contains(personalFunctions, name) {
 			t.Fatalf("%s must only exist in personalDebugFunctions\n%s", name, source)
 		}
@@ -60,6 +65,35 @@ func TestBrowserDebugFishFunctionsLoadLatestChatGPTExtension(t *testing.T) {
 	}
 
 	if strings.Count(source, "$extension_args $argv") != 2 {
-		t.Fatalf("both browser launchers must pass the resolved extension argument\n%s", source)
+		t.Fatalf("both canonical Chromium launchers must pass the resolved extension argument\n%s", source)
+	}
+}
+
+func TestBrowserDebugFishFunctionsUseChromiumOnBothPorts(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/home/programs/fish.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+
+	for _, want := range []string{
+		"chromium-9222 = ''",
+		"set -l port 9222",
+		`--user-data-dir="$HOME/.chromium-debug-9222-profile"`,
+		"chromium-9223 = ''",
+		"set -l port 9223",
+		`--user-data-dir="$HOME/.chromium-debug-9223-profile"`,
+		"chromium-debug = ''",
+		"chromium-9222 $argv",
+		"chrome-debug = ''",
+		"chromium-9223 $argv",
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("dual Chromium launcher contract missing %q\n%s", want, source)
+		}
+	}
+
+	if strings.Contains(source, "google-chrome-stable") {
+		t.Fatalf("browser debug launchers must not use branded Google Chrome\n%s", source)
 	}
 }
