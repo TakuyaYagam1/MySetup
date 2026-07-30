@@ -55,7 +55,10 @@ jobs:
       - name: Update preset flake inputs
         run: |
           for preset in minimal desktop developer personal; do
-            nix flake update "path:${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/${preset}"
+            (
+              cd "Linux/NixOS/presets/${preset}"
+              nix flake update
+            )
           done
 
       - name: Check public flake
@@ -67,8 +70,8 @@ jobs:
       - name: Check preset flakes
         run: |
           for preset in minimal desktop developer personal; do
-            nix flake check --no-build --no-write-lock-file \
-              "path:${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/${preset}"
+            preset_flake="git+file://${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/${preset}"
+            nix flake check --no-build --no-write-lock-file "$preset_flake"
           done
 
       - name: Build public Wahrwelt package

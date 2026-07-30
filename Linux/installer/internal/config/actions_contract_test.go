@@ -45,3 +45,26 @@ func TestGitHubActionsUseCurrentVersionTags(t *testing.T) {
 		}
 	}
 }
+
+func TestPresetFlakeUpdaterUsesDirectoryFlakeReferences(t *testing.T) {
+	workflow, err := os.ReadFile("../../../../.github/workflows/update-flake.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(workflow)
+
+	for _, want := range []string{
+		`cd "Linux/NixOS/presets/${preset}"`,
+		`nix flake update`,
+		`preset_flake="git+file://${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/${preset}"`,
+		`nix flake check --no-build --no-write-lock-file "$preset_flake"`,
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("preset updater must use directory flake reference %q\n%s", want, source)
+		}
+	}
+
+	if strings.Contains(source, `path:${GITHUB_WORKSPACE}/Linux/NixOS/presets/`) {
+		t.Fatalf("preset checks must not use a path URI that excludes shared NixOS sources\n%s", source)
+	}
+}
