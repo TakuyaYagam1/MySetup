@@ -33,14 +33,21 @@ func TestBrowserDebugFishFunctionsArePersonalOnly(t *testing.T) {
 	for _, name := range []string{
 		"chromium-9222 = ''",
 		"chromium-9223 = ''",
-		"chromium-debug = ''",
-		"chrome-debug = ''",
 	} {
 		if !strings.Contains(personalFunctions, name) {
 			t.Fatalf("%s must only exist in personalDebugFunctions\n%s", name, source)
 		}
 		if strings.Contains(source[configStart:], name) {
 			t.Fatalf("%s leaked into the common Fish function set\n%s", name, source)
+		}
+	}
+
+	for _, legacyName := range []string{
+		"chromium-debug = ''",
+		"chrome-debug = ''",
+	} {
+		if strings.Contains(source, legacyName) {
+			t.Fatalf("legacy browser debug alias %s must not be generated\n%s", legacyName, source)
 		}
 	}
 }
@@ -83,10 +90,6 @@ func TestBrowserDebugFishFunctionsUseChromiumOnBothPorts(t *testing.T) {
 		"chromium-9223 = ''",
 		"set -l port 9223",
 		`--user-data-dir="$HOME/.chromium-debug-9223-profile"`,
-		"chromium-debug = ''",
-		"chromium-9222 $argv",
-		"chrome-debug = ''",
-		"chromium-9223 $argv",
 	} {
 		if !strings.Contains(source, want) {
 			t.Fatalf("dual Chromium launcher contract missing %q\n%s", want, source)

@@ -52,14 +52,6 @@ let
           --user-data-dir="$HOME/.chromium-debug-9223-profile" \
           $extension_args $argv
     '';
-
-    chromium-debug = ''
-      chromium-9222 $argv
-    '';
-
-    chrome-debug = ''
-      chromium-9223 $argv
-    '';
   };
 in
 {
