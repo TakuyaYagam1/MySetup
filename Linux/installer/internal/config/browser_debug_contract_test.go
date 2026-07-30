@@ -31,8 +31,8 @@ func TestBrowserDebugFishFunctionsArePersonalOnly(t *testing.T) {
 
 	personalFunctions := source[personalStart:configStart]
 	for _, name := range []string{
-		"chromium-9222 = ''",
-		"chromium-9223 = ''",
+		"chrome-9222 = ''",
+		"chrome-9223 = ''",
 	} {
 		if !strings.Contains(personalFunctions, name) {
 			t.Fatalf("%s must only exist in personalDebugFunctions\n%s", name, source)
@@ -45,6 +45,8 @@ func TestBrowserDebugFishFunctionsArePersonalOnly(t *testing.T) {
 	for _, legacyName := range []string{
 		"chromium-debug = ''",
 		"chrome-debug = ''",
+		"chromium-9222 = ''",
+		"chromium-9223 = ''",
 	} {
 		if strings.Contains(source, legacyName) {
 			t.Fatalf("legacy browser debug alias %s must not be generated\n%s", legacyName, source)
@@ -52,31 +54,28 @@ func TestBrowserDebugFishFunctionsArePersonalOnly(t *testing.T) {
 	}
 }
 
-func TestBrowserDebugFishFunctionsLoadLatestChatGPTExtension(t *testing.T) {
+func TestBrowserDebugFishFunctionsDoNotLoadChatGPTExtension(t *testing.T) {
 	data, err := os.ReadFile("../../../NixOS/home/programs/fish.nix")
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := string(data)
 
-	for _, want := range []string{
+	for _, forbidden := range []string{
 		`$HOME/.config/google-chrome/Default/Extensions/hehggadaopoacecdllhhajmbjkdcmajg`,
 		`find "$chatgpt_root" -mindepth 1 -maxdepth 1 -type d`,
 		"sort -V",
 		`test -f "$chatgpt_extension/manifest.json"`,
 		`set extension_args "--load-extension=$chatgpt_extension"`,
+		"$extension_args $argv",
 	} {
-		if !strings.Contains(source, want) {
-			t.Fatalf("dynamic ChatGPT extension loading contract missing %q\n%s", want, source)
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("browser debug launchers must not inject the ChatGPT extension via %q\n%s", forbidden, source)
 		}
-	}
-
-	if strings.Count(source, "$extension_args $argv") != 2 {
-		t.Fatalf("both canonical Chromium launchers must pass the resolved extension argument\n%s", source)
 	}
 }
 
-func TestBrowserDebugFishFunctionsUseChromiumOnBothPorts(t *testing.T) {
+func TestBrowserDebugFishFunctionsUseGoogleChromeOnBothPorts(t *testing.T) {
 	data, err := os.ReadFile("../../../NixOS/home/programs/fish.nix")
 	if err != nil {
 		t.Fatal(err)
@@ -84,19 +83,25 @@ func TestBrowserDebugFishFunctionsUseChromiumOnBothPorts(t *testing.T) {
 	source := string(data)
 
 	for _, want := range []string{
-		"chromium-9222 = ''",
+		"chrome-9222 = ''",
 		"set -l port 9222",
 		`--user-data-dir="$HOME/.chromium-debug-9222-profile"`,
-		"chromium-9223 = ''",
+		"chrome-9223 = ''",
 		"set -l port 9223",
 		`--user-data-dir="$HOME/.chromium-debug-9223-profile"`,
+		"google-chrome-stable \\",
 	} {
 		if !strings.Contains(source, want) {
 			t.Fatalf("dual Chromium launcher contract missing %q\n%s", want, source)
 		}
 	}
 
-	if strings.Contains(source, "google-chrome-stable") {
-		t.Fatalf("browser debug launchers must not use branded Google Chrome\n%s", source)
+	for _, forbidden := range []string{
+		"chromium-9222 = ''",
+		"chromium-9223 = ''",
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("legacy Chromium launcher %q must not be generated\n%s", forbidden, source)
+		}
 	}
 }

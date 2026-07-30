@@ -7,50 +7,31 @@
 
 let
   personal = wahrweltLib.presets.personal wahrwelt;
-  chatGPTExtensionArgs = ''
-    set -l chatgpt_root "$HOME/.config/google-chrome/Default/Extensions/hehggadaopoacecdllhhajmbjkdcmajg"
-    set -l chatgpt_extension
-    set -l extension_args
-
-    if test -d "$chatgpt_root"
-        set chatgpt_extension (
-            command find "$chatgpt_root" -mindepth 1 -maxdepth 1 -type d \
-                | sort -V \
-                | tail -n 1
-        )
-    end
-
-    if test -n "$chatgpt_extension"; and test -f "$chatgpt_extension/manifest.json"
-        set extension_args "--load-extension=$chatgpt_extension"
-    end
-  '';
   # On-demand launchers for the chrome-devtools MCP server. The debug port is a
   # live credential (full control of the profile's cookies/sessions), so these are
-  # NOT auto-started: the port only exists while the window is open. Both launchers
-  # use Chromium because branded Google Chrome ignores --load-extension since 137.
-  # Their deliberately separate ports and profiles let two MCP servers run without
+  # NOT auto-started: the port only exists while the window is open. Their
+  # deliberately separate ports and profiles let two MCP servers run without
   # a port or profile-lock collision. CHROME_DEBUG_PORT can still override either
   # port for an externally pinned MCP. The port binds to loopback by default;
-  # never add --remote-debugging-address.
+  # never add --remote-debugging-address. Google Chrome is used because the
+  # ChatGPT extension requires branded Chrome.
   personalDebugFunctions = {
-    chromium-9222 = ''
+    chrome-9222 = ''
       set -l port 9222
       set -q CHROME_DEBUG_PORT; and set port $CHROME_DEBUG_PORT
-      ${chatGPTExtensionArgs}
-      chromium \
+      google-chrome-stable \
           --remote-debugging-port=$port \
           --user-data-dir="$HOME/.chromium-debug-9222-profile" \
-          $extension_args $argv
+          $argv
     '';
 
-    chromium-9223 = ''
+    chrome-9223 = ''
       set -l port 9223
       set -q CHROME_DEBUG_PORT; and set port $CHROME_DEBUG_PORT
-      ${chatGPTExtensionArgs}
-      chromium \
+      google-chrome-stable \
           --remote-debugging-port=$port \
           --user-data-dir="$HOME/.chromium-debug-9223-profile" \
-          $extension_args $argv
+          $argv
     '';
   };
 in
