@@ -68,11 +68,11 @@ jobs:
       - name: Build public shell module check
         run: nix build --no-link --print-build-logs .#checks.x86_64-linux.shells-module
 
-      - name: Check preset flakes
+      - name: Evaluate preset NixOS hosts
         run: |
           for preset in minimal desktop developer personal; do
-            preset_flake="git+file://${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/${preset}"
-            nix flake check --no-build --no-write-lock-file "$preset_flake"
+            nix eval --raw --no-write-lock-file \
+              "path:${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/${preset}#checks.x86_64-linux.preset-host.drvPath"
           done
 
       - name: Build public Wahrwelt package
@@ -146,7 +146,7 @@ jobs:
 
             - `nix flake check --no-build`
             - `nix build --no-link --print-build-logs .#checks.x86_64-linux.shells-module`
-            - preset `nix flake check --no-build --no-write-lock-file`
+            - preset `nix eval --raw --no-write-lock-file …#checks.x86_64-linux.preset-host.drvPath`
             - `nix build .#wahrwelt --print-build-logs`
             - `nix build --no-link .#mysetup --print-build-logs`
             - `./result/bin/wahrwelt --help`

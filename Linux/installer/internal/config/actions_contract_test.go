@@ -56,15 +56,15 @@ func TestPresetFlakeUpdaterUsesDirectoryFlakeReferences(t *testing.T) {
 	for _, want := range []string{
 		`update_flake_without_codex "Linux/NixOS/presets/${preset}"`,
 		`nix flake update "${input_names[@]}"`,
-		`preset_flake="git+file://${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/${preset}"`,
-		`nix flake check --no-build --no-write-lock-file "$preset_flake"`,
+		`nix eval --raw --no-write-lock-file`,
+		`"path:${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/${preset}#checks.x86_64-linux.preset-host.drvPath"`,
 	} {
 		if !strings.Contains(source, want) {
 			t.Fatalf("preset updater must use directory flake reference %q\n%s", want, source)
 		}
 	}
 
-	if strings.Contains(source, `path:${GITHUB_WORKSPACE}/Linux/NixOS/presets/`) {
-		t.Fatalf("preset checks must not use a path URI that excludes shared NixOS sources\n%s", source)
+	if strings.Contains(source, `nix flake check --no-build --no-write-lock-file "$preset_flake"`) {
+		t.Fatalf("preset checks must evaluate preset-host.drvPath instead of checking unbuilt outputs\n%s", source)
 	}
 }
