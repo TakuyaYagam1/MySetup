@@ -33,20 +33,33 @@ jobs:
             keep-outputs = true
             experimental-features = nix-command flakes
 
-      - name: Update flake inputs
-        run: nix flake update
-
-      - name: Update NixOS flake inputs
-        working-directory: Linux/NixOS
-        run: nix flake update
-
-      - name: Update preset flake inputs
+      - name: Update managed flake inputs
         run: |
-          for preset in minimal desktop developer personal; do
-            (
-              cd "Linux/NixOS/presets/${preset}"
-              nix flake update
+          update_flake_without_codex() {
+            local flake_dir="$1"
+            local -a input_names
+
+            mapfile -t input_names < <(
+              jq -r '.nodes.root.inputs | keys[] | select(. != "codex-desktop-linux")' \
+                "$flake_dir/flake.lock"
             )
+
+            if [ "${#input_names[@]}" -eq 0 ]; then
+              echo "::error::No flake inputs found in $flake_dir/flake.lock"
+              exit 1
+            fi
+
+            (
+              cd "$flake_dir"
+              nix flake update "${input_names[@]}"
+            )
+          }
+
+          update_flake_without_codex .
+          update_flake_without_codex Linux/NixOS
+
+          for preset in minimal desktop developer personal; do
+            update_flake_without_codex "Linux/NixOS/presets/${preset}"
           done
 
       - name: Check public flake

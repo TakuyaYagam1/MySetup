@@ -1,0 +1,133 @@
+name: Update Codex Desktop
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-codex-desktop
+  cancel-in-progress: false
+
+jobs:
+  update-codex-desktop:
+    runs-on: ubuntu-latest
+    env:
+      CODEX_DESKTOP_REPOSITORY: https://github.com/ilysenko/codex-desktop-linux.git
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31.11.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Resolve upstream revision
+        id: upstream
+        run: |
+          set -euo pipefail
+
+          revision="$(git ls-remote "$CODEX_DESKTOP_REPOSITORY" HEAD | awk 'NR == 1 { print $1 }')"
+          if ! [[ "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not resolve an immutable Codex Desktop revision"
+            exit 1
+          fi
+
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+      - name: Compare and update Codex Desktop locks
+        id: update
+        env:
+          TARGET_REVISION: ${{ steps.upstream.outputs.revision }}
+        run: |
+          set -euo pipefail
+
+          managed_locks=(
+            flake.lock
+            Linux/NixOS/flake.lock
+            Linux/NixOS/presets/developer/flake.lock
+            Linux/NixOS/presets/personal/flake.lock
+          )
+
+          all_current=true
+          for lock_file in "${managed_locks[@]}"; do
+            revision="$(jq -r '.nodes["codex-desktop-linux"].locked.rev // empty' "$lock_file")"
+            if [ "$revision" != "$TARGET_REVISION" ]; then
+              all_current=false
+            fi
+          done
+
+          if [ "$all_current" = true ]; then
+            echo "Codex Desktop is already pinned to $TARGET_REVISION"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          nix flake update codex-desktop-linux
+          (
+            cd Linux/NixOS
+            nix flake update codex-desktop-linux
+          )
+          for preset in developer personal; do
+            (
+              cd "Linux/NixOS/presets/$preset"
+              nix flake update codex-desktop-linux
+            )
+          done
+
+          for lock_file in "${managed_locks[@]}"; do
+            revision="$(jq -r '.nodes["codex-desktop-linux"].locked.rev // empty' "$lock_file")"
+            if [ "$revision" != "$TARGET_REVISION" ]; then
+              echo "::error::$lock_file resolved $revision, expected $TARGET_REVISION"
+              exit 1
+            fi
+          done
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build updated developer preset host
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          nix build --no-link --print-build-logs --no-write-lock-file \
+            "git+file://${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/developer#checks.x86_64-linux.preset-host"
+
+      - name: Create pull request
+        id: cpr
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v8.1.1
+        with:
+          token: ${{ secrets.WAHRWELT_AUTOMATION_TOKEN }}
+          commit-message: "chore(nix): update codex desktop"
+          branch: update-codex-desktop
+          delete-branch: true
+          add-paths: |
+            flake.lock
+            Linux/NixOS/flake.lock
+            Linux/NixOS/presets/developer/flake.lock
+            Linux/NixOS/presets/personal/flake.lock
+          title: "chore(nix): update Codex Desktop"
+          body: |
+            ## What
+
+            Refreshes the immutable `ilysenko/codex-desktop-linux` revision in every lock that owns it.
+
+            ## Verification
+
+            - Resolved upstream Git `HEAD` to an exact commit.
+            - Verified all managed locks resolve to that same commit.
+            - Built the developer preset host, including the actual Codex Desktop package and mutable DMG hash check.
+
+      - name: Validate and merge pull request
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.WAHRWELT_AUTOMATION_TOKEN }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+        run: bash .github/scripts/merge-automation-pr.sh "$PR_NUMBER"

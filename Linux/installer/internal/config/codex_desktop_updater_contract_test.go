@@ -1,0 +1,57 @@
+package config
+
+import (
+	"os"
+	"strings"
+	"testing"
+)
+
+func TestCodexDesktopUpdaterBuildsBeforePublishing(t *testing.T) {
+	workflow, err := os.ReadFile("../../../../.github/workflows/update-codex-desktop.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(workflow)
+
+	for _, want := range []string{
+		"name: Update Codex Desktop",
+		`- cron: "0 0 * * *"`,
+		"CODEX_DESKTOP_REPOSITORY: https://github.com/ilysenko/codex-desktop-linux.git",
+		`git ls-remote "$CODEX_DESKTOP_REPOSITORY" HEAD`,
+		"nix flake update codex-desktop-linux",
+		"flake.lock",
+		"Linux/NixOS/flake.lock",
+		"Linux/NixOS/presets/developer/flake.lock",
+		"Linux/NixOS/presets/personal/flake.lock",
+		"git+file://${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/developer",
+		"checks.x86_64-linux.preset-host",
+		"nix build --no-link --print-build-logs --no-write-lock-file",
+		"peter-evans/create-pull-request@",
+		"secrets.WAHRWELT_AUTOMATION_TOKEN",
+		`bash .github/scripts/merge-automation-pr.sh "$PR_NUMBER"`,
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("Codex Desktop updater contract missing %q\n%s", want, source)
+		}
+	}
+}
+
+func TestGenericFlakeUpdaterExcludesCodexDesktop(t *testing.T) {
+	workflow, err := os.ReadFile("../../../../.github/workflows/update-flake.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(workflow)
+
+	for _, want := range []string{
+		"update_flake_without_codex",
+		`select(. != "codex-desktop-linux")`,
+		"update_flake_without_codex .",
+		"update_flake_without_codex Linux/NixOS",
+		"update_flake_without_codex \"Linux/NixOS/presets/${preset}\"",
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("generic flake updater must exclude Codex Desktop via %q\n%s", want, source)
+		}
+	}
+}

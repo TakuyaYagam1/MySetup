@@ -54,8 +54,8 @@ func TestPresetFlakeUpdaterUsesDirectoryFlakeReferences(t *testing.T) {
 	source := string(workflow)
 
 	for _, want := range []string{
-		`cd "Linux/NixOS/presets/${preset}"`,
-		`nix flake update`,
+		`update_flake_without_codex "Linux/NixOS/presets/${preset}"`,
+		`nix flake update "${input_names[@]}"`,
 		`preset_flake="git+file://${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/${preset}"`,
 		`nix flake check --no-build --no-write-lock-file "$preset_flake"`,
 	} {
