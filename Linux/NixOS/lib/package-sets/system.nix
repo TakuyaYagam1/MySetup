@@ -72,7 +72,11 @@ in
     btop
     htop
     neohtop
-    glances
+    # Glances 4.5.5's localhost HTTP/XML-RPC integration tests are not
+    # sandbox-safe in the current nixpkgs build environment.
+    (glances.overridePythonAttrs (_: {
+      doCheck = false;
+    }))
   ];
   systemDesktop =
     (with pkgs; [

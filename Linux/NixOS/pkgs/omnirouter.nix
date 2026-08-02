@@ -52,6 +52,10 @@ buildNpmPackage' rec {
 
   env = {
     NEXT_TELEMETRY_DISABLED = "1";
+    # Turbopack's native memory use exceeds GitHub-hosted runner capacity on
+    # current OmniRouter releases. Webpack is the upstream-supported fallback.
+    OMNIROUTE_USE_TURBOPACK = "0";
+    OMNIROUTE_BUILD_MEMORY_MB = "4096";
     npm_config_arch = stdenv.hostPlatform.parsed.cpu.name;
     SHARP_IGNORE_GLOBAL_LIBVIPS = "0";
     ONNXRUNTIME_NODE_INSTALL = "skip";
