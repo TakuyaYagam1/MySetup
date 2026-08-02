@@ -74,4 +74,18 @@ rec {
       ];
     });
   };
+
+  app2unitScdocCompatibilityOverlay = _final: prev: {
+    # app2unit 1.4.2's manpage uses nested scdoc inline formatting, which
+    # scdoc 1.11 rejects. Upstream fixed the document in 1.4.4.
+    app2unit = prev.app2unit.overrideAttrs (_: {
+      version = "1.4.4";
+      src = prev.fetchFromGitHub {
+        owner = "Vladimir-csp";
+        repo = "app2unit";
+        rev = "v1.4.4";
+        hash = "sha256-TIY+/9ekGub+10uyqXy5aYU+2NLysMtaQnD1PIjBCFA=";
+      };
+    });
+  };
 }

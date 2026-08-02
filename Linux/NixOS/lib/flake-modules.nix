@@ -15,6 +15,7 @@ rec {
       overlays.valkeyNoCheckOverlay
       overlays.omnirouterFromWahrweltOverlay
       overlays.pipxTestCompatibilityOverlay
+      overlays.app2unitScdocCompatibilityOverlay
     ];
   };
 
