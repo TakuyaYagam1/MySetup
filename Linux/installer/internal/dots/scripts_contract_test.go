@@ -168,6 +168,27 @@ func TestCodexDesktopChromeBridgeActivationIsCollisionSafe(t *testing.T) {
 	}
 }
 
+func TestCodexDesktopChromeBridgeRepairsRuntimeCacheReplacement(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/home/programs/codex-desktop.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"codexChromeBridge = pkgs.writeShellApplication",
+		`$DRY_RUN_CMD ${codexChromeBridge}/bin/wahrwelt-codex-chrome-bridge`,
+		"systemd.user.services.wahrwelt-codex-chrome-bridge",
+		`ExecStart = "${codexChromeBridge}/bin/wahrwelt-codex-chrome-bridge";`,
+		"systemd.user.paths.wahrwelt-codex-chrome-bridge",
+		`PathChanged = "%h/.codex/plugins/cache/openai-bundled";`,
+		`WantedBy = [ "default.target" ];`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("Codex Chrome bridge runtime-cache repair contract missing %q\n%s", want, text)
+		}
+	}
+}
+
 func TestHyprKeybindFilesDoNotContainUnexpectedDuplicateChords(t *testing.T) {
 	allowed := map[string]bool{
 		"hyprland/keybinds.lua|CTRL+SUPER+ALT+Backslash": true,
