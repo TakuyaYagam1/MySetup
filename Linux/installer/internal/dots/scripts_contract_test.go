@@ -132,12 +132,38 @@ func TestCodexDesktopLauncherUsesCodexAppName(t *testing.T) {
 	for _, want := range []string{
 		`"Name=ChatGPT"`,
 		`"Name=Codex App"`,
+		`"Icon=codex-desktop"`,
+		`codexDesktopIcon = "${codexDesktopBase}/share/icons/hicolor/256x256/apps/codex-desktop.png";`,
+		`"Icon=${codexDesktopIcon}"`,
 		`"${codexDesktopBase}/bin/codex-desktop"`,
 		`"$out/bin/codex-desktop"`,
 		"package = codexDesktopPackage;",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("Codex Desktop launcher rename contract missing %q\n%s", want, text)
+		}
+	}
+}
+
+func TestCodexDesktopChromeBridgeActivationIsCollisionSafe(t *testing.T) {
+	data, err := os.ReadFile("../../../NixOS/home/programs/codex-desktop.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"home.activation.wahrweltCodexChromeBridge",
+		`[ "writeBoundary" ]`,
+		`runtimeAlias="$HOME/.codex/plugins/cache/openai-bundled/chrome/.codex-linux-runtime"`,
+		`runtimeTarget="$HOME/.codex/plugins/linux-runtime-cache/openai-bundled/chrome/latest"`,
+		`if [ -L "$runtimeAlias" ]; then`,
+		`readlink "$runtimeAlias"`,
+		`if [ -e "$runtimeAlias" ]; then`,
+		"Wahrwelt Codex Chrome bridge collision",
+		`ln -s "$runtimeTarget" "$runtimeAlias"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("Codex Chrome bridge activation contract missing %q\n%s", want, text)
 		}
 	}
 }
