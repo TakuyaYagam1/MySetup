@@ -38,13 +38,29 @@ let
     runtimeInputs = [ pkgs.coreutils pkgs.inotify-tools ];
     text = ''
       watchRoot="$HOME/.codex/plugins/cache/openai-bundled"
+      watchChrome="$watchRoot/chrome"
       mkdir -p "$watchRoot"
+      ${codexChromeBridge}/bin/wahrwelt-codex-chrome-bridge
 
       while true; do
-        changedName="$(${pkgs.inotify-tools}/bin/inotifywait --quiet --format '%f' --event moved_to --event create "$watchRoot")"
-        if [ "$changedName" = "chrome" ]; then
+        if [ ! -d "$watchChrome" ]; then
+          ${pkgs.inotify-tools}/bin/inotifywait --quiet --event moved_to --event create "$watchRoot"
           ${codexChromeBridge}/bin/wahrwelt-codex-chrome-bridge
+          continue
         fi
+
+        while IFS='|' read -r watchedPath changedName; do
+          changedPath="$watchedPath$changedName"
+          if [ "$changedPath" = "$watchChrome/.codex-linux-runtime" ]; then
+            continue
+          fi
+          if [ "$changedPath" = "$watchChrome" ] || [[ "$changedPath" == "$watchChrome/"* ]]; then
+            ${codexChromeBridge}/bin/wahrwelt-codex-chrome-bridge
+          fi
+        done < <(
+          ${pkgs.inotify-tools}/bin/inotifywait --monitor --quiet --format '%w|%f' \
+            --event moved_to --event create "$watchRoot" "$watchChrome"
+        )
       done
     '';
   };
