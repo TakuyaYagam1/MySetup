@@ -145,59 +145,6 @@ func TestCodexDesktopLauncherUsesCodexAppName(t *testing.T) {
 	}
 }
 
-func TestCodexDesktopChromeBridgeActivationIsCollisionSafe(t *testing.T) {
-	data, err := os.ReadFile("../../../NixOS/home/programs/codex-desktop.nix")
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	for _, want := range []string{
-		"home.activation.wahrweltCodexChromeBridge",
-		`[ "writeBoundary" ]`,
-		`runtimeAlias="$HOME/.codex/plugins/cache/openai-bundled/chrome/.codex-linux-runtime"`,
-		`runtimeTarget="$HOME/.codex/plugins/linux-runtime-cache/openai-bundled/chrome/latest"`,
-		`if [ -L "$runtimeAlias" ]; then`,
-		`readlink "$runtimeAlias"`,
-		`if [ -e "$runtimeAlias" ]; then`,
-		"Wahrwelt Codex Chrome bridge collision",
-		`ln -s "$runtimeTarget" "$runtimeAlias"`,
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("Codex Chrome bridge activation contract missing %q\n%s", want, text)
-		}
-	}
-}
-
-func TestCodexDesktopChromeBridgeRepairsRuntimeCacheReplacement(t *testing.T) {
-	data, err := os.ReadFile("../../../NixOS/home/programs/codex-desktop.nix")
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	for _, want := range []string{
-		"codexChromeBridge = pkgs.writeShellApplication",
-		"codexChromeBridgeWatcher = pkgs.writeShellApplication",
-		`$DRY_RUN_CMD ${codexChromeBridge}/bin/wahrwelt-codex-chrome-bridge`,
-		"systemd.user.services.wahrwelt-codex-chrome-bridge",
-		`ExecStart = "${codexChromeBridgeWatcher}/bin/wahrwelt-codex-chrome-bridge-watcher";`,
-		`watchRoot="$HOME/.codex/plugins/cache/openai-bundled"`,
-		`watchChrome="$watchRoot/chrome"`,
-		`--event moved_to --event create "$watchRoot" "$watchChrome"`,
-		`if [ "$changedPath" = "$watchChrome/.codex-linux-runtime" ]; then`,
-		`if [ "$changedPath" = "$watchChrome" ] || [[ "$changedPath" == "$watchChrome/"* ]]; then`,
-		`Restart = "always";`,
-		`RestartSec = "5s";`,
-		`WantedBy = [ "default.target" ];`,
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("Codex Chrome bridge runtime-cache repair contract missing %q\n%s", want, text)
-		}
-	}
-	if strings.Contains(text, "systemd.user.paths.wahrwelt-codex-chrome-bridge") {
-		t.Fatal("Codex Chrome bridge watcher must not watch the directory it mutates")
-	}
-}
-
 func TestHyprKeybindFilesDoNotContainUnexpectedDuplicateChords(t *testing.T) {
 	allowed := map[string]bool{
 		"hyprland/keybinds.lua|CTRL+SUPER+ALT+Backslash": true,

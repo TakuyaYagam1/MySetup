@@ -13,8 +13,8 @@ let
   # deliberately separate ports and profiles let two MCP servers run without
   # a port or profile-lock collision. CHROME_DEBUG_PORT can still override either
   # port for an externally pinned MCP. The port binds to loopback by default;
-  # never add --remote-debugging-address. Google Chrome is used because the
-  # ChatGPT extension requires branded Chrome.
+  # never add --remote-debugging-address. Google Chrome keeps these debug
+  # sessions consistent with the installed browser.
   personalDebugFunctions = {
     chrome-9222 = ''
       set -l port 9222
