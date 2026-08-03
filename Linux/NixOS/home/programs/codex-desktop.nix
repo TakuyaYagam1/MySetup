@@ -33,6 +33,21 @@ let
       fi
     '';
   };
+  codexChromeBridgeWatcher = pkgs.writeShellApplication {
+    name = "wahrwelt-codex-chrome-bridge-watcher";
+    runtimeInputs = [ pkgs.coreutils pkgs.inotify-tools ];
+    text = ''
+      watchRoot="$HOME/.codex/plugins/cache/openai-bundled"
+      mkdir -p "$watchRoot"
+
+      while true; do
+        changedName="$(${pkgs.inotify-tools}/bin/inotifywait --quiet --format '%f' --event moved_to --event create "$watchRoot")"
+        if [ "$changedName" = "chrome" ]; then
+          ${codexChromeBridge}/bin/wahrwelt-codex-chrome-bridge
+        fi
+      done
+    '';
+  };
   codexDesktopPackage = pkgs.symlinkJoin {
     name = "${codexDesktopBase.name}-wahrwelt";
     paths = [ codexDesktopBase ];
@@ -65,14 +80,11 @@ in
     systemd.user.services.wahrwelt-codex-chrome-bridge = {
       Unit.Description = "Repair the Codex Chrome native-messaging bridge";
       Service = {
-        Type = "oneshot";
-        ExecStart = "${codexChromeBridge}/bin/wahrwelt-codex-chrome-bridge";
+        Type = "simple";
+        ExecStart = "${codexChromeBridgeWatcher}/bin/wahrwelt-codex-chrome-bridge-watcher";
+        Restart = "always";
+        RestartSec = "5s";
       };
-    };
-
-    systemd.user.paths.wahrwelt-codex-chrome-bridge = {
-      Unit.Description = "Watch the Codex Chrome runtime cache";
-      Path.PathChanged = "%h/.codex/plugins/cache/openai-bundled";
       Install.WantedBy = [ "default.target" ];
     };
   };

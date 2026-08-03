@@ -176,16 +176,23 @@ func TestCodexDesktopChromeBridgeRepairsRuntimeCacheReplacement(t *testing.T) {
 	text := string(data)
 	for _, want := range []string{
 		"codexChromeBridge = pkgs.writeShellApplication",
+		"codexChromeBridgeWatcher = pkgs.writeShellApplication",
 		`$DRY_RUN_CMD ${codexChromeBridge}/bin/wahrwelt-codex-chrome-bridge`,
 		"systemd.user.services.wahrwelt-codex-chrome-bridge",
-		`ExecStart = "${codexChromeBridge}/bin/wahrwelt-codex-chrome-bridge";`,
-		"systemd.user.paths.wahrwelt-codex-chrome-bridge",
-		`PathChanged = "%h/.codex/plugins/cache/openai-bundled";`,
+		`ExecStart = "${codexChromeBridgeWatcher}/bin/wahrwelt-codex-chrome-bridge-watcher";`,
+		`watchRoot="$HOME/.codex/plugins/cache/openai-bundled"`,
+		`--event moved_to --event create "$watchRoot"`,
+		`if [ "$changedName" = "chrome" ]; then`,
+		`Restart = "always";`,
+		`RestartSec = "5s";`,
 		`WantedBy = [ "default.target" ];`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("Codex Chrome bridge runtime-cache repair contract missing %q\n%s", want, text)
 		}
+	}
+	if strings.Contains(text, "systemd.user.paths.wahrwelt-codex-chrome-bridge") {
+		t.Fatal("Codex Chrome bridge watcher must not watch the directory it mutates")
 	}
 }
 
