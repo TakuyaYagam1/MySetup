@@ -88,7 +88,8 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
 
   inputs = {
 {{ if eq .LockMode "independent" }}
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # Temporary compatibility pin: Hyprland 0.56.1 requires glaze < 8.
+    nixpkgs.url = "github:NixOS/nixpkgs/643809054d65fdd466a63e3155b8c498cb483c04";
     nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-26.05";
     home-manager = {
       url = "github:nix-community/home-manager";
@@ -111,7 +112,8 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
     };
 {{ end }}
     neovim-nightly-overlay = {
-      url = "github:nix-community/neovim-nightly-overlay";
+      # Temporary pin: the next nightly fails its upstream functional tests.
+      url = "github:nix-community/neovim-nightly-overlay/5522fc3be8969569a980f3d14b86600a55e713fc";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
