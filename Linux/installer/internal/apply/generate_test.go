@@ -121,7 +121,7 @@ func TestFlakeNixUsesIndependentThinWahrweltWrapper(t *testing.T) {
 	for _, want := range []string{
 		`# lock mode: independent`,
 		`nixpkgs.url = "github:NixOS/nixpkgs?rev=643809054d65fdd466a63e3155b8c498cb483c04";`,
-		`url = "github:nix-community/neovim-nightly-overlay?rev=5522fc3be8969569a980f3d14b86600a55e713fc";`,
+		`url = "github:nix-community/neovim-nightly-overlay";`,
 		`home-manager = {`,
 		`nix-index-database = {`,
 		`quickshell = {`,
@@ -182,7 +182,7 @@ func TestFlakeNixSupportsManagedThinWahrweltWrapper(t *testing.T) {
 	for _, forbidden := range []string{
 		`inputs.nixpkgs.follows = "nixpkgs";`,
 		`nixpkgs.url = "github:NixOS/nixpkgs?rev=643809054d65fdd466a63e3155b8c498cb483c04";`,
-		`url = "github:nix-community/neovim-nightly-overlay?rev=5522fc3be8969569a980f3d14b86600a55e713fc";`,
+		`url = "github:nix-community/neovim-nightly-overlay";`,
 	} {
 		if strings.Contains(out, forbidden) {
 			t.Fatalf("managed thin flake must not expose host-owned input %q\n%s", forbidden, out)
@@ -309,7 +309,7 @@ func TestFlakeNixScopesHostOwnedInputsByPreset(t *testing.T) {
 				`nixpkgs.url = "github:NixOS/nixpkgs?rev=643809054d65fdd466a63e3155b8c498cb483c04";`,
 				`home-manager = {`,
 				`neovim-nightly-overlay = {`,
-				`url = "github:nix-community/neovim-nightly-overlay?rev=5522fc3be8969569a980f3d14b86600a55e713fc";`,
+				`url = "github:nix-community/neovim-nightly-overlay";`,
 				`stylix = {`,
 				`nix-index-database = {`,
 				`# preset: ` + preset,

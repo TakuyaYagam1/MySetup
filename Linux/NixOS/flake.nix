@@ -56,8 +56,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     neovim-nightly-overlay = {
-      # Temporary pin: the next nightly fails its upstream functional tests.
-      url = "github:nix-community/neovim-nightly-overlay?rev=5522fc3be8969569a980f3d14b86600a55e713fc";
+      url = "github:nix-community/neovim-nightly-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     lanzaboote = {
