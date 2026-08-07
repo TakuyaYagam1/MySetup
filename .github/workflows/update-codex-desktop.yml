@@ -3,7 +3,9 @@ name: Update Codex Desktop
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 0 * * *"
+    # The upstream validates the mutable DMG hourly at :30. Poll its Git HEAD
+    # shortly afterwards; unchanged revisions exit before touching any lock.
+    - cron: "50 * * * *"
 
 permissions:
   contents: read
@@ -93,11 +95,40 @@ jobs:
 
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: Build updated developer preset host
+      - name: Evaluate updated developer preset
         if: steps.update.outputs.changed == 'true'
         run: |
-          nix build --no-link --print-build-logs --no-write-lock-file \
-            "git+file://${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/developer#checks.x86_64-linux.preset-host"
+          nix flake check --impure --no-build --no-write-lock-file \
+            "git+file://${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/developer"
+
+      - name: Build Codex Desktop package with retry
+        if: steps.update.outputs.changed == 'true'
+        env:
+          TARGET_REVISION: ${{ steps.upstream.outputs.revision }}
+        run: |
+          set -euo pipefail
+
+          for attempt in 1 2 3; do
+            log_file="$(mktemp)"
+            if nix build --no-link --print-build-logs --no-write-lock-file \
+              "github:ilysenko/codex-desktop-linux/${TARGET_REVISION}#packages.x86_64-linux.codex-desktop" \
+              2>&1 | tee "$log_file"; then
+              exit 0
+            fi
+
+            if ! grep -q 'hash mismatch in fixed-output derivation' "$log_file"; then
+              exit 1
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Codex Desktop DMG hash still mismatches after ${attempt} attempts"
+              exit 1
+            fi
+
+            delay_seconds=$((attempt * 120))
+            echo "Mutable Codex Desktop DMG returned a different payload; retrying in ${delay_seconds}s"
+            sleep "$delay_seconds"
+          done
 
       - name: Create pull request
         id: cpr
@@ -123,7 +154,8 @@ jobs:
 
             - Resolved upstream Git `HEAD` to an exact commit.
             - Verified all managed locks resolve to that same commit.
-            - Built the developer preset host, including the actual Codex Desktop package and mutable DMG hash check.
+            - Evaluated the developer preset without building unrelated packages.
+            - Built the upstream Codex Desktop package, including its mutable DMG hash check.
 
       - name: Validate and merge pull request
         if: steps.cpr.outputs.pull-request-number != ''
