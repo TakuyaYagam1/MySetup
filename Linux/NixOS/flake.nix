@@ -12,7 +12,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     caelestia-shell = {
-      url = "github:caelestia-dots/shell/v2.2.0";
+      url = "github:caelestia-dots/shell/v2.3.0";
       inputs = {
         caelestia-cli.follows = "caelestia-cli";
         nixpkgs.follows = "nixpkgs";
