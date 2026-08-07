@@ -14,7 +14,15 @@ wait_for_check() {
   local deadline=$((SECONDS + check_timeout_seconds))
 
   while ((SECONDS < deadline)); do
-    local payload status conclusion details_url
+    local current_head_sha payload status conclusion details_url
+    current_head_sha="$(
+      gh pr view "$pr_number" --repo "$repository" --json headRefOid --jq '.headRefOid'
+    )"
+    if [[ "$current_head_sha" != "$head_sha" ]]; then
+      echo "Pull request head changed from ${head_sha} to ${current_head_sha} while checks were pending"
+      return 2
+    fi
+
     payload="$(
       gh api \
         -H "Accept: application/vnd.github+json" \
@@ -83,7 +91,15 @@ for ((attempt = 1; attempt <= max_update_attempts; attempt++)); do
     exit 1
   fi
 
-  wait_for_check "$head_sha"
+  if wait_for_check "$head_sha"; then
+    :
+  else
+    wait_status=$?
+    if ((wait_status == 2)); then
+      continue
+    fi
+    exit "$wait_status"
+  fi
 
   latest_head_sha="$(
     gh pr view "$pr_number" --repo "$repository" --json headRefOid --jq '.headRefOid'

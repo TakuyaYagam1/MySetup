@@ -1,10 +1,14 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCodexDesktopUpdaterVerifiesBeforePublishing(t *testing.T) {
@@ -83,6 +87,91 @@ func TestAutomationMergeWaitsForUpdatedBranchHead(t *testing.T) {
 		if !strings.Contains(source, want) {
 			t.Fatalf("automation merge script must wait for GitHub to apply update-branch via %q\\n%s", want, source)
 		}
+	}
+}
+
+func TestAutomationMergeFollowsHeadChangesWhileWaitingForLint(t *testing.T) {
+	tempDir := t.TempDir()
+	stateFile := filepath.Join(tempDir, "pr-view-count")
+	mergedFile := filepath.Join(tempDir, "merged")
+	fakeGH := filepath.Join(tempDir, "gh")
+
+	fakeGHSource := `#!/usr/bin/env bash
+set -euo pipefail
+
+old_head=1111111111111111111111111111111111111111
+new_head=2222222222222222222222222222222222222222
+
+if [[ "$1 $2" == "pr view" ]]; then
+  count=0
+  if [[ -f "$FAKE_GH_STATE" ]]; then
+    count="$(<"$FAKE_GH_STATE")"
+  fi
+  count=$((count + 1))
+  printf '%s' "$count" >"$FAKE_GH_STATE"
+
+  if [[ " $* " == *" --jq "* ]]; then
+    printf '%s\n' "$new_head"
+  elif ((count == 1)); then
+    printf '{"state":"OPEN","isDraft":false,"baseRefName":"main","headRefOid":"%s"}\n' "$old_head"
+  else
+    printf '{"state":"OPEN","isDraft":false,"baseRefName":"main","headRefOid":"%s"}\n' "$new_head"
+  fi
+  exit 0
+fi
+
+if [[ "$1 $2" == "pr merge" ]]; then
+  : >"$FAKE_GH_MERGED"
+  exit 0
+fi
+
+if [[ "$1" == "api" ]]; then
+  case " $* " in
+    *"/commits/$old_head/check-runs"*)
+      printf '{"check_runs":[]}\n'
+      ;;
+    *"/commits/$new_head/check-runs"*)
+      printf '{"check_runs":[{"id":1,"status":"completed","conclusion":"success","html_url":"https://example.invalid/check"}]}\n'
+      ;;
+    *"/git/ref/heads/main"*)
+      printf '%s\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      ;;
+    *"/compare/"*)
+      printf '%s\n' ahead
+      ;;
+    *)
+      printf 'unexpected gh api call: %s\n' "$*" >&2
+      exit 1
+      ;;
+  esac
+  exit 0
+fi
+
+printf 'unexpected gh call: %s\n' "$*" >&2
+exit 1
+`
+	if err := os.WriteFile(fakeGH, []byte(fakeGHSource), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "bash", "../../../../.github/scripts/merge-automation-pr.sh", "111")
+	cmd.Env = append(os.Environ(),
+		"GITHUB_REPOSITORY=test/repository",
+		"FAKE_GH_STATE="+stateFile,
+		"FAKE_GH_MERGED="+mergedFile,
+		"PATH="+tempDir+":"+os.Getenv("PATH"),
+	)
+	output, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		t.Fatalf("automation merge kept polling the stale PR head:\n%s", output)
+	}
+	if err != nil {
+		t.Fatalf("automation merge failed: %v\n%s", err, output)
+	}
+	if _, err := os.Stat(mergedFile); err != nil {
+		t.Fatalf("automation merge did not merge the updated PR head: %v\n%s", err, output)
 	}
 }
 
