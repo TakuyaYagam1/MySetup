@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -60,5 +61,37 @@ func TestGenericFlakeUpdaterExcludesCodexDesktop(t *testing.T) {
 		if !strings.Contains(source, want) {
 			t.Fatalf("generic flake updater must exclude Codex Desktop via %q\n%s", want, source)
 		}
+	}
+}
+
+func TestCaelestiaDefaultsUseCurrentBarSchema(t *testing.T) {
+	defaults, err := os.ReadFile("../../../NixOS/home/caelestia/default-settings.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var settings map[string]any
+	if err := json.Unmarshal(defaults, &settings); err != nil {
+		t.Fatalf("invalid Caelestia default settings JSON: %v", err)
+	}
+
+	bar, ok := settings["bar"].(map[string]any)
+	if !ok {
+		t.Fatal("Caelestia defaults must contain a bar object")
+	}
+	if _, ok := bar["status"]; ok {
+		t.Fatal("Caelestia defaults must not contain the removed bar.status option")
+	}
+	statusIcons, ok := bar["statusIcons"].([]any)
+	if !ok || len(statusIcons) == 0 {
+		t.Fatal("Caelestia defaults must contain non-empty bar.statusIcons")
+	}
+
+	module, err := os.ReadFile("../../../NixOS/home/caelestia/default.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(module), "del(.status)") {
+		t.Fatal("Caelestia seed migration must remove the obsolete bar.status option")
 	}
 }

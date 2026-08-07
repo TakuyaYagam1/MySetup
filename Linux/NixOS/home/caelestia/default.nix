@@ -10,7 +10,9 @@ let
   dotfilesLib = homeLibs.dotfiles;
   trans = homeLibs.transparency;
   wahrweltPkgs = pkgs.wahrwelt or (pkgs.mysetup or { });
-  shellJson = pkgs.writeText "caelestia-shell.json" (builtins.toJSON config.caelestiaShellSettings);
+  shellDefaults = builtins.fromJSON (builtins.readFile ./default-settings.json);
+  shellSettings = lib.recursiveUpdate shellDefaults config.caelestiaShellSettings;
+  shellJson = pkgs.writeText "caelestia-shell.json" (builtins.toJSON shellSettings);
 in
 {
   imports = [
@@ -53,6 +55,8 @@ in
           dirs = [ "$HOME/.config/caelestia" ];
           body = ''
             seed_json_object "$HOME/.config/caelestia/shell.json" "${shellJson}" "" '
+                .bar //= {} |
+                if .bar.status? then .bar |= del(.status) else . end |
                 if .bar.excludedScreens? then .bar.excludedScreens |= map(select(. != "")) else . end |
                 .general //= {} |
                 .general.logo = "${config.caelestiaShellSettings.general.logo}" |
