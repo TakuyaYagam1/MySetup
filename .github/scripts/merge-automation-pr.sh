@@ -44,6 +44,29 @@ wait_for_check() {
   return 1
 }
 
+wait_for_updated_head() {
+  local previous_head_sha="$1"
+  local deadline=$((SECONDS + check_timeout_seconds))
+
+  while ((SECONDS < deadline)); do
+    local current_head_sha
+    current_head_sha="$(
+      gh pr view "$pr_number" --repo "$repository" --json headRefOid --jq '.headRefOid'
+    )"
+
+    if [[ "$current_head_sha" != "$previous_head_sha" ]]; then
+      echo "GitHub updated PR branch from ${previous_head_sha} to ${current_head_sha}"
+      return 0
+    fi
+
+    echo "Waiting for GitHub to finish updating PR branch from ${previous_head_sha}"
+    sleep "$poll_interval_seconds"
+  done
+
+  echo "::error::Timed out waiting for GitHub to update PR branch from ${previous_head_sha}"
+  return 1
+}
+
 for ((attempt = 1; attempt <= max_update_attempts; attempt++)); do
   pr_data="$(gh pr view "$pr_number" --repo "$repository" --json baseRefName,headRefOid,isDraft,state)"
   state="$(jq -r '.state' <<<"$pr_data")"
@@ -89,10 +112,19 @@ for ((attempt = 1; attempt <= max_update_attempts; attempt++)); do
       ;;
     behind | diverged)
       echo "Base branch advanced; updating PR before merge (attempt ${attempt}/${max_update_attempts})"
-      gh api \
-        --method PUT \
-        "repos/${repository}/pulls/${pr_number}/update-branch" \
-        -f "expected_head_sha=${head_sha}" >/dev/null
+      if ! update_output="$(
+        gh api \
+          --method PUT \
+          "repos/${repository}/pulls/${pr_number}/update-branch" \
+          -f "expected_head_sha=${head_sha}" 2>&1
+      )"; then
+        if [[ "$update_output" != *"expected head sha didn't match current head ref"* ]]; then
+          echo "$update_output" >&2
+          exit 1
+        fi
+        echo "PR head changed while update-branch was being scheduled"
+      fi
+      wait_for_updated_head "$head_sha"
       ;;
     *)
       echo "::error::Unexpected comparison state '${comparison}' for ${base_sha}...${head_sha}"

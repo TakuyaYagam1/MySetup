@@ -68,6 +68,24 @@ func TestGenericFlakeUpdaterExcludesCodexDesktop(t *testing.T) {
 	}
 }
 
+func TestAutomationMergeWaitsForUpdatedBranchHead(t *testing.T) {
+	script, err := os.ReadFile("../../../../.github/scripts/merge-automation-pr.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(script)
+
+	for _, want := range []string{
+		"wait_for_updated_head()",
+		"expected head sha didn't match current head ref",
+		"wait_for_updated_head \"$head_sha\"",
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("automation merge script must wait for GitHub to apply update-branch via %q\\n%s", want, source)
+		}
+	}
+}
+
 func TestCaelestiaDefaultsUseCurrentBarSchema(t *testing.T) {
 	defaults, err := os.ReadFile("../../../NixOS/home/caelestia/default-settings.json")
 	if err != nil {
