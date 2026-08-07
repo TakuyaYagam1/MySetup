@@ -98,8 +98,8 @@ jobs:
       - name: Evaluate updated developer preset
         if: steps.update.outputs.changed == 'true'
         run: |
-          nix flake check --impure --no-build --no-write-lock-file \
-            "git+file://${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/developer"
+          nix eval --raw --impure --no-write-lock-file \
+            "git+file://${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/developer#checks.x86_64-linux.preset-host.drvPath"
 
       - name: Build Codex Desktop package with retry
         if: steps.update.outputs.changed == 'true'

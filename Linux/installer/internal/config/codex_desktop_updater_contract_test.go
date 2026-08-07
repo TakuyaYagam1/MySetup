@@ -25,7 +25,8 @@ func TestCodexDesktopUpdaterVerifiesBeforePublishing(t *testing.T) {
 		"Linux/NixOS/presets/developer/flake.lock",
 		"Linux/NixOS/presets/personal/flake.lock",
 		"git+file://${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/developer",
-		"nix flake check --impure --no-build --no-write-lock-file",
+		"#checks.x86_64-linux.preset-host.drvPath",
+		"nix eval --raw --impure --no-write-lock-file",
 		"Build Codex Desktop package with retry",
 		"for attempt in 1 2 3",
 		`github:ilysenko/codex-desktop-linux/${TARGET_REVISION}#packages.x86_64-linux.codex-desktop`,
@@ -41,6 +42,9 @@ func TestCodexDesktopUpdaterVerifiesBeforePublishing(t *testing.T) {
 
 	if strings.Contains(source, "Build updated developer preset host") {
 		t.Fatal("Codex Desktop updater must not build the whole developer host")
+	}
+	if strings.Contains(source, "nix flake check") {
+		t.Fatal("Codex Desktop updater must not run flake check because --no-build cannot realise Stylix palette derivations on a clean runner")
 	}
 }
 
