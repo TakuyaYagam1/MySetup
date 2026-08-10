@@ -194,11 +194,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1786373665,
-        "narHash": "sha256-518fFOUG71b8x04Chs44Qnzvpvk2HFfktDyAaCkYuy4=",
+        "lastModified": 1786378179,
+        "narHash": "sha256-1Y8HsukaGyD3ySxQfZoeWhwbkc5gV9JNQHRS5rfEddM=",
         "owner": "ilysenko",
         "repo": "codex-desktop-linux",
-        "rev": "8f5c6573aa7104bab342f48d48ada6a5f11b1ac0",
+        "rev": "7f48416a1f8b2225db7997b81c7db85e546ac9ed",
         "type": "github"
       },
       "original": {
