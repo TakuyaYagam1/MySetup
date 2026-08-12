@@ -130,7 +130,7 @@ func TestCodexDesktopLauncherUsesCodexAppName(t *testing.T) {
 	}
 	text := string(data)
 	for _, want := range []string{
-		`"Name=ChatGPT"`,
+		`"Name=ChatGPT Community"`,
 		`"Name=Codex App"`,
 		`"Icon=codex-desktop"`,
 		`codexDesktopIcon = "${codexDesktopBase}/share/icons/hicolor/256x256/apps/codex-desktop.png";`,
