@@ -19,8 +19,20 @@ func TestHappIsPersonalOnlyAndDoesNotEnableDaemon(t *testing.T) {
 	}
 
 	overlay := readClaudeDesktopContractFile(t, "../../../NixOS/lib/flake-overlays.nix")
-	if !strings.Contains(overlay, "happ = inputs.happ-nix.packages.${system}.happ;") {
-		t.Fatalf("personal overlay must expose the Happ package\n%s", overlay)
+	if !strings.Contains(overlay, "happ = prev.callPackage ../pkgs/happ.nix") {
+		t.Fatalf("personal overlay must expose the wrapped Happ package\n%s", overlay)
+	}
+
+	happPackage := readClaudeDesktopContractFile(t, "../../../NixOS/pkgs/happ.nix")
+	for _, want := range []string{
+		"--unset QT_PLUGIN_PATH",
+		"--unset QT_QPA_PLATFORMTHEME",
+		"QT_STYLE_OVERRIDE Fusion",
+		`--replace-fail "Exec=${happ}/bin/happ" "Exec=$out/bin/happ"`,
+	} {
+		if !strings.Contains(happPackage, want) {
+			t.Fatalf("Happ Qt isolation contract missing %q\n%s", want, happPackage)
+		}
 	}
 
 	homePackages := readClaudeDesktopContractFile(t, "../../../NixOS/lib/package-sets/home.nix")

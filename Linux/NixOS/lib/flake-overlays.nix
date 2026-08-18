@@ -50,7 +50,9 @@ let
       personalPackages =
         if personalOrFull then
           {
-            happ = inputs.happ-nix.packages.${system}.happ;
+            happ = prev.callPackage ../pkgs/happ.nix {
+              happ = inputs.happ-nix.packages.${system}.happ;
+            };
           }
         else
           { };
