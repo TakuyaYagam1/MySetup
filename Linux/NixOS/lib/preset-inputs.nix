@@ -12,6 +12,10 @@ let
     "personal"
     "full"
   ];
+  personalOrFull = builtins.elem preset [
+    "personal"
+    "full"
+  ];
   full = preset == "full";
 
   coreInputs = {
@@ -95,6 +99,13 @@ let
     };
   };
 
+  personalInputs = {
+    happ-nix = {
+      url = "github:DaHL-gh/happ-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
   fullInputs = {
     lanzaboote = {
       url = "github:nix-community/lanzaboote";
@@ -105,4 +116,5 @@ in
 coreInputs
 // (if desktopOrMore then desktopInputs else { })
 // (if developerOrMore then developerInputs else { })
+// (if personalOrFull then personalInputs else { })
 // (if full then fullInputs else { })

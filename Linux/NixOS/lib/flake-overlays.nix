@@ -16,6 +16,10 @@ let
     "personal"
     "full"
   ];
+  personalOrFull = builtins.elem preset [
+    "personal"
+    "full"
+  ];
   shellOverlays = import ./shell-overlays.nix { inherit inputs; };
 
   flakePackagesOverlay =
@@ -43,7 +47,14 @@ let
           }
         else
           { };
-      flakePackages = corePackages // desktopPackages // developerPackages;
+      personalPackages =
+        if personalOrFull then
+          {
+            happ = inputs.happ-nix.packages.${system}.happ;
+          }
+        else
+          { };
+      flakePackages = corePackages // desktopPackages // developerPackages // personalPackages;
       wahrweltPackages = (prev.wahrwelt or (prev.mysetup or { })) // flakePackages;
     in
     flakePackages

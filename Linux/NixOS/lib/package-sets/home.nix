@@ -28,6 +28,7 @@
     codex
   ];
   personal = with pkgs; [
+    happ
     google-chrome
     chromium
     firefox-legacy

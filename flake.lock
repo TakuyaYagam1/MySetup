@@ -393,6 +393,26 @@
         "type": "gitlab"
       }
     },
+    "happ-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1784566053,
+        "narHash": "sha256-kdRSGzfNMaDUMR9KicwfkkMXKdJT1lxA4i6fOxjye7M=",
+        "owner": "DaHL-gh",
+        "repo": "happ-nix",
+        "rev": "35819e2634afbfdc78e273222109c3a87e9f7adb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "DaHL-gh",
+        "repo": "happ-nix",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -753,6 +773,7 @@
         "codex": "codex",
         "codex-desktop-linux": "codex-desktop-linux",
         "end4-dotfiles": "end4-dotfiles",
+        "happ-nix": "happ-nix",
         "home-manager": "home-manager",
         "lanzaboote": "lanzaboote",
         "neovim-nightly-overlay": "neovim-nightly-overlay",
