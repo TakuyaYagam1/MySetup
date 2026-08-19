@@ -46,6 +46,32 @@ func TestGitHubActionsUseCurrentVersionTags(t *testing.T) {
 	}
 }
 
+func TestLintingUsesNixToolchainWithoutApt(t *testing.T) {
+	workflow, err := os.ReadFile("../../../../.github/workflows/linting.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(workflow)
+
+	for _, forbidden := range []string{"apt-get", "apt install", "sudo apt"} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("linting workflow must not depend on APT mirrors: found %q\n%s", forbidden, source)
+		}
+	}
+
+	for _, required := range []string{
+		"timeout-minutes:",
+		"nix profile add",
+		"nixpkgs#fish",
+		"nixpkgs#shellcheck",
+		"nixpkgs#jq",
+	} {
+		if !strings.Contains(source, required) {
+			t.Fatalf("linting workflow must provide its toolchain through Nix: missing %q\n%s", required, source)
+		}
+	}
+}
+
 func TestPresetFlakeUpdaterUsesDirectoryFlakeReferences(t *testing.T) {
 	workflow, err := os.ReadFile("../../../../.github/workflows/update-flake.yml")
 	if err != nil {

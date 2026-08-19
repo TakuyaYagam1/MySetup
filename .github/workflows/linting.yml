@@ -14,6 +14,7 @@ on:
 jobs:
   linting:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
 
@@ -33,10 +34,14 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      - name: Install shell-check toolchain (fish, shellcheck, jq)
+      - name: Install shell-check toolchain with Nix
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fish shellcheck jq
+          profile="$RUNNER_TEMP/wahrwelt-linting-tools"
+          nix profile add --profile "$profile" \
+            nixpkgs#fish \
+            nixpkgs#shellcheck \
+            nixpkgs#jq
+          echo "$profile/bin" >> "$GITHUB_PATH"
 
       - name: Lint GitHub Actions workflows
         run: nix run nixpkgs#actionlint -- .github/workflows/*.yml
