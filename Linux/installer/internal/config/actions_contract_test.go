@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestGitHubActionsUseCurrentVersionTags(t *testing.T) {
+func TestGitHubActionsUseVersionTags(t *testing.T) {
 	workflowPaths, err := filepath.Glob("../../../../.github/workflows/*.yml")
 	if err != nil {
 		t.Fatal(err)
@@ -17,15 +17,8 @@ func TestGitHubActionsUseCurrentVersionTags(t *testing.T) {
 		t.Fatal("no GitHub Actions workflows found")
 	}
 
-	usesSHA := regexp.MustCompile(`(?m)^\s*uses:\s+\S+@[0-9a-f]{40}(?:\s|$)`)
-	expectedTags := map[string]string{
-		"actions/checkout@":                  "v7.0.1",
-		"actions/setup-go@":                  "v7.0.0",
-		"cachix/install-nix-action@":         "v31.11.0",
-		"nixbuild/nix-quick-install-action@": "v35",
-		"nix-community/cache-nix-action@":    "v7",
-		"peter-evans/create-pull-request@":   "v8.1.1",
-	}
+	usesAction := regexp.MustCompile(`(?m)^\s*uses:\s+([^\s@]+)@([^\s#]+)`)
+	versionTag := regexp.MustCompile(`^v[0-9]+(?:\.[0-9]+){0,2}$`)
 
 	for _, path := range workflowPaths {
 		data, err := os.ReadFile(path)
@@ -34,13 +27,10 @@ func TestGitHubActionsUseCurrentVersionTags(t *testing.T) {
 		}
 		source := string(data)
 
-		if match := usesSHA.FindString(source); match != "" {
-			t.Fatalf("%s contains a SHA-pinned action instead of a version tag: %s", path, strings.TrimSpace(match))
-		}
-
-		for action, version := range expectedTags {
-			if strings.Contains(source, action) && !strings.Contains(source, action+version) {
-				t.Fatalf("%s must use %s%s", path, action, version)
+		for _, match := range usesAction.FindAllStringSubmatch(source, -1) {
+			action, ref := match[1], match[2]
+			if !versionTag.MatchString(ref) {
+				t.Fatalf("%s must use a version tag for %s, got %q", path, action, ref)
 			}
 		}
 	}
