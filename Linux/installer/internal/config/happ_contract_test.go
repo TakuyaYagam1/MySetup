@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestHappIsPersonalOnlyAndDoesNotEnableDaemon(t *testing.T) {
+func TestHappIsPersonalOnlyAndEnablesTunDaemon(t *testing.T) {
 	presetInputs := readClaudeDesktopContractFile(t, "../../../NixOS/lib/preset-inputs.nix")
 	for _, want := range []string{
 		"personalInputs = {",
@@ -56,8 +56,16 @@ func TestHappIsPersonalOnlyAndDoesNotEnableDaemon(t *testing.T) {
 		}
 	}
 
-	stack := readClaudeDesktopContractFile(t, "../../../NixOS/modules/mysetup-stack.nix")
-	if strings.Contains(stack, "happ") {
-		t.Fatalf("Happ daemon module must not be imported\n%s", stack)
+	host := readClaudeDesktopContractFile(t, "../../../NixOS/lib/mk-host.nix")
+	for _, want := range []string{
+		"personalOrFull = builtins.elem preset",
+		`effectiveInputs.happ-nix + "/happ-module.nix"`,
+		"programs.happ = {",
+		"package = pkgs.happ;",
+		"tunMode.enable = true;",
+	} {
+		if !strings.Contains(host, want) {
+			t.Fatalf("personal Happ TUN daemon contract missing %q\n%s", want, host)
+		}
 	}
 }

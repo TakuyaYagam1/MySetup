@@ -56,6 +56,10 @@ let
 
   hostVarsValue = if builtins.isAttrs hostVars then hostVars else import hostVars;
   secureBoot = hostVarsValue.features.secureBoot or false;
+  personalOrFull = builtins.elem preset [
+    "personal"
+    "full"
+  ];
   optionalPath = path: lib.optional (path != null && builtins.pathExists path) path;
   secretsFile = if secretsDir == null then null else secretsDir + "/secrets.yaml";
   lanzabooteModules =
@@ -68,6 +72,20 @@ let
       ]
     else
       throw "Wahrwelt Secure Boot requires the host-owned lanzaboote input";
+
+  happModules = lib.optionals personalOrFull [
+    (effectiveInputs.happ-nix + "/happ-module.nix")
+    (
+      { pkgs, ... }:
+      {
+        programs.happ = {
+          enable = true;
+          package = pkgs.happ;
+          tunMode.enable = true;
+        };
+      }
+    )
+  ];
 
   hostModule =
     { lib, ... }:
@@ -120,6 +138,7 @@ nixpkgs.lib.nixosSystem {
 
   ]
   ++ lanzabooteModules
+  ++ happModules
   ++ [
     effectiveInputs.nix-snapd.nixosModules.default
     effectiveInputs.stylix.nixosModules.stylix
