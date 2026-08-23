@@ -20,7 +20,7 @@ let
   # end4 is installed as one patched tree at hypr/end4. Adding nested
   # xdg.configFile entries under that symlink makes Home Manager reject them as
   # outside $HOME.
-  standaloneShellProfiles = lib.filter (profile: profile.id != "end4") shellProfiles.ordered;
+  standaloneShellProfiles = lib.filter (profile: profile.family != "end4") shellProfiles.ordered;
 
   hyprScriptFiles = lib.genAttrs (map (name: "hypr/scripts/${name}") hyprScripts) (target: {
     force = true;

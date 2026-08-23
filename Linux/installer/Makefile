@@ -107,6 +107,7 @@ nix-hm-eval: ## Eval runtime shell module and all-on Home Manager imports, inclu
 		eval_hm_simple "hm.config.home.activation.seedHyprShellRuntime.data" && \
 		eval_hm_simple "hm.config.xdg.configFile.\"hypr/shell-profile.lua\".text" && \
 		eval_hm_full "" "builtins.toString (hm.config.xdg.configFile.\"hypr/end4\".source)" && \
+		eval_hm_full "" "if builtins.hasAttr \"hypr/end4/keybinds.lua\" hm.config.xdg.configFile then builtins.throw \"end4 family must not install files beneath the managed hypr/end4 tree\" else \"ok\"" && \
 		eval_hm_full "" "builtins.toString (hm.config.xdg.configFile.\"quickshell/end4-pC\".source)"'
 
 .PHONY: nix-profile-eval
