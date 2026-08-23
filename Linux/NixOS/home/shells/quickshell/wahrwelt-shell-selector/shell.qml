@@ -181,7 +181,7 @@ ShellRoot {
         Rectangle {
           anchors.fill: parent
           color: "#0f1320"
-          opacity: 0.54
+          opacity: 0.42
         }
 
         Rectangle {
@@ -189,7 +189,7 @@ ShellRoot {
           height: width
           radius: width / 2
           color: "#5b6fe7"
-          opacity: 0.10
+          opacity: 0.04
           anchors.left: parent.left
           anchors.leftMargin: -Math.round(width * 0.2)
           anchors.bottom: parent.bottom
@@ -201,7 +201,7 @@ ShellRoot {
           height: width
           radius: width / 2
           color: "#f48ab6"
-          opacity: 0.08
+          opacity: 0.03
           anchors.horizontalCenter: parent.horizontalCenter
           anchors.verticalCenter: parent.verticalCenter
           anchors.verticalCenterOffset: Math.round(parent.height * 0.12)
