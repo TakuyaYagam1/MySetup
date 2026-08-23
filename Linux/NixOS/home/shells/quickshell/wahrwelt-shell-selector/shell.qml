@@ -4,39 +4,64 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
+import "selector-model.js" as SelectorModel
 
 ShellRoot {
   id: root
 
-  readonly property string targetScreen: Quickshell.env("WAHRWELT_SHELL_SELECTOR_MONITOR") || Quickshell.env("WAHRWELT_SHELL_SELECTOR_MONITOR") || ""
-  readonly property string activeShell: Quickshell.env("WAHRWELT_ACTIVE_SHELL") || Quickshell.env("WAHRWELT_ACTIVE_SHELL") || "caelestia"
-  readonly property string selectorScript: Quickshell.env("WAHRWELT_SHELL_SELECTOR_SCRIPT") || Quickshell.env("WAHRWELT_SHELL_SELECTOR_SCRIPT")
+  readonly property string targetScreen: Quickshell.env("WAHRWELT_SHELL_SELECTOR_MONITOR") || ""
+  readonly property string activeShell: Quickshell.env("WAHRWELT_ACTIVE_SHELL") || "caelestia"
+  readonly property string rememberedEnd4Variant: Quickshell.env("WAHRWELT_END4_VARIANT") || "end4"
+  readonly property string selectorScript: Quickshell.env("WAHRWELT_SHELL_SELECTOR_SCRIPT")
 
   property var shellOptions: [
     // WAHRWELT_SHELL_OPTIONS_BEGIN
     {
       id: "noctalia",
+      family: "noctalia",
       title: "noctalia",
       accent: "#f48ab6",
       surface: "#211f31",
+      quickshellConfig: "",
+      variantLabel: "",
       logo: Qt.resolvedUrl("assets/noctalia.svg")
     },
     {
       id: "caelestia",
+      family: "caelestia",
       title: "caelestia-shell",
       accent: "#6ae5e1",
       surface: "#201f33",
+      quickshellConfig: "",
+      variantLabel: "",
       logo: Qt.resolvedUrl("assets/caelestia.svg")
     },
     {
       id: "end4",
+      family: "end4",
       title: "end-4",
       accent: "#51debd",
       surface: "#1d2122",
+      quickshellConfig: "ii",
+      variantLabel: "Official",
+      logo: Qt.resolvedUrl("assets/illogical-impulse.svg")
+    },
+    {
+      id: "end4-pc",
+      family: "end4",
+      title: "end-4",
+      accent: "#51debd",
+      surface: "#1d2122",
+      quickshellConfig: "end4-pC",
+      variantLabel: "pC",
       logo: Qt.resolvedUrl("assets/illogical-impulse.svg")
     }
     // WAHRWELT_SHELL_OPTIONS_END
   ]
+
+  readonly property var cardOptions: SelectorModel.buildCards(shellOptions)
+  readonly property string activeShellFamily: SelectorModel.activeFamily(shellOptions, activeShell)
+  readonly property string selectedEnd4Variant: SelectorModel.end4Target(activeShell, rememberedEnd4Variant)
 
   readonly property var visibleScreens: {
     const screens = Quickshell.screens || [];
@@ -53,8 +78,9 @@ ShellRoot {
   }
 
   function shellIndex(shellId) {
-    for (let i = 0; i < shellOptions.length; i++) {
-      if (shellOptions[i].id === shellId) {
+    const family = SelectorModel.activeFamily(shellOptions, shellId);
+    for (let i = 0; i < cardOptions.length; i++) {
+      if (cardOptions[i].family === family) {
         return i;
       }
     }
@@ -96,7 +122,7 @@ ShellRoot {
       }
 
       function moveSelection(delta) {
-        const count = root.shellOptions.length;
+        const count = root.cardOptions.length;
         if (count === 0) {
           return;
         }
@@ -104,11 +130,11 @@ ShellRoot {
       }
 
       function activateSelection(index) {
-        const option = root.shellOptions[index];
-        if (!option) {
+        const card = root.cardOptions[index];
+        if (!card) {
           return;
         }
-        root.switchShell(option.id);
+        root.switchShell(SelectorModel.cardTarget(card, root.activeShell, root.rememberedEnd4Variant));
       }
 
       Item {
@@ -199,27 +225,28 @@ ShellRoot {
             spacing: 24
 
             Repeater {
-              model: root.shellOptions
+              model: root.cardOptions
 
               delegate: Rectangle {
                 id: card
 
+                readonly property var cardData: modelData
                 readonly property bool isSelected: window.selectedIndex === index
                 readonly property bool isHovered: hoverHandler.hovered
-                readonly property bool isActiveShell: root.activeShell === modelData.id
+                readonly property bool isActiveShell: root.activeShellFamily === cardData.family
                 property real cardScale: (isSelected || isHovered) ? 1.045 : 1.0
 
                 width: 238
-                height: 208
+                height: 236
                 radius: 28
                 color: {
                   if (isSelected || isHovered) {
-                    return Qt.tint(modelData.surface, Qt.rgba(1, 1, 1, 0.08));
+                    return Qt.tint(cardData.surface, Qt.rgba(1, 1, 1, 0.08));
                   }
-                  return modelData.surface;
+                  return cardData.surface;
                 }
                 border.width: isSelected || isActiveShell ? 2 : 1
-                border.color: isSelected || isActiveShell ? modelData.accent : Qt.rgba(0.55, 0.62, 0.83, 0.42)
+                border.color: isSelected || isActiveShell ? cardData.accent : Qt.rgba(0.55, 0.62, 0.83, 0.42)
 
                 layer.enabled: true
                 layer.smooth: true
@@ -252,6 +279,14 @@ ShellRoot {
                   }
                 }
 
+                MouseArea {
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onEntered: window.selectedIndex = index
+                  onClicked: root.switchShell(SelectorModel.cardTarget(card.cardData, root.activeShell, root.rememberedEnd4Variant))
+                }
+
                 Rectangle {
                   anchors.top: parent.top
                   anchors.right: parent.right
@@ -266,7 +301,7 @@ ShellRoot {
                   Text {
                     anchors.centerIn: parent
                     text: String(index + 1)
-                    color: (card.isSelected || card.isHovered) ? modelData.accent : "#d9e1ff"
+                    color: (card.isSelected || card.isHovered) ? card.cardData.accent : "#d9e1ff"
                     font.pixelSize: 14
                     font.family: "monospace"
                     font.weight: Font.Medium
@@ -284,7 +319,7 @@ ShellRoot {
 
                   Image {
                     Layout.alignment: Qt.AlignHCenter
-                    source: modelData.logo
+                    source: card.cardData.logo
                     fillMode: Image.PreserveAspectFit
                     sourceSize.width: 112
                     sourceSize.height: 112
@@ -296,12 +331,76 @@ ShellRoot {
 
                   Text {
                     Layout.alignment: Qt.AlignHCenter
-                    text: modelData.title
+                    text: card.cardData.title
                     color: card.isSelected || card.isHovered ? "#f4f7ff" : "#d9e1ff"
                     font.pixelSize: 18
                     font.family: "monospace"
                     font.weight: Font.Medium
                     horizontalAlignment: Text.AlignHCenter
+                  }
+
+                  Item {
+                    id: variantControl
+
+                    Layout.alignment: Qt.AlignHCenter
+                    implicitWidth: 174
+                    implicitHeight: 34
+                    visible: card.cardData.family === "end4"
+
+                    Rectangle {
+                      anchors.fill: parent
+                      radius: 12
+                      color: Qt.rgba(0.08, 0.10, 0.16, 0.72)
+                      border.width: 1
+                      border.color: Qt.rgba(0.62, 0.70, 0.88, 0.32)
+                    }
+
+                    Rectangle {
+                      width: (variantControl.width - 4) / 2
+                      height: variantControl.height - 4
+                      x: root.selectedEnd4Variant === "end4-pc" ? variantControl.width / 2 : 2
+                      y: 2
+                      radius: 10
+                      color: card.cardData.accent
+                      opacity: 0.88
+
+                      Behavior on x {
+                        NumberAnimation {
+                          duration: 180
+                          easing.type: Easing.OutCubic
+                        }
+                      }
+                    }
+
+                    Row {
+                      anchors.fill: parent
+                      anchors.margins: 2
+
+                      Repeater {
+                        model: card.cardData.variants
+
+                        delegate: Item {
+                          width: (variantControl.width - 4) / Math.max(1, card.cardData.variants.length)
+                          height: variantControl.height - 4
+
+                          Text {
+                            anchors.centerIn: parent
+                            text: modelData.variantLabel || modelData.id
+                            color: root.selectedEnd4Variant === modelData.id ? "#10161a" : "#d9e1ff"
+                            font.pixelSize: 12
+                            font.family: "monospace"
+                            font.weight: Font.DemiBold
+                          }
+
+                          MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            preventStealing: true
+                            onClicked: root.switchShell(modelData.id)
+                          }
+                        }
+                      }
+                    }
                   }
 
                   Rectangle {
@@ -310,7 +409,7 @@ ShellRoot {
                     width: card.isActiveShell ? 74 : 0
                     height: 3
                     radius: 2
-                    color: modelData.accent
+                    color: card.cardData.accent
                     opacity: 0.95
 
                     Behavior on width {
@@ -335,13 +434,6 @@ ShellRoot {
                   }
                 }
 
-                MouseArea {
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onEntered: window.selectedIndex = index
-                  onClicked: window.activateSelection(index)
-                }
               }
             }
           }

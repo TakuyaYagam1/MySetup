@@ -29,6 +29,11 @@ lock_owner_file="$lock_dir/owner"
 selector_name="wahrwelt-shell-selector"
 selector_pattern="$wahrwelt_selector_pattern"
 end4_pattern="$wahrwelt_end4_pattern"
+end4_official_pattern="$wahrwelt_end4_official_pattern"
+end4_pc_pattern="$wahrwelt_end4_pc_pattern"
+end4_env_pattern="$wahrwelt_end4_env_pattern"
+end4_official_env_pattern="$wahrwelt_end4_official_env_pattern"
+end4_pc_env_pattern="$wahrwelt_end4_pc_env_pattern"
 caelestia_pattern="$wahrwelt_caelestia_pattern"
 active_shell_state="$wahrwelt_active_shell_state"
 start_shell_script="$config_home/hypr/scripts/start-shell.sh"
@@ -61,10 +66,40 @@ read_stored_active_shell() {
 }
 
 detect_shell_from_processes() {
-  if pgrep -u "${USER:-$(id -un)}" -f "$end4_pattern" >/dev/null 2>&1; then
+  local pid
+
+  if pgrep -u "${USER:-$(id -un)}" -f "$end4_pc_pattern" >/dev/null 2>&1; then
+    printf '%s' end4-pc
+    return 0
+  fi
+  for pid in $(wahrwelt_quickshell_pids); do
+    if wahrwelt_pid_has_env_regex "$pid" "$end4_pc_env_pattern"; then
+      printf '%s' end4-pc
+      return 0
+    fi
+  done
+
+  if pgrep -u "${USER:-$(id -un)}" -f "$end4_official_pattern" >/dev/null 2>&1; then
     printf '%s' end4
     return 0
   fi
+  for pid in $(wahrwelt_quickshell_pids); do
+    if wahrwelt_pid_has_env_regex "$pid" "$end4_official_env_pattern"; then
+      printf '%s' end4
+      return 0
+    fi
+  done
+
+  if pgrep -u "${USER:-$(id -un)}" -f "$end4_pattern" >/dev/null 2>&1; then
+    wahrwelt_read_end4_variant
+    return 0
+  fi
+  for pid in $(wahrwelt_quickshell_pids); do
+    if wahrwelt_pid_has_env_regex "$pid" "$end4_env_pattern"; then
+      wahrwelt_read_end4_variant
+      return 0
+    fi
+  done
 
   if noctalia_running; then
     printf '%s' noctalia
@@ -109,7 +144,7 @@ detect_shell_from_entrypoint() {
   fi
 
   if grep -q 'end4/hyprland.lua' "$entrypoint_path"; then
-    printf '%s' end4
+    wahrwelt_read_end4_variant
     return 0
   fi
 
@@ -167,7 +202,7 @@ wait_for_selector_spawn() {
 }
 
 start_selector() {
-  local monitor active_shell
+  local monitor active_shell remembered_end4_variant
 
   if ! command -v qs >/dev/null 2>&1; then
     log "qs command not found; selector cannot start"
@@ -176,14 +211,13 @@ start_selector() {
 
   monitor="${selector_monitor_override:-$(detect_focused_monitor)}"
   active_shell="$(detect_active_shell)"
-  log "starting selector monitor=${monitor:-auto} active=${active_shell:-unknown}"
+  remembered_end4_variant="$(wahrwelt_read_end4_variant)"
+  log "starting selector monitor=${monitor:-auto} active=${active_shell:-unknown} end4_variant=$remembered_end4_variant"
 
   env \
     WAHRWELT_SHELL_SELECTOR_MONITOR="$monitor" \
     WAHRWELT_ACTIVE_SHELL="$active_shell" \
-    WAHRWELT_SHELL_SELECTOR_SCRIPT="$config_home/hypr/scripts/shell-selector.sh" \
-    WAHRWELT_SHELL_SELECTOR_MONITOR="$monitor" \
-    WAHRWELT_ACTIVE_SHELL="$active_shell" \
+    WAHRWELT_END4_VARIANT="$remembered_end4_variant" \
     WAHRWELT_SHELL_SELECTOR_SCRIPT="$config_home/hypr/scripts/shell-selector.sh" \
     qs -c "$selector_name" >/dev/null 2>&1 &
 

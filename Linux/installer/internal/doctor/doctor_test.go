@@ -290,6 +290,26 @@ func TestCheckShellKeybindsWarnsOnProfileMismatch(t *testing.T) {
 	}
 }
 
+func TestDetectActiveShellUsesRememberedEnd4PCVariant(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	home := t.TempDir()
+	runtimeDir := shellruntime.RuntimeDir(home)
+	if err := os.MkdirAll(runtimeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runtimeDir, "hyprland.lua"), []byte(`dofile("/home/user/.config/hypr/end4/hyprland.lua")`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	variantPath := filepath.Join(home, ".local", "state", "wahrwelt", "end4-variant")
+	if err := os.WriteFile(variantPath, []byte("end4-pc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := detectActiveShell(home); got != "end4-pc" {
+		t.Fatalf("expected remembered end4-pc profile, got %q", got)
+	}
+}
+
 func TestCheckShellKeybindsAcceptsHomeManagerSymlinkContent(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "store-keybinds.lua")

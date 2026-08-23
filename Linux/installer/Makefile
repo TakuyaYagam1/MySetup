@@ -70,7 +70,7 @@ shell-check: ## Check Hypr shell scripts and JSON/Python patch sources
 	cd $(REPO_ROOT) && find Linux/dots/hypr/scripts -type f -name '*.sh' -print0 | xargs -0 -r shellcheck -x
 	cd $(REPO_ROOT) && fish -n Linux/dots/hypr/scripts/wsaction.fish
 	cd $(REPO_ROOT) && find Linux/NixOS/home/end4 -type f -name '*.json' -print0 | xargs -0 -r -n1 jq empty
-	cd $(REPO_ROOT) && python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("Linux/NixOS/home/end4/patches/quickshell.py").read_text())'
+	cd $(REPO_ROOT) && python3 -c 'import ast, pathlib; [ast.parse(pathlib.Path(path).read_text()) for path in ("Linux/NixOS/home/end4/patches/quickshell.py", "Linux/NixOS/home/end4/patches/quickshell-pc.py")]'
 
 .PHONY: hypr-bind-check
 hypr-bind-check: ## Check Hypr keybind contracts and duplicate chords
@@ -102,11 +102,12 @@ NIX_HM_ENV := NIXOS_DIR='$(NIXOS_DIR)' \
 	NIX_CACHE_KEYS='$(NIX_CACHE_KEYS)'
 
 .PHONY: nix-hm-eval
-nix-hm-eval: ## Eval runtime shell module and all-on Home Manager imports, including end4
+nix-hm-eval: ## Eval runtime shell module and all-on Home Manager imports, including End4 Official/pC
 	@$(NIX_HM_ENV) bash -c 'source scripts/nix-eval-helpers.sh && \
 		eval_hm_simple "hm.config.home.activation.seedHyprShellRuntime.data" && \
 		eval_hm_simple "hm.config.xdg.configFile.\"hypr/shell-profile.lua\".text" && \
-		eval_hm_full "" "builtins.toString (hm.config.xdg.configFile.\"hypr/end4\".source)"'
+		eval_hm_full "" "builtins.toString (hm.config.xdg.configFile.\"hypr/end4\".source)" && \
+		eval_hm_full "" "builtins.toString (hm.config.xdg.configFile.\"quickshell/end4-pC\".source)"'
 
 .PHONY: nix-profile-eval
 nix-profile-eval: ## Eval Home Manager imports for every package preset

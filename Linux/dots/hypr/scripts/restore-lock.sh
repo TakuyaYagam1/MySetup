@@ -25,8 +25,12 @@ wait_for_profile() {
       noctalia)
         wahrwelt_noctalia_running && return 0
         ;;
-      end4)
-        pgrep -u "$wahrwelt_user_name" -f "$wahrwelt_end4_pattern" >/dev/null 2>&1 && return 0
+      end4 | end4-pc)
+        if [ "$profile" = "end4-pc" ]; then
+          pgrep -u "$wahrwelt_user_name" -f "$wahrwelt_end4_pc_pattern" >/dev/null 2>&1 && return 0
+        else
+          pgrep -u "$wahrwelt_user_name" -f "$wahrwelt_end4_official_pattern" >/dev/null 2>&1 && return 0
+        fi
         ;;
     esac
     sleep 0.1
@@ -44,7 +48,7 @@ case "$profile" in
   noctalia)
     wahrwelt_noctalia_action lock
     ;;
-  end4)
+  end4 | end4-pc)
     hyprlock -c "$wahrwelt_hypr_runtime_dir/hyprlock.conf"
     ;;
 esac

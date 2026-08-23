@@ -105,6 +105,10 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
       url = "git+https://github.com/end-4/dots-hyprland?submodules=1";
       flake = false;
     };
+    end4-pc = {
+      url = "github:pctrade/end4-pC";
+      flake = false;
+    };
 
     zen-browser = {
       url = "github:youwen5/zen-browser-flake";
@@ -141,6 +145,7 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
 {{ if ne .Packages.Preset "minimal" }}
       inputs.quickshell.follows = "quickshell";
       inputs.end4-dotfiles.follows = "end4-dotfiles";
+      inputs.end4-pc.follows = "end4-pc";
       inputs.zen-browser.follows = "zen-browser";
 {{ end }}
       inputs.neovim-nightly-overlay.follows = "neovim-nightly-overlay";

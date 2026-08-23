@@ -125,12 +125,15 @@ func TestFlakeNixUsesIndependentThinWahrweltWrapper(t *testing.T) {
 		`home-manager = {`,
 		`nix-index-database = {`,
 		`quickshell = {`,
+		`end4-pc = {`,
+		`url = "github:pctrade/end4-pC";`,
 		`wahrwelt = {`,
 		`url = "github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS/presets/personal";`,
 		`inputs.nixpkgs.follows = "nixpkgs";`,
 		`inputs.home-manager.follows = "home-manager";`,
 		`inputs.nix-index-database.follows = "nix-index-database";`,
 		`inputs.quickshell.follows = "quickshell";`,
+		`inputs.end4-pc.follows = "end4-pc";`,
 		`inputs.stylix.follows = "stylix";`,
 		`hostname = "workstation";`,
 		`wahrwelt.lib.mkWahrweltHost`,
@@ -319,7 +322,7 @@ func TestFlakeNixScopesHostOwnedInputsByPreset(t *testing.T) {
 					t.Fatalf("%s preset must keep baseline input %q\n%s", preset, want, out)
 				}
 			}
-			for _, desktopInput := range []string{`quickshell = {`, `zen-browser = {`} {
+			for _, desktopInput := range []string{`quickshell = {`, `end4-pc = {`, `zen-browser = {`} {
 				got := strings.Contains(out, desktopInput)
 				want := preset != "minimal"
 				if got != want {

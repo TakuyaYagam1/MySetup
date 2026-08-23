@@ -16,15 +16,21 @@ hypr_runtime_dir="$wahrwelt_hypr_runtime_dir"
 user_name="$wahrwelt_user_name"
 selector_pattern="$wahrwelt_selector_pattern"
 end4_pattern="$wahrwelt_end4_pattern"
+end4_official_pattern="$wahrwelt_end4_official_pattern"
+end4_pc_pattern="$wahrwelt_end4_pc_pattern"
 caelestia_pattern="$wahrwelt_caelestia_pattern"
 selector_handle='__selector__'
 caelestia_handle='__caelestia__'
 caelestia_resizer_handle='__caelestia_resizer__'
 noctalia_handle='__noctalia__'
 end4_handle='__end4__'
+end4_official_handle='__end4_official__'
+end4_pc_handle='__end4_pc__'
 end4_idle_handle='__end4_idle__'
 end4_idle_config="$hypr_runtime_dir/hypridle.conf"
 end4_env_pattern="$wahrwelt_end4_env_pattern"
+end4_official_env_pattern="$wahrwelt_end4_official_env_pattern"
+end4_pc_env_pattern="$wahrwelt_end4_pc_env_pattern"
 
 # shellcheck source=Linux/dots/hypr/scripts/shell-runtime-env.sh
 . "$script_dir/shell-runtime-env.sh"
@@ -187,7 +193,7 @@ stop_inactive_shells() {
       stop_caelestia
       stop_end4
       ;;
-    end4)
+    end4 | end4-pc)
       stop_caelestia
       stop_noctalia
       ;;
@@ -246,12 +252,29 @@ start_profile_shell() {
       fi
       ;;
 
-    end4)
+    end4 | end4-pc)
+      local end4_config end4_exact_handle
+
+      end4_config="$(wahrwelt_end4_quickshell_config "$profile")" || return 1
+      if [ "$profile" = "end4-pc" ]; then
+        end4_exact_handle="$end4_pc_handle"
+      else
+        end4_exact_handle="$end4_official_handle"
+      fi
+
       ensure_end4_idle || true
       dedupe_shell "end4" "$end4_handle" stop_end4 || true
 
+      # A single end4 family process may survive an unclean state update. Do
+      # not start the other variant alongside it: replace it atomically.
+      if is_running "$end4_handle" && ! is_running "$end4_exact_handle"; then
+        log "replacing mismatched end4 variant with profile=$profile"
+        stop_end4
+      fi
+
       if command -v qs-end4 >/dev/null 2>&1; then
-        start_with_retry "end4" "$end4_handle" qs-end4 -n -d -c ii || return 1
+        wahrwelt_export_end4_quickshell_config "$profile" || return 1
+        start_with_retry "end4 ($profile)" "$end4_exact_handle" qs-end4 -n -d -c "$end4_config" || return 1
         sleep 0.5
         apply_end4_hypr_runtime_overrides
       else
@@ -286,7 +309,7 @@ else
   stop_inactive_shells "$profile"
 fi
 
-if [ "$profile" != "end4" ]; then
+if [ "$(wahrwelt_shell_family "$profile")" != "end4" ]; then
   stop_end4_idle
 fi
 

@@ -309,6 +309,46 @@ func TestWriteHyprRuntimeShellStateBootstrapsEnd4BeforeProfileExists(t *testing.
 	}
 }
 
+func TestWriteHyprRuntimeShellStatePreservesEnd4PCVariant(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	runtimeDir := shellruntime.RuntimeDir(home)
+	if err := os.MkdirAll(filepath.Join(hyprDir, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(hyprDir, "end4"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(paths.ActiveShellStatePath(home)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.ActiveShellStatePath(home), []byte("end4-pc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
+		t.Fatal(err)
+	}
+
+	for path, want := range map[string]string{
+		paths.ActiveShellStatePath(home):                                   "end4-pc",
+		filepath.Join(home, ".local", "state", "wahrwelt", "end4-variant"): "end4-pc",
+		filepath.Join(runtimeDir, "hyprland.lua"):                          "Active Hyprland profile: end4-pc",
+		filepath.Join(runtimeDir, "shell-launcher.lua"):                    "Active shell launcher profile: end4-pc",
+		filepath.Join(runtimeDir, "shell-keybinds.lua"):                    "Active shell keybind profile: end4-pc",
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("expected %s to contain %q\n%s", path, want, data)
+		}
+	}
+}
+
 func TestWriteHyprRuntimeShellStateDetectsNoctaliaFromEntrypointWhenStateMissing(t *testing.T) {
 	home := t.TempDir()
 	hyprDir := filepath.Join(home, ".config", "hypr")

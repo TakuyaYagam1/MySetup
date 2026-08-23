@@ -10,9 +10,12 @@
         profile:
         "    {\n"
         + "      id: ${builtins.toJSON profile.id},\n"
+        + "      family: ${builtins.toJSON (profile.family or profile.id)},\n"
         + "      title: ${builtins.toJSON profile.title},\n"
         + "      accent: ${builtins.toJSON profile.accent},\n"
         + "      surface: ${builtins.toJSON profile.surface},\n"
+        + "      quickshellConfig: ${builtins.toJSON (profile.quickshellConfig or "")},\n"
+        + "      variantLabel: ${builtins.toJSON (profile.variantLabel or "")},\n"
         + "      logo: Qt.resolvedUrl(${builtins.toJSON profile.logo})\n"
         + "    }"
       ) profiles

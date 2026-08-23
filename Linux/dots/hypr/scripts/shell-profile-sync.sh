@@ -3,15 +3,16 @@
 # shellcheck disable=SC2154
 
 home_manager_files_root() {
-  local qs_path resolved root
+  local qs_config qs_path resolved root
 
-  qs_path="$config_home/quickshell/ii"
+  qs_config="$(wahrwelt_end4_quickshell_config "$profile")" || return 1
+  qs_path="$config_home/quickshell/$qs_config"
   resolved="$(readlink "$qs_path" 2>/dev/null || true)"
   [ -n "$resolved" ] || return 1
 
   case "$resolved" in
-    */.config/quickshell/ii*)
-      root="${resolved%%/.config/quickshell/ii*}"
+    */.config/quickshell/"$qs_config"*)
+      root="${resolved%%/.config/quickshell/"$qs_config"*}"
       ;;
     *)
       return 1
@@ -25,7 +26,7 @@ home_manager_files_root() {
 ensure_end4_profile_link() {
   local dir target hm_root source
 
-  [ "$profile" = "end4" ] || return 0
+  [ "$(wahrwelt_shell_family "$profile")" = "end4" ] || return 0
 
   dir="$(hypr_dir)"
   target="$dir/end4"
@@ -118,8 +119,8 @@ end)"
 sync_shell_launcher_bindings() {
   local dir profile_launcher
 
-  if [ "$profile" = "end4" ]; then
-    write_regular_file "$(runtime_file shell-launcher.lua)" "-- Active shell launcher profile: end4
+  if [ "$(wahrwelt_shell_family "$profile")" = "end4" ]; then
+    write_regular_file "$(runtime_file shell-launcher.lua)" "-- Active shell launcher profile: $profile
 -- end4 registers launcher bindings from its own Hyprland Lua modules."
     return $?
   fi
@@ -139,8 +140,8 @@ require(\"$profile.launcher\")"
 sync_shell_keybinds() {
   local dir profile_keybinds
 
-  if [ "$profile" = "end4" ]; then
-    write_regular_file "$(runtime_file shell-keybinds.lua)" "-- Active shell keybind profile: end4
+  if [ "$(wahrwelt_shell_family "$profile")" = "end4" ]; then
+    write_regular_file "$(runtime_file shell-keybinds.lua)" "-- Active shell keybind profile: $profile
 -- end4 registers keybinds from its own Hyprland Lua modules."
     return $?
   fi
@@ -162,9 +163,9 @@ sync_hypr_entrypoint() {
 
   dir="$(hypr_dir)"
 
-  if [ "$profile" = "end4" ]; then
+  if [ "$(wahrwelt_shell_family "$profile")" = "end4" ]; then
     target="$dir/end4/hyprland.lua"
-    label="end4"
+    label="$profile"
     content="-- Active Hyprland profile: $label
 local home = os.getenv(\"HOME\")
 if home == nil then
@@ -208,7 +209,7 @@ sync_hypr_lock_stack() {
 
   dir="$(hypr_dir)"
 
-  if [ "$profile" = "end4" ]; then
+  if [ "$(wahrwelt_shell_family "$profile")" = "end4" ]; then
     hyprlock_target="$dir/end4/hyprlock.conf"
     hypridle_target="$dir/end4/hypridle.conf"
 
@@ -222,9 +223,9 @@ sync_hypr_lock_stack() {
       return 1
     fi
 
-    write_regular_file "$(runtime_file hyprlock.conf)" "# Active Hyprlock profile: end4
+    write_regular_file "$(runtime_file hyprlock.conf)" "# Active Hyprlock profile: $profile
 source = $hyprlock_target" || return 1
-    write_regular_file "$(runtime_file hypridle.conf)" "# Active Hypridle profile: end4
+    write_regular_file "$(runtime_file hypridle.conf)" "# Active Hypridle profile: $profile
 source = $hypridle_target"
     return $?
   fi
@@ -285,7 +286,7 @@ prune_legacy_hyprland_runtime_files() {
 sync_end4_top_level_links() {
   local dir
 
-  [ "$profile" = "end4" ] || return 0
+  [ "$(wahrwelt_shell_family "$profile")" = "end4" ] || return 0
 
   dir="$(hypr_dir)"
   rm -f -- "$dir/monitors.conf" "$dir/workspaces.conf"
@@ -346,12 +347,12 @@ validate_profile_ready() {
         return 1
       fi
       ;;
-    end4)
+    end4 | end4-pc)
       ensure_end4_profile_link || return 1
       require_file "end4 hypr lua entrypoint" "$dir/end4/hyprland.lua" || return 1
       require_file "end4 hyprlock entrypoint" "$dir/end4/hyprlock.conf" || return 1
       require_file "end4 hypridle entrypoint" "$dir/end4/hypridle.conf" || return 1
-      require_file "end4 quickshell config" "$config_home/quickshell/ii/shell.qml" || return 1
+      require_file "end4 quickshell config" "$(wahrwelt_end4_quickshell_path "$profile")/shell.qml" || return 1
       require_command qs-end4 || return 1
       ;;
   esac
@@ -363,7 +364,11 @@ prepare_profile_or_fallback() {
 
 persist_profile() {
   mkdir -p -- "$(dirname "$persistent_state_file")"
-  write_regular_file "$persistent_state_file" "$profile"
+  write_regular_file "$persistent_state_file" "$profile" || return 1
+
+  if wahrwelt_valid_end4_variant "$profile"; then
+    write_regular_file "$wahrwelt_end4_variant_state" "$profile"
+  fi
 }
 
 hypr_supports_lua_runtime() {

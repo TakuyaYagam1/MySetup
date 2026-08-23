@@ -15,8 +15,9 @@ Personal system configuration for Linux (NixOS + Hyprland) and Windows (Komorebi
 
 ## `SUPER + SHIFT + W` -> switch shell
 
-Three interchangeable Hyprland shells - **caelestia**, **noctalia**, **end-4** - swap between them at
-runtime, no reinstall needed. Details: [Linux/README.md](Linux/README.md#runtime-shells).
+Three interchangeable Hyprland shell families - **Caelestia**, **Noctalia**, and **End4** - swap at
+runtime, no reinstall needed. End4 includes an **Official** variant and the optional **pC** fork;
+Caelestia remains the default. Details: [Linux/README.md](Linux/README.md#runtime-shells).
 
 Full keybind reference (every shell, every bind): [GitHub Wiki](https://github.com/TakuyaYagam1/wahrwelt/wiki)
 or [`Linux/keybinds.md`](Linux/keybinds.md).
@@ -47,7 +48,7 @@ square instead of a circle.
 
 ## Screenshots
 
-| caelestia-shell | noctalia v5 | noctalia v4 | end-4 (Illogical Impulse) |
+| caelestia-shell | noctalia v5 | noctalia v4 | End4 Official (Illogical Impulse) |
 | :---: | :---: | :---: | :---: |
 | ![caelestia-shell](assets/caelestia-shell.png) | ![noctalia v5](assets/noctalia-v5.png) | ![noctalia v4](assets/noctalia-v4.png) | ![end-4](assets/end-4.png) |
 
@@ -95,9 +96,11 @@ configuration paths are migrated automatically to `wahrwelt`; compatibility name
 available only as source/API aliases.
 
 The installer asks about: Wahrwelt channel, username/password, package preset, display and
-keyboard layout, Secure Boot, GPU type, locale/timezone, CTF tools, and user
-dotfiles. Full flag reference (`--layout`, `--lock-mode`, low-RAM bootstrap, flake module usage
-for external hosts, etc.) is in [Linux/README.md](Linux/README.md).
+keyboard layout, Secure Boot, GPU type, locale/timezone, CTF tools, and user dotfiles. After
+installation, the runtime selector exposes three shell families and an Official/pC segmented
+choice under End4. Caelestia is selected by default. Full flag reference (`--layout`,
+`--lock-mode`, low-RAM bootstrap, flake module usage for external hosts, etc.) is in
+[Linux/README.md](Linux/README.md).
 
 #### Package presets
 
@@ -107,7 +110,7 @@ Presets are **cumulative** - each tier includes everything below it and adds mor
 | Preset | Boots into | What it adds on top of the tier below | Best for |
 | --- | --- | --- | --- |
 | `minimal` | **Text console only** (no display manager, no Hyprland) | Base system + core CLI/system tools, Wayland libraries/tools, and audio utilities (cava, pavucontrol). **No graphical desktop** - you log in at a TTY. | Servers, VMs, low-spec boxes, or anyone who just wants the CLI base. If you boot to a black screen with a blinking cursor, that is the console login working as intended - type your user and password. |
-| `desktop` | **The graphical Hyprland rice** | SDDM greeter + Hyprland compositor + the three runtime shells, plus everyday GUI apps (Firefox, Zen, Spotify, Telegram, Vesktop, LibreOffice, mpv, Obsidian, file manager, screenshot/calculator/terminal-multiplexer tools) and gaming/portal/font support. | Most people who want the desktop but not a dev or private-workstation load. This is the lowest preset that gives you a graphical session. |
+| `desktop` | **The graphical Hyprland rice** | SDDM greeter + Hyprland compositor + three shell families and four runtime profiles (`caelestia`, `noctalia`, `end4`, `end4-pc`), plus everyday GUI apps (Firefox, Zen, Spotify, Telegram, Vesktop, LibreOffice, mpv, Obsidian, file manager, screenshot/calculator/terminal-multiplexer tools) and gaming/portal/font support. | Most people who want the desktop but not a dev or private-workstation load. This is the lowest preset that gives you a graphical session. |
 | `developer` | Same graphical desktop | Developer/API/container tooling: VS Code, API clients (yaak, ngrok), a SQLite TUI, Claude Code, Codex CLI, Codex Desktop, and container extras. | A workstation you also code on, without the full personal app pile. |
 | `personal` | Same graphical desktop | The full private-workstation load: Chrome, extra office suites, Anytype, DBeaver/DataGrip, many editors/IDEs (Cursor, Zed, QtCreator, Android Studio), additional AI tools (gemini-cli, ollama, opencode), Flutter/Android tooling, plus games (Lutris, Heroic). | **My own machine, basically.** I built this preset specifically for my personal daily-driver, so it's opinionated and packed with my exact toolset - most people should stick to one of the first three. This is by far the heaviest build; on <16GB RAM keep `max-jobs` low (see the build-cores note above) to avoid OOM during the first build. |
 
@@ -132,14 +135,16 @@ projects - these dots would not exist without them:
 - [noctalia-dev/noctalia](https://github.com/noctalia-dev/noctalia) - QuickShell-based desktop
   shell shipped as one of the runtime profiles.
 - [end-4/dots-hyprland](https://github.com/end-4/dots-hyprland) - the Illogical Impulse
-  Hyprland/QuickShell dotfiles wired in as the `end4` runtime profile.
+  Hyprland/QuickShell dotfiles wired in as the End4 Official `end4` runtime profile.
+- [pctrade/end4-pC](https://github.com/pctrade/end4-pC) - GPL-3.0-licensed optional
+  QuickShell fork wired in as the End4 pC `end4-pc` runtime profile.
 - [caelestia-dots/shell](https://github.com/caelestia-dots/shell) - Caelestia QuickShell, the
   default runtime profile.
 - [anotherhadi/nixy](https://github.com/anotherhadi/nixy) - reference NixOS workstation config
   used for ideas around Home Manager modules, MIME defaults, and Nix utility wiring.
 
 Additional thanks to [@outfoxxed](https://github.com/outfoxxed) for
-[QuickShell](https://github.com/outfoxxed/quickshell), which all three shell profiles depend on,
+[QuickShell](https://github.com/outfoxxed/quickshell), which all shell profiles depend on,
 and to the wider Hyprland community for the help, suggestions, and reference configs.
 
 ## License

@@ -1,7 +1,9 @@
 # Keybinds
 
-Hyprland-based NixOS configuration with three swappable QuickShell-based
-shells. Use `Super+Shift+W` to switch between them at runtime.
+Hyprland-based NixOS configuration with three swappable QuickShell-based shell
+families. End4 has Official and pC variants, for four runtime profile IDs in
+total. Use `Super+Shift+W` to switch between them at runtime; Caelestia is the
+default.
 
 The configuration is layered: a **common** set is sourced by every shell,
 then each shell adds its own bindings on top.
@@ -25,15 +27,16 @@ Source files in the repository:
 - `Linux/dots/hypr/hyprland/keybinds.conf` - base Hyprland keybinds
 - `Linux/dots/hypr/shell-common-keybinds.conf` - shared shell entrypoints
 - `Linux/dots/hypr/shell-workspace-keybinds.conf` - workspace group navigation
-- `Linux/dots/hypr/{caelestia,noctalia,end4}/keybinds.conf` - per-shell
+- `Linux/dots/hypr/{caelestia,noctalia,end4}/keybinds.conf` - per-family
 - `Linux/dots/hypr/{caelestia,noctalia}/launcher.conf` - Super long-press launcher
 
 ---
 
 ## Common (all shells)
 
-These keybinds are sourced by **all three shells** (caelestia, noctalia,
-end4) via `source = $hypr/shell-common-keybinds.conf` and
+These keybinds are sourced by **all four runtime profiles** (`caelestia`,
+`noctalia`, `end4`, `end4-pc`) via
+`source = $hypr/shell-common-keybinds.conf` and
 `shell-workspace-keybinds.conf`, plus the base Hyprland config in
 `hyprland/keybinds.conf`.
 
@@ -41,7 +44,7 @@ end4) via `source = $hypr/shell-common-keybinds.conf` and
 
 | Keys | Action |
 | --- | --- |
-| `Super+Shift+W` | Toggle QuickShell-based shell selector (switch between caelestia / noctalia / end4) |
+| `Super+Shift+W` | Toggle the shell selector: Caelestia, Noctalia, or End4 with an Official/pC segmented choice |
 
 ### Application launchers
 
@@ -309,21 +312,22 @@ Interrupt is wired for: catchall keys, all mouse buttons
 
 ## End4 (Illogical Impulse)
 
-Bindings specific to **end-4 / Illogical Impulse**, layered on top of Common.
-The end4 profile uses upstream end-4 dotfiles patched by
+Bindings specific to the **End4** family, layered on top of Common. End4
+Official uses profile ID `end4` and QuickShell config `ii`; End4 pC uses
+profile ID `end4-pc` and QuickShell config `end4-pC`. Both variants use the
+same upstream end-4 Hyprland base patched by
 `Linux/NixOS/home/end4/patches/hypr.nix` and overlays Wahrwelt-specific
 keybinds from `Linux/dots/hypr/end4/keybinds.conf`.
 
 > Sources: `Linux/dots/hypr/end4/keybinds.conf`,
-> upstream `end-4/dots-hyprland`.
+> upstream `end-4/dots-hyprland`, and optional `pctrade/end4-pC` QuickShell.
 
 ### Launcher
 
-End4 ships its own QuickShell launcher tied to **Super long-press** via
-upstream `end-4/dots-hyprland`. Wahrwelt leaves the upstream wiring alone -
-no per-shell launcher.conf is needed (`Linux/dots/hypr/end4/launcher.conf`
-is intentionally empty; the active `$hypr/shell-launcher.conf` symlink
-points to the upstream config while end4 is active).
+End4 ships its own QuickShell launcher tied to **Super long-press**. Wahrwelt
+keeps one shared End4 Hyprland/keybind layer while the selector starts either
+`qs -c ii` from `~/.config/quickshell/ii` or `qs -c end4-pC` from
+`~/.config/quickshell/end4-pC`. No separate pC keybind table is needed.
 
 | Trigger | Action |
 | --- | --- |
@@ -387,6 +391,8 @@ section above for the resulting set.
   shortcuts come from the upstream `end-4/dots-hyprland` config. They are
   not duplicated here - refer to the upstream wiki for shell-internal
   bindings: <https://end-4.github.io/dots-hyprland-wiki/>.
-- Wahrwelt keeps end4 mutable runtime settings under
-  `~/.config/illogical-impulse`, so shell-side JSON changes can persist
-  without a rebuild.
+- Wahrwelt keeps shared End4 settings in the mutable
+  `~/.config/illogical-impulse/config.json`, so themes and shell-side changes
+  persist across Official/pC switches without a rebuild.
+- Both QuickShell trees come from immutable Nix store outputs. The pC
+  self-updater is disabled; flake lock updates are the supported update path.

@@ -3,6 +3,7 @@
   "profiles": [
     {
       "id": "noctalia",
+      "family": "noctalia",
       "title": "noctalia",
       "accent": "#f48ab6",
       "surface": "#211f31",
@@ -12,6 +13,7 @@
     },
     {
       "id": "caelestia",
+      "family": "caelestia",
       "title": "caelestia-shell",
       "accent": "#6ae5e1",
       "surface": "#201f33",
@@ -21,7 +23,22 @@
     },
     {
       "id": "end4",
+      "family": "end4",
+      "quickshellConfig": "ii",
+      "variantLabel": "Official",
       "title": "end-4",
+      "accent": "#51debd",
+      "surface": "#1d2122",
+      "logo": "assets/illogical-impulse.svg",
+      "launcher": "end4/launcher.lua",
+      "keybinds": "end4/keybinds.lua"
+    },
+    {
+      "id": "end4-pc",
+      "family": "end4",
+      "quickshellConfig": "end4-pC",
+      "variantLabel": "pC",
+      "title": "end4-pC",
       "accent": "#51debd",
       "surface": "#1d2122",
       "logo": "assets/illogical-impulse.svg",

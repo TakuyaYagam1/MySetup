@@ -273,12 +273,12 @@ func TestPackagePresetLocksContainOnlyTheirDependencyTier(t *testing.T) {
 	}
 	requiredByPreset := map[string][]string{
 		"minimal":   {"nixpkgs", "home-manager", "neovim-nightly-overlay"},
-		"desktop":   {"caelestia-shell", "noctalia", "quickshell", "zen-browser"},
-		"developer": {"caelestia-shell", "noctalia", "claude-code", "codex", "codex-desktop-linux"},
-		"personal":  {"caelestia-shell", "noctalia", "claude-code", "codex", "codex-desktop-linux"},
+		"desktop":   {"caelestia-shell", "noctalia", "quickshell", "zen-browser", "end4-pc"},
+		"developer": {"caelestia-shell", "noctalia", "claude-code", "codex", "codex-desktop-linux", "end4-pc"},
+		"personal":  {"caelestia-shell", "noctalia", "claude-code", "codex", "codex-desktop-linux", "end4-pc"},
 	}
 	forbiddenByPreset := map[string][]string{
-		"minimal":   {"caelestia-shell", "noctalia", "quickshell", "zen-browser", "claude-code", "codex", "codex-desktop-linux", "lanzaboote"},
+		"minimal":   {"caelestia-shell", "noctalia", "quickshell", "zen-browser", "claude-code", "codex", "codex-desktop-linux", "end4-pc", "lanzaboote"},
 		"desktop":   {"claude-code", "codex", "codex-desktop-linux", "lanzaboote"},
 		"developer": {"lanzaboote"},
 		"personal":  {"lanzaboote"},

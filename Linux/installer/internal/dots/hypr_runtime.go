@@ -31,17 +31,20 @@ func writeHyprRuntimeShellState(home, hyprDir string) error {
 	if err := writeShellLauncherConfig(shellLauncher, hyprDir); err != nil {
 		return err
 	}
-	if profile != "end4" {
+	if !shellruntime.IsEnd4Profile(profile) {
 		if err := writeShellLauncherBindingsConfig(shellLauncherBindings, hyprDir, profile); err != nil {
 			return err
 		}
 		return writeLegacyRuntimeShellState(hyprDir, shellKeybinds, hyprland, hyprlock, hypridle, shellLauncher, profile)
 	}
 
-	if err := writeEnd4RuntimeShellPlaceholders(shellLauncherBindings, shellKeybinds); err != nil {
+	if err := writeRuntimeShellStateFile(shellruntime.End4VariantStatePath(home), profile); err != nil {
 		return err
 	}
-	return writeEnd4RuntimeShellState(hyprDir, hyprland, hyprlock, hypridle)
+	if err := writeEnd4RuntimeShellPlaceholders(shellLauncherBindings, shellKeybinds, profile); err != nil {
+		return err
+	}
+	return writeEnd4RuntimeShellState(hyprDir, hyprland, hyprlock, hypridle, profile)
 }
 
 func removeLegacyHyprlandRuntimeFiles(home, hyprDir string) error {
@@ -90,21 +93,21 @@ func writeLegacyRuntimeShellState(hyprDir, shellKeybinds, hyprland, hyprlock, hy
 	return writeShellManagedRuntimePlaceholder(hypridle, "Hypridle", profile, "Caelestia and Noctalia use shell-native idle flows.")
 }
 
-func writeEnd4RuntimeShellState(hyprDir, hyprland, hyprlock, hypridle string) error {
-	if err := writeEnd4HyprEntrypointConfig(hyprland); err != nil {
+func writeEnd4RuntimeShellState(hyprDir, hyprland, hyprlock, hypridle, profile string) error {
+	if err := writeEnd4HyprEntrypointConfig(hyprland, profile); err != nil {
 		return err
 	}
-	if err := writeRuntimeSourceConfig(hyprlock, filepath.Join(hyprDir, "end4", "hyprlock.conf"), "Active Hyprlock profile: end4"); err != nil {
+	if err := writeRuntimeSourceConfig(hyprlock, filepath.Join(hyprDir, "end4", "hyprlock.conf"), "Active Hyprlock profile: "+profile); err != nil {
 		return err
 	}
-	return writeRuntimeSourceConfig(hypridle, filepath.Join(hyprDir, "end4", "hypridle.conf"), "Active Hypridle profile: end4")
+	return writeRuntimeSourceConfig(hypridle, filepath.Join(hyprDir, "end4", "hypridle.conf"), "Active Hypridle profile: "+profile)
 }
 
-func writeEnd4RuntimeShellPlaceholders(shellLauncher, shellKeybinds string) error {
-	if err := writeRuntimeConfigFile(shellLauncher, "-- Active shell launcher profile: end4\n-- end4 registers launcher bindings from its own Hyprland Lua modules.\n"); err != nil {
+func writeEnd4RuntimeShellPlaceholders(shellLauncher, shellKeybinds, profile string) error {
+	if err := writeRuntimeConfigFile(shellLauncher, fmt.Sprintf("-- Active shell launcher profile: %s\n-- end4 registers launcher bindings from its own Hyprland Lua modules.\n", profile)); err != nil {
 		return err
 	}
-	return writeRuntimeConfigFile(shellKeybinds, "-- Active shell keybind profile: end4\n-- end4 registers keybinds from its own Hyprland Lua modules.\n")
+	return writeRuntimeConfigFile(shellKeybinds, fmt.Sprintf("-- Active shell keybind profile: %s\n-- end4 registers keybinds from its own Hyprland Lua modules.\n", profile))
 }
 
 func writeRuntimeShellStateFile(path, profile string) error {
@@ -208,8 +211,8 @@ local _ = runtime_root
 	return writeRuntimeConfigFile(path, content)
 }
 
-func writeEnd4HyprEntrypointConfig(path string) error {
-	content := `-- Active Hyprland profile: end4
+func writeEnd4HyprEntrypointConfig(path, profile string) error {
+	content := fmt.Sprintf(`-- Active Hyprland profile: %s
 local home = os.getenv("HOME")
 if home == nil then
     error("HOME is not set; cannot locate end4 Hyprland config")
@@ -220,7 +223,7 @@ local hypr_root = config_home .. "/hypr"
 local end4_root = hypr_root .. "/end4"
 package.path = end4_root .. "/?.lua;" .. end4_root .. "/?/init.lua;" .. hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
 dofile(end4_root .. "/hyprland.lua")
-`
+`, profile)
 	return writeRuntimeConfigFile(path, content)
 }
 

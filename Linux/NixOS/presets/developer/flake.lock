@@ -225,6 +225,22 @@
         "url": "https://github.com/end-4/dots-hyprland"
       }
     },
+    "end4-pc": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787475231,
+        "narHash": "sha256-kwRQjXSxFsBoZtSzNDqXLXly0MEzp8I3sDTsznhnZ9k=",
+        "owner": "pctrade",
+        "repo": "end4-pC",
+        "rev": "226c8c46397b4931a883206bc7d0dbe993621465",
+        "type": "github"
+      },
+      "original": {
+        "owner": "pctrade",
+        "repo": "end4-pC",
+        "type": "github"
+      }
+    },
     "firefox-gnome-theme": {
       "flake": false,
       "locked": {
@@ -740,6 +756,7 @@
         "codex": "codex",
         "codex-desktop-linux": "codex-desktop-linux",
         "end4-dotfiles": "end4-dotfiles",
+        "end4-pc": "end4-pc",
         "home-manager": "home-manager",
         "neovim-nightly-overlay": "neovim-nightly-overlay",
         "nix-index-database": "nix-index-database",

@@ -134,7 +134,7 @@ func repairActiveEnd4ProfileLink(ctx context.Context, runner run.CommandRunner, 
 	if profile == "" {
 		profile = shellruntime.ReadActiveShell(paths.LegacyActiveShellStatePath(home))
 	}
-	if profile != shellruntime.End4 {
+	if !shellruntime.IsEnd4Profile(profile) {
 		return nil
 	}
 	configDir := filepath.Join(home, ".config")
@@ -142,7 +142,7 @@ func repairActiveEnd4ProfileLink(ctx context.Context, runner run.CommandRunner, 
 	if ok, err := shellruntime.RuntimeConfigExists(filepath.Join(target, "hyprland.lua")); err != nil || ok {
 		return err
 	}
-	source, err := shellruntime.End4SourceFromHomeManager(configDir)
+	source, err := shellruntime.End4SourceForProfileFromHomeManager(configDir, profile)
 	if err != nil || source == "" {
 		return err
 	}

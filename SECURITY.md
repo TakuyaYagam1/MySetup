@@ -42,7 +42,8 @@ Please include:
 **Out of scope:**
 
 - Vulnerabilities in upstream projects (Hyprland, Quickshell, caelestia-shell,
-  noctalia, end-4 dots-hyprland, Komorebi, YASB, Zen Browser, etc.).
+  noctalia, end-4 dots-hyprland, pctrade/end4-pC, Komorebi, YASB, Zen Browser,
+  etc.).
   Report those to the upstream maintainers directly.
 - Vulnerabilities in NixOS itself or in any package fetched from `nixpkgs`.
 - Issues that require an already-compromised machine to exploit.

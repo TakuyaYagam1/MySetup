@@ -102,6 +102,33 @@ func TestReadActiveShellAcceptsKnownProfilesOnly(t *testing.T) {
 	}
 }
 
+func TestReadEnd4VariantRequiresExactPersistedFormat(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "end4-variant")
+	tests := []struct {
+		name string
+		data string
+		want string
+	}{
+		{name: "official", data: "end4\n", want: End4},
+		{name: "pc", data: "end4-pc\n", want: End4PC},
+		{name: "missing newline", data: "end4-pc", want: End4},
+		{name: "leading whitespace", data: " end4-pc\n", want: End4},
+		{name: "extra line", data: "end4-pc\nend4\n", want: End4},
+		{name: "untrusted value", data: "../../end4-pc\n", want: End4},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := os.WriteFile(path, []byte(tt.data), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if got := ReadEnd4Variant(path); got != tt.want {
+				t.Fatalf("ReadEnd4Variant() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDetectShellFromEntrypointUsesEntrypointAndKeybinds(t *testing.T) {
 	dir := t.TempDir()
 	entrypoint := filepath.Join(dir, "hyprland.lua")
@@ -160,6 +187,70 @@ func TestBootstrapActiveShellPriorityAndFallback(t *testing.T) {
 	}
 	if got := BootstrapActiveShell(home, hyprDir); got != End4 {
 		t.Fatalf("active shell state should take priority, got %q", got)
+	}
+}
+
+func TestBootstrapActiveShellRemembersExactEnd4Variant(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	if err := os.MkdirAll(RuntimeDir(home), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(RuntimeFile(home, "hyprland.lua"), []byte(`dofile("/home/user/.config/hypr/end4/hyprland.lua")`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	variantPath := filepath.Join(home, ".local", "state", "wahrwelt", "end4-variant")
+	if err := os.WriteFile(variantPath, []byte("end4-pc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := BootstrapActiveShell(home, hyprDir); got != "end4-pc" {
+		t.Fatalf("end4 entrypoint should restore remembered pC variant, got %q", got)
+	}
+
+	if err := os.WriteFile(variantPath, []byte("../../untrusted\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := BootstrapActiveShell(home, hyprDir); got != End4 {
+		t.Fatalf("invalid remembered variant must fall back to official end4, got %q", got)
+	}
+}
+
+func TestEnd4SourceFromHomeManagerUsesRememberedVariantConfig(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+
+	home := t.TempDir()
+	configDir := filepath.Join(home, ".config")
+	hmRoot := t.TempDir()
+	qsSource := filepath.Join(hmRoot, ".config", "quickshell", "end4-pC")
+	end4Source := filepath.Join(hmRoot, ".config", "hypr", "end4")
+	for _, dir := range []string{filepath.Join(configDir, "quickshell"), qsSource, end4Source} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(end4Source, "hyprland.lua"), []byte("require(\"custom.general\")\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(qsSource, filepath.Join(configDir, "quickshell", "end4-pC")); err != nil {
+		t.Fatal(err)
+	}
+	variantPath := filepath.Join(home, ".local", "state", "wahrwelt", "end4-variant")
+	if err := os.MkdirAll(filepath.Dir(variantPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(variantPath, []byte("end4-pc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := End4SourceFromHomeManager(configDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != end4Source {
+		t.Fatalf("unexpected pC end4 source: got %q want %q", got, end4Source)
 	}
 }
 

@@ -7,6 +7,7 @@ _:
 {
   imports = [
     ./quickshell.nix
+    ./quickshell-pc.nix
     ./hypr.nix
     ./xdg-files.nix
   ];

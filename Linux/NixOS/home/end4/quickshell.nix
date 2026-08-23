@@ -13,6 +13,9 @@ in
       else
         ${end4Lib.runtimeEnv.quickshellExports}
       fi
+      if [ -n "''${WAHRWELT_QS_CONFIG:-}" ]; then
+        export qsConfig="$WAHRWELT_QS_CONFIG"
+      fi
       exec ${qsPackage}/bin/qs "$@"
     '')
   ];

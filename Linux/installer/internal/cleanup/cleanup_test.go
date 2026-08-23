@@ -195,6 +195,49 @@ func TestRunRepairsActiveEnd4ProfileLink(t *testing.T) {
 	}
 }
 
+func TestRunRepairsActiveEnd4PCProfileLink(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_STATE_HOME", "")
+
+	hmRoot := filepath.Join(t.TempDir(), "hm-files")
+	end4Source := filepath.Join(hmRoot, ".config", "hypr", "end4")
+	qsSource := filepath.Join(hmRoot, ".config", "quickshell", "end4-pC")
+	for _, dir := range []string{end4Source, qsSource, filepath.Join(home, ".config", "quickshell")} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(end4Source, "hyprland.lua"), []byte("require(\"hyprland.env\")\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(qsSource, filepath.Join(home, ".config", "quickshell", "end4-pC")); err != nil {
+		t.Fatal(err)
+	}
+
+	stateDir := filepath.Join(home, ".local", "state", "wahrwelt")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "active-shell"), []byte("end4-pc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "end4-variant"), []byte("end4-pc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := captureStdout(t, func() {
+		if err := Run(context.Background(), Options{DryRun: true, Yes: true}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	for _, want := range []string{"ln -sfn", end4Source, filepath.Join(home, ".config", "hypr", "end4")} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected cleanup output to contain %q\n%s", want, out)
+		}
+	}
+}
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	original := os.Stdout

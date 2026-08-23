@@ -14,15 +14,20 @@ wahrwelt_hypr_dir="$wahrwelt_config_home/hypr"
 wahrwelt_state_dir="$wahrwelt_state_home/wahrwelt"
 wahrwelt_hypr_runtime_dir="$wahrwelt_state_dir/hypr-runtime"
 wahrwelt_active_shell_state="$wahrwelt_state_dir/active-shell"
+wahrwelt_end4_variant_state="$wahrwelt_state_dir/end4-variant"
 wahrwelt_log_file="$wahrwelt_runtime_session_dir/wahrwelt-shell.log"
 wahrwelt_default_shell_profile="caelestia"
 
 wahrwelt_selector_pattern='((^|[ /])(qs|quickshell)([[:space:]].*)?-c[[:space:]]wahrwelt-shell-selector([[:space:]]|$))|quickshell/wahrwelt-shell-selector([/[:space:]]|$)'
-wahrwelt_end4_pattern='((^|[ /])(qs-end4|qs|quickshell)([[:space:]].*)?-c[[:space:]]ii([[:space:]]|$))|quickshell/ii([/[:space:]]|$)'
+wahrwelt_end4_official_pattern='((^|[ /])(qs-end4|qs|quickshell)([[:space:]].*)?-c[[:space:]]ii([[:space:]]|$))|quickshell/ii([/[:space:]]|$)'
+wahrwelt_end4_pc_pattern='((^|[ /])(qs-end4|qs|quickshell)([[:space:]].*)?-c[[:space:]]end4-pC([[:space:]]|$))|quickshell/end4-pC([/[:space:]]|$)'
+wahrwelt_end4_pattern="($wahrwelt_end4_official_pattern)|($wahrwelt_end4_pc_pattern)"
 wahrwelt_noctalia_v4_pattern='(^|[ /])noctalia-shell([[:space:]]|$)|share/noctalia-shell'
 wahrwelt_caelestia_pattern='share/caelestia-shell|caelestia-shell|(^|[ /])caelestia[[:space:]]+shell([[:space:]]|$)'
 wahrwelt_noctalia_v4_env_pattern='^QS_CONFIG_PATH=.*/share/noctalia-shell$'
-wahrwelt_end4_env_pattern='^qsConfig=.*/quickshell/ii$|^ILLOGICAL_IMPULSE_DOTFILES_SOURCE='
+wahrwelt_end4_official_env_pattern='^qsConfig=.*/quickshell/ii$'
+wahrwelt_end4_pc_env_pattern='^qsConfig=.*/quickshell/end4-pC$'
+wahrwelt_end4_env_pattern="$wahrwelt_end4_official_env_pattern|$wahrwelt_end4_pc_env_pattern|^ILLOGICAL_IMPULSE_DOTFILES_SOURCE="
 
 wahrwelt_user_name="${USER:-}"
 if [ -z "$wahrwelt_user_name" ]; then
@@ -39,9 +44,64 @@ wahrwelt_runtime_file() {
 
 wahrwelt_valid_shell_profile() {
   case "$1" in
-    caelestia | noctalia | end4) return 0 ;;
+    caelestia | noctalia | end4 | end4-pc) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+wahrwelt_valid_end4_variant() {
+  case "$1" in
+    end4 | end4-pc) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+wahrwelt_shell_family() {
+  case "$1" in
+    end4 | end4-pc) printf '%s' end4 ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+wahrwelt_end4_quickshell_config() {
+  case "$1" in
+    end4) printf '%s' ii ;;
+    end4-pc) printf '%s' end4-pC ;;
+    *) return 1 ;;
+  esac
+}
+
+wahrwelt_end4_quickshell_path() {
+  local qs_config
+
+  qs_config="$(wahrwelt_end4_quickshell_config "$1")" || return 1
+  printf '%s/quickshell/%s' "$wahrwelt_config_home" "$qs_config"
+}
+
+wahrwelt_export_end4_quickshell_config() {
+  local qs_path
+
+  qs_path="$(wahrwelt_end4_quickshell_path "$1")" || return 1
+  export WAHRWELT_QS_CONFIG="$qs_path"
+  export qsConfig="$qs_path"
+}
+
+wahrwelt_read_end4_variant() {
+  local path="${1:-$wahrwelt_end4_variant_state}"
+  local stored=""
+
+  if [ -f "$path" ]; then
+    IFS= read -r stored <"$path" || stored=""
+    if ! printf '%s\n' "$stored" | cmp -s - "$path"; then
+      stored=""
+    fi
+  fi
+
+  if wahrwelt_valid_end4_variant "$stored"; then
+    printf '%s' "$stored"
+  else
+    printf '%s' end4
+  fi
 }
 
 wahrwelt_noctalia_command() {

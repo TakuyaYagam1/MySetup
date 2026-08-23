@@ -37,6 +37,26 @@ matching_pids() {
         done
       } | sort -u
       ;;
+    "$end4_official_handle")
+      {
+        pgrep -u "$user_name" -f "$end4_official_pattern" 2>/dev/null || true
+        for pid in $(wahrwelt_quickshell_pids); do
+          if wahrwelt_pid_has_env_regex "$pid" "$end4_official_env_pattern"; then
+            printf '%s\n' "$pid"
+          fi
+        done
+      } | sort -u
+      ;;
+    "$end4_pc_handle")
+      {
+        pgrep -u "$user_name" -f "$end4_pc_pattern" 2>/dev/null || true
+        for pid in $(wahrwelt_quickshell_pids); do
+          if wahrwelt_pid_has_env_regex "$pid" "$end4_pc_env_pattern"; then
+            printf '%s\n' "$pid"
+          fi
+        done
+      } | sort -u
+      ;;
     "$end4_idle_handle")
       for pid in $(pgrep -u "$user_name" -x hypridle 2>/dev/null || true); do
         if ps -p "$pid" -o args= 2>/dev/null | grep -Fq -- "-c $end4_idle_config"; then

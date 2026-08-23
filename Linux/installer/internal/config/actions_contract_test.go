@@ -84,3 +84,43 @@ func TestPresetFlakeUpdaterUsesDirectoryFlakeReferences(t *testing.T) {
 		t.Fatalf("preset checks must evaluate preset-host.drvPath instead of checking unbuilt outputs\n%s", source)
 	}
 }
+
+func TestFlakeUpdaterValidatesEnd4PCIntegration(t *testing.T) {
+	workflow, err := os.ReadFile("../../../../.github/workflows/update-flake.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(workflow)
+
+	for _, want := range []string{
+		"Verify end4-pC input ownership",
+		`'.nodes.root.inputs["end4-pc"]'`,
+		"Linux/NixOS/presets/minimal/flake.lock",
+		"Linux/NixOS/presets/desktop/flake.lock",
+		"Linux/NixOS/presets/developer/flake.lock",
+		"Linux/NixOS/presets/personal/flake.lock",
+		"Build end4-pC Quickshell config",
+		`xdg.configFile."quickshell/end4-pC".source`,
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("flake updater must validate the end4-pC integration: missing %q\n%s", want, source)
+		}
+	}
+}
+
+func TestLocalCheckValidatesEnd4PCSources(t *testing.T) {
+	makefile, err := os.ReadFile("../../Makefile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(makefile)
+
+	for _, want := range []string{
+		"quickshell-pc.py",
+		`xdg.configFile.\"quickshell/end4-pC\".source`,
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("local check must validate end4-pC sources: missing %q\n%s", want, source)
+		}
+	}
+}

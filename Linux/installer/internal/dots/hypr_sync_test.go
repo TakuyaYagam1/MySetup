@@ -128,6 +128,39 @@ func TestSyncHyprPreservesEnd4ProfileWhenActive(t *testing.T) {
 	}
 }
 
+func TestSyncHyprPreservesEnd4ProfileWhenPCVariantIsActive(t *testing.T) {
+	dotsSrc := t.TempDir()
+	writeRequiredHyprSource(t, dotsSrc)
+	configDir := filepath.Join(t.TempDir(), ".config")
+	hyprDir := filepath.Join(configDir, "hypr")
+	end4Dir := filepath.Join(hyprDir, "end4")
+	if err := os.MkdirAll(end4Dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(end4Dir, "launcher.lua"), []byte("-- active pC profile\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	home := homeDirFromConfigDir(configDir)
+	if err := os.MkdirAll(filepath.Dir(paths.ActiveShellStatePath(home)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.ActiveShellStatePath(home), []byte("end4-pc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	state := config.Default()
+	state.User.Username = "tester"
+	var out bytes.Buffer
+	runner := run.Runner{DryRun: true, Stdout: &out, Stderr: &out}
+	if err := syncHypr(context.Background(), runner, dotsSrc, configDir, state); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "rm -rf -- "+end4Dir) {
+		t.Fatalf("active end4-pc profile must not be pruned during hypr sync:\n%s", out.String())
+	}
+}
+
 func TestSyncHyprFailsWhenRequiredSourceMissing(t *testing.T) {
 	dotsSrc := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dotsSrc, "hypr"), 0o755); err != nil {

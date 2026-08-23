@@ -220,7 +220,8 @@ Secret files must be regular files, non-symlinks, and not group/world readable.
 - Feature flags: GPU type, Secure Boot, CTF tools, OmniRouter, Portainer.
 - Passwords: Linux user password hash.
 - Dots: Hyprland Lua config, scripts chmod, wallpapers, Zen Browser Catppuccin
-  chrome, optional Sine profile, Neovim, v2rayN `sing-box`.
+  chrome, optional Sine profile, Neovim, v2rayN `sing-box`, and the runtime
+  shell selector with End4 Official/pC variants.
 
 Presets are cumulative - each one includes everything below it and adds more
 (`minimal` -> `desktop` -> `developer` -> `personal`). The full per-tier
@@ -231,8 +232,9 @@ breakdown is in the [root README](../README.md#package-presets); in short:
   you picked this and hit a black screen with a blinking cursor, that is the
   console login working, not a bug.
 - `desktop`: the first preset with a graphical session. Adds the SDDM login
-  screen, Hyprland, the runtime shells, and everyday GUI apps (browser, chat,
-  office, media, file manager).
+  screen, Hyprland, three shell families and four runtime profiles
+  (`caelestia`, `noctalia`, `end4`, `end4-pc`), and everyday GUI apps (browser,
+  chat, office, media, file manager).
 - `developer`: `desktop` plus developer/API/container tooling, Claude Code,
   Codex CLI, and Codex Desktop.
 - `personal`: `developer` plus the full private-workstation load - extra apps,
@@ -243,16 +245,18 @@ module, and each module turns itself on or off based on `wahrwelt.packages.prese
 That way all four presets run through the same code path.
 
 Each preset has a public flake and its own lock under
-`Linux/NixOS/presets/<preset>`. `minimal` contains only core inputs,
-`desktop` adds the graphical shell graph, and `developer`/`personal` add the
-Claude Code, Codex CLI, and Codex Desktop inputs. The old `Linux/NixOS` flake
-remains the full compatibility entrypoint.
+`Linux/NixOS/presets/<preset>`. `minimal` contains only core inputs and does not
+own `end4-pc`. `desktop`, `developer`, and `personal` add the graphical shell
+graph, including the pinned `pctrade/end4-pC` source. The latter two also add
+the Claude Code, Codex CLI, and Codex Desktop inputs. The old `Linux/NixOS`
+flake remains the full compatibility entrypoint and owns `end4-pc` too.
 
 The generated wrapper `flake.nix` points at the selected preset flake.
 Independent mode keeps moving core inputs host-owned and adds
-Quickshell/end4/Zen only for desktop or higher. AI inputs stay owned by the
-developer/personal preset lock. Lanzaboote is injected by the host wrapper only
-when Secure Boot is enabled, so it never pollutes the preset locks.
+Quickshell/End4/Zen, including `end4-pc`, only for desktop or higher. AI inputs
+stay owned by the developer/personal preset lock. Lanzaboote is injected by the
+host wrapper only when Secure Boot is enabled, so it never pollutes the preset
+locks.
 
 ### ChatGPT Desktop settings
 
@@ -341,13 +345,15 @@ Use:
 Super+Shift+W
 ```
 
-The QuickShell selector opens on the focused monitor and switches between:
+The QuickShell selector opens on the focused monitor. It presents three shell
+families, with a segmented Official/pC choice inside End4:
 
-- `caelestia-shell`
-- `noctalia`
-- `end4` / Illogical Impulse
+- Caelestia -> profile ID `caelestia` (default)
+- Noctalia -> profile ID `noctalia`
+- End4 Official -> profile ID `end4`, QuickShell config `ii`
+- End4 pC -> profile ID `end4-pc`, QuickShell config `end4-pC`
 
-The full per-shell keybind reference (common + caelestia + noctalia + end4)
+The full per-shell keybind reference (common + Caelestia + Noctalia + End4)
 lives in the [GitHub Wiki](https://github.com/TakuyaYagam1/wahrwelt/wiki) or
 [`Linux/keybinds.md`](keybinds.md).
 
@@ -369,6 +375,7 @@ Manual switch commands:
 ~/.config/hypr/scripts/start-shell.sh caelestia
 ~/.config/hypr/scripts/start-shell.sh noctalia
 ~/.config/hypr/scripts/start-shell.sh end4
+~/.config/hypr/scripts/start-shell.sh end4-pc
 ```
 
 The shell stack is intentionally split:
@@ -376,10 +383,16 @@ The shell stack is intentionally split:
 - `caelestia` and `noctalia` use the installer-managed `Linux/dots/hypr`
   Lua entrypoint with shared `shell-common-keybinds.lua` and
   `shell-workspace-keybinds.lua` fragments.
-- `end4` uses a dedicated Home Manager profile based on
-  `end-4/dots-hyprland`, with patched Lua Hyprland and QuickShell paths.
-- `end4` keeps mutable runtime settings under `~/.config/illogical-impulse`,
-  so shell-side JSON changes can persist without a rebuild.
+- End4 Official and pC share the dedicated End4 Home Manager and patched
+  Hyprland layer. Official starts `qs -c ii` from
+  `~/.config/quickshell/ii`; pC starts `qs -c end4-pC` from
+  `~/.config/quickshell/end4-pC`.
+- Both End4 variants read the same mutable
+  `~/.config/illogical-impulse/config.json`, so themes and user settings remain
+  dynamic and survive switching between Official and pC without a rebuild.
+- End4 sources are immutable Nix store outputs. The pC fork's upstream
+  self-update path is disabled; updates arrive only through Wahrwelt flake lock
+  refreshes and CI validation.
 
 Ownership contract:
 
@@ -546,9 +559,15 @@ Useful checks after changing installer or shell integration:
 | --- | --- |
 | `make -C Linux/installer check` | Before pushing or applying - full local CI: lint, fmt-check, hypr-bind-check, shell-check, tests, nix evals. |
 | `make -C Linux/installer shell-check` | After editing Hypr scripts, JSON, or Python patch sources under `Linux/dots/hypr/`. |
-| `make -C Linux/installer nix-hm-eval` | After touching `home/`, end4 runtime-env, or shell-profile imports - evaluates the runtime shell module and all-on home-manager imports including end4. |
+| `make -C Linux/installer nix-hm-eval` | After touching `home/`, End4 runtime-env, or shell-profile imports - evaluates the runtime shell module and all-on Home Manager imports including End4 Official and pC. |
 | `make -C Linux/installer nix-installed-mirror-build` | After flake changes that affect an already-installed system - builds `wahrwelt` and the legacy `mysetup` alias from an `/etc/nixos`-style temporary mirror. |
 | `make all` (run from `Linux/`) | Aggregate: delegates to installer Makefile + `statix` + `deadnix` + json-lint. |
+
+The scheduled flake updater also enforces the pC dependency boundary: the
+`end4-pc` input must exist in the root/full, `desktop`, `developer`, and
+`personal` locks, must be absent from `minimal`, and the generated
+`xdg.configFile."quickshell/end4-pC".source` must build before an update PR can
+merge.
 
 ## Configuration Structure
 
@@ -580,7 +599,7 @@ Linux/NixOS/
 │   ├── lib/                       # dotfile sync + shell selector helpers
 │   ├── caelestia/                 # caelestia-shell profile
 │   ├── noctalia/                  # noctalia profile
-│   ├── end4/                      # end-4 Illogical Impulse profile
+│   ├── end4/                      # shared End4 Official/pC profile
 │   ├── programs/                  # btop, cava, fastfetch, fish, foot, git,
 │   │                              # packages (preset-gated home pkgs),
 │   │                              # starship, thunar, vesktop, uwsm, …

@@ -10,14 +10,14 @@ import (
 )
 
 func restoreActiveEnd4Profile(ctx context.Context, runner run.CommandRunner, configDir, hyprDir, activeProfile string) error {
-	if activeProfile != "end4" {
+	if !shellruntime.IsEnd4Profile(activeProfile) {
 		return nil
 	}
-	return restoreEnd4ProfileLinkFromHomeManager(ctx, runner, configDir, hyprDir)
+	return restoreEnd4ProfileLinkFromHomeManager(ctx, runner, configDir, hyprDir, activeProfile)
 }
 
 func pruneStaleEnd4ProfileDir(ctx context.Context, runner run.CommandRunner, hyprDir, activeProfile string) error {
-	if activeProfile == "end4" {
+	if shellruntime.IsEnd4Profile(activeProfile) {
 		return nil
 	}
 	end4Dir := filepath.Join(hyprDir, "end4")
@@ -40,12 +40,12 @@ func pruneStaleEnd4ProfileDir(ctx context.Context, runner run.CommandRunner, hyp
 	return runner.Command(ctx, "rm", "-rf", "--", end4Dir)
 }
 
-func restoreEnd4ProfileLinkFromHomeManager(ctx context.Context, runner run.CommandRunner, configDir, hyprDir string) error {
+func restoreEnd4ProfileLinkFromHomeManager(ctx context.Context, runner run.CommandRunner, configDir, hyprDir, activeProfile string) error {
 	target := filepath.Join(hyprDir, "end4")
 	if ok, err := shellruntime.RuntimeConfigExists(filepath.Join(target, "hyprland.lua")); err != nil || ok {
 		return err
 	}
-	source, err := shellruntime.End4SourceFromHomeManager(configDir)
+	source, err := shellruntime.End4SourceForProfileFromHomeManager(configDir, activeProfile)
 	if err != nil || source == "" {
 		return err
 	}

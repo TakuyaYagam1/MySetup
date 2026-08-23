@@ -17,6 +17,9 @@ const (
 	Caelestia = "caelestia"
 	Noctalia  = "noctalia"
 	End4      = "end4"
+	End4PC    = "end4-pc"
+
+	End4Family = "end4"
 )
 
 //go:embed manifest.json
@@ -58,13 +61,16 @@ type Manifest struct {
 }
 
 type Profile struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	Accent   string `json:"accent"`
-	Surface  string `json:"surface"`
-	Logo     string `json:"logo"`
-	Launcher string `json:"launcher"`
-	Keybinds string `json:"keybinds"`
+	ID               string `json:"id"`
+	Family           string `json:"family"`
+	QuickshellConfig string `json:"quickshellConfig,omitempty"`
+	VariantLabel     string `json:"variantLabel,omitempty"`
+	Title            string `json:"title"`
+	Accent           string `json:"accent"`
+	Surface          string `json:"surface"`
+	Logo             string `json:"logo"`
+	Launcher         string `json:"launcher"`
+	Keybinds         string `json:"keybinds"`
 }
 
 func parseManifest(data []byte) (Manifest, error) {
@@ -76,9 +82,39 @@ func parseManifest(data []byte) (Manifest, error) {
 		return Manifest{}, errors.New("shell runtime manifest defaultProfile is empty")
 	}
 	seen := map[string]bool{}
+	quickshellConfigs := map[string]map[string]bool{}
 	for _, profile := range parsed.Profiles {
 		if profile.ID == "" {
 			return Manifest{}, errors.New("shell runtime manifest profile id is empty")
+		}
+		if seen[profile.ID] {
+			return Manifest{}, fmt.Errorf("shell runtime manifest duplicate profile id: %s", profile.ID)
+		}
+		if profile.Family == "" {
+			return Manifest{}, fmt.Errorf("shell runtime manifest profile %q family is empty", profile.ID)
+		}
+		if profile.Family == End4Family {
+			if profile.QuickshellConfig == "" {
+				return Manifest{}, fmt.Errorf("shell runtime manifest profile %q quickshellConfig is empty", profile.ID)
+			}
+			if profile.VariantLabel == "" {
+				return Manifest{}, fmt.Errorf("shell runtime manifest profile %q variantLabel is empty", profile.ID)
+			}
+		}
+		if profile.QuickshellConfig != "" {
+			familyConfigs := quickshellConfigs[profile.Family]
+			if familyConfigs == nil {
+				familyConfigs = map[string]bool{}
+				quickshellConfigs[profile.Family] = familyConfigs
+			}
+			if familyConfigs[profile.QuickshellConfig] {
+				return Manifest{}, fmt.Errorf(
+					"shell runtime manifest duplicate quickshellConfig %q in family %q",
+					profile.QuickshellConfig,
+					profile.Family,
+				)
+			}
+			familyConfigs[profile.QuickshellConfig] = true
 		}
 		seen[profile.ID] = true
 	}
@@ -100,6 +136,24 @@ func IsProfile(value string) bool {
 	return slices.Contains(Profiles, value)
 }
 
+func ProfileByID(id string) (Profile, bool) {
+	for _, profile := range ProfileSpecs {
+		if profile.ID == id {
+			return profile, true
+		}
+	}
+	return Profile{}, false
+}
+
+func IsFamily(profileID, family string) bool {
+	profile, ok := ProfileByID(profileID)
+	return ok && profile.Family == family
+}
+
+func IsEnd4Profile(profileID string) bool {
+	return IsFamily(profileID, End4Family)
+}
+
 func RuntimeDir(home string) string {
 	return filepath.Join(paths.XDGStateHome(home), "wahrwelt", "hypr-runtime")
 }
@@ -110,6 +164,10 @@ func RuntimeFile(home, name string) string {
 
 func ActiveShellStatePath(home string) string {
 	return paths.ActiveShellStatePath(home)
+}
+
+func End4VariantStatePath(home string) string {
+	return filepath.Join(paths.XDGStateHome(home), "wahrwelt", "end4-variant")
 }
 
 func ReadActiveShell(path string) string {
@@ -123,7 +181,25 @@ func ReadActiveShell(path string) string {
 	return ""
 }
 
+func ReadEnd4Variant(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return End4
+	}
+	switch string(data) {
+	case End4 + "\n":
+		return End4
+	case End4PC + "\n":
+		return End4PC
+	}
+	return End4
+}
+
 func DetectShellFromEntrypoint(entrypointPath, keybindsPath string) string {
+	return DetectShellFromEntrypointWithEnd4Variant(entrypointPath, keybindsPath, "")
+}
+
+func DetectShellFromEntrypointWithEnd4Variant(entrypointPath, keybindsPath, end4VariantPath string) string {
 	data, err := os.ReadFile(entrypointPath)
 	if err != nil {
 		return ""
@@ -131,6 +207,9 @@ func DetectShellFromEntrypoint(entrypointPath, keybindsPath string) string {
 	text := string(data)
 	switch {
 	case strings.Contains(text, "end4/hyprland.lua"):
+		if end4VariantPath != "" {
+			return ReadEnd4Variant(end4VariantPath)
+		}
 		return End4
 	case strings.Contains(text, "wahrwelt/hyprland.lua"),
 		strings.Contains(text, "mysetup/hyprland.lua"):
@@ -163,10 +242,11 @@ func BootstrapActiveShell(home, hyprDir string) string {
 	if profile := ReadActiveShell(paths.LegacyActiveShellStatePath(home)); profile != "" {
 		return profile
 	}
-	if profile := DetectShellFromEntrypoint(RuntimeFile(home, "hyprland.lua"), RuntimeFile(home, "shell-keybinds.lua")); profile != "" {
+	variantPath := End4VariantStatePath(home)
+	if profile := DetectShellFromEntrypointWithEnd4Variant(RuntimeFile(home, "hyprland.lua"), RuntimeFile(home, "shell-keybinds.lua"), variantPath); profile != "" {
 		return profile
 	}
-	if profile := DetectShellFromEntrypoint(filepath.Join(hyprDir, "hyprland.lua"), filepath.Join(hyprDir, "shell-keybinds.lua")); profile != "" {
+	if profile := DetectShellFromEntrypointWithEnd4Variant(filepath.Join(hyprDir, "hyprland.lua"), filepath.Join(hyprDir, "shell-keybinds.lua"), variantPath); profile != "" {
 		return profile
 	}
 	return DefaultProfile
@@ -174,10 +254,18 @@ func BootstrapActiveShell(home, hyprDir string) string {
 
 func End4SourceFromHomeManager(configDir string) (string, error) {
 	home := filepath.Dir(configDir)
-	if source, err := end4SourceFromGCRoot(home); err != nil || source != "" {
+	return End4SourceForProfileFromHomeManager(configDir, ReadEnd4Variant(End4VariantStatePath(home)))
+}
+
+func End4SourceForProfileFromHomeManager(configDir, profileID string) (string, error) {
+	profile, ok := ProfileByID(profileID)
+	if !ok || profile.Family != End4Family {
+		profile, _ = ProfileByID(End4)
+	}
+	if source, err := end4SourceFromQuickshellLink(configDir, profile.QuickshellConfig); err != nil || source != "" {
 		return source, err
 	}
-	return end4SourceFromQuickshellLink(configDir)
+	return end4SourceFromGCRoot(filepath.Dir(configDir))
 }
 
 func end4SourceFromGCRoot(home string) (string, error) {
@@ -197,8 +285,8 @@ func end4SourceFromGCRoot(home string) (string, error) {
 	return source, nil
 }
 
-func end4SourceFromQuickshellLink(configDir string) (string, error) {
-	qsPath := filepath.Join(configDir, "quickshell", "ii")
+func end4SourceFromQuickshellLink(configDir, configName string) (string, error) {
+	qsPath := filepath.Join(configDir, "quickshell", configName)
 	target, err := os.Readlink(qsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -206,7 +294,7 @@ func end4SourceFromQuickshellLink(configDir string) (string, error) {
 		}
 		return "", nil
 	}
-	suffix := string(os.PathSeparator) + filepath.Join(".config", "quickshell", "ii")
+	suffix := string(os.PathSeparator) + filepath.Join(".config", "quickshell", configName)
 	root, ok := strings.CutSuffix(target, suffix)
 	if !ok || root == "" {
 		return "", nil

@@ -39,6 +39,10 @@
       url = "git+https://github.com/end-4/dots-hyprland?submodules=1";
       flake = false;
     };
+    end4-pc = {
+      url = "github:pctrade/end4-pC";
+      flake = false;
+    };
     zen-browser = {
       url = "github:youwen5/zen-browser-flake";
       inputs.nixpkgs.follows = "nixpkgs";

@@ -62,6 +62,26 @@ jobs:
             update_flake_without_codex "Linux/NixOS/presets/${preset}"
           done
 
+      - name: Verify end4-pC input ownership
+        run: |
+          for lock in \
+            flake.lock \
+            Linux/NixOS/flake.lock \
+            Linux/NixOS/presets/desktop/flake.lock \
+            Linux/NixOS/presets/developer/flake.lock \
+            Linux/NixOS/presets/personal/flake.lock; do
+            if ! jq -e '.nodes.root.inputs["end4-pc"]' "$lock" > /dev/null; then
+              echo "::error::$lock must own the end4-pc input"
+              exit 1
+            fi
+          done
+
+          minimal_lock=Linux/NixOS/presets/minimal/flake.lock
+          if jq -e '.nodes.root.inputs["end4-pc"]' "$minimal_lock" > /dev/null; then
+            echo "::error::$minimal_lock must not own the end4-pc input"
+            exit 1
+          fi
+
       - name: Check public flake
         run: nix flake check --no-build
 
@@ -87,6 +107,10 @@ jobs:
       - name: Build patched end4 Hypr config
         working-directory: Linux/NixOS
         run: nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.xdg.configFile."hypr/end4".source'
+
+      - name: Build end4-pC Quickshell config
+        working-directory: Linux/NixOS
+        run: nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.xdg.configFile."quickshell/end4-pC".source'
 
       - name: Build patched Caelestia shell
         working-directory: Linux/NixOS
@@ -151,7 +175,9 @@ jobs:
             - `nix build --no-link .#mysetup --print-build-logs`
             - `./result/bin/wahrwelt --help`
             - `./result/bin/mysetup --help`
+            - end4-pC input ownership: present in root/full/desktop/developer/personal locks and absent from minimal
             - `nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.xdg.configFile."hypr/end4".source'`
+            - `nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.xdg.configFile."quickshell/end4-pC".source'`
             - `nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.programs.caelestia.package'`
             - `nix build .#wahrwelt --print-build-logs`
             - `nix build --no-link .#mysetup --print-build-logs`

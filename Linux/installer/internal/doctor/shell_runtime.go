@@ -19,15 +19,15 @@ func checkShellRuntime(out *reportWriter, opts Options) {
 	check(out, "shell selector config", filepath.Join(home, ".config/quickshell/wahrwelt-shell-selector/shell.qml"))
 	checkHyprScripts(out, filepath.Join(home, ".config/hypr/scripts"))
 
-	switch profile {
-	case "end4":
-		checkEnd4Profile(out, home)
-	case "caelestia", "noctalia":
+	switch {
+	case shellruntime.IsEnd4Profile(profile):
+		checkEnd4Profile(out, home, profile)
+	case profile == "caelestia" || profile == "noctalia":
 		checkWahrweltProfile(out, home, profile)
 	default:
 		out.println("WARN active shell is unknown")
 		checkWahrweltProfile(out, home, "caelestia")
-		checkEnd4Profile(out, home)
+		checkEnd4Profile(out, home, shellruntime.End4)
 	}
 }
 
@@ -129,13 +129,17 @@ func shellKeybindTextMatchesProfile(text, profile string) bool {
 	}
 }
 
-func checkEnd4Profile(out *reportWriter, home string) {
-	checkShellEntrypoint(out, hyprRuntimePath(home, "hyprland.lua"), "end4/hyprland.lua", "end4")
+func checkEnd4Profile(out *reportWriter, home, profileID string) {
+	profile, ok := shellruntime.ProfileByID(profileID)
+	if !ok || profile.Family != shellruntime.End4Family {
+		profile, _ = shellruntime.ProfileByID(shellruntime.End4)
+	}
+	checkShellEntrypoint(out, hyprRuntimePath(home, "hyprland.lua"), "end4/hyprland.lua", profile.ID)
 	checkRuntimeConfig(out, "end4 hyprlock entrypoint", hyprRuntimePath(home, "hyprlock.conf"), "end4/hyprlock.conf")
 	checkRuntimeConfig(out, "end4 hypridle entrypoint", hyprRuntimePath(home, "hypridle.conf"), "end4/hypridle.conf")
 	check(out, "end4 hypr config", hyprConfigPath(home, "end4/hyprland.lua"))
 	check(out, "end4 wahrwelt keybinds", hyprConfigPath(home, "end4/wahrwelt/keybinds.lua"))
-	check(out, "end4 quickshell shell", filepath.Join(home, ".config/quickshell/ii/shell.qml"))
+	check(out, "end4 quickshell shell", filepath.Join(home, ".config/quickshell", profile.QuickshellConfig, "shell.qml"))
 	checkDirectory(out, "end4 runtime config dir", filepath.Join(home, ".config/illogical-impulse"))
 	checkWritableFile(out, "end4 kdeglobals", filepath.Join(home, ".config/kdeglobals"))
 	checkOptionalFile(out, "end4 runtime config", filepath.Join(home, ".config/illogical-impulse/config.json"))
@@ -163,6 +167,7 @@ func detectActiveShell(home string) string {
 	if profile := shellruntime.ReadActiveShell(shellruntime.ActiveShellStatePath(home)); profile != "" {
 		return profile
 	}
+	variantPath := shellruntime.End4VariantStatePath(home)
 	for _, candidate := range []struct {
 		entrypoint string
 		keybinds   string
@@ -170,7 +175,7 @@ func detectActiveShell(home string) string {
 		{hyprRuntimePath(home, "hyprland.lua"), hyprRuntimePath(home, "shell-keybinds.lua")},
 		{hyprConfigPath(home, "hyprland.lua"), hyprConfigPath(home, "shell-keybinds.lua")},
 	} {
-		if profile := shellruntime.DetectShellFromEntrypoint(candidate.entrypoint, candidate.keybinds); profile != "" {
+		if profile := shellruntime.DetectShellFromEntrypointWithEnd4Variant(candidate.entrypoint, candidate.keybinds, variantPath); profile != "" {
 			return profile
 		}
 	}

@@ -41,7 +41,7 @@ end4_monitor_rules() {
 apply_end4_hypr_runtime_overrides() {
   local dir rules layouts options rule applied=0
 
-  [ "$profile" = "end4" ] || return 0
+  [ "$(wahrwelt_shell_family "$profile")" = "end4" ] || return 0
   command -v hyprctl >/dev/null 2>&1 || return 0
   hyprctl monitors >/dev/null 2>&1 || return 0
 
