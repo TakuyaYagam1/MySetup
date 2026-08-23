@@ -181,7 +181,7 @@ ShellRoot {
         Rectangle {
           anchors.fill: parent
           color: "#0f1320"
-          opacity: 0.66
+          opacity: 0.54
         }
 
         Rectangle {
