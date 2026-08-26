@@ -94,6 +94,12 @@ assert_allowed ipc-call \
   'hl.exec_cmd("qs -c ii ipc call notificationService dismissAll")'
 assert_allowed qml-ipc-call \
   'Quickshell.execDetached(["qs", "-c", Quickshell.env("qsConfig"), "ipc", "call", "sidebarRight", "toggle"]);'
+assert_rejected qml-unmanaged-official-native-settings \
+  'Quickshell.execDetached(["qs", "-n", "-p", Quickshell.shellPath("settings.qml")]);'
+assert_rejected qml-native-settings-env-path \
+  'Quickshell.execDetached(["qs", "-n", "-p", Quickshell.env("qsConfig") + "/settings.qml"]);'
+assert_rejected qml-native-settings-wrong-file \
+  'Quickshell.execDetached(["qs", "-n", "-p", Quickshell.shellPath("welcome.qml")]);'
 assert_rejected qml-direct-path \
   'Quickshell.execDetached(["qs", "-p", Quickshell.shellPath("welcome.qml")]);'
 assert_rejected qml-multiline-direct-path \

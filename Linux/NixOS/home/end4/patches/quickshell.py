@@ -519,19 +519,19 @@ def patch_managed_quickshell_lifecycle(root: Path) -> None:
         (
             root / "ii/modules/waffle/bar/StartButton.qml",
             '                    Quickshell.execDetached(["qs", "-p", Quickshell.shellPath("settings.qml")]);',
-            '                    Quickshell.execDetached(["systemsettings"]);',
+            '                    Quickshell.execDetached(["wahrwelt-end4-settings"]);',
             "waffle settings lifecycle",
         ),
         (
             root / "ii/modules/ii/sidebarRight/SidebarRightContent.qml",
             '                    Quickshell.execDetached(["qs", "-p", root.settingsQmlPath]);',
-            '                    Quickshell.execDetached(["systemsettings"]);',
+            '                    Quickshell.execDetached(["wahrwelt-end4-settings"]);',
             "sidebar settings lifecycle",
         ),
         (
             root / "ii/modules/waffle/actionCenter/mainPage/MainPageFooter.qml",
             '            Quickshell.execDetached(["qs", "-p", Quickshell.shellPath("settings.qml")]);',
-            '            Quickshell.execDetached(["systemsettings"]);',
+            '            Quickshell.execDetached(["wahrwelt-end4-settings"]);',
             "action-center settings lifecycle",
         ),
     ]

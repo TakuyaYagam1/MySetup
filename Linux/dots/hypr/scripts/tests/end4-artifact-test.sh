@@ -27,6 +27,11 @@ fi
 
 tests_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 python3 "$tests_dir/end4-artifact-lifecycle.py" "$artifact"
+if [ -f "$artifact/ii/settings.qml" ] ||
+  [ -f "$artifact/modules/ii/settings/Settings.qml" ] ||
+  [ -f "$artifact/hyprland/variables.lua" ]; then
+  python3 "$tests_dir/end4-native-settings.py" "$artifact"
+fi
 
 if [ "$mode" = "hypr" ]; then
   if ! grep -Fq '/scripts/close-active.sh' "$artifact/wahrwelt/keybinds.lua"; then

@@ -233,6 +233,12 @@ previous=""
 runtime_bundle_path_list=()
 state_path_list=()
 state_guard_path_list=("$persistent_state_file" "$wahrwelt_end4_variant_state")
+spotify_focus_guard_active=0
+spotify_music_was_hidden=0
+spotify_guard_addresses=()
+spotify_focus_monitor_before=""
+spotify_focus_window_before=""
+spotify_focus_window_pid_before=""
 
 discard_switch_snapshots() {
   if [ -n "$runtime_bundle_snapshot_dir" ]; then
@@ -248,9 +254,10 @@ discard_switch_snapshots() {
 }
 
 cleanup_start_shell() {
-  local recovery recovery_identity
+  local recovery recovery_identity spotify_wait_for_watcher=0
 
   trap - EXIT
+  [ "$shell_processes_touched" -eq 0 ] || spotify_wait_for_watcher=1
   if [ "$switch_transaction_active" -eq 1 ]; then
     if [ "$shell_processes_touched" -eq 1 ] && [ "$profile_start_attempted" -eq 1 ]; then
       cleanup_failed_profile_start "$profile"
@@ -280,6 +287,9 @@ cleanup_start_shell() {
     fi
   else
     discard_switch_snapshots
+  fi
+  if ! finish_spotify_focus_guard "$spotify_wait_for_watcher"; then
+    log "failed to restore Spotify activation after shell transaction cleanup"
   fi
   if [ -n "$lock_identity" ]; then
     if wahrwelt_release_owned_lock "$lock_dir" "$lock_identity" 2>/dev/null; then
@@ -351,6 +361,291 @@ wait_for_session() {
   done
   log "session readiness timeout; continuing anyway"
   return 0
+}
+
+status_notifier_owner() {
+  local reply owner
+
+  command -v busctl >/dev/null 2>&1 || return 1
+  reply="$(
+    busctl --user --timeout=50ms call \
+      org.freedesktop.DBus \
+      /org/freedesktop/DBus \
+      org.freedesktop.DBus \
+      GetNameOwner \
+      s org.kde.StatusNotifierWatcher 2>/dev/null
+  )" || return 1
+  owner="$(sed -n 's/^s "\(:[0-9][0-9]*\.[0-9][0-9]*\)"$/\1/p' <<<"$reply")"
+  [ -n "$owner" ] || return 1
+  printf '%s' "$owner"
+}
+
+wait_for_ready_status_notifier() {
+  local attempt owner current readiness
+
+  for attempt in $(seq 1 10); do
+    owner="$(status_notifier_owner 2>/dev/null || true)"
+    if [ -n "$owner" ]; then
+      readiness="$(
+        busctl --user --timeout=50ms get-property \
+          "$owner" \
+          /StatusNotifierWatcher \
+          org.kde.StatusNotifierWatcher \
+          IsStatusNotifierHostRegistered 2>/dev/null
+      )" || readiness=""
+      if [ "$readiness" = "b true" ]; then
+        current="$(status_notifier_owner 2>/dev/null || true)"
+        [ "$current" = "$owner" ] && return 0
+      fi
+    fi
+    sleep 0.05
+  done
+
+  log "StatusNotifierWatcher readiness timeout"
+  return 1
+}
+
+set_spotify_focus_on_activate() {
+  local address="$1"
+  local value="$2"
+
+  hyprctl dispatch "hl.dsp.window.set_prop({ prop = \"focus_on_activate\", value = \"$value\", window = \"address:$address\" })" \
+    >/dev/null 2>&1
+}
+
+begin_spotify_focus_guard() {
+  local clients monitors active_window addresses address focus_monitor focus_window focus_window_pid
+  local candidates=()
+
+  if ! command -v hyprctl >/dev/null 2>&1 ||
+    ! command -v jq >/dev/null 2>&1 ||
+    ! command -v busctl >/dev/null 2>&1; then
+    log "Spotify activation snapshot unavailable; continuing without focus guard"
+    return 0
+  fi
+  if ! clients="$(hyprctl -j clients 2>/dev/null)" ||
+    ! monitors="$(hyprctl -j monitors 2>/dev/null)" ||
+    ! jq -e 'type == "array"' <<<"$clients" >/dev/null ||
+    ! jq -e 'type == "array"' <<<"$monitors" >/dev/null; then
+    log "Spotify activation snapshot unavailable; continuing without focus guard"
+    return 0
+  fi
+
+  if jq -e 'any(.[]; (.specialWorkspace.name // "") == "special:music")' \
+    <<<"$monitors" >/dev/null; then
+    return 0
+  fi
+
+  addresses="$(
+    jq -cer '[
+      .[]
+      | select((.class // "" | ascii_downcase) == "spotify")
+      | select(.mapped != false)
+      | select((.workspace.name // "") == "special:music")
+      | (.address // "" | ascii_downcase)
+    ] | unique' <<<"$clients"
+  )" || {
+    log "Spotify activation snapshot unavailable; continuing without focus guard"
+    return 0
+  }
+  mapfile -t candidates < <(jq -r '.[]' <<<"$addresses")
+  [ "${#candidates[@]}" -gt 0 ] || return 0
+
+  for address in "${candidates[@]}"; do
+    if [[ ! "$address" =~ ^0x[0-9a-f]+$ ]]; then
+      log "Spotify activation snapshot contained an invalid address; continuing without focus guard"
+      return 0
+    fi
+  done
+
+  if ! active_window="$(hyprctl -j activewindow 2>/dev/null)" ||
+    ! jq -e 'type == "object"' <<<"$active_window" >/dev/null; then
+    log "Spotify activation snapshot unavailable; continuing without focus guard"
+    return 0
+  fi
+  focus_monitor="$(
+    jq -er '
+      [.[] | select(.focused == true) | .name] as $names
+      | if ($names | length) == 1 and ($names[0] | type) == "string" and ($names[0] | length) > 0 then
+          $names[0]
+        else
+          error("focused monitor unavailable")
+        end
+    ' <<<"$monitors"
+  )" || {
+    log "Spotify activation snapshot unavailable; continuing without focus guard"
+    return 0
+  }
+  if [[ ! "$focus_monitor" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+    log "Spotify activation snapshot contained an invalid monitor; continuing without focus guard"
+    return 0
+  fi
+  focus_window="$(
+    jq -er '
+      if length == 0 then
+        ""
+      elif (.address | type) == "string" then
+        (.address | ascii_downcase)
+      else
+        error("active window address unavailable")
+      end
+    ' <<<"$active_window"
+  )" || {
+    log "Spotify activation snapshot unavailable; continuing without focus guard"
+    return 0
+  }
+  focus_window_pid=""
+  if [ -n "$focus_window" ]; then
+    if [[ ! "$focus_window" =~ ^0x[0-9a-f]+$ ]] ||
+      ! focus_window_pid="$(
+        jq -er '
+          if (.pid | type) == "number" and .pid >= 1 and (.pid | floor) == .pid then
+            .pid
+          else
+            error("active window pid unavailable")
+          end
+        ' <<<"$active_window"
+      )" ||
+      ! jq -e --arg address "$focus_window" --argjson pid "$focus_window_pid" '
+        any(.[];
+          ((.address // "" | ascii_downcase) == $address) and
+          (.pid == $pid)
+        )
+      ' <<<"$clients" >/dev/null; then
+      log "Spotify activation snapshot unavailable; continuing without focus guard"
+      return 0
+    fi
+    for address in "${candidates[@]}"; do
+      if [ "$focus_window" = "$address" ]; then
+        log "Spotify activation snapshot focused the guarded window; continuing without focus guard"
+        return 0
+      fi
+    done
+  fi
+
+  spotify_focus_monitor_before="$focus_monitor"
+  spotify_focus_window_before="$focus_window"
+  spotify_focus_window_pid_before="$focus_window_pid"
+  spotify_music_was_hidden=1
+  spotify_guard_addresses=()
+  for address in "${candidates[@]}"; do
+    spotify_guard_addresses+=("$address")
+    spotify_focus_guard_active=1
+    if ! set_spotify_focus_on_activate "$address" false; then
+      log "failed to apply Spotify activation guard for address=$address"
+      if ! finish_spotify_focus_guard 0; then
+        log "failed to clean a partial Spotify activation guard"
+        return 1
+      fi
+      log "continuing shell switch without Spotify activation guard"
+      return 0
+    fi
+  done
+}
+
+finish_spotify_focus_guard() {
+  local wait_for_watcher="${1:-0}"
+  local clients address current_special_visible=0 same_music_window=0 status=0
+  local clients_available=0
+  local restore_window_setup='local restore_window = nil'
+  local restore_window_check=false
+  local live_addresses=()
+
+  [ "$spotify_focus_guard_active" -eq 1 ] || return 0
+  if [ "$wait_for_watcher" -eq 1 ]; then
+    wait_for_ready_status_notifier || true
+  fi
+
+  if clients="$(hyprctl -j clients 2>/dev/null)" &&
+    jq -e 'type == "array"' <<<"$clients" >/dev/null; then
+    clients_available=1
+    for address in "${spotify_guard_addresses[@]}"; do
+      if jq -e --arg address "$address" '
+        any(.[];
+          ((.address // "" | ascii_downcase) == $address) and
+          ((.class // "" | ascii_downcase) == "spotify")
+        )
+      ' <<<"$clients" >/dev/null; then
+        live_addresses+=("$address")
+        if jq -e --arg address "$address" '
+          any(.[];
+            ((.address // "" | ascii_downcase) == $address) and
+            ((.class // "" | ascii_downcase) == "spotify") and
+            ((.workspace.name // "") == "special:music")
+          )
+        ' <<<"$clients" >/dev/null; then
+          same_music_window=1
+        fi
+      fi
+    done
+  else
+    live_addresses=("${spotify_guard_addresses[@]}")
+  fi
+
+  if [ "$spotify_music_was_hidden" -eq 1 ] && [ "$same_music_window" -eq 1 ]; then
+    if hyprctl -j monitors 2>/dev/null |
+      jq -e 'any(.[]; (.specialWorkspace.name // "") == "special:music")' >/dev/null; then
+      current_special_visible=1
+    fi
+    if [ "$current_special_visible" -eq 1 ]; then
+      if [ -n "$spotify_focus_window_before" ]; then
+        restore_window_setup="local restore_window = hl.get_window(\"address:$spotify_focus_window_before\")"
+        restore_window_check="restore_window and restore_window.pid == $spotify_focus_window_pid_before and restore_window.monitor == restore_monitor"
+      fi
+      hyprctl eval "
+        local function checked(dispatcher)
+          local result = hl.dispatch(dispatcher)
+          if result ~= nil and result.ok == false then
+            error(result.error or \"dispatcher failed\")
+          end
+        end
+        local restore_monitor = hl.get_monitor(\"$spotify_focus_monitor_before\")
+        $restore_window_setup
+        local hidden = false
+        for _, monitor in ipairs(hl.get_monitors()) do
+          local workspace = monitor.active_special_workspace
+          if workspace and workspace.name == \"special:music\" then
+            monitor:set_special_workspace({})
+            hidden = true
+          end
+        end
+        for _, monitor in ipairs(hl.get_monitors()) do
+          local workspace = monitor.active_special_workspace
+          if workspace and workspace.name == \"special:music\" then
+            error(\"special:music remained visible after recovery\")
+          end
+        end
+        if hidden and restore_monitor then
+          checked(hl.dsp.focus({ monitor = restore_monitor }))
+        end
+        if hidden and $restore_window_check then
+          checked(hl.dsp.focus({ window = restore_window }))
+        end
+      " >/dev/null 2>&1 || status=1
+    fi
+  fi
+
+  for address in "${live_addresses[@]}"; do
+    set_spotify_focus_on_activate "$address" unset || status=1
+  done
+
+  if [ "$clients_available" -eq 1 ] && [ "$status" -eq 0 ]; then
+    spotify_guard_addresses=()
+    spotify_focus_guard_active=0
+    spotify_music_was_hidden=0
+    spotify_focus_monitor_before=""
+    spotify_focus_window_before=""
+    spotify_focus_window_pid_before=""
+  elif [ "$clients_available" -eq 0 ] && [ "$status" -eq 0 ]; then
+    spotify_guard_addresses=()
+    spotify_focus_guard_active=0
+    spotify_music_was_hidden=0
+    spotify_focus_monitor_before=""
+    spotify_focus_window_before=""
+    spotify_focus_window_pid_before=""
+  fi
+
+  return "$status"
 }
 
 stop_caelestia() {
@@ -575,6 +870,10 @@ attempt_previous_fallback() {
     return 1
   fi
   propagate_runtime_environment
+  if ! finish_spotify_focus_guard 1; then
+    log "failed to restore Spotify activation after fallback profile=$profile"
+    return 1
+  fi
   hypr_reload_started=0
   profile_start_attempted=0
   shell_processes_touched=0
@@ -602,6 +901,11 @@ fi
 if ! prepare_profile_or_fallback; then
   log "aborting shell switch before stopping current shell; profile=$profile"
   rollback_switch_transaction || log "failed to restore shell transaction after preparation error"
+  exit 1
+fi
+
+if ! begin_spotify_focus_guard; then
+  log "aborting shell switch before stopping current shell; Spotify activation guard failed"
   exit 1
 fi
 
@@ -658,6 +962,10 @@ if ! reload_hypr; then
   exit 1
 fi
 propagate_runtime_environment
+if ! finish_spotify_focus_guard 1; then
+  log "failed to restore Spotify activation after shell switch"
+  exit 1
+fi
 switch_transaction_active=0
 profile_start_attempted=0
 shell_processes_touched=0

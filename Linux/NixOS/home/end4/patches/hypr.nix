@@ -121,8 +121,36 @@ let
   '';
 
   managedSettingsApp = pkgs.writeText "end4-managed-settings-app.lua" ''
-    settingsApp = "XDG_CURRENT_DESKTOP=gnome ~/.config/hypr/hyprland/scripts/launch_first_available.sh 'systemsettings' 'gnome-control-center' 'better-control'"
+    settingsApp = "wahrwelt-end4-settings"
   '';
+
+  end4SettingsLauncher = pkgs.writeShellApplication {
+    name = "wahrwelt-end4-settings";
+    text = ''
+      config_home="''${XDG_CONFIG_HOME:-$HOME/.config}"
+      official_config="$config_home/quickshell/ii"
+      pc_config="$config_home/quickshell/end4-pC"
+
+      case "''${qsConfig:-}" in
+        "$official_config")
+          export WAHRWELT_END4_PROFILE=end4
+          export WAHRWELT_QS_CONFIG="$official_config"
+          export qsConfig="$official_config"
+          exec qs-end4 -n -d -p "$official_config/settings.qml"
+          ;;
+        "$pc_config")
+          export WAHRWELT_END4_PROFILE=end4-pc
+          export WAHRWELT_QS_CONFIG="$pc_config"
+          export qsConfig="$pc_config"
+          exec qs-end4 -c end4-pC ipc call settings open
+          ;;
+        *)
+          printf 'refusing unmanaged End4 QuickShell config: %s\n' "''${qsConfig:-unset}" >&2
+          exit 64
+          ;;
+      esac
+    '';
+  };
 
   runtimeContract = pkgs.writeText "end4-runtime-contract" "end4-adapter-v1\n";
 
@@ -177,7 +205,11 @@ let
         strict_replace_line_from_files "$out/hyprland/variables.lua" \
           ${upstreamSettingsApp} \
           ${managedSettingsApp} \
-          'Wahrwelt start-shell owns end4 QuickShell settings lifecycle'
+          'Wahrwelt owns End4 native settings lifecycle'
+
+        install -m 0555 \
+          ${end4SettingsLauncher}/bin/wahrwelt-end4-settings \
+          "$out/wahrwelt/settings"
 
         install -m 0644 ${hypridleConf} "$out/hypridle.conf"
         install -m 0644 ${customGeneralLua} "$out/custom/general.lua"
@@ -317,6 +349,8 @@ let
       '';
 in
 {
+  home.packages = [ end4SettingsLauncher ];
+
   xdg.configFile."hypr/end4" = {
     source = validatedHypr;
   };

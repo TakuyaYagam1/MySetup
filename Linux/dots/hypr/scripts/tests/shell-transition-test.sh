@@ -77,6 +77,11 @@ test_add_process() {
 test_remove_process() {
   local process="$1"
   local next="${WAHRWELT_TEST_PROCESSES}.next"
+  local stops_watcher=0
+
+  if [ "${WAHRWELT_TEST_WATCHER_PROCESS:-}" = "$process" ] && test_has_process "$process"; then
+    stops_watcher=1
+  fi
 
   while IFS= read -r running; do
     [ "$running" = "$process" ] && continue
@@ -86,13 +91,245 @@ test_remove_process() {
     printf '%s\n' "$running"
   done <"$WAHRWELT_TEST_PROCESSES" >"$next"
   mv -- "$next" "$WAHRWELT_TEST_PROCESSES"
+
+  if [ "$stops_watcher" -eq 1 ]; then
+    : >"$WAHRWELT_TEST_WATCHER_OWNER"
+    test_spotify_watcher_gap
+    if [ -n "${WAHRWELT_TEST_REPLACEMENT_WATCHER_OWNER:-}" ]; then
+      printf '%s\n' "$WAHRWELT_TEST_REPLACEMENT_WATCHER_OWNER" >"$WAHRWELT_TEST_WATCHER_OWNER"
+    fi
+  elif ! grep -Eq '^(caelestia|noctalia|end4|end4-pc)#[0-9]+$' "$WAHRWELT_TEST_PROCESSES"; then
+    : >"$WAHRWELT_TEST_WATCHER_OWNER"
+    test_spotify_watcher_gap
+  fi
 }
 
 test_event() {
   printf '%s\n' "$1" >>"$WAHRWELT_TEST_EVENTS"
 }
 
+test_spotify_watcher_gap() {
+  local address reveal_monitor next
+
+  [ -n "${WAHRWELT_TEST_SPOTIFY_GAP_MODE:-}" ] || return 0
+  [ ! -e "$WAHRWELT_TEST_SPOTIFY_GAP_FIRED" ] || return 0
+  : >"$WAHRWELT_TEST_SPOTIFY_GAP_FIRED"
+  address="$(jq -r '
+    .[]
+    | select((.class // "" | ascii_downcase) == "spotify")
+    | select(.workspace.name == "special:music")
+    | .address
+  ' "$WAHRWELT_TEST_CLIENTS" | head -n 1)"
+  [ -n "$address" ] || return 0
+
+  if [ "$WAHRWELT_TEST_SPOTIFY_GAP_MODE" = respect ] &&
+    grep -Fqx -- "$address=false" "$WAHRWELT_TEST_FOCUS_PROPS"; then
+    test_event "spotify-activation-blocked:$address"
+    return 0
+  fi
+
+  reveal_monitor="${WAHRWELT_TEST_SPOTIFY_REVEAL_MONITOR:-eDP-1}"
+  next="${WAHRWELT_TEST_MONITORS}.next"
+  jq --arg monitor "$reveal_monitor" '
+    map(
+      if .name == $monitor then
+        .specialWorkspace = {"id": -98, "name": "special:music"}
+      else
+        .
+      end
+    )
+  ' "$WAHRWELT_TEST_MONITORS" >"$next"
+  mv -- "$next" "$WAHRWELT_TEST_MONITORS"
+  if [ "${WAHRWELT_TEST_SPOTIFY_HIDE_STEALS_FOCUS:-0}" = 1 ]; then
+    jq --arg monitor "$reveal_monitor" \
+      'map(.focused = (.name == $monitor))' "$WAHRWELT_TEST_MONITORS" >"$next"
+    mv -- "$next" "$WAHRWELT_TEST_MONITORS"
+    jq --arg address "$address" '.[] | select(.address == $address)' \
+      "$WAHRWELT_TEST_CLIENTS" >"$WAHRWELT_TEST_ACTIVE_WINDOW"
+    test_event "focus-stolen:spotify-activation:$address"
+  fi
+  test_event "spotify-workspace-revealed:$address"
+}
+
+test_publish_watcher() {
+  if [ -n "${WAHRWELT_TEST_REPLACEMENT_WATCHER_OWNER:-}" ]; then
+    printf '%s\n' "$WAHRWELT_TEST_REPLACEMENT_WATCHER_OWNER" >"$WAHRWELT_TEST_WATCHER_OWNER"
+    return 0
+  fi
+  printf ':1.%s\n' "$(cat "$WAHRWELT_TEST_GENERATION")" >"$WAHRWELT_TEST_WATCHER_OWNER"
+}
+
+hyprctl() {
+  local command address monitor music_monitor next restore_address restore_monitor
+
+  if { [ "${1:-}" = -j ] && [ "${2:-}" = clients ]; } ||
+    { [ "${1:-}" = clients ] && [ "${2:-}" = -j ]; }; then
+    [ "${WAHRWELT_TEST_FAIL_SPOTIFY_SNAPSHOT:-}" != clients ] || return 1
+    cat "$WAHRWELT_TEST_CLIENTS"
+    return 0
+  fi
+  if { [ "${1:-}" = -j ] && [ "${2:-}" = monitors ]; } ||
+    { [ "${1:-}" = monitors ] && [ "${2:-}" = -j ]; }; then
+    cat "$WAHRWELT_TEST_MONITORS"
+    return 0
+  fi
+  if { [ "${1:-}" = -j ] && [ "${2:-}" = activewindow ]; } ||
+    { [ "${1:-}" = activewindow ] && [ "${2:-}" = -j ]; }; then
+    cat "$WAHRWELT_TEST_ACTIVE_WINDOW"
+    return 0
+  fi
+  if [ "${1:-}" = eval ]; then
+    command="${2:-}"
+    case "$command" in
+      *'hl.get_monitors()'*'active_special_workspace'*'set_special_workspace({})'*)
+        music_monitor="$(jq -r \
+          '[.[] | select(.specialWorkspace.name == "special:music")][0].name // empty' \
+          "$WAHRWELT_TEST_MONITORS")"
+        while IFS= read -r monitor; do
+          [ -n "$monitor" ] || continue
+          test_event "hide:special:music:$monitor"
+        done < <(jq -r '.[] | select(.specialWorkspace.name == "special:music") | .name' \
+          "$WAHRWELT_TEST_MONITORS")
+        next="${WAHRWELT_TEST_MONITORS}.next"
+        jq 'map(
+          if .specialWorkspace.name == "special:music" then
+            .specialWorkspace = {"id": 0, "name": ""}
+          else
+            .
+          end
+        )' "$WAHRWELT_TEST_MONITORS" >"$next"
+        mv -- "$next" "$WAHRWELT_TEST_MONITORS"
+        if [ "${WAHRWELT_TEST_SPOTIFY_HIDE_STEALS_FOCUS:-0}" = 1 ] &&
+          [ -n "$music_monitor" ]; then
+          jq --arg monitor "$music_monitor" \
+            'map(.focused = (.name == $monitor))' "$WAHRWELT_TEST_MONITORS" >"$next"
+          mv -- "$next" "$WAHRWELT_TEST_MONITORS"
+          printf '%s\n' \
+            '{"address":"0xfeed00","class":"foot","pid":300,"monitor":1}' \
+            >"$WAHRWELT_TEST_ACTIVE_WINDOW"
+          test_event "focus-stolen:special-close:$music_monitor"
+        fi
+        restore_monitor="$(sed -n \
+          's/.*restore_monitor = hl.get_monitor("\([A-Za-z0-9_.-]*\)").*/\1/p' \
+          <<<"$command")"
+        restore_address="$(sed -n \
+          's/.*restore_window = hl.get_window("address:\(0x[0-9a-f]*\)").*/\1/p' \
+          <<<"$command")"
+        if [ -n "$music_monitor" ] && [ -n "$restore_monitor" ]; then
+          jq --arg monitor "$restore_monitor" \
+            'map(.focused = (.name == $monitor))' "$WAHRWELT_TEST_MONITORS" >"$next"
+          mv -- "$next" "$WAHRWELT_TEST_MONITORS"
+          test_event "focus-restore-monitor:$restore_monitor"
+        fi
+        if [ -n "$music_monitor" ] && [ -n "$restore_address" ]; then
+          jq --arg address "$restore_address" '.[] | select(.address == $address)' \
+            "$WAHRWELT_TEST_CLIENTS" >"$WAHRWELT_TEST_ACTIVE_WINDOW"
+          test_event "focus-restore-window:$restore_address"
+        fi
+        return 0
+        ;;
+    esac
+    return 1
+  fi
+
+  [ "${1:-}" = dispatch ] || return 1
+  command="${2:-}"
+
+  case "$command" in
+    *'hl.dsp.window.set_prop('*'prop = "focus_on_activate"'*'window = "address:'*)
+      address="$(sed -n 's/.*window = "address:\([^"]*\)".*/\1/p' <<<"$command")"
+      jq -e --arg address "$address" '
+        any(.[];
+          .address == $address and
+          ((.class // "" | ascii_downcase) == "spotify")
+        )
+      ' "$WAHRWELT_TEST_CLIENTS" >/dev/null || return 1
+      case "$command" in
+        *'value = "false"'*)
+          grep -Fqx -- "$address=false" "$WAHRWELT_TEST_FOCUS_PROPS" ||
+            printf '%s=false\n' "$address" >>"$WAHRWELT_TEST_FOCUS_PROPS"
+          test_event "spotify-focus-block:$address"
+          ;;
+        *'value = "unset"'*)
+          next="${WAHRWELT_TEST_FOCUS_PROPS}.next"
+          grep -Fvx -- "$address=false" "$WAHRWELT_TEST_FOCUS_PROPS" >"$next" || true
+          mv -- "$next" "$WAHRWELT_TEST_FOCUS_PROPS"
+          test_event "spotify-focus-restore:$address"
+          ;;
+        *) return 1 ;;
+      esac
+      return 0
+      ;;
+    'hl.dsp.workspace.toggle_special("music")')
+      monitor="$(jq -r '([.[] | select(.focused == true)][0].name // .[0].name) // empty' \
+        "$WAHRWELT_TEST_MONITORS")"
+      next="${WAHRWELT_TEST_MONITORS}.next"
+      jq --arg monitor "$monitor" 'map(
+        if .name == $monitor then
+          if .specialWorkspace.name == "special:music" then
+            .specialWorkspace = {"id": 0, "name": ""}
+          else
+            .specialWorkspace = {"id": -98, "name": "special:music"}
+          end
+        elif .specialWorkspace.name == "special:music" then
+          .specialWorkspace = {"id": 0, "name": ""}
+        else
+          .
+        end
+      )' "$WAHRWELT_TEST_MONITORS" >"$next"
+      mv -- "$next" "$WAHRWELT_TEST_MONITORS"
+      test_event hide:special:music
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+busctl() {
+  local owner
+
+  [ "${1:-}" = --user ] || return 1
+  shift
+  if [ "${1:-}" = --timeout=50ms ]; then
+    shift
+    test_event "busctl-bounded:${1:-}"
+  elif [[ "${1:-}" == --timeout=* ]]; then
+    test_event "busctl-wrong-timeout:${1:-}:${2:-}"
+    shift
+  else
+    test_event "busctl-unbounded:${1:-}"
+  fi
+
+  if [ "${1:-}" = call ] &&
+    [ "${2:-}" = org.freedesktop.DBus ] &&
+    [ "${5:-}" = GetNameOwner ] &&
+    [ "${7:-}" = org.kde.StatusNotifierWatcher ]; then
+    owner="$(tr -d '\n' <"$WAHRWELT_TEST_WATCHER_OWNER")"
+    [ -n "$owner" ] || return 1
+    printf 's "%s"\n' "$owner"
+    return 0
+  fi
+  if [ "${1:-}" = get-property ] &&
+    [ "${3:-}" = /StatusNotifierWatcher ] &&
+    [ "${4:-}" = org.kde.StatusNotifierWatcher ] &&
+    [ "${5:-}" = IsStatusNotifierHostRegistered ]; then
+    owner="$(tr -d '\n' <"$WAHRWELT_TEST_WATCHER_OWNER")"
+    [ -n "$owner" ] && [ "${2:-}" = "$owner" ] || return 1
+    if [ "${WAHRWELT_TEST_WATCHER_UNREADY:-}" = 1 ]; then
+      printf 'b false\n'
+      return 0
+    fi
+    test_event "watcher-ready:$owner"
+    printf 'b true\n'
+    return 0
+  fi
+
+  return 1
+}
+
 sleep() {
+  test_event "sleep:$1"
   :
 }
 
@@ -194,6 +431,7 @@ start_profile_shell() {
     case ",${WAHRWELT_TEST_FAIL_START}," in
       *",$profile,"*)
         test_add_process "$profile"
+        test_publish_watcher
         return 1
         ;;
     esac
@@ -209,6 +447,7 @@ start_profile_shell() {
       ;;
   esac
   test_add_process "$profile"
+  test_publish_watcher
   if [ "${WAHRWELT_TEST_ABORT_AFTER_START:-}" = "$profile" ]; then
     test_event "abort-after-start:$profile"
     kill -TERM "$$"
@@ -348,6 +587,20 @@ assert_no_target_stop() {
   fi
 }
 
+assert_event_before() {
+  local event_file="$1"
+  local earlier="$2"
+  local later="$3"
+  local message="$4"
+  local earlier_line later_line
+
+  earlier_line="$(grep -n -m1 -F -- "$earlier" "$event_file" | cut -d: -f1 || true)"
+  later_line="$(grep -n -m1 -F -- "$later" "$event_file" | cut -d: -f1 || true)"
+  [ -n "$earlier_line" ] || fail "$message has no $earlier event"
+  [ -n "$later_line" ] || fail "$message has no $later event"
+  [ "$earlier_line" -lt "$later_line" ] || fail "$message event order is not $earlier before $later"
+}
+
 bundle_paths_for_root() {
   local root="$1"
   local hypr="$root/home/.config/hypr"
@@ -455,6 +708,30 @@ seed_case() {
     end4 | end4-pc) printf '%s\n' end4-idle >>"$root/processes" ;;
   esac
   : >"$root/events"
+  : >"$root/clients.json"
+  printf '%s\n' '[]' >"$root/clients.json"
+  printf '%s\n' '{}' >"$root/activewindow.json"
+  printf '%s\n' '[{"name":"eDP-1","focused":true,"specialWorkspace":{"id":0,"name":""}}]' \
+    >"$root/monitors.json"
+  printf '%s\n' ':1.1' >"$root/watcher-owner"
+  : >"$root/focus-props"
+}
+
+seed_spotify() {
+  local root="$1"
+  local visible="${2:-hidden}"
+
+  printf '%s\n' '[
+    {"address":"0xabc123","class":"sPoTiFy","pid":100,"monitor":0,"mapped":true,"workspace":{"id":-98,"name":"special:music"}},
+    {"address":"0xdef456","class":"foot","pid":200,"monitor":0,"mapped":true,"workspace":{"id":1,"name":"1"}}
+  ]' >"$root/clients.json"
+  printf '%s\n' \
+    '{"address":"0xdef456","class":"foot","pid":200,"monitor":0,"workspace":{"id":1,"name":"1"}}' \
+    >"$root/activewindow.json"
+  if [ "$visible" = visible ]; then
+    printf '%s\n' '[{"name":"eDP-1","specialWorkspace":{"id":-98,"name":"special:music"}}]' \
+      >"$root/monitors.json"
+  fi
 }
 
 run_switch() {
@@ -481,6 +758,19 @@ run_switch() {
     WAHRWELT_TEST_PROCESSES="$root/processes" \
     WAHRWELT_TEST_GENERATION="$root/generation" \
     WAHRWELT_TEST_EVENTS="$root/events" \
+    WAHRWELT_TEST_CLIENTS="$root/clients.json" \
+    WAHRWELT_TEST_ACTIVE_WINDOW="$root/activewindow.json" \
+    WAHRWELT_TEST_MONITORS="$root/monitors.json" \
+    WAHRWELT_TEST_WATCHER_OWNER="$root/watcher-owner" \
+    WAHRWELT_TEST_WATCHER_PROCESS="${WAHRWELT_TEST_WATCHER_PROCESS:-}" \
+    WAHRWELT_TEST_REPLACEMENT_WATCHER_OWNER="${WAHRWELT_TEST_REPLACEMENT_WATCHER_OWNER:-}" \
+    WAHRWELT_TEST_FOCUS_PROPS="$root/focus-props" \
+    WAHRWELT_TEST_SPOTIFY_GAP_FIRED="$root/spotify-gap-fired" \
+    WAHRWELT_TEST_SPOTIFY_GAP_MODE="${WAHRWELT_TEST_SPOTIFY_GAP_MODE:-}" \
+    WAHRWELT_TEST_SPOTIFY_REVEAL_MONITOR="${WAHRWELT_TEST_SPOTIFY_REVEAL_MONITOR:-}" \
+    WAHRWELT_TEST_SPOTIFY_HIDE_STEALS_FOCUS="${WAHRWELT_TEST_SPOTIFY_HIDE_STEALS_FOCUS:-}" \
+    WAHRWELT_TEST_FAIL_SPOTIFY_SNAPSHOT="${WAHRWELT_TEST_FAIL_SPOTIFY_SNAPSHOT:-}" \
+    WAHRWELT_TEST_WATCHER_UNREADY="${WAHRWELT_TEST_WATCHER_UNREADY:-}" \
     WAHRWELT_TEST_FAIL_PREPARE="$fail_prepare" \
     WAHRWELT_TEST_FAIL_START="$fail_start" \
     WAHRWELT_TEST_FAIL_PERSIST="$fail_persist" \
@@ -499,6 +789,212 @@ run_switch() {
   fi
   return "$switch_status"
 }
+
+root="$(new_case_root spotify-same-profile-surviving-watcher)"
+seed_case "$root" noctalia
+seed_spotify "$root"
+before_instance="$(profile_instance "$root/processes" noctalia)"
+run_switch "$root"
+after_instance="$(profile_instance "$root/processes" noctalia)"
+assert_eq "$before_instance" "$after_instance" \
+  "same-profile surviving watcher keeps the existing shell process"
+assert_eq '' "$(cat "$root/focus-props")" \
+  "same-profile surviving watcher restores Spotify focus-on-activate"
+assert_eq 1 "$(grep -Fc 'spotify-focus-block:0xabc123' "$root/events")" \
+  "same-profile surviving watcher guards exact hidden Spotify once"
+assert_eq 1 "$(grep -Fc 'spotify-focus-restore:0xabc123' "$root/events")" \
+  "same-profile surviving watcher restores exact hidden Spotify once"
+grep -Fqx 'watcher-ready::1.1' "$root/events" ||
+  fail "same-profile surviving watcher did not accept the same ready owner"
+if grep -Fqx 'log:StatusNotifierWatcher readiness timeout' "$root/events"; then
+  fail "same-profile surviving watcher waited for an unnecessary replacement owner"
+fi
+if grep -Fqx 'sleep:0.05' "$root/events"; then
+  fail "same-profile surviving watcher added a polling cooldown"
+fi
+if grep -Eq '^busctl-(unbounded|wrong-timeout):' "$root/events"; then
+  fail "same-profile surviving watcher used the wrong D-Bus timeout contract"
+fi
+
+if [ "${WAHRWELT_TEST_SPOTIFY_FAST_SAME_OWNER_ONLY:-0}" = 1 ]; then
+  printf 'OK shell transition same-owner Spotify regression\n'
+  exit 0
+fi
+
+root="$(new_case_root spotify-guarded-window-active)"
+seed_case "$root" noctalia
+seed_spotify "$root"
+jq '.[] | select(.address == "0xabc123")' "$root/clients.json" >"$root/activewindow.json"
+WAHRWELT_TEST_SPOTIFY_GAP_MODE=respect run_switch "$root" end4
+assert_process_set "$root/processes" end4
+if grep -Eq '^spotify-focus-(block|restore):' "$root/events"; then
+  fail "active guarded Spotify was retained as a focus recovery target"
+fi
+grep -Fqx \
+  'log:Spotify activation snapshot focused the guarded window; continuing without focus guard' \
+  "$root/events" || fail "active guarded Spotify snapshot did not fail open"
+
+if [ "${WAHRWELT_TEST_SPOTIFY_ACTIVE_GUARDED_ONLY:-0}" = 1 ]; then
+  printf 'OK shell transition active-guarded Spotify regression\n'
+  exit 0
+fi
+
+root="$(new_case_root spotify-hidden-success)"
+seed_case "$root" noctalia
+seed_spotify "$root"
+WAHRWELT_TEST_SPOTIFY_GAP_MODE=respect run_switch "$root" end4
+assert_eq '' "$(cat "$root/focus-props")" "successful switch restores Spotify focus-on-activate"
+assert_eq '' "$(jq -r '.[] | select(.specialWorkspace.name == "special:music") | .name' "$root/monitors.json")" \
+  "successful switch keeps hidden Spotify workspace hidden"
+assert_eq 1 "$(grep -Fc 'spotify-focus-block:0xabc123' "$root/events")" \
+  "successful switch guards exact hidden Spotify once"
+assert_eq 1 "$(grep -Fc 'spotify-focus-restore:0xabc123' "$root/events")" \
+  "successful switch restores exact hidden Spotify once"
+grep -Fqx 'spotify-activation-blocked:0xabc123' "$root/events" ||
+  fail "hidden Spotify activation was not blocked during the watcher gap"
+if grep -Fqx 'hide:special:music' "$root/events"; then
+  fail "blocked Spotify activation redundantly toggled the hidden workspace"
+fi
+assert_event_before "$root/events" 'spotify-focus-block:0xabc123' 'stop:selector' \
+  "successful hidden Spotify guard"
+assert_event_before "$root/events" 'start:end4' 'watcher-ready::1.2' \
+  "successful hidden Spotify watcher replacement"
+assert_event_before "$root/events" 'reload' 'spotify-focus-restore:0xabc123' \
+  "successful hidden Spotify reload"
+assert_event_before "$root/events" 'watcher-ready::1.2' 'spotify-focus-restore:0xabc123' \
+  "successful hidden Spotify watcher readiness"
+if grep -Eq '^busctl-(unbounded|wrong-timeout):' "$root/events"; then
+  fail "successful hidden Spotify guard used the wrong D-Bus timeout contract"
+fi
+grep -Fqx 'busctl-bounded:call' "$root/events" ||
+  fail "Spotify guard did not bound the watcher owner call"
+grep -Fqx 'busctl-bounded:get-property' "$root/events" ||
+  fail "Spotify guard did not bound the watcher readiness call"
+
+root="$(new_case_root spotify-snapshot-unavailable)"
+seed_case "$root" noctalia
+seed_spotify "$root"
+if ! WAHRWELT_TEST_FAIL_SPOTIFY_SNAPSHOT=clients run_switch "$root" end4; then
+  fail "unavailable Spotify snapshot blocked the shell switch"
+fi
+assert_process_set "$root/processes" end4
+if grep -Eq '^spotify-focus-(block|restore):' "$root/events"; then
+  fail "unavailable Spotify snapshot left a partial focus guard"
+fi
+
+root="$(new_case_root spotify-watcher-timeout)"
+seed_case "$root" noctalia
+seed_spotify "$root"
+if ! WAHRWELT_TEST_SPOTIFY_GAP_MODE=respect WAHRWELT_TEST_WATCHER_UNREADY=1 \
+  run_switch "$root" end4; then
+  fail "StatusNotifierWatcher timeout rolled back a successful shell switch"
+fi
+assert_process_set "$root/processes" end4
+assert_eq '' "$(cat "$root/focus-props")" "watcher timeout restores Spotify focus-on-activate"
+assert_eq 1 "$(grep -Fc 'spotify-focus-restore:0xabc123' "$root/events")" \
+  "watcher timeout restores exact hidden Spotify once"
+grep -Fqx 'log:StatusNotifierWatcher readiness timeout' "$root/events" ||
+  fail "StatusNotifierWatcher timeout was not logged"
+assert_event_before "$root/events" 'reload' 'spotify-focus-restore:0xabc123' \
+  "watcher timeout cleanup"
+bounded_busctl_calls="$(grep -c '^busctl-bounded:' "$root/events" || true)"
+watcher_poll_sleeps="$(grep -c '^sleep:0.05$' "$root/events" || true)"
+watcher_timeout_budget_ms=$((bounded_busctl_calls * 50 + watcher_poll_sleeps * 50))
+if [ "$watcher_timeout_budget_ms" -gt 2000 ]; then
+  fail "StatusNotifierWatcher exceptional timeout budget is ${watcher_timeout_budget_ms}ms, want <=2000ms"
+fi
+
+root="$(new_case_root spotify-reveal-recovery)"
+seed_case "$root" noctalia
+seed_spotify "$root"
+WAHRWELT_TEST_SPOTIFY_GAP_MODE=force run_switch "$root" end4
+assert_eq '' "$(cat "$root/focus-props")" "revealed Spotify cleanup restores focus-on-activate"
+assert_eq '' "$(jq -r '.[] | select(.specialWorkspace.name == "special:music") | .name' "$root/monitors.json")" \
+  "revealed Spotify workspace is hidden again"
+assert_eq 1 "$(grep -Fc 'hide:special:music' "$root/events")" \
+  "revealed Spotify workspace is hidden exactly once"
+assert_event_before "$root/events" 'watcher-ready::1.2' 'hide:special:music' \
+  "revealed Spotify recovery waits for the replacement watcher"
+
+root="$(new_case_root spotify-multi-monitor-reveal-recovery)"
+seed_case "$root" noctalia
+seed_spotify "$root"
+printf '%s\n' '[
+  {"name":"eDP-1","focused":true,"specialWorkspace":{"id":0,"name":""}},
+  {"name":"HDMI-A-1","focused":false,"specialWorkspace":{"id":0,"name":""}}
+]' >"$root/monitors.json"
+WAHRWELT_TEST_SPOTIFY_GAP_MODE=force \
+  WAHRWELT_TEST_SPOTIFY_REVEAL_MONITOR=HDMI-A-1 \
+  WAHRWELT_TEST_SPOTIFY_HIDE_STEALS_FOCUS=1 \
+  run_switch "$root" end4
+assert_eq '' "$(jq -r '.[] | select(.specialWorkspace.name == "special:music") | .name' \
+  "$root/monitors.json")" "multi-monitor recovery hides Spotify on its actual monitor"
+assert_eq eDP-1 "$(jq -r '.[] | select(.focused == true) | .name' "$root/monitors.json")" \
+  "multi-monitor recovery preserves the focused monitor"
+assert_eq 0xdef456 "$(jq -r '.address // empty' "$root/activewindow.json")" \
+  "multi-monitor recovery preserves the exact active window"
+assert_eq 1 "$(grep -Fc 'hide:special:music:HDMI-A-1' "$root/events")" \
+  "multi-monitor recovery hides the exact monitor once"
+if grep -Fqx 'hide:special:music:eDP-1' "$root/events"; then
+  fail "multi-monitor recovery hid Spotify on the focused monitor"
+fi
+
+root="$(new_case_root spotify-visible-before-switch)"
+seed_case "$root" noctalia
+seed_spotify "$root" visible
+WAHRWELT_TEST_SPOTIFY_GAP_MODE=force run_switch "$root" end4
+if grep -Eq '^spotify-focus-(block|restore):' "$root/events"; then
+  fail "visible Spotify received a hidden-workspace focus guard"
+fi
+if grep -Fqx 'hide:special:music' "$root/events"; then
+  fail "workspace visible before the switch was hidden"
+fi
+assert_eq eDP-1 "$(jq -r '.[] | select(.specialWorkspace.name == "special:music") | .name' "$root/monitors.json")" \
+  "workspace visible before the switch remains visible"
+
+root="$(new_case_root spotify-same-profile-stale-watcher)"
+seed_case "$root" noctalia
+seed_spotify "$root"
+printf '%s\n' 'caelestia#2' >>"$root/processes"
+WAHRWELT_TEST_SPOTIFY_GAP_MODE=respect \
+  WAHRWELT_TEST_WATCHER_PROCESS=caelestia \
+  WAHRWELT_TEST_REPLACEMENT_WATCHER_OWNER=:1.2 \
+  run_switch "$root"
+assert_process_set "$root/processes" noctalia
+assert_eq '' "$(jq -r '.[] | select(.specialWorkspace.name == "special:music") | .name' \
+  "$root/monitors.json")" "same-profile stale watcher cleanup keeps Spotify hidden"
+assert_eq '' "$(cat "$root/focus-props")" \
+  "same-profile stale watcher cleanup restores Spotify focus-on-activate"
+grep -Fqx 'spotify-activation-blocked:0xabc123' "$root/events" ||
+  fail "same-profile stale watcher cleanup did not block Spotify activation"
+assert_event_before "$root/events" 'spotify-focus-block:0xabc123' 'stop:caelestia' \
+  "same-profile stale watcher guard"
+assert_event_before "$root/events" 'watcher-ready::1.2' 'spotify-focus-restore:0xabc123' \
+  "same-profile stale watcher readiness"
+
+root="$(new_case_root spotify-start-failure-rollback)"
+seed_case "$root" noctalia
+seed_spotify "$root"
+if WAHRWELT_TEST_SPOTIFY_GAP_MODE=respect run_switch "$root" end4 "" end4; then
+  fail "Spotify rollback fixture hid the requested start failure"
+fi
+assert_eq '' "$(cat "$root/focus-props")" "fallback rollback restores Spotify focus-on-activate"
+assert_process_set "$root/processes" noctalia
+assert_eq 1 "$(grep -Fc 'spotify-focus-block:0xabc123' "$root/events")" \
+  "fallback rollback guards exact hidden Spotify once"
+assert_eq 1 "$(grep -Fc 'spotify-focus-restore:0xabc123' "$root/events")" \
+  "fallback rollback restores exact hidden Spotify once"
+assert_event_before "$root/events" 'start:noctalia' 'watcher-ready::1.3' \
+  "fallback rollback watcher replacement"
+assert_event_before "$root/events" 'reload' 'spotify-focus-restore:0xabc123' \
+  "fallback rollback reload"
+assert_event_before "$root/events" 'watcher-ready::1.3' 'spotify-focus-restore:0xabc123' \
+  "fallback rollback watcher readiness"
+
+if [ "${WAHRWELT_TEST_SPOTIFY_ONLY:-0}" = 1 ]; then
+  printf 'OK shell transition Spotify regressions\n'
+  exit 0
+fi
 
 profiles=(caelestia noctalia end4 end4-pc)
 case_index=0
@@ -765,9 +1261,11 @@ assert_process_set "$root/processes" noctalia
 
 root="$(new_case_root signal-after-start-rollback)"
 seed_case "$root" noctalia
+seed_spotify "$root"
 before_state="$(capture_case_state "$root")"
 set +e
-run_switch "$root" end4 "" "" "" "" "" end4 2>"$root/abort-after-start.stderr"
+WAHRWELT_TEST_SPOTIFY_GAP_MODE=respect \
+  run_switch "$root" end4 "" "" "" "" "" end4 2>"$root/abort-after-start.stderr"
 signal_status=$?
 set -e
 assert_eq 143 "$signal_status" "TERM after target start preserves signal status"
@@ -776,6 +1274,11 @@ assert_eq "$before_state" "$after_state" "TERM after target start restores exact
 assert_process_set "$root/processes" noctalia
 grep -Fqx 'abort-after-start:end4' "$root/events" || fail "post-start TERM hook did not run"
 grep -Fqx 'start:noctalia' "$root/events" || fail "post-start TERM did not restart previous shell"
+assert_eq '' "$(cat "$root/focus-props")" "TERM rollback restores Spotify focus-on-activate"
+assert_eq 1 "$(grep -Fc 'spotify-focus-restore:0xabc123' "$root/events")" \
+  "TERM rollback restores exact hidden Spotify once"
+assert_event_before "$root/events" 'watcher-ready::1.3' 'spotify-focus-restore:0xabc123' \
+  "TERM rollback watcher readiness"
 if grep -Eq '^(reload|propagate)$' "$root/events"; then
   fail "post-start TERM reloaded an uncommitted runtime"
 fi
