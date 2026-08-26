@@ -44,6 +44,7 @@ jobs:
             nixpkgs#actionlint \
             nixpkgs#coreutils \
             nixpkgs#fish \
+            nixpkgs#nix \
             nixpkgs#util-linux \
             nixpkgs#shellcheck \
             nixpkgs#jq
@@ -53,42 +54,40 @@ jobs:
             /nix/store/*) ;;
             *) echo "::error::Tool profile did not resolve into the Nix store"; exit 1 ;;
           esac
-          for tool in actionlint fish jq mv shellcheck unshare; do
+          for tool in actionlint fish jq mv nix nix-store shellcheck unshare; do
             test -x "$profile_store/bin/$tool" || {
               echo "::error::Missing CI tool: $tool"
               exit 1
             }
           done
 
-          nix_exe="$(command -v nix)"
-          nix_exe="$(readlink -e -- "$nix_exe")"
-          nix_bin_dir="$(dirname -- "$nix_exe")"
-          case "$nix_bin_dir" in
-            /nix/store/*/bin) ;;
-            *) echo "::error::Nix did not resolve into an immutable store bin"; exit 1 ;;
-          esac
-          test -x "$nix_bin_dir/nix"
-          test -x "$nix_bin_dir/nix-store"
-
           echo "profile_bin=$profile_store/bin" >> "$GITHUB_OUTPUT"
-          echo "nix_bin_dir=$nix_bin_dir" >> "$GITHUB_OUTPUT"
 
       - name: Prepare installer test host
         env:
-          CI_NIX_BIN_DIR: ${{ steps.tools.outputs.nix_bin_dir }}
           CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}
         run: |
           case "$CI_PROFILE_BIN" in
             /nix/store/*/bin) ;;
             *) echo "::error::Tool profile output is not an immutable store bin"; exit 1 ;;
           esac
-          case "$CI_NIX_BIN_DIR" in
-            /nix/store/*/bin) ;;
-            *) echo "::error::Nix output is not an immutable store bin"; exit 1 ;;
-          esac
-          test -x "$CI_NIX_BIN_DIR/nix"
-          test -x "$CI_NIX_BIN_DIR/nix-store"
-          export PATH="$CI_PROFILE_BIN:$CI_NIX_BIN_DIR:$PATH"
+          for tool in actionlint fish jq mv nix nix-store shellcheck unshare; do
+            test -x "$CI_PROFILE_BIN/$tool" || {
+              echo "::error::Missing pinned CI tool: $tool"
+              exit 1
+            }
+          done
+          for tool in nix nix-store; do
+            test "$(stat -c '%u' -- "$CI_PROFILE_BIN/$tool")" = 0 || {
+              echo "::error::Pinned $tool invocation is not root-owned"
+              exit 1
+            }
+            test "$(stat -Lc '%u' -- "$CI_PROFILE_BIN/$tool")" = 0 || {
+              echo "::error::Pinned $tool executable is not root-owned"
+              exit 1
+            }
+          done
+          export PATH="$CI_PROFILE_BIN:$PATH"
           mv --help | grep -Fq -- '--exchange'
           mv --help | grep -Fq -- 'none-fail'
           if ! unshare -Ur true 2>/dev/null; then
@@ -102,56 +101,48 @@ jobs:
 
       - name: Lint GitHub Actions workflows
         env:
-          CI_NIX_BIN_DIR: ${{ steps.tools.outputs.nix_bin_dir }}
           CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}
-        run: PATH="$CI_PROFILE_BIN:$CI_NIX_BIN_DIR:$PATH" actionlint .github/workflows/*.yml
+        run: PATH="$CI_PROFILE_BIN:$PATH" actionlint .github/workflows/*.yml
 
       - name: Run shell, Lua, and selector integration gates
         env:
-          CI_NIX_BIN_DIR: ${{ steps.tools.outputs.nix_bin_dir }}
           CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}
-        run: PATH="$CI_PROFILE_BIN:$CI_NIX_BIN_DIR:$PATH" make -C Linux test-hypr-integration
+        run: PATH="$CI_PROFILE_BIN:$PATH" make -C Linux test-hypr-integration
 
       - name: Run linting + Go tests
         env:
-          CI_NIX_BIN_DIR: ${{ steps.tools.outputs.nix_bin_dir }}
           CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}
         run: |
-          PATH="$CI_PROFILE_BIN:$CI_NIX_BIN_DIR:$PATH" make -C Linux lint test-go
+          PATH="$CI_PROFILE_BIN:$PATH" make -C Linux lint test-go
 
       - name: Evaluate mixed-version Noctalia Home Manager module
         env:
-          CI_NIX_BIN_DIR: ${{ steps.tools.outputs.nix_bin_dir }}
           CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}
-        run: PATH="$CI_PROFILE_BIN:$CI_NIX_BIN_DIR:$PATH" make -C Linux/installer nix-noctalia-hm-compat
+        run: PATH="$CI_PROFILE_BIN:$PATH" make -C Linux/installer nix-noctalia-hm-compat
 
       - name: Realize validated End4 Hypr artifact
         env:
-          CI_NIX_BIN_DIR: ${{ steps.tools.outputs.nix_bin_dir }}
           CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}
-        run: PATH="$CI_PROFILE_BIN:$CI_NIX_BIN_DIR:$PATH" make -C Linux nix-end4-hypr-build
+        run: PATH="$CI_PROFILE_BIN:$PATH" make -C Linux nix-end4-hypr-build
 
       - name: Realize managed End4 pC QuickShell artifact
         env:
-          CI_NIX_BIN_DIR: ${{ steps.tools.outputs.nix_bin_dir }}
           CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}
-        run: PATH="$CI_PROFILE_BIN:$CI_NIX_BIN_DIR:$PATH" make -C Linux nix-end4-pc-quickshell-build
+        run: PATH="$CI_PROFILE_BIN:$PATH" make -C Linux nix-end4-pc-quickshell-build
 
       - name: Build brand migration unit
         env:
-          CI_NIX_BIN_DIR: ${{ steps.tools.outputs.nix_bin_dir }}
           CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}
         run: |
-          export PATH="$CI_PROFILE_BIN:$CI_NIX_BIN_DIR:$PATH"
+          export PATH="$CI_PROFILE_BIN:$PATH"
           nix build --no-link --no-write-lock-file \
             "path:${GITHUB_WORKSPACE}?dir=Linux/NixOS#nixosConfigurations.NixOS.config.systemd.units.\"wahrwelt-brand-migration.service\".unit"
 
       - name: Evaluate preset NixOS hosts
         env:
-          CI_NIX_BIN_DIR: ${{ steps.tools.outputs.nix_bin_dir }}
           CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}
         run: |
-          export PATH="$CI_PROFILE_BIN:$CI_NIX_BIN_DIR:$PATH"
+          export PATH="$CI_PROFILE_BIN:$PATH"
           for preset in minimal desktop developer personal; do
             nix eval --raw --no-write-lock-file \
               "path:${GITHUB_WORKSPACE}?dir=Linux/NixOS/presets/${preset}#checks.x86_64-linux.preset-host.drvPath"
