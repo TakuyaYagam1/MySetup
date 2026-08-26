@@ -1251,6 +1251,8 @@ printf '%s\n' 'prepare_runtime_environment() { :; }' \
   >"$start_lock_fixture/shell-runtime-env.sh"
 printf '%s\n' \
   'runtime_bundle_paths() { :; }' \
+  'runtime_switch_bundle_paths() { :; }' \
+  'wahrwelt_capture_exact_path_guards() { :; }' \
   'wahrwelt_begin_exact_snapshot() { wahrwelt_new_snapshot_dir=snapshot; }' \
   'snapshot_exact_paths() { :; }' \
   'remove_exact_path_snapshot() { :; }' \

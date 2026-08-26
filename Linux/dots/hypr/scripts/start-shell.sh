@@ -231,7 +231,8 @@ profile_start_attempted=0
 hypr_reload_started=0
 previous=""
 runtime_bundle_path_list=()
-state_path_list=("$persistent_state_file" "$wahrwelt_end4_variant_state")
+state_path_list=()
+state_guard_path_list=("$persistent_state_file" "$wahrwelt_end4_variant_state")
 
 discard_switch_snapshots() {
   if [ -n "$runtime_bundle_snapshot_dir" ]; then
@@ -298,32 +299,32 @@ cleanup_start_shell() {
 trap cleanup_start_shell EXIT
 
 begin_switch_transaction() {
-  mapfile -t runtime_bundle_path_list < <(runtime_bundle_paths)
-  wahrwelt_begin_exact_snapshot "$runtime_dir" .runtime-rollback- runtime || return 1
-  runtime_bundle_snapshot_dir="$wahrwelt_new_snapshot_dir"
-  if ! snapshot_exact_paths "$runtime_bundle_snapshot_dir" "${runtime_bundle_path_list[@]}"; then
-    discard_switch_snapshots
-    return 1
+  local planned_paths
+
+  wahrwelt_capture_exact_path_guards "${state_guard_path_list[@]}" || return 1
+  runtime_bundle_path_list=()
+  planned_paths="$(runtime_switch_bundle_paths)" || return 1
+  if [ -n "$planned_paths" ]; then
+    mapfile -t runtime_bundle_path_list <<<"$planned_paths"
+    wahrwelt_begin_exact_snapshot "$runtime_dir" .runtime-rollback- runtime || return 1
+    runtime_bundle_snapshot_dir="$wahrwelt_new_snapshot_dir"
+    if ! snapshot_exact_paths "$runtime_bundle_snapshot_dir" "${runtime_bundle_path_list[@]}"; then
+      discard_switch_snapshots
+      return 1
+    fi
   fi
 
-  if ! wahrwelt_begin_exact_snapshot "$runtime_dir" .state-switch-rollback- state; then
-    discard_switch_snapshots
-    return 1
-  fi
-  state_snapshot_dir="$wahrwelt_new_snapshot_dir"
-  if ! snapshot_exact_paths "$state_snapshot_dir" "${state_path_list[@]}"; then
-    discard_switch_snapshots
-    return 1
-  fi
   switch_transaction_active=1
 }
 
 restore_runtime_bundle() {
+  [ "${#runtime_bundle_path_list[@]}" -gt 0 ] || return 0
   [ -n "$runtime_bundle_snapshot_dir" ] || return 1
   restore_exact_paths "$runtime_bundle_snapshot_dir" "${runtime_bundle_path_list[@]}"
 }
 
 restore_original_state() {
+  [ "${#state_path_list[@]}" -gt 0 ] || return 0
   [ -n "$state_snapshot_dir" ] || return 1
   restore_exact_paths "$state_snapshot_dir" "${state_path_list[@]}"
 }
@@ -577,6 +578,8 @@ attempt_previous_fallback() {
   hypr_reload_started=0
   profile_start_attempted=0
   shell_processes_touched=0
+  switch_transaction_active=0
+  discard_switch_snapshots
   return 0
 }
 

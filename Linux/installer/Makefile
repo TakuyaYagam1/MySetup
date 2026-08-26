@@ -22,6 +22,7 @@ HYPR_SHELL_INTEGRATION_TESTS := \
 	Linux/dots/hypr/scripts/tests/shell-runtime-dir-test.sh \
 	Linux/dots/hypr/scripts/tests/shell-runtime-env-test.sh \
 	Linux/dots/hypr/scripts/tests/close-active-test.sh \
+	Linux/dots/hypr/scripts/tests/shell-transition-fast-path-test.sh \
 	Linux/dots/hypr/scripts/tests/shell-transition-test.sh
 
 END4_HYPR_EXPR := let \

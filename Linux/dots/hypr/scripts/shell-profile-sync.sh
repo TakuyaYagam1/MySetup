@@ -99,6 +99,17 @@ if ! declare -p wahrwelt_snapshot_directory_fds >/dev/null 2>&1; then
   declare -A wahrwelt_snapshot_owned_parents=()
   declare -A wahrwelt_snapshot_owned_recoveries=()
 fi
+if ! declare -p wahrwelt_snapshot_paths >/dev/null 2>&1; then
+  declare -A wahrwelt_snapshot_paths=()
+  declare -A wahrwelt_snapshot_original_types=()
+  declare -A wahrwelt_snapshot_original_identities=()
+  declare -A wahrwelt_snapshot_original_parents=()
+fi
+if ! declare -p wahrwelt_exact_path_guard_types >/dev/null 2>&1; then
+  declare -A wahrwelt_exact_path_guard_types=()
+  declare -A wahrwelt_exact_path_guard_identities=()
+  declare -A wahrwelt_exact_path_guard_parents=()
+fi
 wahrwelt_new_snapshot_dir=""
 wahrwelt_snapshot_recovery_fd_path=""
 wahrwelt_snapshot_recovery_exact_path=""
@@ -157,6 +168,99 @@ runtime_regular_is_private() {
 
   [ -f "$path" ] &&
     [ "$(stat -Lc %h -- "$path" 2>/dev/null || true)" = 1 ]
+}
+
+runtime_regular_matches_content() {
+  local parent_fd="$1"
+  local name="$2"
+  local content="$3"
+
+  command -v python3 >/dev/null 2>&1 || return 1
+  python3 -I -S - "$parent_fd" "$name" "$content" <<'PY'
+import os
+import stat
+import sys
+
+parent_fd = int(sys.argv[1])
+name = os.fsencode(sys.argv[2])
+expected = os.fsencode(sys.argv[3]) + b"\n"
+flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK
+fd = os.open(name, flags, dir_fd=parent_fd)
+try:
+    before = os.fstat(fd)
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or before.st_nlink != 1
+        or stat.S_IMODE(before.st_mode) != 0o644
+    ):
+        raise OSError("runtime target is not an ordinary managed regular file")
+    chunks = []
+    remaining = len(expected) + 1
+    while remaining:
+        chunk = os.read(fd, remaining)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    value = b"".join(chunks)
+    after = os.fstat(fd)
+    visible = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    stable = lambda info: (
+        info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_size,
+        info.st_mtime_ns, info.st_ctime_ns,
+    )
+    if (
+        value != expected
+        or stable(before) != stable(after)
+        or not stat.S_ISREG(visible.st_mode)
+        or visible.st_nlink != 1
+        or (visible.st_dev, visible.st_ino) != (after.st_dev, after.st_ino)
+    ):
+        raise OSError("runtime target content or identity changed")
+finally:
+    os.close(fd)
+PY
+}
+
+runtime_path_matches_content() {
+  local path="$1"
+  local content="$2"
+  local parent before after fd status=1
+
+  parent="$(dirname -- "$path")"
+  [ -d "$parent" ] && [ ! -L "$parent" ] || return 1
+  before="$(runtime_directory_identity "$parent" 2>/dev/null || true)"
+  [ -n "$before" ] || return 1
+  exec {fd}<"$parent" || return 1
+  after="$(runtime_directory_identity "/proc/${BASHPID:-$$}/fd/$fd" 2>/dev/null || true)"
+  if [ "$after" = "$before" ] && runtime_canonical_parent_matches "$path" "$before" &&
+    runtime_regular_matches_content "$fd" "${path##*/}" "$content" 2>/dev/null &&
+    runtime_canonical_parent_matches "$path" "$before"; then
+    status=0
+  fi
+  exec {fd}<&-
+  return "$status"
+}
+
+stable_runtime_entrypoint_matches() {
+  local path="$1"
+  local content="$2"
+  local gcroot generation expected resolved resolved_after
+
+  runtime_path_matches_content "$path" "$content" && return 0
+  [ -L "$path" ] || return 1
+
+  gcroot="$HOME/.local/state/home-manager/gcroots/current-home"
+  [ -L "$gcroot" ] || return 1
+  generation="$(readlink -f -- "$gcroot" 2>/dev/null || true)"
+  [ -n "$generation" ] || return 1
+  expected="$generation/home-files/.config/hypr/hyprland.lua"
+  resolved="$(readlink -f -- "$path" 2>/dev/null || true)"
+  [ -n "$resolved" ] && [ -f "$resolved" ] || return 1
+  [ "$resolved" = "$(readlink -f -- "$expected" 2>/dev/null || true)" ] || return 1
+  printf '%s\n' "$content" | cmp -s - "$resolved" || return 1
+  resolved_after="$(readlink -f -- "$path" 2>/dev/null || true)"
+  [ "$resolved_after" = "$resolved" ]
 }
 
 runtime_create_regular_candidate() {
@@ -364,6 +468,93 @@ runtime_parent_identity() {
   runtime_path_identity "$parent"
 }
 
+wahrwelt_capture_exact_path_guards() {
+  local path type identity parent
+
+  wahrwelt_exact_path_guard_types=()
+  wahrwelt_exact_path_guard_identities=()
+  wahrwelt_exact_path_guard_parents=()
+  for path in "$@"; do
+    type="$(runtime_path_kind "$path")"
+    case "$type" in
+      absent) identity="" ;;
+      regular)
+        if ! runtime_regular_is_private "$path"; then
+          log "refusing hardlinked state path at transaction begin: $path"
+          return 1
+        fi
+        identity="$(runtime_state_identity "$path" 2>/dev/null || true)"
+        [ -n "$identity" ] || return 1
+        ;;
+      symlink)
+        identity="$(runtime_state_identity "$path" 2>/dev/null || true)"
+        [ -n "$identity" ] || return 1
+        ;;
+      *)
+        log "refusing non-regular state path at transaction begin: $path"
+        return 1
+        ;;
+    esac
+    parent="$(runtime_parent_identity "$path" 2>/dev/null || true)"
+    if [ -z "$parent" ]; then
+      log "state parent was absent or unsafe at transaction begin: $(dirname -- "$path")"
+      return 1
+    fi
+    wahrwelt_exact_path_guard_types["$path"]="$type"
+    wahrwelt_exact_path_guard_identities["$path"]="$identity"
+    wahrwelt_exact_path_guard_parents["$path"]="$parent"
+  done
+}
+
+wahrwelt_verify_exact_path_guards() {
+  local path expected_type expected_identity expected_parent
+  local current_type current_identity current_parent
+
+  for path in "$@"; do
+    if [ -z "${wahrwelt_exact_path_guard_types[$path]+x}" ]; then
+      log "state path lacks a transaction-begin ownership guard: $path"
+      return 1
+    fi
+    expected_type="${wahrwelt_exact_path_guard_types[$path]}"
+    expected_identity="${wahrwelt_exact_path_guard_identities[$path]}"
+    expected_parent="${wahrwelt_exact_path_guard_parents[$path]}"
+    current_type="$(runtime_path_kind "$path")"
+    current_identity="$(runtime_state_identity "$path" 2>/dev/null || true)"
+    current_parent="$(runtime_parent_identity "$path" 2>/dev/null || true)"
+    if [ "$current_type" != "$expected_type" ] ||
+      [ "$current_identity" != "$expected_identity" ] ||
+      [ "$current_parent" != "$expected_parent" ]; then
+      log "state path changed after transaction begin; preserving concurrent winner: $path"
+      return 1
+    fi
+  done
+}
+
+wahrwelt_snapshot_matches_exact_path_guards() {
+  local snapshot_dir="$1"
+  local path index key expected_type expected_identity expected_parent
+  shift
+
+  for path in "$@"; do
+    if [ -z "${wahrwelt_exact_path_guard_types[$path]+x}" ]; then
+      log "state snapshot path lacks a transaction-begin ownership guard: $path"
+      return 1
+    fi
+    index="$(snapshot_path_index "$snapshot_dir" "$path" 2>/dev/null || true)"
+    [ -n "$index" ] || return 1
+    key="$(snapshot_parent_key "$snapshot_dir" "$index")"
+    expected_type="${wahrwelt_exact_path_guard_types[$path]}"
+    expected_identity="${wahrwelt_exact_path_guard_identities[$path]}"
+    expected_parent="${wahrwelt_exact_path_guard_parents[$path]}"
+    if [ "${wahrwelt_snapshot_original_types[$key]:-}" != "$expected_type" ] ||
+      [ "${wahrwelt_snapshot_original_identities[$key]:-}" != "$expected_identity" ] ||
+      [ "${wahrwelt_snapshot_original_parents[$key]:-}" != "$expected_parent" ]; then
+      log "state snapshot differs from transaction-begin ownership guard; preserving concurrent winner: $path"
+      return 1
+    fi
+  done
+}
+
 wahrwelt_begin_exact_snapshot() {
   local parent="$1"
   local prefix="$2"
@@ -473,44 +664,57 @@ snapshot_leaf_key() {
 }
 
 snapshot_write_field() {
-  local snapshot_dir="$1"
-  local name="$2"
-  local value="$3"
-  local fd identity key
+  snapshot_write_fields "$@"
+}
 
+snapshot_write_fields() {
+  local snapshot_dir="$1"
+  local fd output name key index=0
+  local -a fields=("${@:2}") identities=()
+
+  [ "$((${#fields[@]} % 2))" -eq 0 ] || return 1
   fd="$(wahrwelt_snapshot_directory_fd "$snapshot_dir")"
   [ -n "$fd" ] || return 1
-  identity="$(
-    python3 -I -S - "$fd" "$name" "$value" 2>/dev/null <<'PY'
+  output="$(
+    python3 -I -S - "$fd" "${fields[@]}" 2>/dev/null <<'PY'
 import hashlib
 import os
 import stat
 import sys
 
 parent_fd = int(sys.argv[1])
-name = os.fsencode(sys.argv[2])
-value = os.fsencode(sys.argv[3])
-flags = os.O_WRONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_CREAT | os.O_EXCL
-fd = os.open(name, flags, 0o600, dir_fd=parent_fd)
-try:
-    offset = 0
-    while offset < len(value):
-        offset += os.write(fd, value[offset:])
-    os.fsync(fd)
-    info = os.fstat(fd)
-    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-        raise OSError("snapshot field is not a private regular file")
-    print(":".join(map(str, (
-        info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_size,
-        info.st_mtime_ns, info.st_ctime_ns,
-    ))) + ":" + hashlib.sha256(value).hexdigest())
-finally:
-    os.close(fd)
+fields = sys.argv[2:]
+if len(fields) % 2:
+    raise OSError("invalid snapshot field batch")
+for raw_name, raw_value in zip(fields[::2], fields[1::2]):
+    name = os.fsencode(raw_name)
+    value = os.fsencode(raw_value)
+    flags = os.O_WRONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_CREAT | os.O_EXCL
+    fd = os.open(name, flags, 0o600, dir_fd=parent_fd)
+    try:
+        offset = 0
+        while offset < len(value):
+            offset += os.write(fd, value[offset:])
+        os.fsync(fd)
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise OSError("snapshot field is not a private regular file")
+        print(":".join(map(str, (
+            info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_size,
+            info.st_mtime_ns, info.st_ctime_ns,
+        ))) + ":" + hashlib.sha256(value).hexdigest())
+    finally:
+        os.close(fd)
 PY
   )" || return 1
-  [ -n "$identity" ] || return 1
-  key="$(snapshot_leaf_key "$snapshot_dir" "$name")"
-  wahrwelt_snapshot_leaf_identities["$key"]="$identity"
+  mapfile -t identities <<<"$output"
+  [ "${#identities[@]}" -eq "$((${#fields[@]} / 2))" ] || return 1
+  while [ "$index" -lt "${#fields[@]}" ]; do
+    name="${fields[$index]}"
+    key="$(snapshot_leaf_key "$snapshot_dir" "$name")"
+    wahrwelt_snapshot_leaf_identities["$key"]="${identities[$((index / 2))]}"
+    index=$((index + 2))
+  done
 }
 
 snapshot_has_field() {
@@ -614,6 +818,14 @@ wahrwelt_unregister_exact_snapshot() {
         ;;
     esac
   done
+  for key in "${!wahrwelt_snapshot_paths[@]}"; do
+    case "$key" in
+      "$snapshot_dir":*)
+        unset 'wahrwelt_snapshot_paths[$key]' 'wahrwelt_snapshot_original_types[$key]' \
+          'wahrwelt_snapshot_original_identities[$key]' 'wahrwelt_snapshot_original_parents[$key]'
+        ;;
+    esac
+  done
   fd="${wahrwelt_snapshot_directory_fds[$snapshot_dir]:-}"
   [ -z "$fd" ] || exec {fd}<&-
   fd="${wahrwelt_snapshot_directory_parent_fds[$snapshot_dir]:-}"
@@ -704,17 +916,17 @@ transaction_pinned_snapshot_path() {
 snapshot_path_index() {
   local snapshot_dir="$1"
   local path="$2"
-  local index=0 stored
+  local index=0 key
 
-  while snapshot_has_field "$snapshot_dir" "$index.path"; do
-    stored="$(snapshot_read_field "$snapshot_dir" "$index.path" 2>/dev/null || true)"
-    if [ "$stored" = "$path" ]; then
+  while :; do
+    key="$(snapshot_parent_key "$snapshot_dir" "$index")"
+    [ -n "${wahrwelt_snapshot_paths[$key]+x}" ] || return 1
+    if [ "${wahrwelt_snapshot_paths[$key]}" = "$path" ]; then
       printf '%s' "$index"
       return 0
     fi
     index=$((index + 1))
   done
-  return 1
 }
 
 snapshot_expected_state() {
@@ -728,9 +940,10 @@ snapshot_expected_state() {
     identity="${wahrwelt_snapshot_owned_identities[$key]}"
     parent="${wahrwelt_snapshot_owned_parents[$key]}"
   else
-    type="$(snapshot_read_field "$snapshot_dir" "$index.type" 2>/dev/null || true)"
-    identity="$(snapshot_read_field "$snapshot_dir" "$index.identity" 2>/dev/null || true)"
-    parent="$(snapshot_read_field "$snapshot_dir" "$index.parent" 2>/dev/null || true)"
+    [ -n "${wahrwelt_snapshot_paths[$key]+x}" ] || return 1
+    type="${wahrwelt_snapshot_original_types[$key]}"
+    identity="${wahrwelt_snapshot_original_identities[$key]}"
+    parent="${wahrwelt_snapshot_original_parents[$key]}"
   fi
   printf '%s\n%s\n%s\n' "$type" "$identity" "$parent"
 }
@@ -1068,11 +1281,24 @@ snapshot_exact_paths() {
     if declare -F wahrwelt_before_snapshot_leaf_write_hook >/dev/null 2>&1; then
       wahrwelt_before_snapshot_leaf_write_hook "$snapshot_dir" "$index" "$(wahrwelt_snapshot_directory_fd "$snapshot_dir")" || return 1
     fi
-    snapshot_write_field "$snapshot_dir" "$index.path" "$path" || return 1
-    snapshot_write_field "$snapshot_dir" "$index.type" "$type" || return 1
-    snapshot_write_field "$snapshot_dir" "$index.identity" "$identity" || return 1
-    snapshot_write_field "$snapshot_dir" "$index.parent" "$parent" || return 1
-    [ "$type" != regular ] || snapshot_write_field "$snapshot_dir" "$index.mode" "$mode" || return 1
+    if [ "$type" = regular ]; then
+      snapshot_write_fields "$snapshot_dir" \
+        "$index.path" "$path" \
+        "$index.type" "$type" \
+        "$index.identity" "$identity" \
+        "$index.parent" "$parent" \
+        "$index.mode" "$mode" || return 1
+    else
+      snapshot_write_fields "$snapshot_dir" \
+        "$index.path" "$path" \
+        "$index.type" "$type" \
+        "$index.identity" "$identity" \
+        "$index.parent" "$parent" || return 1
+    fi
+    wahrwelt_snapshot_paths["$key"]="$path"
+    wahrwelt_snapshot_original_types["$key"]="$type"
+    wahrwelt_snapshot_original_identities["$key"]="$identity"
+    wahrwelt_snapshot_original_parents["$key"]="$parent"
     if ! runtime_canonical_parent_matches "$path" "$parent"; then
       log "runtime parent changed while taking transaction snapshot; preserving concurrent winner: $path"
       return 1
@@ -1586,6 +1812,15 @@ write_regular_file() {
         log "runtime publication target is not an ordinary private regular file: $path"
         return 1
       fi
+      if runtime_regular_matches_content "$runtime_pinned_parent_fd" "$base" "$content" 2>/dev/null; then
+        if ! runtime_canonical_parent_matches "$path" "$runtime_pinned_parent_identity"; then
+          close_pinned_runtime_parent
+          log "runtime parent changed during unchanged publication check; preserving concurrent winner: $path"
+          return 1
+        fi
+        close_pinned_runtime_parent
+        return 0
+      fi
       ;;
     *)
       close_pinned_runtime_parent
@@ -1593,6 +1828,15 @@ write_regular_file() {
       return 1
       ;;
   esac
+  if [ "${switch_transaction_active:-0}" -eq 1 ] ||
+    [ "${#wahrwelt_transaction_snapshot_dirs[@]}" -gt 0 ]; then
+    snapshot_ref="$(transaction_pinned_snapshot_path "$path" 2>/dev/null || true)"
+    if [ -z "$snapshot_ref" ]; then
+      close_pinned_runtime_parent
+      log "runtime mutation lacks a retained transaction recovery parent: $path"
+      return 1
+    fi
+  fi
   if [ "$prior_type" = absent ]; then
     candidate_identity="$(runtime_publish_anonymous_regular "$runtime_pinned_parent_fd" "$base" 0644 content "$content" 2>/dev/null || true)"
     if [ -z "$candidate_identity" ] ||
@@ -1633,7 +1877,7 @@ write_regular_file() {
       log "runtime publication replacement lost ownership proof; preserving recovery: $path"
       return 1
     fi
-    snapshot_ref="$(transaction_pinned_snapshot_path "$path" 2>/dev/null || true)"
+    [ -n "$snapshot_ref" ] || snapshot_ref="$(transaction_pinned_snapshot_path "$path" 2>/dev/null || true)"
     if [ -z "$snapshot_ref" ]; then
       if [ "$(runtime_state_identity "$anchored" 2>/dev/null || true)" = "$candidate_identity" ] &&
         [ "$(runtime_state_identity "$runtime_pinned_parent_path/$candidate" 2>/dev/null || true)" = "$prior_identity" ]; then
@@ -1697,8 +1941,91 @@ write_regular_file() {
   return "$hook_status"
 }
 
+write_regular_file_if_changed() {
+  local path="$1"
+  local content="$2"
+  local base anchored status=1
+
+  if runtime_path_matches_content "$path" "$content"; then
+    if preflight_regular_file_target "$path" && open_pinned_runtime_parent "$path"; then
+      base="${path##*/}"
+      anchored="$runtime_pinned_parent_path/$base"
+      if preflight_exact_transaction_path "$path" "$anchored" "$runtime_pinned_parent_identity" &&
+        runtime_canonical_parent_matches "$path" "$runtime_pinned_parent_identity" &&
+        runtime_regular_matches_content "$runtime_pinned_parent_fd" "$base" "$content" 2>/dev/null; then
+        status=0
+      fi
+      close_pinned_runtime_parent
+    fi
+  fi
+  [ "$status" -eq 0 ] && return 0
+  write_regular_file "$path" "$content"
+}
+
 runtime_file() {
   wahrwelt_runtime_file "$1"
+}
+
+runtime_shell_profile_content() {
+  local dir
+
+  dir="$(hypr_dir)"
+  printf '%s' "-- Runtime shell launcher
+hl.on(\"hyprland.start\", function()
+    hl.exec_cmd(\"$dir/scripts/start-shell.sh\")
+end)"
+}
+
+runtime_shell_launcher_content() {
+  local launcher_module launcher_profile
+
+  launcher_module="$(wahrwelt_shell_launcher_module "$profile")" || return 1
+  launcher_profile="$profile"
+  if [ "$(wahrwelt_shell_family "$profile")" = end4 ]; then
+    launcher_profile=end4
+  fi
+  printf '%s' "-- Active shell launcher profile: $launcher_profile
+require(\"$launcher_module\")"
+}
+
+runtime_shell_keybinds_content() {
+  local adapter quickshell_path
+
+  adapter="$(wahrwelt_shell_adapter "$profile")" || return 1
+  if [ "$(wahrwelt_shell_family "$profile")" = end4 ]; then
+    quickshell_path="$(wahrwelt_end4_quickshell_path "$profile")" || return 1
+    printf '%s' "-- Wahrwelt shell adapter: $profile
+require(\"$adapter\").load({ profile = \"$profile\", quickshell_config = \"$quickshell_path\" })"
+    return 0
+  fi
+  printf '%s' "-- Wahrwelt shell adapter: $profile
+require(\"$adapter\")"
+}
+
+runtime_hyprlock_content() {
+  local dir
+
+  dir="$(hypr_dir)"
+  if [ "$(wahrwelt_shell_family "$profile")" = end4 ]; then
+    printf '%s' "# Active Hyprlock profile: end4
+source = $dir/end4/hyprlock.conf"
+    return 0
+  fi
+  printf '%s' '# Active Hyprlock profile: shell-managed
+# Caelestia and Noctalia use shell-native lock flows.'
+}
+
+runtime_hypridle_content() {
+  local dir
+
+  dir="$(hypr_dir)"
+  if [ "$(wahrwelt_shell_family "$profile")" = end4 ]; then
+    printf '%s' "# Active Hypridle profile: end4
+source = $dir/end4/hypridle.conf"
+    return 0
+  fi
+  printf '%s' '# Active Hypridle profile: shell-managed
+# Caelestia and Noctalia use shell-native idle flows.'
 }
 
 ensure_wahrwelt_entrypoint() {
@@ -1716,18 +2043,15 @@ ensure_wahrwelt_entrypoint() {
 }
 
 sync_shell_launcher() {
-  local dir
+  local content
 
-  dir="$(hypr_dir)"
   mkdir -p -- "$hypr_runtime_dir"
-  write_regular_file "$(runtime_file shell-profile.lua)" "-- Runtime shell launcher
-hl.on(\"hyprland.start\", function()
-    hl.exec_cmd(\"$dir/scripts/start-shell.sh\")
-end)"
+  content="$(runtime_shell_profile_content)" || return 1
+  write_regular_file_if_changed "$(runtime_file shell-profile.lua)" "$content"
 }
 
 sync_shell_launcher_bindings() {
-  local dir profile_launcher launcher_module
+  local content dir profile_launcher launcher_module
 
   dir="$(hypr_dir)"
   launcher_module="$(wahrwelt_shell_launcher_module "$profile")" || return 1
@@ -1738,24 +2062,15 @@ sync_shell_launcher_bindings() {
     return 1
   fi
 
-  write_regular_file "$(runtime_file shell-launcher.lua)" "-- Active shell launcher profile: $profile
-require(\"$launcher_module\")"
+  content="$(runtime_shell_launcher_content)" || return 1
+  write_regular_file_if_changed "$(runtime_file shell-launcher.lua)" "$content"
 }
 
 sync_shell_keybinds() {
-  local adapter quickshell_path
+  local content
 
-  adapter="$(wahrwelt_shell_adapter "$profile")" || return 1
-
-  if [ "$(wahrwelt_shell_family "$profile")" = "end4" ]; then
-    quickshell_path="$(wahrwelt_end4_quickshell_path "$profile")" || return 1
-    write_regular_file "$(runtime_file shell-keybinds.lua)" "-- Wahrwelt shell adapter: $profile
-require(\"$adapter\").load({ profile = \"$profile\", quickshell_config = \"$quickshell_path\" })"
-    return $?
-  fi
-
-  write_regular_file "$(runtime_file shell-keybinds.lua)" "-- Wahrwelt shell adapter: $profile
-require(\"$adapter\")"
+  content="$(runtime_shell_keybinds_content)" || return 1
+  write_regular_file_if_changed "$(runtime_file shell-keybinds.lua)" "$content"
 }
 
 sync_hypr_entrypoint() {
@@ -1763,11 +2078,11 @@ sync_hypr_entrypoint() {
 
   content="$(wahrwelt_print_canonical_runtime_entrypoint)" || return 1
 
-  write_regular_file "$(runtime_file hyprland.lua)" "$content"
+  write_regular_file_if_changed "$(runtime_file hyprland.lua)" "$content"
 }
 
 sync_hypr_lock_stack() {
-  local dir hyprlock_target hypridle_target
+  local content dir hyprlock_target hypridle_target
 
   dir="$(hypr_dir)"
 
@@ -1785,17 +2100,17 @@ sync_hypr_lock_stack() {
       return 1
     fi
 
-    write_regular_file "$(runtime_file hyprlock.conf)" "# Active Hyprlock profile: $profile
-source = $hyprlock_target" || return 1
-    write_regular_file "$(runtime_file hypridle.conf)" "# Active Hypridle profile: $profile
-source = $hypridle_target"
+    content="$(runtime_hyprlock_content)" || return 1
+    write_regular_file_if_changed "$(runtime_file hyprlock.conf)" "$content" || return 1
+    content="$(runtime_hypridle_content)" || return 1
+    write_regular_file_if_changed "$(runtime_file hypridle.conf)" "$content"
     return $?
   fi
 
-  write_regular_file "$(runtime_file hyprlock.conf)" "# Active Hyprlock profile: shell-managed ($profile)
-# Caelestia and Noctalia use shell-native lock flows." || return 1
-  write_regular_file "$(runtime_file hypridle.conf)" "# Active Hypridle profile: shell-managed ($profile)
-# Caelestia and Noctalia use shell-native idle flows."
+  content="$(runtime_hyprlock_content)" || return 1
+  write_regular_file_if_changed "$(runtime_file hyprlock.conf)" "$content" || return 1
+  content="$(runtime_hypridle_content)" || return 1
+  write_regular_file_if_changed "$(runtime_file hypridle.conf)" "$content"
 }
 
 sync_stable_lua_entrypoint() {
@@ -1938,6 +2253,9 @@ prune_legacy_hyprland_runtime_files() {
   while IFS= read -r path; do
     snapshot_ref="$(transaction_pinned_snapshot_path "$path" 2>/dev/null || true)"
     if [ -z "$snapshot_ref" ]; then
+      if [ "$(runtime_path_kind "$path")" = absent ]; then
+        continue
+      fi
       log "legacy runtime path lacks a pinned transaction snapshot: $path"
       return 1
     fi
@@ -1964,7 +2282,45 @@ prune_legacy_hyprland_runtime_files() {
   done < <(legacy_hyprland_runtime_paths)
 }
 
-runtime_bundle_paths() {
+runtime_bundle_fast_path_ready() {
+  local dir path stable_content launcher_content hypr_content
+
+  dir="$(hypr_dir)"
+  stable_content="$(wahrwelt_print_stable_runtime_entrypoint "$hypr_runtime_dir/hyprland.lua")" || return 1
+  launcher_content="$(runtime_shell_profile_content)" || return 1
+  hypr_content="$(wahrwelt_print_canonical_runtime_entrypoint)" || return 1
+
+  stable_runtime_entrypoint_matches "$dir/hyprland.lua" "$stable_content" || return 1
+  runtime_path_matches_content "$(runtime_file shell-profile.lua)" "$launcher_content" || return 1
+  runtime_path_matches_content "$(runtime_file hyprland.lua)" "$hypr_content" || return 1
+  while IFS= read -r path; do
+    if [ -e "$path" ] || [ -L "$path" ]; then
+      return 1
+    fi
+  done < <(legacy_hyprland_runtime_paths)
+}
+
+runtime_profile_mutation_paths() {
+  local content path
+
+  path="$(runtime_file shell-launcher.lua)"
+  content="$(runtime_shell_launcher_content)" || return 1
+  runtime_path_matches_content "$path" "$content" || printf '%s\n' "$path"
+
+  path="$(runtime_file shell-keybinds.lua)"
+  content="$(runtime_shell_keybinds_content)" || return 1
+  runtime_path_matches_content "$path" "$content" || printf '%s\n' "$path"
+
+  path="$(runtime_file hyprlock.conf)"
+  content="$(runtime_hyprlock_content)" || return 1
+  runtime_path_matches_content "$path" "$content" || printf '%s\n' "$path"
+
+  path="$(runtime_file hypridle.conf)"
+  content="$(runtime_hypridle_content)" || return 1
+  runtime_path_matches_content "$path" "$content" || printf '%s\n' "$path"
+}
+
+runtime_full_bundle_paths() {
   local dir
 
   dir="$(hypr_dir)"
@@ -1977,6 +2333,84 @@ runtime_bundle_paths() {
     "$(runtime_file hyprlock.conf)" \
     "$(runtime_file hypridle.conf)"
   legacy_hyprland_runtime_paths
+}
+
+runtime_bundle_paths() {
+  if runtime_bundle_fast_path_ready; then
+    runtime_profile_mutation_paths
+    return $?
+  fi
+  runtime_full_bundle_paths
+}
+
+runtime_union_path_if_needed() {
+  local path="$1"
+  local requested_content="$2"
+  local fallback_content="$3"
+
+  if [ "$requested_content" != "$fallback_content" ] ||
+    ! runtime_path_matches_content "$path" "$requested_content"; then
+    printf '%s\n' "$path"
+  fi
+  return 0
+}
+
+runtime_profile_union_mutation_paths() {
+  local requested_profile="$1"
+  local fallback_profile="$2"
+  local path requested_content fallback_content
+  local profile="$requested_profile"
+
+  path="$(runtime_file shell-launcher.lua)"
+  requested_content="$(runtime_shell_launcher_content)" || return 1
+  profile="$fallback_profile"
+  fallback_content="$(runtime_shell_launcher_content)" || return 1
+  runtime_union_path_if_needed "$path" "$requested_content" "$fallback_content"
+
+  profile="$requested_profile"
+  path="$(runtime_file shell-keybinds.lua)"
+  requested_content="$(runtime_shell_keybinds_content)" || return 1
+  profile="$fallback_profile"
+  fallback_content="$(runtime_shell_keybinds_content)" || return 1
+  runtime_union_path_if_needed "$path" "$requested_content" "$fallback_content"
+
+  profile="$requested_profile"
+  path="$(runtime_file hyprlock.conf)"
+  requested_content="$(runtime_hyprlock_content)" || return 1
+  profile="$fallback_profile"
+  fallback_content="$(runtime_hyprlock_content)" || return 1
+  runtime_union_path_if_needed "$path" "$requested_content" "$fallback_content"
+
+  profile="$requested_profile"
+  path="$(runtime_file hypridle.conf)"
+  requested_content="$(runtime_hypridle_content)" || return 1
+  profile="$fallback_profile"
+  fallback_content="$(runtime_hypridle_content)" || return 1
+  runtime_union_path_if_needed "$path" "$requested_content" "$fallback_content"
+}
+
+runtime_switch_bundle_paths() {
+  local requested_profile="$profile"
+
+  if ! runtime_bundle_fast_path_ready; then
+    runtime_full_bundle_paths
+    return $?
+  fi
+  if wahrwelt_valid_shell_profile "${previous:-}" && [ "$previous" != "$requested_profile" ]; then
+    runtime_profile_union_mutation_paths "$requested_profile" "$previous"
+    return $?
+  fi
+  runtime_profile_mutation_paths
+}
+
+state_bundle_paths() {
+  if ! runtime_path_matches_content "$persistent_state_file" "$profile"; then
+    printf '%s\n' "$persistent_state_file"
+  fi
+  if wahrwelt_valid_end4_variant "$profile" &&
+    ! runtime_path_matches_content "$wahrwelt_end4_variant_state" "$profile"; then
+    printf '%s\n' "$wahrwelt_end4_variant_state"
+  fi
 }
 
 sync_runtime_shell_files() {
@@ -2051,15 +2485,48 @@ prepare_profile_or_fallback() {
 }
 
 persist_profile() {
-  local snapshot_dir status=0
+  local planned_paths snapshot_dir status=0 owns_snapshot=1
   local state_paths=("$persistent_state_file" "$wahrwelt_end4_variant_state")
 
-  wahrwelt_begin_exact_snapshot "$wahrwelt_runtime_session_dir" .state-rollback- persist || return 1
-  snapshot_dir="$wahrwelt_new_snapshot_dir"
-  if ! snapshot_exact_paths "$snapshot_dir" "${state_paths[@]}"; then
-    remove_exact_path_snapshot "$snapshot_dir" "${state_paths[@]}" ||
-      log "state persistence snapshot initialization failed; exact recovery retained"
-    return 1
+  if [ "${switch_transaction_active:-0}" -eq 1 ]; then
+    wahrwelt_verify_exact_path_guards "${state_paths[@]}" || return 1
+    if [ -z "${state_snapshot_dir:-}" ]; then
+      state_path_list=()
+      planned_paths="$(state_bundle_paths)" || return 1
+      if [ -n "$planned_paths" ]; then
+        mapfile -t state_path_list <<<"$planned_paths"
+        if ! wahrwelt_begin_exact_snapshot "$wahrwelt_runtime_session_dir" .state-switch-rollback- state; then
+          state_path_list=()
+          return 1
+        fi
+        state_snapshot_dir="$wahrwelt_new_snapshot_dir"
+        if ! snapshot_exact_paths "$state_snapshot_dir" "${state_path_list[@]}"; then
+          remove_exact_path_snapshot "$state_snapshot_dir" "${state_path_list[@]}" ||
+            log "state switch snapshot initialization failed; exact recovery retained"
+          state_snapshot_dir=""
+          state_path_list=()
+          return 1
+        fi
+        if ! wahrwelt_snapshot_matches_exact_path_guards "$state_snapshot_dir" "${state_path_list[@]}"; then
+          remove_exact_path_snapshot "$state_snapshot_dir" "${state_path_list[@]}" ||
+            log "state switch ownership guard failed; exact recovery retained"
+          state_snapshot_dir=""
+          state_path_list=()
+          return 1
+        fi
+      fi
+    fi
+    wahrwelt_verify_exact_path_guards "${state_paths[@]}" || return 1
+    snapshot_dir="${state_snapshot_dir:-}"
+    owns_snapshot=0
+  else
+    wahrwelt_begin_exact_snapshot "$wahrwelt_runtime_session_dir" .state-rollback- persist || return 1
+    snapshot_dir="$wahrwelt_new_snapshot_dir"
+    if ! snapshot_exact_paths "$snapshot_dir" "${state_paths[@]}"; then
+      remove_exact_path_snapshot "$snapshot_dir" "${state_paths[@]}" ||
+        log "state persistence snapshot initialization failed; exact recovery retained"
+      return 1
+    fi
   fi
 
   if ! preflight_regular_file_target "$persistent_state_file" ||
@@ -2068,20 +2535,22 @@ persist_profile() {
   fi
 
   if [ "$status" -eq 0 ] && wahrwelt_valid_end4_variant "$profile"; then
-    write_regular_file "$wahrwelt_end4_variant_state" "$profile" || status=1
+    write_regular_file_if_changed "$wahrwelt_end4_variant_state" "$profile" || status=1
   fi
   if [ "$status" -eq 0 ]; then
-    write_regular_file "$persistent_state_file" "$profile" || status=1
+    write_regular_file_if_changed "$persistent_state_file" "$profile" || status=1
   fi
 
   if [ "$status" -ne 0 ]; then
-    if ! restore_exact_paths "$snapshot_dir" "${state_paths[@]}"; then
+    if [ "$owns_snapshot" -eq 1 ] && ! restore_exact_paths "$snapshot_dir" "${state_paths[@]}"; then
       log "failed to restore shell state transaction after persistence error; preserving private snapshot: $snapshot_dir"
       return 1
     fi
   fi
-  remove_exact_path_snapshot "$snapshot_dir" "${state_paths[@]}" ||
-    log "state persistence snapshot cleanup refused; exact recovery retained"
+  if [ "$owns_snapshot" -eq 1 ]; then
+    remove_exact_path_snapshot "$snapshot_dir" "${state_paths[@]}" ||
+      log "state persistence snapshot cleanup refused; exact recovery retained"
+  fi
   return "$status"
 }
 

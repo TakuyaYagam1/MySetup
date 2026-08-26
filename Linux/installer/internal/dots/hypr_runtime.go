@@ -970,7 +970,30 @@ func validateDirectEnd4RuntimePublicationState(
 	if publication.path == shellruntime.RuntimeFile(home, "shell-keybinds.lua") && isLegacyDirectEnd4KeybindsPlaceholder(content) {
 		return nil
 	}
+	if isHistoricalEnd4SharedRuntimePayload(home, hyprDir, publication.path, content) {
+		return nil
+	}
 	return fmt.Errorf("unowned direct End4 ancillary runtime collision: %s", publication.path)
+}
+
+func isHistoricalEnd4SharedRuntimePayload(home, hyprDir, path, content string) bool {
+	for _, profileID := range []string{shellruntime.End4, shellruntime.End4PC} {
+		var candidate string
+		switch path {
+		case shellruntime.RuntimeFile(home, "shell-launcher.lua"):
+			candidate = fmt.Sprintf("-- Active shell launcher profile: %s\nrequire(%q)\n", profileID, "end4.launcher")
+		case shellruntime.RuntimeFile(home, "hyprlock.conf"):
+			candidate = runtimeSourceConfig(filepath.Join(hyprDir, "end4", "hyprlock.conf"), "Active Hyprlock profile: "+profileID)
+		case shellruntime.RuntimeFile(home, "hypridle.conf"):
+			candidate = runtimeSourceConfig(filepath.Join(hyprDir, "end4", "hypridle.conf"), "Active Hypridle profile: "+profileID)
+		default:
+			return false
+		}
+		if content == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func runtimePublicationIsPreservedHomeManagerSymlink(home string, publication runtimePublication, state runtimePathState) bool {
@@ -1196,12 +1219,12 @@ func runtimeLockStackPublicationsForPaths(hyprDir, hyprlock, hypridle, profile s
 		return []runtimePublication{
 			{
 				path:    hyprlock,
-				content: shellManagedRuntimePlaceholder("Hyprlock", profile, "Caelestia and Noctalia use shell-native lock flows."),
+				content: shellManagedRuntimePlaceholder("Hyprlock", "Caelestia and Noctalia use shell-native lock flows."),
 				mode:    0o644,
 			},
 			{
 				path:    hypridle,
-				content: shellManagedRuntimePlaceholder("Hypridle", profile, "Caelestia and Noctalia use shell-native idle flows."),
+				content: shellManagedRuntimePlaceholder("Hypridle", "Caelestia and Noctalia use shell-native idle flows."),
 				mode:    0o644,
 			},
 		}
@@ -1209,12 +1232,12 @@ func runtimeLockStackPublicationsForPaths(hyprDir, hyprlock, hypridle, profile s
 	return []runtimePublication{
 		{
 			path:    hyprlock,
-			content: runtimeSourceConfig(filepath.Join(hyprDir, "end4", "hyprlock.conf"), "Active Hyprlock profile: "+profile),
+			content: runtimeSourceConfig(filepath.Join(hyprDir, "end4", "hyprlock.conf"), "Active Hyprlock profile: end4"),
 			mode:    0o644,
 		},
 		{
 			path:    hypridle,
-			content: runtimeSourceConfig(filepath.Join(hyprDir, "end4", "hypridle.conf"), "Active Hypridle profile: "+profile),
+			content: runtimeSourceConfig(filepath.Join(hyprDir, "end4", "hypridle.conf"), "Active Hypridle profile: end4"),
 			mode:    0o644,
 		},
 	}
@@ -1267,15 +1290,19 @@ func shellKeybindsConfig(hyprDir string, profile shellruntime.Profile) string {
 func shellLauncherBindingsConfig(profile shellruntime.Profile) string {
 	module := strings.TrimSuffix(filepath.ToSlash(profile.Launcher), ".lua")
 	module = strings.ReplaceAll(module, "/", ".")
-	return fmt.Sprintf("-- Active shell launcher profile: %s\nrequire(%q)\n", profile.ID, module)
+	launcherProfile := profile.ID
+	if shellruntime.IsEnd4Profile(profile.ID) {
+		launcherProfile = shellruntime.End4
+	}
+	return fmt.Sprintf("-- Active shell launcher profile: %s\nrequire(%q)\n", launcherProfile, module)
 }
 
 func runtimeSourceConfig(target, label string) string {
 	return fmt.Sprintf("# %s\nsource = %s\n", label, target)
 }
 
-func shellManagedRuntimePlaceholder(component, profile, detail string) string {
-	return fmt.Sprintf("# Active %s profile: shell-managed (%s)\n# %s\n", component, profile, detail)
+func shellManagedRuntimePlaceholder(component, detail string) string {
+	return fmt.Sprintf("# Active %s profile: shell-managed\n# %s\n", component, detail)
 }
 
 type runtimeSnapshotKind uint8

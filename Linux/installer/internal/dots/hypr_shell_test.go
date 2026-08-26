@@ -93,10 +93,93 @@ func TestWriteHyprRuntimeShellStateRendersCanonicalProfiles(t *testing.T) {
 				}
 			} else {
 				assertFileContains(t, shellruntime.RuntimeFile(home, "shell-keybinds.lua"), `require("`+profile.Adapter+`")`)
-				assertFileContains(t, shellruntime.RuntimeFile(home, "hyprlock.conf"), "shell-managed ("+profile.ID+")")
+				assertFileContains(t, shellruntime.RuntimeFile(home, "hyprlock.conf"), "profile: shell-managed")
 			}
 			if got := strings.TrimSpace(readTestFile(t, statePath)); got != profile.ID {
 				t.Fatalf("active shell = %q, want %q", got, profile.ID)
+			}
+		})
+	}
+}
+
+func TestEnd4VariantRuntimeDiffIsAdapterOnly(t *testing.T) {
+	t.Parallel()
+
+	official, ok := shellruntime.ProfileByID(shellruntime.End4)
+	if !ok {
+		t.Fatal("End4 Official profile is missing")
+	}
+	pc, ok := shellruntime.ProfileByID(shellruntime.End4PC)
+	if !ok {
+		t.Fatal("End4 pC profile is missing")
+	}
+	home := "/test/home"
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	officialLock := runtimeLockStackPublications(home, hyprDir, official.ID)
+	pcLock := runtimeLockStackPublications(home, hyprDir, pc.ID)
+	officialPayloads := []string{
+		shellLauncherBindingsConfig(official),
+		shellKeybindsConfig(hyprDir, official),
+		officialLock[0].content,
+		officialLock[1].content,
+	}
+	pcPayloads := []string{
+		shellLauncherBindingsConfig(pc),
+		shellKeybindsConfig(hyprDir, pc),
+		pcLock[0].content,
+		pcLock[1].content,
+	}
+
+	differences := 0
+	for index := range officialPayloads {
+		if officialPayloads[index] != pcPayloads[index] {
+			differences++
+		}
+	}
+	if differences != 1 {
+		t.Fatalf("End4 variant runtime differences = %d, want adapter-only difference\nOfficial: %#v\npC: %#v", differences, officialPayloads, pcPayloads)
+	}
+	if officialPayloads[1] == pcPayloads[1] {
+		t.Fatal("End4 variants unexpectedly share the exact adapter payload")
+	}
+}
+
+func TestHistoricalEnd4SharedRuntimePayloadsRemainMigratable(t *testing.T) {
+	t.Parallel()
+
+	home := "/test/home"
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	for _, testCase := range []struct {
+		name    string
+		path    string
+		content string
+	}{
+		{
+			name:    "launcher",
+			path:    shellruntime.RuntimeFile(home, "shell-launcher.lua"),
+			content: "-- Active shell launcher profile: end4-pc\nrequire(\"end4.launcher\")\n",
+		},
+		{
+			name:    "lock",
+			path:    shellruntime.RuntimeFile(home, "hyprlock.conf"),
+			content: runtimeSourceConfig(filepath.Join(hyprDir, "end4", "hyprlock.conf"), "Active Hyprlock profile: end4-pc"),
+		},
+		{
+			name:    "idle",
+			path:    shellruntime.RuntimeFile(home, "hypridle.conf"),
+			content: runtimeSourceConfig(filepath.Join(hyprDir, "end4", "hypridle.conf"), "Active Hypridle profile: end4-pc"),
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			publication := runtimePublication{path: testCase.path, content: "canonical replacement\n", mode: 0o644}
+			state := runtimePathState{snapshot: runtimePathSnapshot{
+				path:    testCase.path,
+				kind:    runtimeSnapshotRegular,
+				content: []byte(testCase.content),
+				mode:    0o644,
+			}}
+			if err := validateDirectEnd4RuntimePublicationState(home, hyprDir, publication, state); err != nil {
+				t.Fatalf("historical End4 pC runtime payload is not migratable: %v", err)
 			}
 		})
 	}

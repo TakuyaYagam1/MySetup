@@ -186,8 +186,14 @@ let
     end)
   '';
 
-  defaultHyprlockRuntime = pkgs.writeText "wahrwelt-empty-hyprlock" "";
-  defaultHypridleRuntime = pkgs.writeText "wahrwelt-empty-hypridle" "";
+  defaultHyprlockRuntime = pkgs.writeText "wahrwelt-empty-hyprlock" ''
+    # Active Hyprlock profile: shell-managed
+    # Caelestia and Noctalia use shell-native lock flows.
+  '';
+  defaultHypridleRuntime = pkgs.writeText "wahrwelt-empty-hypridle" ''
+    # Active Hypridle profile: shell-managed
+    # Caelestia and Noctalia use shell-native idle flows.
+  '';
 
   defaultShellLauncherRuntime = pkgs.writeText "wahrwelt-shell-launcher-default" ''
     -- Active shell launcher profile: ${defaultProfile.id}

@@ -2640,7 +2640,7 @@ wahrwelt_read_known_lock_field() {
 
   expected="$(wahrwelt_lock_identity "$lock_dir" 2>/dev/null || true)"
   [ -n "$expected" ] || return 1
-  exec {fd}<"$lock_dir" 2>/dev/null || return 1
+  { exec {fd}<"$lock_dir"; } 2>/dev/null || return 1
   pinned="/proc/${BASHPID:-$$}/fd/$fd"
   if [ "$(wahrwelt_opened_directory_identity "$pinned" 2>/dev/null || true)" != "$expected" ]; then
     exec {fd}<&-
@@ -2672,7 +2672,7 @@ wahrwelt_known_lock_directory() {
     *) expected="$(wahrwelt_lock_identity "$lock_dir" 2>/dev/null || true)" ;;
   esac
   [ -n "$expected" ] || return 1
-  exec {fd}<"$lock_dir" 2>/dev/null || return 1
+  { exec {fd}<"$lock_dir"; } 2>/dev/null || return 1
   pinned="/proc/${BASHPID:-$$}/fd/$fd"
   if [ "$(wahrwelt_opened_directory_identity "$pinned" 2>/dev/null || true)" != "$expected" ]; then
     exec {fd}<&-
