@@ -42,6 +42,7 @@ func runAtFDBarrier(
 	cmd.ExtraFiles = []*os.File{readyW, continueR}
 	cmd.Stdout = &output
 	cmd.Stderr = &output
+	cmd.WaitDelay = 5 * time.Second
 	if err := cmd.Start(); err != nil {
 		_ = readyW.Close()
 		_ = continueR.Close()
@@ -52,13 +53,23 @@ func runAtFDBarrier(
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	finished := false
-	defer func() {
-		if finished {
-			return
+	var waitErr error
+	waitForExit := func() error {
+		if !finished {
+			waitErr = <-done
+			finished = true
 		}
-		_, _ = continueW.Write([]byte{'1'})
-		_ = cmd.Process.Kill()
-		<-done
+		return waitErr
+	}
+	stopAndWait := func() error {
+		if !finished {
+			_, _ = continueW.Write([]byte{'1'})
+			_ = cmd.Process.Kill()
+		}
+		return waitForExit()
+	}
+	defer func() {
+		_ = stopAndWait()
 	}()
 
 	marker := make([]byte, len("ready\n"))
@@ -70,21 +81,23 @@ func runAtFDBarrier(
 	select {
 	case readErr := <-ready:
 		if readErr != nil || string(marker) != "ready\n" {
-			t.Fatalf("helper barrier failed: marker=%q err=%v\n%s", marker, readErr, output.String())
+			childErr := stopAndWait()
+			t.Fatalf("helper barrier failed: marker=%q err=%v child=%v\n%s", marker, readErr, childErr, output.String())
 		}
-	case waitErr := <-done:
+	case childErr := <-done:
+		waitErr = childErr
 		finished = true
-		t.Fatalf("helper exited before barrier: %v\n%s", waitErr, output.String())
+		t.Fatalf("helper exited before barrier: %v\n%s", childErr, output.String())
 	case <-time.After(5 * time.Second):
-		t.Fatalf("timed out waiting for helper barrier\n%s", output.String())
+		childErr := stopAndWait()
+		t.Fatalf("timed out waiting for helper barrier (child: %v)\n%s", childErr, output.String())
 	}
 
 	mutate()
 	if _, err := continueW.Write([]byte{'1'}); err != nil {
 		t.Fatal(err)
 	}
-	waitErr := <-done
-	finished = true
+	waitErr = waitForExit()
 	return output.String(), waitErr
 }
 

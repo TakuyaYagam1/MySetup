@@ -189,6 +189,7 @@ func TestHyprUserAdapterGuardFailsClosedOnRecoveryReplacement(t *testing.T) {
 	cmd.ExtraFiles = []*os.File{readyW, continueR}
 	cmd.Stdout = &output
 	cmd.Stderr = &output
+	cmd.WaitDelay = 5 * time.Second
 	if err := cmd.Start(); err != nil {
 		_ = readyW.Close()
 		_ = continueR.Close()
@@ -199,13 +200,23 @@ func TestHyprUserAdapterGuardFailsClosedOnRecoveryReplacement(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	finished := false
-	defer func() {
-		if finished {
-			return
+	var waitErr error
+	waitForExit := func() error {
+		if !finished {
+			waitErr = <-done
+			finished = true
 		}
-		_, _ = continueW.Write([]byte{'1'})
-		_ = cmd.Process.Kill()
-		<-done
+		return waitErr
+	}
+	stopAndWait := func() error {
+		if !finished {
+			_, _ = continueW.Write([]byte{'1'})
+			_ = cmd.Process.Kill()
+		}
+		return waitForExit()
+	}
+	defer func() {
+		_ = stopAndWait()
 	}()
 
 	ready := make(chan error, 1)
@@ -220,13 +231,16 @@ func TestHyprUserAdapterGuardFailsClosedOnRecoveryReplacement(t *testing.T) {
 	select {
 	case err := <-ready:
 		if err != nil {
-			t.Fatalf("guard did not reach recovery barrier: %v\n%s", err, output.String())
+			childErr := stopAndWait()
+			t.Fatalf("guard did not reach recovery barrier: %v (child: %v)\n%s", err, childErr, output.String())
 		}
 	case err := <-done:
+		waitErr = err
 		finished = true
 		t.Fatalf("guard exited before recovery barrier: %v\n%s", err, output.String())
 	case <-time.After(5 * time.Second):
-		t.Fatalf("timed out waiting for recovery barrier\n%s", output.String())
+		childErr := stopAndWait()
+		t.Fatalf("timed out waiting for recovery barrier (child: %v)\n%s", childErr, output.String())
 	}
 
 	recovery := singleHistoricalAdapterRecovery(t, dir)
@@ -243,12 +257,14 @@ func TestHyprUserAdapterGuardFailsClosedOnRecoveryReplacement(t *testing.T) {
 	}
 	select {
 	case err := <-done:
+		waitErr = err
 		finished = true
 		if err == nil {
 			t.Fatalf("guard accepted replaced recovery\n%s", output.String())
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatalf("guard did not finish after recovery barrier\n%s", output.String())
+		childErr := stopAndWait()
+		t.Fatalf("guard did not finish after recovery barrier (child: %v)\n%s", childErr, output.String())
 	}
 	if got := readContractFile(t, recovery); got != unknown {
 		t.Fatalf("unknown recovery replacement changed: %q", got)
