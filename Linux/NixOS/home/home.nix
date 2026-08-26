@@ -3,6 +3,7 @@
   pkgs,
   inputs,
   lib,
+  modulesPath,
   wahrwelt,
   wahrweltLib,
   ...
@@ -68,6 +69,10 @@ let
   ];
 in
 {
+  disabledModules = lib.optionals (builtins.pathExists "${modulesPath}/programs/noctalia.nix") [
+    "programs/noctalia.nix"
+  ];
+
   _module.args.homeLibs = homeLibs;
 
   imports =

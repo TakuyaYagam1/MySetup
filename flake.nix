@@ -124,11 +124,16 @@
         {
           config,
           lib,
+          modulesPath,
           wahrwelt,
           pkgs,
           ...
         }:
         {
+          disabledModules = lib.optionals (builtins.pathExists "${modulesPath}/programs/noctalia.nix") [
+            "programs/noctalia.nix"
+          ];
+
           _module.args.homeLibs = import ./Linux/NixOS/home/lib {
             inherit lib pkgs;
           };
