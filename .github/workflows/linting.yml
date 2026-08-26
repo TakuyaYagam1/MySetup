@@ -63,6 +63,11 @@ jobs:
       - name: Realize managed End4 pC QuickShell artifact
         run: make -C Linux nix-end4-pc-quickshell-build
 
+      - name: Build brand migration unit
+        run: |
+          nix build --no-link --no-write-lock-file \
+            "path:${GITHUB_WORKSPACE}?dir=Linux/NixOS#nixosConfigurations.NixOS.config.systemd.units.\"wahrwelt-brand-migration.service\".unit"
+
       - name: Evaluate preset NixOS hosts
         run: |
           for preset in minimal desktop developer personal; do

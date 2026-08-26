@@ -197,7 +197,7 @@ let
         local name="$4"
         local identity="$5"
         local owner_fd="''${6:-}"
-        local retained= visible_id found
+        local retained="" visible_id found
 
         if [ -n "$owner_fd" ]; then
           retained="$(readlink -- "/proc/self/fd/$owner_fd" 2>/dev/null || true)"
