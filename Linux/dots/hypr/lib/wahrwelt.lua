@@ -10,8 +10,6 @@ M.state_home = os.getenv("XDG_STATE_HOME") or (M.home .. "/.local/state")
 M.hypr = M.config_home .. "/hypr"
 M.runtime = M.state_home .. "/wahrwelt/hypr-runtime"
 
-package.path = M.hypr .. "/?.lua;" .. M.hypr .. "/?/init.lua;" .. package.path
-
 function M.runtime_file(name)
 	return M.runtime .. "/" .. name
 end
@@ -21,19 +19,28 @@ function M.config_file(name)
 end
 
 function M.file_exists(path)
-	local file = io.open(path, "r")
+	local file, open_error, error_code = io.open(path, "r")
 	if file == nil then
-		return false
+		if error_code == 2 then
+			return false
+		end
+		error(open_error or ("failed to open " .. path), 2)
 	end
 	file:close()
 	return true
 end
 
 function M.optional_require(module)
-	local path = M.hypr .. "/" .. module:gsub("%.", "/") .. ".lua"
-	if M.file_exists(path) then
-		require(module)
+	local path_module = module
+	if module:sub(1, #"wahrwelt.") == "wahrwelt." then
+		path_module = "user." .. module:sub(#"wahrwelt." + 1)
 	end
+	local path = M.hypr .. "/" .. path_module:gsub("%.", "/") .. ".lua"
+	if not M.file_exists(path) then
+		return false
+	end
+	require(module)
+	return true
 end
 
 function M.load_runtime(name)

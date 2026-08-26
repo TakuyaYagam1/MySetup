@@ -26,7 +26,7 @@ func syncHypr(ctx context.Context, runner run.CommandRunner, dotsSrc, configDir 
 	if err := prepareHyprDestination(ctx, runner, dst, state.User.Username); err != nil {
 		return err
 	}
-	if err := pruneStaleEnd4ProfileDir(ctx, runner, dst, activeProfile); err != nil {
+	if err := pruneStaleEnd4ProfileDir(configDir, dst, activeProfile); err != nil {
 		return err
 	}
 	if err := syncHyprDotfiles(ctx, runner, src, dst); err != nil {
@@ -65,9 +65,11 @@ func requiredHyprSourceFiles() []string {
 	files := make([]string, 0, 5+2*len(shellruntime.ProfileSpecs)+len(shellruntime.HyprScripts))
 	files = append(files,
 		"hyprland.lua",
+		"end4-adapter.lua",
 		filepath.Join("hyprland", "input.lua"),
 		filepath.Join("hyprland", "keybinds.lua"),
 		"shell-common-keybinds.lua",
+		"shell-common-rules.lua",
 		"shell-workspace-keybinds.lua",
 	)
 	for _, profile := range shellruntime.ProfileSpecs {
@@ -98,8 +100,9 @@ func syncHyprDotfiles(ctx context.Context, runner run.CommandRunner, src, dst st
 		"--exclude", "/shell-profile.lua",
 		"--exclude", "/shell-launcher.lua",
 		"--exclude", "/shell-keybinds.lua",
-		"--exclude", "/wahrwelt/hyprland.lua",
-		"--exclude", "/wahrwelt/local.lua",
+		"--exclude", "/user/",
+		"--exclude", "/wahrwelt/",
+		"--exclude", "/mysetup/",
 		"--exclude", "/runtime/",
 		"--exclude", "/end4/",
 		src+"/", dst+"/")
@@ -116,7 +119,7 @@ func finalizeHyprDestination(ctx context.Context, runner run.CommandRunner, src,
 		fmt.Println("write hypr local config and bootstrap active shell runtime state")
 		return nil
 	}
-	if err := writeHyprLocalConfig(ctx, runner, state, src, dst); err != nil {
+	if err := writeHyprLocalConfig(ctx, runner, state.User.Username, src, dst); err != nil {
 		return err
 	}
 	return writeHyprRuntimeShellState(home, dst)

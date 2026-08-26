@@ -3,8 +3,10 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/apply"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 )
@@ -34,6 +36,22 @@ func TestLoadInitialStatePrefersMachineState(t *testing.T) {
 	}
 }
 
+func TestLoadInitialStateCarriesOpaqueMachineStateProof(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := config.Save(statePath, config.Default()); err != nil {
+		t.Fatal(err)
+	}
+
+	_, proof, err := loadInitialStateWithProof(paths.Options{StatePath: statePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reflect.DeepEqual(proof, apply.LoadedStateProof{}) {
+		t.Fatal("machine state load did not retain its ownership proof")
+	}
+}
+
 func TestLoadInitialStateFallsBackToDraft(t *testing.T) {
 	dir := t.TempDir()
 	draftPath := filepath.Join(dir, "draft.json")
@@ -52,6 +70,25 @@ func TestLoadInitialStateFallsBackToDraft(t *testing.T) {
 	}
 	if got.Host.Hostname != "draft" {
 		t.Fatalf("expected draft fallback, got %q", got.Host.Hostname)
+	}
+}
+
+func TestLoadInitialStateDoesNotTreatDraftAsMachineStateProof(t *testing.T) {
+	dir := t.TempDir()
+	draftPath := filepath.Join(dir, "draft.json")
+	if err := config.Save(draftPath, config.Default()); err != nil {
+		t.Fatal(err)
+	}
+
+	_, proof, err := loadInitialStateWithProof(paths.Options{
+		StatePath: filepath.Join(dir, "missing.json"),
+		DraftPath: draftPath,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(proof, apply.LoadedStateProof{}) {
+		t.Fatal("draft load unexpectedly received machine-state ownership proof")
 	}
 }
 

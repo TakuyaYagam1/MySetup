@@ -7,7 +7,7 @@
 
 let
   dotfilesSource = inputs.end4-pc;
-  inherit (end4Lib) pythonEnv;
+  inherit (end4Lib) dotfilesLib pythonEnv;
   quickshellPatcher = ./quickshell-pc.py;
   updaterNotice = "Wahrwelt manages end4-pC updates through the flake input";
 
@@ -38,6 +38,10 @@ let
 
         test -f "$out/shell.qml"
         patchShebangs $out
+
+        ${pkgs.bash}/bin/bash \
+          ${dotfilesLib.dotsRoot}/hypr/scripts/tests/end4-artifact-test.sh \
+          --quickshell "$out"
       '';
 in
 {

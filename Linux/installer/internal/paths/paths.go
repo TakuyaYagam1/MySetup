@@ -21,8 +21,10 @@ type Sources struct {
 }
 
 const (
-	DefaultStatePath = "/etc/nixos/wahrwelt/state.json"
-	LegacyStatePath  = "/etc/nixos/mysetup/state.json"
+	DefaultStatePath        = "/etc/nixos/installer-state.json"
+	LegacyWahrweltStatePath = "/etc/nixos/wahrwelt/state.json"
+	LegacyMySetupStatePath  = "/etc/nixos/mysetup/state.json"
+	LegacyStatePath         = LegacyMySetupStatePath
 )
 
 func DefaultOptions() Options {
@@ -68,11 +70,58 @@ func ExistingFile(primary, legacy string) string {
 	return legacy
 }
 
-func (o Options) ExistingStatePath() string {
+func (o Options) ExistingStatePath() (string, error) {
 	if o.StatePath != DefaultStatePath {
-		return o.StatePath
+		return existingStatePath(o.StatePath)
 	}
-	return ExistingFile(o.StatePath, LegacyStatePath)
+	return existingStatePath(o.StatePath, LegacyWahrweltStatePath, LegacyMySetupStatePath)
+}
+
+func existingStatePath(canonical string, fallbacks ...string) (string, error) {
+	for _, candidate := range append([]string{canonical}, fallbacks...) {
+		exists, err := regularStateFile(candidate)
+		if err != nil {
+			return "", err
+		}
+		if exists {
+			return candidate, nil
+		}
+	}
+	return canonical, nil
+}
+
+func regularStateFile(path string) (bool, error) {
+	if err := ordinaryStateParent(path); err != nil {
+		return false, err
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if !info.Mode().IsRegular() {
+		return false, fmt.Errorf("unsupported state path: %s", path)
+	}
+	return true, nil
+}
+
+func ordinaryStateParent(path string) error {
+	for parent := filepath.Clean(filepath.Dir(path)); ; parent = filepath.Dir(parent) {
+		info, err := os.Lstat(parent)
+		if err == nil {
+			if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+				return fmt.Errorf("unsupported state parent path: %s", parent)
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		next := filepath.Dir(parent)
+		if next == parent {
+			return nil
+		}
+	}
 }
 
 func (o Options) ExistingDraftPath() string {

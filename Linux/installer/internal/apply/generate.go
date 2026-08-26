@@ -40,7 +40,7 @@ func ConfigurationNix() string {
 
 {
   imports = [
-    ./private
+    ./user
   ];
 
   environment.systemPackages = with pkgs; [
@@ -50,8 +50,8 @@ func ConfigurationNix() string {
 `
 }
 
-func PrivateDefaultNix() string {
-	return `# Host-local private NixOS modules. This file is preserved by Wahrwelt.
+func UserDefaultNix() string {
+	return `# Host-local user NixOS modules. This file is preserved by Wahrwelt.
 # Put local-only modules and payloads in this directory, then uncomment or add
 # explicit imports below.
 { ... }:

@@ -42,10 +42,9 @@ let
 
   shellXdgDataDirs = lib.concatStringsSep ":" (xdgDataDirBase ++ [ "$XDG_DATA_DIRS" ]);
 
-  sessionVariables = {
+  end4Variables = {
     ILLOGICAL_IMPULSE_DOTFILES_SOURCE = "${config.home.homeDirectory}/.config";
     ILLOGICAL_IMPULSE_VIRTUAL_ENV = "${config.home.homeDirectory}/.local/state/quickshell/.venv";
-    qsConfig = "${config.home.homeDirectory}/.config/quickshell/ii";
   };
 
   commonQtVars = {
@@ -55,15 +54,16 @@ let
     QT_QPA_PLATFORMTHEME = qtPlatformTheme;
   };
 
-  shellVariables = commonQtVars // {
-    PATH = sessionBinPath;
-    XDG_DATA_DIRS = shellXdgDataDirs;
-  };
+  shellVariables =
+    commonQtVars
+    // end4Variables
+    // {
+      PATH = sessionBinPath;
+      XDG_DATA_DIRS = shellXdgDataDirs;
+    };
 
   hyprVariables = commonQtVars // {
     PATH = sessionBinPath;
-    inherit (sessionVariables) qsConfig;
-    inherit (sessionVariables) ILLOGICAL_IMPULSE_VIRTUAL_ENV;
   };
 
   renderShellExport = name: value: ''
@@ -80,7 +80,6 @@ in
     qtRuntime
     runtime
     runtimeBinPath
-    sessionVariables
     shellVariables
     shellXdgDataDirs
     ;
@@ -89,6 +88,5 @@ in
 
   hyprEnv = ''
     ${lib.concatStringsSep "\n" (lib.mapAttrsToList renderHyprEnv hyprVariables)}
-    $qsConfig = ${config.home.homeDirectory}/.config/quickshell/ii
   '';
 }

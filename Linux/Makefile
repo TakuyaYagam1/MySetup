@@ -21,11 +21,12 @@ FISH_FIND := find $(DOTS_DIR)/hypr/scripts -type f -name '*.fish' -print0
 LUA_DIRS := $(DOTS_DIR)/nvim $(DOTS_DIR)/hypr
 LUA_FIND := find $(LUA_DIRS) -type f -name '*.lua' -print0
 JSON_FIND := find $(NIXOS_DIR) $(DOTS_DIR) $(INSTALLER_DIR)/internal/shellruntime -type f -name '*.json' ! -name 'lazy-lock.json' -print0
+PYTHON_FIND := find $(NIXOS_DIR) $(DOTS_DIR)/hypr/scripts -type f -name '*.py' -print0
 
 ##@ Aggregate
 
 .PHONY: lint
-lint: lint-go lint-nix lint-shell lint-lua lint-json ## Run all linters across go/nix/shell/lua/json
+lint: lint-go lint-nix lint-shell lint-lua lint-json lint-python ## Run all linters across go/nix/shell/lua/json/python
 
 .PHONY: fmt-check
 fmt-check: fmt-check-go fmt-check-nix fmt-check-shell fmt-check-lua ## Check formatting without writing
@@ -34,7 +35,7 @@ fmt-check: fmt-check-go fmt-check-nix fmt-check-shell fmt-check-lua ## Check for
 fmt: fmt-go fmt-nix fmt-shell fmt-lua ## Apply formatting in place across go/nix/shell/lua
 
 .PHONY: test
-test: test-go ## Run all test suites
+test: test-go test-hypr-integration ## Run all Go and Hypr integration test suites
 
 .PHONY: vuln
 vuln: vuln-go ## Run all vulnerability scanners
@@ -154,14 +155,26 @@ lint-json: ## jq empty on every JSON in NixOS/, dots/, installer manifests
 	echo "lint-json: $$count .json files parse cleanly"
 
 .PHONY: lint-python
-lint-python: ## python ast.parse on tracked patch sources
-	@python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("$(NIXOS_DIR)/home/end4/patches/quickshell.py").read_text())'
+lint-python: ## python ast.parse on NixOS helpers, patch sources, and Hypr tests
+	@$(PYTHON_FIND) | xargs -0 -r python3 -c 'import ast, pathlib, sys; [ast.parse(pathlib.Path(path).read_text()) for path in sys.argv[1:]]'
 
 ##@ Project-wide checks
 
 .PHONY: shell-contracts
 shell-contracts: ## Hypr keybind/profile contract tests
 	$(MAKE) -C $(INSTALLER_DIR) hypr-bind-check
+
+.PHONY: test-hypr-integration
+test-hypr-integration: ## Shell transitions, app-close behavior, Lua runtime, and selector model
+	$(MAKE) -C $(INSTALLER_DIR) hypr-integration-check
+
+.PHONY: nix-end4-hypr-build
+nix-end4-hypr-build: ## Realize and inspect the validated End4 Hypr artifact
+	$(MAKE) -C $(INSTALLER_DIR) nix-end4-hypr-build
+
+.PHONY: nix-end4-pc-quickshell-build
+nix-end4-pc-quickshell-build: ## Realize and inspect the managed End4 pC QuickShell artifact
+	$(MAKE) -C $(INSTALLER_DIR) nix-end4-pc-quickshell-build
 
 .PHONY: full-check
 full-check: ## Mirror installer/Makefile check target (full local CI)

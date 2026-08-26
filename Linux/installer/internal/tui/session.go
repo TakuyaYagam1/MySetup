@@ -26,13 +26,14 @@ type Options struct {
 }
 
 type session struct {
-	state    config.State
-	secrets  config.Secrets
-	paths    paths.Options
-	dryRun   bool
-	layout   apply.Layout
-	lockMode apply.LockMode
-	selected int
+	state            config.State
+	loadedStateProof apply.LoadedStateProof
+	secrets          config.Secrets
+	paths            paths.Options
+	dryRun           bool
+	layout           apply.Layout
+	lockMode         apply.LockMode
+	selected         int
 }
 
 var sections = []string{
@@ -51,16 +52,17 @@ var sections = []string{
 }
 
 func Run(ctx context.Context, opts Options) error {
-	state, err := loadInitialState(opts.Paths)
+	state, loadedStateProof, err := loadInitialStateWithProof(opts.Paths)
 	if err != nil {
 		return err
 	}
 	s := &session{
-		state:    state,
-		paths:    opts.Paths,
-		dryRun:   opts.DryRun,
-		layout:   opts.Layout,
-		lockMode: opts.LockMode,
+		state:            state,
+		loadedStateProof: loadedStateProof,
+		paths:            opts.Paths,
+		dryRun:           opts.DryRun,
+		layout:           opts.Layout,
+		lockMode:         opts.LockMode,
 	}
 
 	for {
@@ -135,19 +137,28 @@ func isDirtySection(selected string) bool {
 }
 
 func loadInitialState(opts paths.Options) (config.State, error) {
-	statePath := opts.ExistingStatePath()
-	if _, err := os.Stat(statePath); err == nil {
-		return config.LoadExisting(statePath)
+	state, _, err := loadInitialStateWithProof(opts)
+	return state, err
+}
+
+func loadInitialStateWithProof(opts paths.Options) (config.State, apply.LoadedStateProof, error) {
+	statePath, err := opts.ExistingStatePath()
+	if err != nil {
+		return config.State{}, apply.LoadedStateProof{}, err
+	}
+	if _, err := os.Lstat(statePath); err == nil {
+		return apply.LoadStateWithProof(statePath)
 	} else if !os.IsNotExist(err) {
-		return config.State{}, fmt.Errorf("stat state %s: %w", statePath, err)
+		return config.State{}, apply.LoadedStateProof{}, fmt.Errorf("stat state %s: %w", statePath, err)
 	}
 	draftPath := opts.ExistingDraftPath()
 	if _, err := os.Stat(draftPath); err == nil {
-		return config.LoadExisting(draftPath)
+		state, loadErr := config.LoadExisting(draftPath)
+		return state, apply.LoadedStateProof{}, loadErr
 	} else if !os.IsNotExist(err) {
-		return config.State{}, fmt.Errorf("stat draft %s: %w", draftPath, err)
+		return config.State{}, apply.LoadedStateProof{}, fmt.Errorf("stat draft %s: %w", draftPath, err)
 	}
-	return config.Default(), nil
+	return config.Default(), apply.LoadedStateProof{}, nil
 }
 
 func runApply(ctx context.Context, s *session) error {
@@ -171,13 +182,14 @@ func runApply(ctx context.Context, s *session) error {
 		return nil
 	}
 	if err := apply.Run(ctx, apply.Options{
-		Paths:     s.paths,
-		State:     s.state,
-		Secrets:   s.secrets,
-		DryRun:    s.dryRun,
-		AssumeYes: false,
-		Layout:    s.layout,
-		LockMode:  s.lockMode,
+		Paths:            s.paths,
+		State:            s.state,
+		LoadedStateProof: s.loadedStateProof,
+		Secrets:          s.secrets,
+		DryRun:           s.dryRun,
+		AssumeYes:        false,
+		Layout:           s.layout,
+		LockMode:         s.lockMode,
 	}); err != nil {
 		return err
 	}

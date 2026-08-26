@@ -4,6 +4,7 @@
     {
       "id": "noctalia",
       "family": "noctalia",
+      "adapter": "noctalia.keybinds",
       "title": "noctalia",
       "accent": "#f48ab6",
       "surface": "#211f31",
@@ -14,6 +15,7 @@
     {
       "id": "caelestia",
       "family": "caelestia",
+      "adapter": "caelestia.keybinds",
       "title": "caelestia-shell",
       "accent": "#6ae5e1",
       "surface": "#201f33",
@@ -24,6 +26,7 @@
     {
       "id": "end4",
       "family": "end4",
+      "adapter": "end4-adapter",
       "quickshellConfig": "ii",
       "variantLabel": "Official",
       "title": "end-4",
@@ -36,6 +39,7 @@
     {
       "id": "end4-pc",
       "family": "end4",
+      "adapter": "end4-adapter",
       "quickshellConfig": "end4-pC",
       "variantLabel": "pC",
       "title": "end4-pC",
@@ -56,10 +60,11 @@
   ],
   "hyprScripts": [
     "close-active.sh",
+    "lock-active.sh",
     "noctalia-launcher.sh",
+    "noctalia-msg.sh",
     "record-toggle.sh",
     "restore-lock.sh",
-    "shell-end4-overrides.sh",
     "shell-process.sh",
     "shell-profile-sync.sh",
     "shell-runtime-env.sh",

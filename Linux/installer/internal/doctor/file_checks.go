@@ -13,6 +13,28 @@ func check(out *reportWriter, label, path string) {
 	out.printf("WARN %s missing: %s\n", label, path)
 }
 
+func checkRegularFile(out *reportWriter, label, path string) {
+	info, err := os.Stat(path)
+	if err != nil {
+		out.printf("WARN %s missing: %s\n", label, path)
+		return
+	}
+	if !info.Mode().IsRegular() {
+		out.printf("WARN %s is not a regular file: %s\n", label, path)
+		return
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		out.printf("WARN %s unreadable: %s\n", label, path)
+		return
+	}
+	if err := file.Close(); err != nil {
+		out.printf("WARN %s unreadable: %s\n", label, path)
+		return
+	}
+	out.printf("OK   %s: %s\n", label, path)
+}
+
 func checkAny(out *reportWriter, label string, paths ...string) {
 	for _, path := range paths {
 		if _, err := os.Stat(path); err == nil {

@@ -3,6 +3,7 @@ package paths
 import (
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 )
 
@@ -135,11 +136,11 @@ func TestDefaultOptionsStillHonorsProcessXDGStateHome(t *testing.T) {
 	}
 }
 
-func TestDefaultOptionsUseCanonicalWahrweltPaths(t *testing.T) {
+func TestDefaultOptionsUseCanonicalInstallerStatePath(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "")
 	opts := DefaultOptions()
-	if opts.StatePath != DefaultStatePath {
-		t.Fatalf("expected canonical state path %q, got %q", DefaultStatePath, opts.StatePath)
+	if got, want := opts.StatePath, "/etc/nixos/installer-state.json"; got != want {
+		t.Fatalf("expected canonical state path %q, got %q", want, got)
 	}
 	if got, want := ActiveShellStatePath("/home/tester"), "/home/tester/.local/state/wahrwelt/active-shell"; got != want {
 		t.Fatalf("expected canonical active shell path %q, got %q", want, got)
@@ -156,6 +157,99 @@ func TestExistingStatePathFallsBackToLegacyDefault(t *testing.T) {
 	opts := Options{StatePath: canonical}
 	if got := ExistingFile(opts.StatePath, legacy); got != legacy {
 		t.Fatalf("expected legacy state fallback %q, got %q", legacy, got)
+	}
+}
+
+func TestExistingStatePathUsesCanonicalFallbackOrder(t *testing.T) {
+	dir := t.TempDir()
+	canonical := filepath.Join(dir, "installer-state.json")
+	wahrwelt := filepath.Join(dir, "wahrwelt", "state.json")
+	mysetup := filepath.Join(dir, "mysetup", "state.json")
+
+	mkdir(t, filepath.Dir(wahrwelt))
+	mkdir(t, filepath.Dir(mysetup))
+	write(t, wahrwelt)
+	write(t, mysetup)
+	got, err := existingStatePath(canonical, wahrwelt, mysetup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != wahrwelt {
+		t.Fatalf("expected Wahrwelt fallback %q, got %q", wahrwelt, got)
+	}
+
+	write(t, canonical)
+	got, err = existingStatePath(canonical, wahrwelt, mysetup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != canonical {
+		t.Fatalf("expected canonical state path %q, got %q", canonical, got)
+	}
+
+	if err := os.Remove(wahrwelt); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(canonical); err != nil {
+		t.Fatal(err)
+	}
+	got, err = existingStatePath(canonical, wahrwelt, mysetup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != mysetup {
+		t.Fatalf("expected MySetup fallback %q, got %q", mysetup, got)
+	}
+}
+
+func TestExistingStatePathKeepsExplicitCustomPath(t *testing.T) {
+	dir := t.TempDir()
+	custom := filepath.Join(dir, "custom-state.json")
+	got, err := (Options{StatePath: custom}).ExistingStatePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != custom {
+		t.Fatalf("custom state path must not fall back, got %q", got)
+	}
+}
+
+func TestExistingStatePathRejectsUnsupportedCanonicalAndLegacyNodes(t *testing.T) {
+	dir := t.TempDir()
+	canonical := filepath.Join(dir, "installer-state.json")
+	wahrwelt := filepath.Join(dir, "wahrwelt", "state.json")
+	mysetup := filepath.Join(dir, "mysetup", "state.json")
+
+	if err := syscall.Mkfifo(canonical, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := existingStatePath(canonical, wahrwelt, mysetup); err == nil {
+		t.Fatal("FIFO canonical state path was accepted")
+	}
+	if err := os.Remove(canonical); err != nil {
+		t.Fatal(err)
+	}
+
+	victim := filepath.Join(dir, "outside-state.json")
+	write(t, victim)
+	if err := os.MkdirAll(filepath.Dir(wahrwelt), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, wahrwelt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := existingStatePath(canonical, wahrwelt, mysetup); err == nil {
+		t.Fatal("symlink legacy state path was accepted")
+	}
+	if err := os.Remove(wahrwelt); err != nil {
+		t.Fatal(err)
+	}
+	stateParent := filepath.Join(dir, "state-parent")
+	if err := os.Symlink(filepath.Dir(victim), stateParent); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := existingStatePath(filepath.Join(stateParent, "installer-state.json"), mysetup); err == nil {
+		t.Fatal("symlink state parent was accepted")
 	}
 }
 

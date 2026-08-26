@@ -20,25 +20,29 @@ case "$action" in
 esac
 
 config_home="$wahrwelt_config_home"
-runtime_dir="$wahrwelt_runtime_session_dir"
-state_dir="$runtime_dir/wahrwelt-shell-selector"
+if ! wahrwelt_adopt_legacy_private_state_directory wahrwelt-shell-selector shell-selector-state; then
+  printf 'Wahrwelt selector ownership collision: %s/wahrwelt-shell-selector\n' \
+    "$wahrwelt_runtime_session_public_dir" >&2
+  exit 1
+fi
+if ! wahrwelt_open_private_state_directory wahrwelt-shell-selector shell-selector-state; then
+  printf 'Wahrwelt selector ownership collision: %s/wahrwelt-shell-selector\n' \
+    "$wahrwelt_runtime_session_public_dir" >&2
+  exit 1
+fi
+state_dir="$wahrwelt_private_state_directory_path"
 log_file="$wahrwelt_log_file"
 lock_dir="$state_dir/lock"
 lock_pid_file="$lock_dir/pid"
 lock_owner_file="$lock_dir/owner"
+lock_identity=""
 selector_name="wahrwelt-shell-selector"
 selector_pattern="$wahrwelt_selector_pattern"
-end4_pattern="$wahrwelt_end4_pattern"
-end4_official_pattern="$wahrwelt_end4_official_pattern"
-end4_pc_pattern="$wahrwelt_end4_pc_pattern"
-end4_env_pattern="$wahrwelt_end4_env_pattern"
 end4_official_env_pattern="$wahrwelt_end4_official_env_pattern"
 end4_pc_env_pattern="$wahrwelt_end4_pc_env_pattern"
 caelestia_pattern="$wahrwelt_caelestia_pattern"
 active_shell_state="$wahrwelt_active_shell_state"
 start_shell_script="$config_home/hypr/scripts/start-shell.sh"
-
-mkdir -p "$state_dir"
 
 log() {
   printf '[%s] [shell-selector] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$log_file"
@@ -59,6 +63,21 @@ acquire_lock() {
     '(^|[ /])shell-selector\.sh([[:space:]]|$)' \
     20 \
     0.02 || exit 0
+  lock_identity="$wahrwelt_acquired_lock_identity"
+  [ -n "$lock_identity" ] || exit 1
+}
+
+cleanup_lock() {
+  local recovery
+
+  [ -n "$lock_identity" ] || return 0
+  if wahrwelt_release_owned_lock "$lock_dir" "$lock_identity" 2>/dev/null; then
+    recovery="$wahrwelt_lock_recovery_exact_path"
+    log "selector lock public name released; recovery retained at $recovery"
+  else
+    recovery="${wahrwelt_lock_recovery_exact_path:-$lock_dir}"
+    log "selector lock changed during cleanup; recovery/collision preserved at $recovery"
+  fi
 }
 
 read_stored_active_shell() {
@@ -68,10 +87,6 @@ read_stored_active_shell() {
 detect_shell_from_processes() {
   local pid
 
-  if pgrep -u "${USER:-$(id -un)}" -f "$end4_pc_pattern" >/dev/null 2>&1; then
-    printf '%s' end4-pc
-    return 0
-  fi
   for pid in $(wahrwelt_quickshell_pids); do
     if wahrwelt_pid_has_env_regex "$pid" "$end4_pc_env_pattern"; then
       printf '%s' end4-pc
@@ -79,24 +94,9 @@ detect_shell_from_processes() {
     fi
   done
 
-  if pgrep -u "${USER:-$(id -un)}" -f "$end4_official_pattern" >/dev/null 2>&1; then
-    printf '%s' end4
-    return 0
-  fi
   for pid in $(wahrwelt_quickshell_pids); do
     if wahrwelt_pid_has_env_regex "$pid" "$end4_official_env_pattern"; then
       printf '%s' end4
-      return 0
-    fi
-  done
-
-  if pgrep -u "${USER:-$(id -un)}" -f "$end4_pattern" >/dev/null 2>&1; then
-    wahrwelt_read_end4_variant
-    return 0
-  fi
-  for pid in $(wahrwelt_quickshell_pids); do
-    if wahrwelt_pid_has_env_regex "$pid" "$end4_env_pattern"; then
-      wahrwelt_read_end4_variant
       return 0
     fi
   done
@@ -122,17 +122,7 @@ detect_shell_from_keybinds() {
     [ -r "$keybinds_path" ] || return 1
   fi
 
-  if grep -qE 'noctalia[/.]keybinds|noctalia(-shell)? msg|noctalia-msg\.sh|noctalia-launcher\.sh' "$keybinds_path"; then
-    printf '%s' noctalia
-    return 0
-  fi
-
-  if grep -qE 'caelestia[/.]keybinds|caelestia:launcher' "$keybinds_path"; then
-    printf '%s' caelestia
-    return 0
-  fi
-
-  return 1
+  wahrwelt_detect_shell_adapter "$keybinds_path"
 }
 
 detect_shell_from_entrypoint() {
@@ -143,14 +133,19 @@ detect_shell_from_entrypoint() {
     [ -r "$entrypoint_path" ] || return 1
   fi
 
-  if grep -q 'end4/hyprland.lua' "$entrypoint_path"; then
-    wahrwelt_read_end4_variant
-    return 0
-  fi
-
-  if grep -q 'wahrwelt/hyprland.lua' "$entrypoint_path"; then
+  if wahrwelt_is_canonical_entrypoint "$entrypoint_path"; then
     detect_shell_from_keybinds
     return $?
+  fi
+
+  if wahrwelt_is_legacy_user_entrypoint "$entrypoint_path"; then
+    detect_shell_from_keybinds
+    return $?
+  fi
+
+  if wahrwelt_is_legacy_direct_end4_entrypoint "$entrypoint_path" "$config_home"; then
+    wahrwelt_read_end4_variant
+    return 0
   fi
 
   return 1
@@ -251,7 +246,7 @@ case "$action" in
 esac
 
 acquire_lock
-trap 'rm -rf -- "$lock_dir" 2>/dev/null || true' EXIT
+trap cleanup_lock EXIT
 
 case "$action" in
   toggle)

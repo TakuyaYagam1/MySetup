@@ -5,6 +5,12 @@ from pathlib import Path
 import sys
 
 
+def replace_once(text: str, old: str, new: str, label: str) -> str:
+    if old not in text:
+        raise SystemExit(f"{label} not found")
+    return text.replace(old, new, 1)
+
+
 def replace_function(text: str, start: str, end: str, replacement: str) -> str:
     start_index = text.find(start)
     if start_index < 0:
@@ -68,6 +74,45 @@ def patch_updates_count(root: Path) -> None:
     path.write_text(text.replace(old, new, 1))
 
 
+def patch_managed_quickshell_lifecycle(root: Path) -> None:
+    ipc_old = '["qs", "-p", Quickshell.shellPath(""), "ipc", "call"'
+    ipc_new = '["qs", "-c", Quickshell.env("qsConfig"), "ipc", "call"'
+    ipc_rewrites = 0
+    for path in root.rglob("*.qml"):
+        text = path.read_text()
+        count = text.count(ipc_old)
+        if count:
+            path.write_text(text.replace(ipc_old, ipc_new))
+            ipc_rewrites += count
+    if ipc_rewrites != 7:
+        raise SystemExit(
+            f"expected 7 path-scoped QuickShell IPC calls, found {ipc_rewrites}"
+        )
+
+    replacements = [
+        (
+            root / "services/FirstRunExperience.qml",
+            '        Quickshell.execDetached(["bash", "-c", `qs -p \'${root.welcomeQmlPath}\'`])',
+            '        Quickshell.execDetached(["notify-send", root.firstRunNotifSummary, root.firstRunNotifBody, "-a", "Shell"])',
+            "first-run welcome lifecycle",
+        ),
+        (
+            root / "services/ConflictKiller.qml",
+            '                    Quickshell.execDetached(["qs", "-p", root.killDialogQmlPath])',
+            '                    Quickshell.execDetached(["notify-send", "Shell conflict", "Another notification daemon is already running", "-a", "Shell"])',
+            "conflict dialog lifecycle",
+        ),
+    ]
+    for path, old, new, label in replacements:
+        text = path.read_text()
+        path.write_text(replace_once(text, old, new, label))
+
+    for path in root.rglob("*.qml"):
+        text = path.read_text()
+        if '["qs", "-p"' in text or "qs -p" in text:
+            raise SystemExit(f"unmanaged QuickShell lifecycle remains in {path}")
+
+
 def main() -> None:
     if len(sys.argv) != 3:
         raise SystemExit(
@@ -77,6 +122,7 @@ def main() -> None:
     root = Path(sys.argv[1])
     patch_about(root, sys.argv[2])
     patch_updates_count(root)
+    patch_managed_quickshell_lifecycle(root)
 
 
 if __name__ == "__main__":

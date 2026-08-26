@@ -2,11 +2,11 @@
 set -euo pipefail
 
 active="$(hyprctl activewindow -j 2>/dev/null || true)"
-address="$(jq -r '.address // empty' <<<"$active")"
-class="$(jq -r '.class // empty' <<<"$active")"
-workspace="$(jq -r '.workspace.name // empty' <<<"$active")"
+address="$(jq -r '.address // empty' <<<"$active" 2>/dev/null || true)"
+class="$(jq -r '.class // empty' <<<"$active" 2>/dev/null || true)"
+workspace="$(jq -r '.workspace.name // empty' <<<"$active" 2>/dev/null || true)"
 
-if [[ -z "$address" || "$address" == "0x0" ]]; then
+if [[ ! "$address" =~ ^0x[[:xdigit:]]+$ || "$address" =~ ^0x0+$ ]]; then
   exit 0
 fi
 
@@ -19,7 +19,7 @@ case "${class,,}" in
     fi
     ;;
   *)
-    hyprctl dispatch "hl.dsp.window.close(\"address:$address\")" >/dev/null 2>&1 ||
+    hyprctl dispatch "hl.dsp.window.close({ window = \"address:$address\" })" >/dev/null 2>&1 ||
       hyprctl dispatch 'hl.dsp.window.kill()' >/dev/null 2>&1 ||
       true
     ;;

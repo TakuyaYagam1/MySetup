@@ -5,8 +5,21 @@ families. End4 has Official and pC variants, for four runtime profile IDs in
 total. Use `Super+Shift+W` to switch between them at runtime; Caelestia is the
 default.
 
-The configuration is layered: a **common** set is sourced by every shell,
-then each shell adds its own bindings on top.
+The configuration is layered with explicit Lua `require` calls. There is no
+legacy hyprlang source chain and no file auto-discovery. The canonical runtime loads
+`hyprland.keybinds`, then the writable runtime `shell-keybinds.lua` adapter:
+
+- `caelestia` -> `require("caelestia.keybinds")`
+- `noctalia` -> `require("noctalia.keybinds")`
+- `end4` and `end4-pc` ->
+  `require("end4-adapter").load({ profile = ..., quickshell_config = ... })`
+
+Each profile adapter explicitly requires the common modules it needs. The End4
+adapter loads the shared patched End4 tree and then its Wahrwelt keybind overlay.
+For each exact chord and submap, the first upstream End4 bind replaces any
+earlier canonical bind. Additional upstream handlers on that same chord are
+kept intentionally. Every Wahrwelt overlay bind uses `hl.unbind` before
+installing its final replacement.
 
 ## How to read the tables
 
@@ -14,31 +27,45 @@ then each shell adds its own bindings on top.
 | --- | --- |
 | `Super` | Windows/Meta key |
 | `Super+Shift, X` | hold Super+Shift, press X |
-| `bind` | normal single-press binding |
-| `bindl` | also fires when the session is locked |
-| `binde` | repeats while held (e.g. resize, workspace cycle) |
-| `bindr` | fires on release (used for `qs ... kill`) |
-| `bindm` | mouse binding (movewindow / resizewindow) |
-| `$kbX` | named variable defined in `dots/hypr/variables.conf` |
+| `hl.bind` | normal Lua binding |
+| `locked = true` | also fires when the session is locked |
+| `repeating = true` | repeats while held, for example resize or workspace cycle |
+| `release = true` | fires on release |
+| `mouse = true` | mouse drag or resize binding |
+| `v.kbX` | named value returned by `dots/hypr/variables.lua` |
 
 Source files in the repository:
 
-- `Linux/dots/hypr/variables.conf` - keybind variable definitions
-- `Linux/dots/hypr/hyprland/keybinds.conf` - base Hyprland keybinds
-- `Linux/dots/hypr/shell-common-keybinds.conf` - shared shell entrypoints
-- `Linux/dots/hypr/shell-workspace-keybinds.conf` - workspace group navigation
-- `Linux/dots/hypr/{caelestia,noctalia,end4}/keybinds.conf` - per-family
-- `Linux/dots/hypr/{caelestia,noctalia}/launcher.conf` - Super long-press launcher
+- `Linux/dots/hypr/variables.lua` - keybind values
+- `Linux/dots/hypr/hyprland/keybinds.lua` - base Hyprland keybinds
+- `Linux/dots/hypr/shell-common-keybinds.lua` - shared shell entrypoints
+- `Linux/dots/hypr/shell-workspace-keybinds.lua` - workspace group navigation
+- `Linux/dots/hypr/{caelestia,noctalia,end4}/keybinds.lua` - per-profile adapters
+- `Linux/dots/hypr/{caelestia,noctalia,end4}/launcher.lua` - profile launchers
 
 ---
 
 ## Common (all shells)
 
-These keybinds are sourced by **all four runtime profiles** (`caelestia`,
-`noctalia`, `end4`, `end4-pc`) via
-`source = $hypr/shell-common-keybinds.conf` and
-`shell-workspace-keybinds.conf`, plus the base Hyprland config in
-`hyprland/keybinds.conf`.
+These bindings are registered by all four runtime profiles (`caelestia`,
+`noctalia`, `end4`, `end4-pc`). The base comes from
+`hyprland/keybinds.lua`; profile modules require `shell-common-keybinds.lua`
+and, where needed, `shell-workspace-keybinds.lua`.
+
+User overrides belong in writable
+`~/.config/hypr/user/default.lua`. Unbind an existing chord before
+rebinding it so both actions do not fire:
+
+```lua
+hl.unbind("SUPER + Q")
+hl.bind("SUPER + Q", hl.dsp.exec_cmd("notify-send custom-close"))
+```
+
+Save the file and apply it with:
+
+```bash
+hyprctl reload
+```
 
 ### Shell selector
 
@@ -111,7 +138,7 @@ These keybinds are sourced by **all four runtime profiles** (`caelestia`,
 
 | Keys | Action |
 | --- | --- |
-| `Super+Q` | Close active window (delegates to `close-active.sh`) |
+| `Super+Q` | App-aware close via `close-active.sh`: route Spotify to `special:music`, otherwise close the exact window address with a kill fallback |
 | `Super+Space` | Toggle floating |
 | `Super+P` | Pin window |
 | `Ctrl+Shift+Return` | Fullscreen |
@@ -168,8 +195,8 @@ These keybinds are sourced by **all four runtime profiles** (`caelestia`,
 Bindings specific to **caelestia-shell**, layered on top of Common.
 Wired through caelestia's `global, caelestia:*` dispatchers and CLI helpers.
 
-> Source: `Linux/dots/hypr/caelestia/keybinds.conf`,
-> `Linux/dots/hypr/caelestia/launcher.conf`.
+> Modules: `Linux/dots/hypr/caelestia/keybinds.lua`,
+> `Linux/dots/hypr/caelestia/launcher.lua`.
 
 ### Launcher (Super long-press)
 
@@ -245,8 +272,8 @@ Interrupt is wired for: catchall keys, all mouse buttons
 Bindings specific to **noctalia**, layered on top of Common.
 Wired through `noctalia msg <command>`.
 
-> Source: `Linux/dots/hypr/noctalia/keybinds.conf`,
-> `Linux/dots/hypr/noctalia/launcher.conf`,
+> Modules: `Linux/dots/hypr/noctalia/keybinds.lua`,
+> `Linux/dots/hypr/noctalia/launcher.lua`,
 > `Linux/dots/hypr/scripts/noctalia-launcher.sh`.
 
 ### Launcher (Super long-press)
@@ -317,9 +344,9 @@ Official uses profile ID `end4` and QuickShell config `ii`; End4 pC uses
 profile ID `end4-pc` and QuickShell config `end4-pC`. Both variants use the
 same upstream end-4 Hyprland base patched by
 `Linux/NixOS/home/end4/patches/hypr.nix` and overlays Wahrwelt-specific
-keybinds from `Linux/dots/hypr/end4/keybinds.conf`.
+keybinds from `Linux/dots/hypr/end4/keybinds.lua`.
 
-> Sources: `Linux/dots/hypr/end4/keybinds.conf`,
+> Modules: `Linux/dots/hypr/end4/keybinds.lua`,
 > upstream `end-4/dots-hyprland`, and optional `pctrade/end4-pC` QuickShell.
 
 ### Launcher
@@ -337,11 +364,11 @@ keeps one shared End4 Hyprland/keybind layer while the selector starts either
 
 | Keys | Action |
 | --- | --- |
-| `Ctrl+Super+Alt+Slash` | Open this keybinds source in editor (`xdg-open ../wahrwelt/keybinds.conf`) |
+| `Ctrl+Super+Alt+Slash` | Open writable `~/.config/hypr/user/default.lua` in the default editor |
 
 ### Unbound upstream defaults
 
-These upstream end-4 bindings are explicitly cleared before sourcing the
+These upstream end-4 bindings are explicitly cleared before requiring the
 shared Wahrwelt set, to avoid double-binds and conflicts:
 
 | Cleared |
@@ -361,8 +388,8 @@ shared Wahrwelt set, to avoid double-binds and conflicts:
 | `Super+X` |
 | `Super+Ctrl+Space` |
 
-After clearing, end4 sources `shell-common-keybinds.conf` and
-`shell-workspace-keybinds.conf` - see the [Common](#common-all-shells)
+After clearing, End4 requires `shell-common-keybinds.lua` and
+`shell-workspace-keybinds.lua` - see the [Common](#common-all-shells)
 section above for the resulting set.
 
 ### Workspaces (end4 extras)

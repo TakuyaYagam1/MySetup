@@ -18,6 +18,15 @@ type Options struct {
 }
 
 func Apply(ctx context.Context, opts Options) error {
+	return applyWithHooks(ctx, opts, applyHooks{})
+}
+
+type applyHooks struct {
+	migration    legacyUserMigrationHooks
+	finalRuntime runtimeMutationHook
+}
+
+func applyWithHooks(ctx context.Context, opts Options, hooks applyHooks) error {
 	runner := opts.Runner
 	if runner == nil {
 		runner = run.New(opts.DryRun)
@@ -27,7 +36,9 @@ func Apply(ctx context.Context, opts Options) error {
 		return err
 	}
 	configDir := filepath.Join(home, ".config")
-	if err := migrateLegacyUserPaths(ctx, runner, home); err != nil {
+	hyprDir := filepath.Join(configDir, "hypr")
+	hyprSyncDeferred, err := migrateAndFinalizeHyprUserRuntime(ctx, runner, home, hyprDir, opts.Sources.Dots, hooks)
+	if err != nil {
 		return err
 	}
 
@@ -36,10 +47,8 @@ func Apply(ctx context.Context, opts Options) error {
 			return err
 		}
 	}
-	if opts.State.Dots.Hypr {
-		if err := syncHypr(ctx, runner, opts.Sources.Dots, configDir, opts.State); err != nil {
-			return err
-		}
+	if err := applyHyprDots(ctx, runner, opts, configDir, hyprSyncDeferred); err != nil {
+		return err
 	}
 	if opts.State.Dots.ZenTheme || opts.State.Dots.Sine {
 		if err := setupZen(ctx, runner, opts.Sources.Dots, home, opts.State.User.Username, opts.State.Dots); err != nil {
@@ -58,6 +67,56 @@ func Apply(ctx context.Context, opts Options) error {
 	}
 	refreshThumbnailDaemons(ctx, runner, opts.State.User.Username, home)
 	return nil
+}
+
+func applyHyprDots(ctx context.Context, runner run.CommandRunner, opts Options, configDir string, deferred bool) error {
+	if !opts.State.Dots.Hypr || deferred {
+		return nil
+	}
+	return syncHypr(ctx, runner, opts.Sources.Dots, configDir, opts.State)
+}
+
+func migrateAndFinalizeHyprUserRuntime(
+	ctx context.Context,
+	runner run.CommandRunner,
+	home, hyprDir, dotsSource string,
+	hooks applyHooks,
+) (bool, error) {
+	var transition hyprUserRuntimeTransition
+	prepared := false
+	migrationHooks := hooks.migration
+	injectedHyprHook := migrationHooks.hypr
+	migrationHooks.hypr = func(stage hyprUserMigrationCommitStage, migration hyprUserMigration) error {
+		if !runner.IsDryRun() {
+			var err error
+			transition, err = publishHyprUserNamespaceTransition(home, hyprDir, dotsSource)
+			if err != nil {
+				return err
+			}
+			prepared = true
+		}
+		if injectedHyprHook != nil {
+			return injectedHyprHook(stage, migration)
+		}
+		return nil
+	}
+	if err := migrateLegacyUserPathsWithHooks(ctx, runner, home, migrationHooks); err != nil {
+		return false, err
+	}
+	if !runner.IsDryRun() {
+		if !prepared {
+			var err error
+			transition, err = publishHyprUserNamespaceTransition(home, hyprDir, dotsSource)
+			if err != nil {
+				return false, err
+			}
+		}
+		if err := finalizeHyprUserNamespaceRuntime(home, hyprDir, dotsSource, transition, hooks.finalRuntime); err != nil {
+			return false, err
+		}
+		return transition.directEnd4Deferred, nil
+	}
+	return false, nil
 }
 
 func managedHome(configured string) (string, error) {

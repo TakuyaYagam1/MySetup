@@ -124,11 +124,16 @@
         {
           config,
           lib,
+          modulesPath,
           wahrwelt,
           pkgs,
           ...
         }:
         {
+          disabledModules = lib.optionals (builtins.pathExists "${modulesPath}/programs/noctalia.nix") [
+            "programs/noctalia.nix"
+          ];
+
           _module.args.homeLibs = import ./Linux/NixOS/home/lib {
             inherit lib pkgs;
           };
@@ -300,8 +305,13 @@
               )
             ];
           };
+          shellHome = nixos.config.home-manager.users.alice;
+          runtimePythonPresent = builtins.any (
+            package: (package.outPath or "") == nixos.pkgs.python3.outPath
+          ) shellHome.home.packages;
         in
-        nixos.config.home-manager.users.alice.home.activationPackage;
+        assert lib.assertMsg runtimePythonPresent "desktop Hypr runtime must directly install python3";
+        shellHome.home.activationPackage;
     in
     {
       overlays = rec {

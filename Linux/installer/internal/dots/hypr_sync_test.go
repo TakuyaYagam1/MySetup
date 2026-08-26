@@ -18,6 +18,8 @@ import (
 func TestSyncHyprReturnsExecutableCommandError(t *testing.T) {
 	dotsSrc := t.TempDir()
 	writeRequiredHyprSource(t, dotsSrc)
+	home := t.TempDir()
+	configDir := filepath.Join(home, ".config")
 	bin := t.TempDir()
 	writeScript(t, filepath.Join(bin, "rsync"), `last=
 for arg do last=$arg; done
@@ -25,7 +27,7 @@ mkdir -p "$last/scripts" "$last/caelestia" "$last/hyprland"
 printf '%s\n' '-- caelestia binds' > "$last/caelestia/keybinds.lua"
 printf '%s\n' '-- caelestia launcher' > "$last/caelestia/launcher.lua"
 printf '%s\n' 'hl.config({ input = { kb_layout = "us", kb_options = "grp:alt_shift_toggle" } })' > "$last/hyprland/input.lua"
-printf '%s\n' 'wahrwelt.load_runtime("shell-keybinds.lua")' > "$last/hyprland/keybinds.lua"
+printf '%s\n' '-- canonical keybinds' > "$last/hyprland/keybinds.lua"
 printf '%s\n' '#!/usr/bin/env bash' > "$last/scripts/start-shell.sh"`)
 	writeScript(t, filepath.Join(bin, "chmod"), "exit 0")
 	writeScript(t, filepath.Join(bin, "find"), "exit 27")
@@ -33,12 +35,17 @@ printf '%s\n' '#!/usr/bin/env bash' > "$last/scripts/start-shell.sh"`)
 
 	var out bytes.Buffer
 	runner := run.Runner{Stdout: &out, Stderr: &out}
-	err := syncHypr(context.Background(), runner, dotsSrc, t.TempDir(), config.Default())
+	err := syncHypr(context.Background(), runner, dotsSrc, configDir, config.Default())
 	if err == nil {
 		t.Fatal("expected scripts executable command error")
 	}
 	if !strings.Contains(err.Error(), "find failed") {
 		t.Fatalf("expected find failure, got %v", err)
+	}
+	for _, path := range []string{shellruntime.ActiveShellStatePath(home), shellruntime.End4VariantStatePath(home)} {
+		if _, statErr := os.Lstat(path); !os.IsNotExist(statErr) {
+			t.Fatalf("failed hypr apply published shell selection state at %s: %v", path, statErr)
+		}
 	}
 }
 
@@ -56,45 +63,29 @@ func TestSyncHyprDoesNotReloadLiveHyprland(t *testing.T) {
 	}
 }
 
-func TestSyncHyprExcludesHomeManagerEnd4Profile(t *testing.T) {
+func TestSyncHyprExcludesCanonicalAndLegacyUserDirectories(t *testing.T) {
 	dotsSrc := t.TempDir()
 	writeRequiredHyprSource(t, dotsSrc)
-	configDir := filepath.Join(t.TempDir(), ".config")
-	hyprDir := filepath.Join(configDir, "hypr")
-	staleEnd4Dir := filepath.Join(hyprDir, "end4")
-	if err := os.MkdirAll(staleEnd4Dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(staleEnd4Dir, "launcher.lua"), []byte("-- stale lite profile\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 
-	state := config.Default()
-	state.User.Username = "tester"
 	var out bytes.Buffer
 	runner := run.Runner{DryRun: true, Stdout: &out, Stderr: &out}
-	if err := syncHypr(context.Background(), runner, dotsSrc, configDir, state); err != nil {
+	if err := syncHypr(context.Background(), runner, dotsSrc, t.TempDir(), config.Default()); err != nil {
 		t.Fatal(err)
 	}
-
-	got := out.String()
-	for _, want := range []string{
-		"rm -rf -- " + staleEnd4Dir,
-		"--exclude /hyprland.lua",
-		"--exclude /hyprlock.conf",
-		"--exclude /hypridle.conf",
-		"--exclude /wahrwelt/hyprland.lua",
-		"--exclude /wahrwelt/local.lua",
-		"--exclude /runtime/",
-		"--exclude /end4/",
-	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("expected hypr sync output to contain %q, got:\n%s", want, got)
+	text := out.String()
+	for _, required := range []string{"--exclude /user/", "--exclude /wahrwelt/", "--exclude /mysetup/"} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("hypr sync must preserve user and legacy user directories, missing %q:\n%s", required, text)
+		}
+	}
+	for _, forbidden := range []string{"--exclude /wahrwelt/local.lua", "--exclude /wahrwelt/hyprland.lua"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("hypr sync retained narrow user-directory exclusion %q:\n%s", forbidden, text)
 		}
 	}
 }
 
-func TestSyncHyprPreservesEnd4ProfileWhenActive(t *testing.T) {
+func TestSyncHyprRejectsUnknownEnd4DirectoryForNonEnd4Profile(t *testing.T) {
 	dotsSrc := t.TempDir()
 	writeRequiredHyprSource(t, dotsSrc)
 	configDir := filepath.Join(t.TempDir(), ".config")
@@ -106,6 +97,46 @@ func TestSyncHyprPreservesEnd4ProfileWhenActive(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(staleEnd4Dir, "launcher.lua"), []byte("-- stale lite profile\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := writeMarker(run.Runner{}, filepath.Join(hyprDir, managedMarkerName), "hypr"); err != nil {
+		t.Fatal(err)
+	}
+	writeHomeManagerEnd4Source(t, configDir, "ii")
+
+	state := config.Default()
+	state.User.Username = "tester"
+	var out bytes.Buffer
+	runner := run.Runner{Stdout: &out, Stderr: &out}
+	err := syncHypr(context.Background(), runner, dotsSrc, configDir, state)
+	if err == nil || !strings.Contains(err.Error(), "unowned End4 profile collision") {
+		t.Fatalf("expected unknown End4 ownership collision, got %v", err)
+	}
+	if strings.Contains(out.String(), "rm -rf -- "+staleEnd4Dir) {
+		t.Fatalf("unknown End4 directory must not be removed:\n%s", out.String())
+	}
+	if got := readTestFile(t, filepath.Join(staleEnd4Dir, "launcher.lua")); got != "-- stale lite profile\n" {
+		t.Fatalf("unknown End4 contents changed: %q", got)
+	}
+}
+
+func TestSyncHyprRejectsUnknownEnd4DirectoryWhenEnd4IsActive(t *testing.T) {
+	dotsSrc := t.TempDir()
+	writeRequiredHyprSource(t, dotsSrc)
+	configDir := filepath.Join(t.TempDir(), ".config")
+	hyprDir := filepath.Join(configDir, "hypr")
+	staleEnd4Dir := filepath.Join(hyprDir, "end4")
+	if err := os.MkdirAll(staleEnd4Dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staleEnd4Dir, "launcher.lua"), []byte("-- stale lite profile\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeMarker(run.Runner{}, filepath.Join(hyprDir, managedMarkerName), "hypr"); err != nil {
+		t.Fatal(err)
+	}
+	writeHomeManagerEnd4Source(t, configDir, "ii")
+	bin := t.TempDir()
+	writeScript(t, filepath.Join(bin, "rsync"), "exit 0")
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
 
 	home := homeDirFromConfigDir(configDir)
 	if err := os.MkdirAll(filepath.Dir(paths.ActiveShellStatePath(home)), 0o755); err != nil {
@@ -118,26 +149,30 @@ func TestSyncHyprPreservesEnd4ProfileWhenActive(t *testing.T) {
 	state := config.Default()
 	state.User.Username = "tester"
 	var out bytes.Buffer
-	runner := run.Runner{DryRun: true, Stdout: &out, Stderr: &out}
-	if err := syncHypr(context.Background(), runner, dotsSrc, configDir, state); err != nil {
-		t.Fatal(err)
+	runner := run.Runner{Stdout: &out, Stderr: &out}
+	err := syncHypr(context.Background(), runner, dotsSrc, configDir, state)
+	if err == nil || !strings.Contains(err.Error(), "unowned End4 profile collision") {
+		t.Fatalf("expected unknown active End4 ownership collision, got %v", err)
 	}
-
 	if strings.Contains(out.String(), "rm -rf -- "+staleEnd4Dir) {
-		t.Fatalf("active end4 profile must not be pruned during hypr sync:\n%s", out.String())
+		t.Fatalf("unknown active End4 directory must not be removed:\n%s", out.String())
+	}
+	if got := readTestFile(t, filepath.Join(staleEnd4Dir, "launcher.lua")); got != "-- stale lite profile\n" {
+		t.Fatalf("unknown active End4 contents changed: %q", got)
 	}
 }
 
-func TestSyncHyprPreservesEnd4ProfileWhenPCVariantIsActive(t *testing.T) {
+func TestSyncHyprAcceptsExactHomeManagerEnd4SourceWhenPCVariantIsActive(t *testing.T) {
 	dotsSrc := t.TempDir()
 	writeRequiredHyprSource(t, dotsSrc)
 	configDir := filepath.Join(t.TempDir(), ".config")
 	hyprDir := filepath.Join(configDir, "hypr")
 	end4Dir := filepath.Join(hyprDir, "end4")
-	if err := os.MkdirAll(end4Dir, 0o755); err != nil {
+	end4Source := writeHomeManagerEnd4Source(t, configDir, "end4-pC")
+	if err := os.MkdirAll(filepath.Dir(end4Dir), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(end4Dir, "launcher.lua"), []byte("-- active pC profile\n"), 0o644); err != nil {
+	if err := os.Symlink(end4Source, end4Dir); err != nil {
 		t.Fatal(err)
 	}
 
@@ -158,6 +193,99 @@ func TestSyncHyprPreservesEnd4ProfileWhenPCVariantIsActive(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "rm -rf -- "+end4Dir) {
 		t.Fatalf("active end4-pc profile must not be pruned during hypr sync:\n%s", out.String())
+	}
+	info, err := os.Lstat(end4Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("exact Home Manager End4 target was replaced: mode=%s", info.Mode())
+	}
+}
+
+func TestRestoreActiveEnd4RejectsUnknownFileAndSymlinkWithoutMutation(t *testing.T) {
+	for _, kind := range []string{"file", "symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			configDir := filepath.Join(t.TempDir(), ".config")
+			hyprDir := filepath.Join(configDir, "hypr")
+			target := filepath.Join(hyprDir, "end4")
+			writeHomeManagerEnd4Source(t, configDir, "ii")
+			if err := os.MkdirAll(hyprDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			var unknownSource string
+			switch kind {
+			case "file":
+				if err := os.WriteFile(target, []byte("unknown file\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			case "symlink":
+				unknownSource = t.TempDir()
+				if err := os.Symlink(unknownSource, target); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			runner := run.Runner{DryRun: true}
+			err := restoreActiveEnd4Profile(context.Background(), runner, configDir, hyprDir, shellruntime.End4)
+			if err == nil || !strings.Contains(err.Error(), "unowned End4 profile collision") {
+				t.Fatalf("expected unknown %s collision, got %v", kind, err)
+			}
+			if kind == "file" {
+				if got := readTestFile(t, target); got != "unknown file\n" {
+					t.Fatalf("unknown file changed: %q", got)
+				}
+			} else if got, err := os.Readlink(target); err != nil || got != unknownSource {
+				t.Fatalf("unknown symlink changed: target=%q err=%v", got, err)
+			}
+		})
+	}
+}
+
+func TestValidateEnd4TargetOwnershipRequiresTargetSymlink(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "end4")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "hyprland.lua"), []byte("-- ordinary collision\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := validateEnd4TargetOwnership(target, []string{target})
+	if err == nil || !strings.Contains(err.Error(), "target is not a symlink") {
+		t.Fatalf("ordinary directory self-identification was accepted: %v", err)
+	}
+	if got := readTestFile(t, filepath.Join(target, "hyprland.lua")); got != "-- ordinary collision\n" {
+		t.Fatalf("ordinary collision changed: %q", got)
+	}
+}
+
+func TestValidateEnd4TargetOwnershipRejectsBrokenAndWrongLinks(t *testing.T) {
+	proven := filepath.Join(t.TempDir(), "proven")
+	if err := os.MkdirAll(proven, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"broken", "wrong"} {
+		t.Run(kind, func(t *testing.T) {
+			target := filepath.Join(t.TempDir(), "end4")
+			linkTarget := filepath.Join(t.TempDir(), "missing")
+			if kind == "wrong" {
+				if err := os.MkdirAll(linkTarget, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.Symlink(linkTarget, target); err != nil {
+				t.Fatal(err)
+			}
+			err := validateEnd4TargetOwnership(target, []string{proven})
+			if err == nil {
+				t.Fatalf("%s End4 link was accepted", kind)
+			}
+			got, readErr := os.Readlink(target)
+			if readErr != nil || got != linkTarget {
+				t.Fatalf("%s link changed: got %q err=%v", kind, got, readErr)
+			}
+		})
 	}
 }
 
@@ -206,20 +334,18 @@ chmod) shift; /bin/chmod "$@"; exit $? ;;
 esac`)
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
 
-	state := config.Default()
-	state.User.Username = "tester"
 	var out bytes.Buffer
 	runner := run.Runner{Stdout: &out, Stderr: &out}
-	if err := writeHyprLocalConfig(context.Background(), runner, state, hyprSourceDir, hyprDir); err != nil {
+	if err := writeHyprLocalConfig(context.Background(), runner, "tester", hyprSourceDir, hyprDir); err != nil {
 		t.Fatal(err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(hyprDir, "wahrwelt", "local.lua"))
+	data, err := os.ReadFile(filepath.Join(hyprDir, "user", "default.lua"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "hl.monitor") || !strings.Contains(string(data), "kb_layout") {
-		t.Fatalf("expected generated wahrwelt local Lua config, got:\n%s", data)
+	if string(data) != wahrweltDefaultLua {
+		t.Fatalf("expected canonical wahrwelt default template, got:\n%s", data)
 	}
 	for _, want := range []string{
 		"sudo chown -R tester:",
@@ -235,10 +361,12 @@ func writeRequiredHyprSource(t *testing.T, dotsSrc string) {
 	t.Helper()
 
 	files := map[string]string{
-		"hypr/hyprland.lua":                 "require(\"hyprland.keybinds\")\n",
+		"hypr/end4-adapter.lua":             "return {}\n",
+		"hypr/hyprland.lua":                 "require(\"hyprland.keybinds\")\nwahrwelt.load_runtime(\"shell-profile.lua\")\nwahrwelt.load_runtime(\"shell-launcher.lua\")\nwahrwelt.load_runtime(\"shell-keybinds.lua\")\n",
 		"hypr/hyprland/input.lua":           "hl.config({ input = { kb_layout = \"us\", kb_options = \"grp:alt_shift_toggle\" } })\n",
-		"hypr/hyprland/keybinds.lua":        "wahrwelt.load_runtime(\"shell-keybinds.lua\")\n",
+		"hypr/hyprland/keybinds.lua":        "-- canonical keybinds\n",
 		"hypr/shell-common-keybinds.lua":    "wahrwelt.bind_exec(\"SUPER + SHIFT + W\", wahrwelt.hypr .. \"/scripts/shell-selector.sh toggle\")\n",
+		"hypr/shell-common-rules.lua":       "hl.window_rule({ match = { class = \"spotify\" }, workspace = \"special:music\" })\n",
 		"hypr/shell-workspace-keybinds.lua": "wahrwelt.bind_exec(\"SUPER + 1\", wahrwelt.hypr .. \"/scripts/wsaction.fish -g workspace 1\")\n",
 		"hypr/lib/wahrwelt.lua":             "return {}\n",
 		"hypr/variables.lua":                "return {}\n",
@@ -260,4 +388,33 @@ func writeRequiredHyprSource(t *testing.T, dotsSrc string) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func writeHomeManagerEnd4Source(t *testing.T, configDir, quickshellConfig string) string {
+	t.Helper()
+	_ = quickshellConfig
+	home := filepath.Dir(configDir)
+	end4Store := filepath.Join(t.TempDir(), "end4-store")
+	if err := os.MkdirAll(end4Store, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(end4Store, "hyprland.lua"), []byte("-- exact HM End4 source\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	generation := filepath.Join(t.TempDir(), "home-manager-generation")
+	end4Source := filepath.Join(generation, "home-files", ".config", "hypr", "end4")
+	if err := os.MkdirAll(filepath.Dir(end4Source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(end4Store, end4Source); err != nil {
+		t.Fatal(err)
+	}
+	gcroot := filepath.Join(home, ".local", "state", "home-manager", "gcroots", "current-home")
+	if err := os.MkdirAll(filepath.Dir(gcroot), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(generation, gcroot); err != nil {
+		t.Fatal(err)
+	}
+	return end4Source
 }

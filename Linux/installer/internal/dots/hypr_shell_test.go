@@ -1,48 +1,25 @@
 package dots
 
 import (
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/shellruntime"
 )
 
-func TestWriteShellLauncherConfigWritesRuntimeLauncher(t *testing.T) {
-	dir := t.TempDir()
-	hyprDir := filepath.Join(dir, ".config", "hypr")
-	path := filepath.Join(shellruntime.RuntimeDir(dir), "shell-profile.lua")
-
-	if err := writeShellLauncherConfig(path, hyprDir); err != nil {
-		t.Fatal(err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := string(data)
-	for _, want := range []string{
-		"-- Runtime shell launcher",
-		`hl.exec_cmd("` + filepath.Join(hyprDir, "scripts", "start-shell.sh") + `")`,
-	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("shell launcher missing %q\n%s", want, got)
-		}
-	}
-}
-
 func TestWriteShellLauncherConfigReplacesExistingSymlink(t *testing.T) {
-	dir := t.TempDir()
-	hyprDir := filepath.Join(dir, ".config", "hypr")
-	path := filepath.Join(shellruntime.RuntimeDir(dir), "shell-profile.lua")
-	target := filepath.Join(dir, "store-shell-profile.lua")
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	path := shellruntime.RuntimeFile(home, "shell-profile.lua")
+	target := filepath.Join(home, "store-shell-profile.lua")
+	writeTestFile(t, target, "old target\n")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(target, []byte("old target\n"), 0o444); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(target, path); err != nil {
@@ -58,398 +35,1264 @@ func TestWriteShellLauncherConfigReplacesExistingSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
-		t.Fatalf("shell launcher should be rewritten as a regular file, got symlink %s", path)
+		t.Fatalf("shell launcher should be rewritten as a regular file: %s", path)
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "start-shell.sh") || strings.Contains(string(data), "start-shell.sh noctalia") {
-		t.Fatalf("shell launcher should contain runtime launcher without hardcoded profile\n%s", string(data))
-	}
-	targetData, err := os.ReadFile(target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(targetData) != "old target\n" {
-		t.Fatalf("symlink target should not be overwritten, got %q", string(targetData))
-	}
+	assertFileContains(t, path, filepath.Join(hyprDir, "scripts", "start-shell.sh"))
+	assertFileContains(t, target, "old target")
 }
 
-func TestWriteShellKeybindsConfigUsesCurrentShell(t *testing.T) {
-	dir := t.TempDir()
-	hyprDir := filepath.Join(dir, ".config", "hypr")
-	path := filepath.Join(shellruntime.RuntimeDir(dir), "shell-keybinds.lua")
-	noctaliaKeybinds := filepath.Join(hyprDir, "noctalia", "keybinds.lua")
-	if err := os.MkdirAll(filepath.Dir(noctaliaKeybinds), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(noctaliaKeybinds, []byte("# noctalia binds\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeShellKeybindsConfig(path, hyprDir, "noctalia"); err != nil {
-		t.Fatal(err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := string(data)
-	for _, want := range []string{
-		"-- Active shell keybind profile: noctalia",
-		`require("noctalia.keybinds")`,
-	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("shell keybind layer missing %q\n%s", want, got)
-		}
-	}
-}
-
-func TestWriteShellKeybindsConfigReplacesExistingSymlink(t *testing.T) {
-	dir := t.TempDir()
-	hyprDir := filepath.Join(dir, ".config", "hypr")
-	path := filepath.Join(shellruntime.RuntimeDir(dir), "shell-keybinds.lua")
-	caelestiaKeybinds := filepath.Join(hyprDir, "caelestia", "keybinds.lua")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Dir(caelestiaKeybinds), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(caelestiaKeybinds, []byte("# caelestia binds\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	target := filepath.Join(dir, "store-shell-keybinds.lua")
-	if err := os.WriteFile(target, []byte("old target\n"), 0o444); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(target, path); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := writeShellKeybindsConfig(path, hyprDir, "caelestia"); err != nil {
-		t.Fatal(err)
-	}
-
-	info, err := os.Lstat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		t.Fatalf("shell keybinds should be rewritten as a regular file, got symlink %s", path)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), `require("caelestia.keybinds")`) {
-		t.Fatalf("shell keybind config should source default profile\n%s", string(data))
-	}
-}
-
-func TestWriteShellKeybindsConfigErrorsWhenProfileMissing(t *testing.T) {
-	dir := t.TempDir()
-	hyprDir := filepath.Join(dir, ".config", "hypr")
-
-	err := writeShellKeybindsConfig(filepath.Join(shellruntime.RuntimeDir(dir), "shell-keybinds.lua"), hyprDir, "noctalia")
-	if err == nil {
-		t.Fatal("expected missing shell keybind layer error")
-	}
-	if !strings.Contains(err.Error(), "shell keybind profile missing") {
-		t.Fatalf("expected missing shell keybind layer error, got %v", err)
-	}
-}
-
-func TestWriteHyprRuntimeShellStateSeedsLegacyRuntimeFiles(t *testing.T) {
-	home := t.TempDir()
-	hyprDir := filepath.Join(home, ".config", "hypr")
-	runtimeDir := shellruntime.RuntimeDir(home)
-	if err := os.MkdirAll(filepath.Join(hyprDir, "caelestia"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(hyprDir, "scripts"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(hyprDir, "wahrwelt"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "caelestia", "keybinds.lua"), []byte("-- binds\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "caelestia", "launcher.lua"), []byte("-- launcher\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "wahrwelt", "hyprland.lua"), []byte("hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@120\", position = \"0x0\", scale = \"1\" })\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
-		t.Fatal(err)
-	}
-
-	activeShell, err := os.ReadFile(paths.ActiveShellStatePath(home))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.TrimSpace(string(activeShell)) != "caelestia" {
-		t.Fatalf("expected active shell caelestia, got %q", string(activeShell))
-	}
-
-	stableEntrypoint, err := os.ReadFile(filepath.Join(hyprDir, "hyprland.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(stableEntrypoint), filepath.Join(runtimeDir, "hyprland.lua")) {
-		t.Fatalf("expected stable entrypoint to source runtime config\n%s", string(stableEntrypoint))
-	}
-
-	entrypoint, err := os.ReadFile(filepath.Join(runtimeDir, "hyprland.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	entrypointText := string(entrypoint)
-	if !strings.Contains(entrypointText, "wahrwelt/hyprland.lua") {
-		t.Fatalf("expected legacy entrypoint to source wahrwelt config\n%s", entrypointText)
-	}
-	if !strings.Contains(entrypointText, shellruntime.RuntimeFile(home, "shell-profile.lua")) {
-		t.Fatalf("expected legacy entrypoint to source runtime shell profile\n%s", entrypointText)
-	}
-	if strings.Contains(entrypointText, filepath.Join(hyprDir, "runtime", "shell-profile.lua")) {
-		t.Fatalf("legacy entrypoint should not source old hypr runtime path\n%s", entrypointText)
-	}
-
-	launcher, err := os.ReadFile(filepath.Join(runtimeDir, "shell-launcher.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(launcher), `require("caelestia.launcher")`) {
-		t.Fatalf("expected launcher runtime config to source caelestia launcher layer\n%s", string(launcher))
-	}
-
-	hyprlock, err := os.ReadFile(filepath.Join(runtimeDir, "hyprlock.conf"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(hyprlock), "shell-managed (caelestia)") {
-		t.Fatalf("expected legacy hyprlock placeholder to mention caelestia\n%s", string(hyprlock))
-	}
-
-	hypridle, err := os.ReadFile(filepath.Join(runtimeDir, "hypridle.conf"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(hypridle), "shell-managed (caelestia)") {
-		t.Fatalf("expected legacy hypridle placeholder to mention caelestia\n%s", string(hypridle))
-	}
-}
-
-func TestWriteHyprRuntimeShellStateBootstrapsEnd4BeforeProfileExists(t *testing.T) {
-	home := t.TempDir()
-	hyprDir := filepath.Join(home, ".config", "hypr")
-	runtimeDir := shellruntime.RuntimeDir(home)
-	if err := os.MkdirAll(filepath.Join(hyprDir, "scripts"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(hyprDir, "end4"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Dir(paths.ActiveShellStatePath(home)), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(paths.ActiveShellStatePath(home), []byte("end4\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
-		t.Fatal(err)
-	}
-
-	activeShell, err := os.ReadFile(paths.ActiveShellStatePath(home))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.TrimSpace(string(activeShell)) != "end4" {
-		t.Fatalf("expected active shell end4, got %q", string(activeShell))
-	}
-
-	hyprland, err := os.ReadFile(filepath.Join(runtimeDir, "hyprland.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(hyprland), `dofile(end4_root .. "/hyprland.lua")`) {
-		t.Fatalf("expected end4 runtime entrypoint to point at profile installed by Home Manager\n%s", string(hyprland))
-	}
-	hyprlock, err := os.ReadFile(filepath.Join(runtimeDir, "hyprlock.conf"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(hyprlock), filepath.Join(hyprDir, "end4", "hyprlock.conf")) {
-		t.Fatalf("expected end4 hyprlock runtime source\n%s", string(hyprlock))
-	}
-	shellLauncher, err := os.ReadFile(filepath.Join(runtimeDir, "shell-launcher.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(shellLauncher), "Active shell launcher profile: end4") {
-		t.Fatalf("expected end4 shell launcher placeholder\n%s", string(shellLauncher))
-	}
-	shellKeybinds, err := os.ReadFile(filepath.Join(runtimeDir, "shell-keybinds.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(shellKeybinds), "Active shell keybind profile: end4") {
-		t.Fatalf("expected end4 shell keybind placeholder\n%s", string(shellKeybinds))
-	}
-	stableEntrypoint, err := os.ReadFile(filepath.Join(hyprDir, "hyprland.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(stableEntrypoint), filepath.Join(runtimeDir, "hyprland.lua")) {
-		t.Fatalf("expected stable entrypoint to keep pointing at runtime config\n%s", string(stableEntrypoint))
-	}
-}
-
-func TestWriteHyprRuntimeShellStatePreservesEnd4PCVariant(t *testing.T) {
+func TestWriteHyprRuntimeShellStateRendersCanonicalProfiles(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "")
 
-	home := t.TempDir()
-	hyprDir := filepath.Join(home, ".config", "hypr")
-	runtimeDir := shellruntime.RuntimeDir(home)
-	if err := os.MkdirAll(filepath.Join(hyprDir, "scripts"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(hyprDir, "end4"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Dir(paths.ActiveShellStatePath(home)), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(paths.ActiveShellStatePath(home), []byte("end4-pc\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	var canonicalEntrypoint string
+	for _, profile := range shellruntime.ProfileSpecs {
+		profile := profile
+		t.Run(profile.ID, func(t *testing.T) {
+			home := t.TempDir()
+			hyprDir := filepath.Join(home, ".config", "hypr")
+			writeRuntimeProfileAssets(t, home, hyprDir, profile)
+			statePath := shellruntime.ActiveShellStatePath(home)
+			writeTestFile(t, statePath, profile.ID+"\n")
 
-	if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
-		t.Fatal(err)
-	}
+			if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
+				t.Fatal(err)
+			}
 
-	for path, want := range map[string]string{
-		paths.ActiveShellStatePath(home):                                   "end4-pc",
-		filepath.Join(home, ".local", "state", "wahrwelt", "end4-variant"): "end4-pc",
-		filepath.Join(runtimeDir, "hyprland.lua"):                          "Active Hyprland profile: end4-pc",
-		filepath.Join(runtimeDir, "shell-launcher.lua"):                    "Active shell launcher profile: end4-pc",
-		filepath.Join(runtimeDir, "shell-keybinds.lua"):                    "Active shell keybind profile: end4-pc",
-	} {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(string(data), want) {
-			t.Fatalf("expected %s to contain %q\n%s", path, want, data)
-		}
+			entrypoint := readTestFile(t, shellruntime.RuntimeFile(home, "hyprland.lua"))
+			if canonicalEntrypoint == "" {
+				canonicalEntrypoint = entrypoint
+			} else if entrypoint != canonicalEntrypoint {
+				t.Fatalf("runtime hyprland.lua differs from other profiles\n%s", entrypoint)
+			}
+			if strings.Count(entrypoint, `dofile(hypr_root .. "/user/hyprland.lua")`) != 1 {
+				t.Fatalf("canonical entrypoint must load user adapter exactly once\n%s", entrypoint)
+			}
+			for _, forbidden := range []string{"shell-profile.lua", "end4/hyprland.lua", "end4_root"} {
+				if strings.Contains(entrypoint, forbidden) {
+					t.Fatalf("canonical entrypoint contains forbidden direct load %q\n%s", forbidden, entrypoint)
+				}
+			}
+
+			launcherModule := strings.TrimSuffix(filepath.ToSlash(profile.Launcher), ".lua")
+			launcherModule = strings.ReplaceAll(launcherModule, "/", ".")
+			assertFileContains(t, shellruntime.RuntimeFile(home, "shell-launcher.lua"), `require("`+launcherModule+`")`)
+
+			keybinds := readTestFile(t, shellruntime.RuntimeFile(home, "shell-keybinds.lua"))
+			if first, _, _ := strings.Cut(keybinds, "\n"); first != shellruntime.AdapterMarker(profile.ID) {
+				t.Fatalf("unexpected adapter marker: got %q want %q", first, shellruntime.AdapterMarker(profile.ID))
+			}
+			if shellruntime.IsEnd4Profile(profile.ID) {
+				quickshellPath := filepath.Join(home, ".config", "quickshell", profile.QuickshellConfig)
+				want := `require("end4-adapter").load({ profile = "` + profile.ID + `", quickshell_config = "` + quickshellPath + `" })`
+				if keybinds != shellruntime.AdapterMarker(profile.ID)+"\n"+want+"\n" {
+					t.Fatalf("unexpected exact End4 adapter args\n%s", keybinds)
+				}
+				assertFileContains(t, shellruntime.RuntimeFile(home, "hyprlock.conf"), filepath.Join(hyprDir, "end4", "hyprlock.conf"))
+				if _, err := os.Lstat(shellruntime.End4VariantStatePath(home)); !os.IsNotExist(err) {
+					t.Fatalf("runtime rendering unexpectedly selected an End4 variant: %v", err)
+				}
+			} else {
+				assertFileContains(t, shellruntime.RuntimeFile(home, "shell-keybinds.lua"), `require("`+profile.Adapter+`")`)
+				assertFileContains(t, shellruntime.RuntimeFile(home, "hyprlock.conf"), "shell-managed ("+profile.ID+")")
+			}
+			if got := strings.TrimSpace(readTestFile(t, statePath)); got != profile.ID {
+				t.Fatalf("active shell = %q, want %q", got, profile.ID)
+			}
+		})
 	}
 }
 
-func TestWriteHyprRuntimeShellStateDetectsNoctaliaFromEntrypointWhenStateMissing(t *testing.T) {
-	home := t.TempDir()
-	hyprDir := filepath.Join(home, ".config", "hypr")
-	if err := os.MkdirAll(filepath.Join(hyprDir, "wahrwelt"), 0o755); err != nil {
-		t.Fatal(err)
+func TestShellProfileSyncMirrorsGoRuntimeRendering(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is not installed")
 	}
-	if err := os.MkdirAll(filepath.Join(hyprDir, "noctalia"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "hyprland.lua"), []byte(`dofile("`+filepath.Join(hyprDir, "wahrwelt", "hyprland.lua")+`")`+"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "shell-keybinds.lua"), []byte(`require("noctalia.keybinds")`+"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "wahrwelt", "hyprland.lua"), []byte("hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@120\", position = \"0x0\", scale = \"1\" })\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "noctalia", "keybinds.lua"), []byte("-- noctalia binds\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "noctalia", "launcher.lua"), []byte("-- noctalia launcher\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
-		t.Fatal(err)
-	}
-
-	activeShell, err := os.ReadFile(paths.ActiveShellStatePath(home))
+	t.Setenv("XDG_STATE_HOME", "")
+	script, err := filepath.Abs("../../../dots/hypr/scripts/shell-profile-sync.sh")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(string(activeShell)) != "noctalia" {
-		t.Fatalf("expected detected active shell noctalia, got %q", string(activeShell))
+	runtimeScript, err := filepath.Abs("../../../dots/hypr/scripts/shell-runtime.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, profile := range shellruntime.ProfileSpecs {
+		profile := profile
+		t.Run(profile.ID, func(t *testing.T) {
+			home := t.TempDir()
+			runtimeDir := filepath.Join(home, "run")
+			if err := os.Mkdir(runtimeDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			hyprDir := filepath.Join(home, ".config", "hypr")
+			writeRuntimeProfileAssets(t, home, hyprDir, profile)
+			writeTestFile(t, shellruntime.ActiveShellStatePath(home), profile.ID+"\n")
+			if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
+				t.Fatal(err)
+			}
+
+			paths := make([]string, 0, len(shellruntime.RuntimeFiles)+1)
+			for _, name := range shellruntime.RuntimeFiles {
+				paths = append(paths, shellruntime.RuntimeFile(home, name))
+			}
+			paths = append(paths, filepath.Join(hyprDir, "hyprland.lua"))
+			want := make(map[string]string, len(paths))
+			for _, path := range paths {
+				want[path] = readTestFile(t, path)
+			}
+
+			cmd := exec.Command(bash, "-c", `
+set -eu
+. "$1"
+config_home="$wahrwelt_config_home"
+hypr_runtime_dir="$wahrwelt_hypr_runtime_dir"
+profile="$2"
+log() { :; }
+hypr_dir() { wahrwelt_hypr_dir_path; }
+. "$3"
+mapfile -t runtime_bundle_path_list < <(runtime_bundle_paths)
+wahrwelt_begin_exact_snapshot "$wahrwelt_runtime_session_dir" .runtime-render-test- render
+runtime_bundle_snapshot_dir="$wahrwelt_new_snapshot_dir"
+snapshot_exact_paths "$runtime_bundle_snapshot_dir" "${runtime_bundle_path_list[@]}"
+sync_runtime_shell_files
+remove_exact_path_snapshot "$runtime_bundle_snapshot_dir" "${runtime_bundle_path_list[@]}"
+`, "bash", runtimeScript, profile.ID, script)
+			cmd.Env = append(os.Environ(),
+				"HOME="+home,
+				"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
+				"XDG_RUNTIME_DIR="+runtimeDir,
+				"XDG_STATE_HOME="+filepath.Join(home, ".local", "state"),
+			)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("shell runtime sync failed: %v\n%s", err, output)
+			}
+
+			for _, path := range paths {
+				if got := readTestFile(t, path); got != want[path] {
+					t.Fatalf("shell rendering drifted from Go for %s\nGo:\n%s\nShell:\n%s", path, want[path], got)
+				}
+			}
+		})
 	}
 }
 
-func TestWriteHyprRuntimeShellStateSeedsEnd4RuntimeFilesWhenProfileExists(t *testing.T) {
+func TestWriteHyprRuntimeShellStatePreservesRememberedEnd4VariantForNonEnd4(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
 	home := t.TempDir()
 	hyprDir := filepath.Join(home, ".config", "hypr")
-	runtimeDir := shellruntime.RuntimeDir(home)
-	if err := os.MkdirAll(filepath.Join(hyprDir, "scripts"), 0o755); err != nil {
+	profile, _ := shellruntime.ProfileByID(shellruntime.Noctalia)
+	writeRuntimeProfileAssets(t, home, hyprDir, profile)
+	writeTestFile(t, shellruntime.ActiveShellStatePath(home), shellruntime.Noctalia+"\n")
+	writeTestFile(t, shellruntime.End4VariantStatePath(home), shellruntime.End4PC+"\n")
+
+	if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(hyprDir, "end4"), 0o755); err != nil {
+	if got := readTestFile(t, shellruntime.End4VariantStatePath(home)); got != shellruntime.End4PC+"\n" {
+		t.Fatalf("remembered End4 variant changed across non-End4 transition: %q", got)
+	}
+}
+
+func TestWriteHyprRuntimeShellStateDoesNotPublishShellSelectionState(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	profile, _ := shellruntime.ProfileByID(shellruntime.DefaultProfile)
+	writeRuntimeProfileAssets(t, home, hyprDir, profile)
+
+	if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
 		t.Fatal(err)
 	}
-	for rel := range map[string]string{
-		"end4/hyprland.lua":  "require(\"hyprland.env\")\n",
-		"end4/hyprlock.conf": "background {}\n",
-		"end4/hypridle.conf": "general {}\n",
+	for _, path := range []string{shellruntime.ActiveShellStatePath(home), shellruntime.End4VariantStatePath(home)} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatalf("fresh runtime rendering published shell selection state at %s: %v", path, err)
+		}
+	}
+
+	rememberedActive := shellruntime.End4PC + "\n"
+	rememberedVariant := shellruntime.End4 + "\n"
+	writeModeTestFile(t, shellruntime.ActiveShellStatePath(home), rememberedActive, 0o600)
+	writeModeTestFile(t, shellruntime.End4VariantStatePath(home), rememberedVariant, 0o640)
+	end4Profile, _ := shellruntime.ProfileByID(shellruntime.End4PC)
+	writeRuntimeProfileAssets(t, home, hyprDir, end4Profile)
+	injected := errors.New("injected runtime rendering failure")
+	err := writeHyprRuntimeShellStateWithHook(home, hyprDir, func(_, _ string) error { return injected })
+	if !errors.Is(err, injected) {
+		t.Fatalf("runtime error = %v, want injected rendering failure", err)
+	}
+	assertTestFileState(t, shellruntime.ActiveShellStatePath(home), rememberedActive, 0o600)
+	assertTestFileState(t, shellruntime.End4VariantStatePath(home), rememberedVariant, 0o640)
+}
+
+func TestWriteHyprRuntimeShellStateValidatesBeforeMutation(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	profile, _ := shellruntime.ProfileByID(shellruntime.Caelestia)
+	writeRuntimeProfileAssets(t, home, hyprDir, profile)
+	if err := os.Remove(filepath.Join(hyprDir, filepath.FromSlash(profile.Keybinds))); err != nil {
+		t.Fatal(err)
+	}
+	statePath := shellruntime.ActiveShellStatePath(home)
+	runtimePath := shellruntime.RuntimeFile(home, "hyprland.lua")
+	writeTestFile(t, statePath, shellruntime.Caelestia+"\n")
+	writeTestFile(t, runtimePath, "existing runtime\n")
+
+	err := writeHyprRuntimeShellState(home, hyprDir)
+	if err == nil || !strings.Contains(err.Error(), "shell keybind profile missing") {
+		t.Fatalf("expected preflight asset error, got %v", err)
+	}
+	if got := readTestFile(t, runtimePath); got != "existing runtime\n" {
+		t.Fatalf("runtime changed before validation completed: %q", got)
+	}
+	if got := readTestFile(t, statePath); got != shellruntime.Caelestia+"\n" {
+		t.Fatalf("active state changed after failed generation: %q", got)
+	}
+}
+
+func TestWriteHyprRuntimeShellStateRollsBackEveryMutationFault(t *testing.T) {
+	injected := errors.New("injected runtime publication fault")
+	profile, _ := shellruntime.ProfileByID(shellruntime.End4)
+	operationCount := len(buildRuntimeTransactionPlan("/test/home", "/test/home/.config/hypr", profile).paths())
+
+	for faultIndex := range operationCount {
+		t.Run(fmt.Sprintf("operation-%02d", faultIndex+1), func(t *testing.T) {
+			t.Setenv("XDG_STATE_HOME", "")
+			home := t.TempDir()
+			hyprDir := filepath.Join(home, ".config", "hypr")
+			writeRuntimeProfileAssets(t, home, hyprDir, profile)
+			writeTestFile(t, shellruntime.ActiveShellStatePath(home), shellruntime.End4+"\n")
+
+			plan := buildRuntimeTransactionPlan(home, hyprDir, profile)
+			initializeRuntimeTransactionBaseline(t, plan, home)
+			writeModeTestFile(t, shellruntime.ActiveShellStatePath(home), shellruntime.End4+"\n", 0o600)
+			writeModeTestFile(t, shellruntime.End4VariantStatePath(home), shellruntime.End4PC+"\n", 0o640)
+			before := snapshotRuntimePlan(t, plan)
+
+			operation := 0
+			err := writeHyprRuntimeShellStateWithHook(home, hyprDir, func(_, _ string) error {
+				if operation == faultIndex {
+					return injected
+				}
+				operation++
+				return nil
+			})
+			if !errors.Is(err, injected) {
+				t.Fatalf("runtime error = %v, want injected failure at operation %d", err, faultIndex+1)
+			}
+			assertRuntimePlanSnapshot(t, plan, before)
+		})
+	}
+}
+
+func TestWriteHyprRuntimeShellStateLeavesSelectionStateUntouchedOnRuntimeFailure(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	profile, _ := shellruntime.ProfileByID(shellruntime.End4PC)
+	writeRuntimeProfileAssets(t, home, hyprDir, profile)
+	writeModeTestFile(t, shellruntime.RuntimeFile(home, "hyprland.lua"), shellruntime.CanonicalEntrypoint(), 0o600)
+	writeModeTestFile(t, shellruntime.RuntimeFile(home, "shell-keybinds.lua"), shellruntime.AdapterMarker(shellruntime.End4PC)+"\n", 0o600)
+	writeModeTestFile(t, shellruntime.ActiveShellStatePath(home), "invalid-active\n", 0o600)
+	writeModeTestFile(t, shellruntime.End4VariantStatePath(home), shellruntime.End4+"\n", 0o640)
+
+	injected := errors.New("injected runtime write fault")
+	err := writeHyprRuntimeShellStateWithHook(home, hyprDir, func(operation, path string) error {
+		if operation == runtimeMutationWrite && path == shellruntime.RuntimeFile(home, "shell-keybinds.lua") {
+			return injected
+		}
+		return nil
+	})
+	if !errors.Is(err, injected) {
+		t.Fatalf("runtime error = %v, want runtime write failure", err)
+	}
+	assertTestFileState(t, shellruntime.ActiveShellStatePath(home), "invalid-active\n", 0o600)
+	assertTestFileState(t, shellruntime.End4VariantStatePath(home), shellruntime.End4+"\n", 0o640)
+}
+
+func TestWriteHyprRuntimeShellStateLeavesStateSymlinksUntouched(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	profile, _ := shellruntime.ProfileByID(shellruntime.End4)
+	writeRuntimeProfileAssets(t, home, hyprDir, profile)
+	activeTarget := filepath.Join(home, "user-state", "active-shell")
+	variantTarget := filepath.Join(home, "user-state", "end4-variant")
+	writeModeTestFile(t, activeTarget, shellruntime.End4+"\n", 0o600)
+	writeModeTestFile(t, variantTarget, shellruntime.End4PC+"\n", 0o640)
+	for path, target := range map[string]string{
+		shellruntime.ActiveShellStatePath(home): activeTarget,
+		shellruntime.End4VariantStatePath(home): variantTarget,
 	} {
-		path := filepath.Join(hyprDir, rel)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(path, []byte("placeholder\n"), 0o644); err != nil {
+		if err := os.Symlink(target, path); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Dir(paths.ActiveShellStatePath(home)), 0o755); err != nil {
-		t.Fatal(err)
+	err := writeHyprRuntimeShellState(home, hyprDir)
+	if err != nil {
+		t.Fatalf("runtime error = %v, want state symlinks left outside runtime transaction", err)
 	}
-	if err := os.WriteFile(paths.ActiveShellStatePath(home), []byte("end4\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
-		t.Fatal(err)
-	}
-
-	for _, tc := range []struct {
-		path string
-		want string
-	}{
-		{path: filepath.Join(runtimeDir, "hyprland.lua"), want: `dofile(end4_root .. "/hyprland.lua")`},
-		{path: filepath.Join(runtimeDir, "hyprlock.conf"), want: "source = " + filepath.Join(hyprDir, "end4", "hyprlock.conf")},
-		{path: filepath.Join(runtimeDir, "hypridle.conf"), want: "source = " + filepath.Join(hyprDir, "end4", "hypridle.conf")},
-		{path: filepath.Join(runtimeDir, "shell-launcher.lua"), want: "Active shell launcher profile: end4"},
-		{path: filepath.Join(runtimeDir, "shell-keybinds.lua"), want: "Active shell keybind profile: end4"},
+	for path, wantTarget := range map[string]string{
+		shellruntime.ActiveShellStatePath(home): activeTarget,
+		shellruntime.End4VariantStatePath(home): variantTarget,
 	} {
-		data, err := os.ReadFile(tc.path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(string(data), tc.want) {
-			t.Fatalf("expected %s to contain %q\n%s", tc.path, tc.want, string(data))
+		gotTarget, err := os.Readlink(path)
+		if err != nil || gotTarget != wantTarget {
+			t.Fatalf("state symlink was not restored for %s: got %q want %q err=%v", path, gotTarget, wantTarget, err)
 		}
 	}
+}
 
-	entrypoint, err := os.ReadFile(filepath.Join(runtimeDir, "hyprland.lua"))
+func TestWriteHyprRuntimeShellStateLeavesAbsentVariantAbsent(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	profile, _ := shellruntime.ProfileByID(shellruntime.End4PC)
+	writeRuntimeProfileAssets(t, home, hyprDir, profile)
+	writeModeTestFile(t, shellruntime.RuntimeFile(home, "hyprland.lua"), shellruntime.CanonicalEntrypoint(), 0o600)
+	writeModeTestFile(t, shellruntime.RuntimeFile(home, "shell-keybinds.lua"), shellruntime.AdapterMarker(shellruntime.End4PC)+"\n", 0o600)
+	writeModeTestFile(t, shellruntime.ActiveShellStatePath(home), "invalid-active\n", 0o600)
+
+	err := writeHyprRuntimeShellState(home, hyprDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	entrypointText := string(entrypoint)
-	if strings.Contains(entrypointText, shellruntime.RuntimeFile(home, "shell-profile.lua")) {
-		t.Fatalf("end4 entrypoint should not source Wahrwelt shell profile\n%s", entrypointText)
+	if _, err := os.Lstat(shellruntime.End4VariantStatePath(home)); !os.IsNotExist(err) {
+		t.Fatalf("absent remembered variant was published by runtime rendering: %v", err)
 	}
-	if strings.Contains(entrypointText, filepath.Join(hyprDir, "runtime", "shell-profile.lua")) {
-		t.Fatalf("end4 entrypoint should not source old hypr runtime path\n%s", entrypointText)
+	assertTestFileState(t, shellruntime.ActiveShellStatePath(home), "invalid-active\n", 0o600)
+}
+
+func TestWriteHyprRuntimeShellStatePreflightsAllPathCollisions(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	profile, _ := shellruntime.ProfileByID(shellruntime.Caelestia)
+	writeRuntimeProfileAssets(t, home, hyprDir, profile)
+	writeModeTestFile(t, shellruntime.ActiveShellStatePath(home), profile.ID+"\n", 0o600)
+	legacyPath := filepath.Join(hyprDir, "hyprland.conf")
+	writeModeTestFile(t, legacyPath, "legacy bytes\n", 0o640)
+	collision := shellruntime.RuntimeFile(home, "shell-keybinds.lua")
+	if err := os.MkdirAll(collision, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	err := writeHyprRuntimeShellState(home, hyprDir)
+	if err == nil || !strings.Contains(err.Error(), "non-regular shell runtime collision") {
+		t.Fatalf("expected transaction path collision, got %v", err)
+	}
+	assertTestFileState(t, legacyPath, "legacy bytes\n", 0o640)
+	assertTestFileState(t, shellruntime.ActiveShellStatePath(home), profile.ID+"\n", 0o600)
+	info, statErr := os.Lstat(collision)
+	if statErr != nil || !info.IsDir() {
+		t.Fatalf("runtime collision changed: info=%v err=%v", info, statErr)
+	}
+}
+
+func TestRemoveLegacyRuntimeFileRejectsUnknownRegularAndSymlink(t *testing.T) {
+	for _, kind := range []string{"regular", "symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, "hyprland.conf")
+			var wantTarget string
+			switch kind {
+			case "regular":
+				writeModeTestFile(t, path, "user-owned legacy runtime\n", 0o600)
+			case "symlink":
+				wantTarget = filepath.Join(root, "user-owned-target")
+				writeModeTestFile(t, wantTarget, "user-owned symlink target\n", 0o600)
+				if err := os.Symlink(wantTarget, path); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			err := removeLegacyRuntimeFile(path)
+			if err == nil || !strings.Contains(err.Error(), "unowned legacy Hyprland runtime collision") {
+				t.Fatalf("expected ownership collision, got %v", err)
+			}
+			if kind == "regular" {
+				assertTestFileState(t, path, "user-owned legacy runtime\n", 0o600)
+				return
+			}
+			if got, readErr := os.Readlink(path); readErr != nil || got != wantTarget {
+				t.Fatalf("unknown symlink changed: target=%q err=%v", got, readErr)
+			}
+		})
+	}
+}
+
+func TestWriteHyprRuntimeShellStateRejectsUnknownTopLevelEntrypoint(t *testing.T) {
+	for _, kind := range []string{"regular", "symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			t.Setenv("XDG_STATE_HOME", "")
+			home := t.TempDir()
+			hyprDir := filepath.Join(home, ".config", "hypr")
+			profile, _ := shellruntime.ProfileByID(shellruntime.Caelestia)
+			writeRuntimeProfileAssets(t, home, hyprDir, profile)
+			writeTestFile(t, shellruntime.ActiveShellStatePath(home), profile.ID+"\n")
+			path := filepath.Join(hyprDir, "hyprland.lua")
+			var wantTarget string
+			switch kind {
+			case "regular":
+				writeModeTestFile(t, path, "user-owned entrypoint\n", 0o600)
+			case "symlink":
+				wantTarget = filepath.Join(home, "user-owned-entrypoint")
+				writeModeTestFile(t, wantTarget, "user-owned symlink target\n", 0o600)
+				if err := os.Symlink(wantTarget, path); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			err := writeHyprRuntimeShellState(home, hyprDir)
+			if err == nil || !strings.Contains(err.Error(), "unowned top-level Hyprland runtime collision") {
+				t.Fatalf("expected top-level ownership collision, got %v", err)
+			}
+			if kind == "regular" {
+				assertTestFileState(t, path, "user-owned entrypoint\n", 0o600)
+				return
+			}
+			if got, readErr := os.Readlink(path); readErr != nil || got != wantTarget {
+				t.Fatalf("unknown top-level symlink changed: target=%q err=%v", got, readErr)
+			}
+		})
+	}
+}
+
+func TestRuntimeTransactionRollbackPreservesConcurrentWinner(t *testing.T) {
+	for _, kind := range []string{"regular", "symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, "runtime.lua")
+			injected := errors.New("injected post-write failure")
+			tx, err := beginRuntimeFileTransaction([]string{path}, func(operation, gotPath string) error {
+				if operation != runtimeMutationWrite || gotPath != path {
+					t.Fatalf("unexpected mutation hook: %s %s", operation, gotPath)
+				}
+				if err := os.Remove(path); err != nil {
+					return err
+				}
+				if kind == "regular" {
+					return errors.Join(os.WriteFile(path, []byte("concurrent winner\n"), 0o600), injected)
+				}
+				target := filepath.Join(root, "concurrent-target")
+				if err := os.WriteFile(target, []byte("concurrent symlink target\n"), 0o600); err != nil {
+					return err
+				}
+				if err := os.Symlink(target, path); err != nil {
+					return err
+				}
+				return injected
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = tx.mutate(runtimeMutationWrite, path, func() (runtimePathState, error) {
+				if err := os.WriteFile(path, []byte("transaction-owned result\n"), 0o644); err != nil {
+					return runtimePathState{}, err
+				}
+				return snapshotRuntimePathState(path)
+			})
+			if !errors.Is(err, injected) {
+				t.Fatalf("transaction error = %v, want injected failure", err)
+			}
+			if kind == "regular" {
+				assertTestFileState(t, path, "concurrent winner\n", 0o600)
+				return
+			}
+			if info, statErr := os.Lstat(path); statErr != nil || info.Mode()&os.ModeSymlink == 0 {
+				t.Fatalf("concurrent symlink winner was replaced: info=%v err=%v", info, statErr)
+			}
+		})
+	}
+}
+
+func TestRuntimeTransactionRollbackRetainsOriginalRecoveryForConcurrentWinner(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "runtime.lua")
+	writeModeTestFile(t, path, "prior managed runtime\n", 0o640)
+	injected := errors.New("injected post-write failure")
+	tx, err := beginRuntimeFileTransaction([]string{path}, func(operation, gotPath string) error {
+		if operation != runtimeMutationWrite || gotPath != path {
+			t.Fatalf("unexpected mutation hook: %s %s", operation, gotPath)
+		}
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, []byte("concurrent winner\n"), 0o600); err != nil {
+			return err
+		}
+		return injected
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.close()
+
+	err = tx.mutate(runtimeMutationWrite, path, func() (runtimePathState, error) {
+		if err := os.WriteFile(path, []byte("transaction-owned result\n"), 0o644); err != nil {
+			return runtimePathState{}, err
+		}
+		return snapshotRuntimePathState(path)
+	})
+	if !errors.Is(err, injected) || !strings.Contains(err.Error(), "recovery retained at") {
+		t.Fatalf("transaction error = %v, want injected failure with retained recovery", err)
+	}
+	assertTestFileState(t, path, "concurrent winner\n", 0o600)
+	recovery := tx.recovery[path]
+	if recovery == nil || recovery.retained == "" {
+		t.Fatal("original runtime recovery was not retained")
+	}
+	assertTestFileState(t, recovery.retained, "prior managed runtime\n", 0o640)
+}
+
+func TestRuntimeTransactionDoesNotBlessWinnerBetweenPublicationAndOwnershipRecord(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "runtime.lua")
+	injected := errors.New("injected failure after ownership record")
+	tx, err := beginRuntimeFileTransaction([]string{path}, func(_, _ string) error { return injected })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.close()
+
+	err = tx.mutate(runtimeMutationWrite, path, func() (runtimePathState, error) {
+		owned, err := publishRuntimeRegularFile(path, []byte("transaction-owned result\n"), 0o644, tx.states[path], tx.parents[filepath.Dir(path)])
+		if err != nil {
+			return runtimePathState{}, err
+		}
+		if err := os.Remove(path); err != nil {
+			return runtimePathState{}, err
+		}
+		if err := os.WriteFile(path, []byte("winner between publication and record\n"), 0o600); err != nil {
+			return runtimePathState{}, err
+		}
+		return owned, nil
+	})
+	if !errors.Is(err, injected) {
+		t.Fatalf("transaction error = %v, want injected failure", err)
+	}
+	assertTestFileState(t, path, "winner between publication and record\n", 0o600)
+}
+
+func TestRuntimeTransactionPinnedParentRejectsSwapWithoutWritingVictim(t *testing.T) {
+	root := t.TempDir()
+	parent := filepath.Join(root, "runtime-parent")
+	if err := os.Mkdir(parent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(parent, "runtime.lua")
+	tx, err := beginRuntimeFileTransaction([]string{path}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.close()
+	victim := filepath.Join(root, "victim")
+	if err := os.Mkdir(victim, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	movedParent := filepath.Join(root, "pinned-parent-recovery")
+	if err := os.Rename(parent, movedParent); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, parent); err != nil {
+		t.Fatal(err)
+	}
+
+	err = tx.mutate(runtimeMutationWrite, path, func() (runtimePathState, error) {
+		return publishRuntimeRegularFile(path, []byte("must not reach victim\n"), 0o644, tx.states[path], tx.parents[filepath.Dir(path)])
+	})
+	if err == nil || !strings.Contains(err.Error(), "parent directory changed") {
+		t.Fatalf("expected pinned-parent rejection, got %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(victim, "runtime.lua")); !os.IsNotExist(err) {
+		t.Fatalf("parent swap wrote outside runtime namespace: %v", err)
+	}
+}
+
+func TestRuntimeTransactionPinsMissingParentAncestorAtBegin(t *testing.T) {
+	root := t.TempDir()
+	ancestor := filepath.Join(root, "runtime-ancestor")
+	if err := os.Mkdir(ancestor, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	parent := filepath.Join(ancestor, "missing", "runtime-parent")
+	path := filepath.Join(parent, "runtime.lua")
+	tx, err := beginRuntimeFileTransaction([]string{path}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.close()
+
+	victim := filepath.Join(root, "victim")
+	if err := os.Mkdir(victim, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	movedAncestor := filepath.Join(root, "pinned-missing-ancestor-recovery")
+	if err := os.Rename(ancestor, movedAncestor); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, ancestor); err != nil {
+		t.Fatal(err)
+	}
+
+	plan := runtimeTransactionPlan{publications: []runtimePublication{{path: path}}}
+	err = tx.pinPublicationParents(plan)
+	if err == nil || !strings.Contains(err.Error(), "parent directory changed") {
+		t.Fatalf("expected begin-time anchor rejection, got %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(victim, "missing", "runtime-parent", "runtime.lua")); !os.IsNotExist(err) {
+		t.Fatalf("missing-parent ancestor swap wrote outside runtime namespace: %v", err)
+	}
+}
+
+func TestRuntimeTransactionPinsBeforeSnapshotForAbsentTarget(t *testing.T) {
+	for _, scenario := range []string{"existing-parent", "missing-parent-ancestor"} {
+		t.Run(scenario, func(t *testing.T) {
+			root := t.TempDir()
+			ancestor := filepath.Join(root, "runtime-ancestor")
+			if err := os.Mkdir(ancestor, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			parent := ancestor
+			if scenario == "missing-parent-ancestor" {
+				parent = filepath.Join(ancestor, "missing", "runtime-parent")
+			}
+			path := filepath.Join(parent, "runtime.lua")
+			movedAncestor := filepath.Join(root, "pinned-runtime-ancestor")
+			victim := filepath.Join(root, "victim")
+			if err := os.Mkdir(victim, 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			_, err := beginRuntimeFileTransactionWithHooks([]string{path}, nil, nil, func(gotPath string) error {
+				if gotPath != path {
+					t.Fatalf("begin hook path = %s, want %s", gotPath, path)
+				}
+				if err := os.Rename(ancestor, movedAncestor); err != nil {
+					return err
+				}
+				if err := os.Symlink(victim, ancestor); err != nil {
+					return err
+				}
+				return nil
+			})
+			if err == nil || !strings.Contains(err.Error(), "parent directory changed") {
+				t.Fatalf("expected pin-before-snapshot rejection, got %v", err)
+			}
+			if _, err := os.Lstat(filepath.Join(victim, "runtime.lua")); !os.IsNotExist(err) {
+				t.Fatalf("begin-time parent swap created a victim runtime path: %v", err)
+			}
+			if _, err := os.Lstat(filepath.Join(victim, "missing", "runtime-parent", "runtime.lua")); !os.IsNotExist(err) {
+				t.Fatalf("begin-time ancestor swap created a victim runtime path: %v", err)
+			}
+		})
+	}
+}
+
+func TestRuntimeTransactionRejectsLegacyPathAppearingBelowMissingParent(t *testing.T) {
+	root := t.TempDir()
+	hyprDir := filepath.Join(root, "hypr")
+	if err := os.Mkdir(hyprDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(hyprDir, "wahrwelt", "hyprland.conf")
+	unknown := "concurrent legacy runtime\n"
+	plan := runtimeTransactionPlan{removals: []string{path}}
+	tx, err := beginRuntimeFileTransactionWithHooks(plan.paths(), nil, nil, func(gotPath string) error {
+		if gotPath != path {
+			t.Fatalf("begin hook path = %s, want %s", gotPath, path)
+		}
+		if err := os.Mkdir(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(path, []byte(unknown), 0o600)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tx.pinPublicationParents(plan)
+	err = tx.finish(err)
+	if err == nil || !strings.Contains(err.Error(), "changed while pinning parent") {
+		t.Fatalf("late legacy path error = %v, want ownership collision", err)
+	}
+	assertTestFileState(t, path, unknown, 0o600)
+}
+
+func TestRuntimeRegularReplacementPreservesExternalHardlink(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "runtime.lua")
+	alias := filepath.Join(root, "external-alias.lua")
+	writeModeTestFile(t, path, "prior shared bytes\n", 0o640)
+	if err := os.Link(path, alias); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Lstat(alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := beginRuntimeFileTransaction([]string{path}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tx.mutate(runtimeMutationWrite, path, func() (runtimePathState, error) {
+		return publishRuntimeRegularFile(path, []byte("new managed bytes\n"), 0o644, tx.states[path], tx.parents[filepath.Dir(path)])
+	})
+	err = tx.finish(err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertTestFileState(t, alias, "prior shared bytes\n", 0o640)
+	assertTestFileState(t, path, "new managed bytes\n", 0o644)
+	after, err := os.Lstat(alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+	published, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(before, after) {
+		t.Fatal("external hardlink inode changed")
+	}
+	if os.SameFile(after, published) {
+		t.Fatal("managed runtime replacement reused the externally linked inode")
+	}
+	assertOnlyRuntimeRecoveryResidue(t, root, 1)
+}
+
+func TestRuntimeReplacementRestoresExactPairAfterCandidateReplacement(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "runtime.lua")
+	writeModeTestFile(t, path, "prior managed bytes\n", 0o640)
+	expected, err := snapshotRuntimePathState(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory, err := openPinnedRuntimeDirectory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer directory.close()
+	unknown := "candidate basename replacement\n"
+	var recoveryPath string
+	_, err = replaceRuntimeRegularAtWithExchangeHook(
+		directory,
+		filepath.Base(path),
+		path,
+		expected,
+		[]byte("new managed bytes\n"),
+		0o644,
+		true,
+		func(candidatePath string) error {
+			recoveryPath = candidatePath
+			if err := os.Remove(candidatePath); err != nil {
+				return err
+			}
+			return os.WriteFile(candidatePath, []byte(unknown), 0o600)
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "exact pair restored") {
+		t.Fatalf("candidate replacement error = %v, want exact pair rollback", err)
+	}
+	assertTestFileState(t, path, "prior managed bytes\n", 0o640)
+	assertTestFileState(t, recoveryPath, unknown, 0o600)
+}
+
+func TestRuntimeCreatedDirectoryCleanupPreservesConcurrentReplacement(t *testing.T) {
+	for _, scenario := range []string{"replacement", "concurrent-content"} {
+		t.Run(scenario, func(t *testing.T) {
+			root := t.TempDir()
+			parent := filepath.Join(root, "runtime-parent")
+			path := filepath.Join(parent, "runtime.lua")
+			tx, err := beginRuntimeFileTransaction([]string{path}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan := runtimeTransactionPlan{publications: []runtimePublication{{path: path}}}
+			if err := tx.pinPublicationParents(plan); err != nil {
+				t.Fatal(err)
+			}
+			winner := filepath.Join(parent, "winner")
+			switch scenario {
+			case "replacement":
+				recovery := filepath.Join(root, "transaction-created-parent")
+				if err := os.Rename(parent, recovery); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Mkdir(parent, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			case "concurrent-content":
+			}
+			writeModeTestFile(t, winner, "concurrent winner\n", 0o600)
+			injected := errors.New("injected precommit failure")
+			err = tx.finish(injected)
+			if !errors.Is(err, injected) {
+				t.Fatalf("finish error = %v, want injected failure", err)
+			}
+			assertTestFileState(t, winner, "concurrent winner\n", 0o600)
+		})
+	}
+}
+
+func TestRuntimeDirectoryCandidateReplacementIsNeverAdopted(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "runtime-parent", "runtime.lua")
+	tx, err := beginRuntimeFileTransaction([]string{path}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := tx.anchors[filepath.Dir(path)]
+	if parent == nil {
+		t.Fatal("missing begin-time runtime parent anchor")
+	}
+	var candidatePath string
+	var ownedRecovery string
+	_, err = tx.createAndJournalRuntimeDirectoryWithHook(parent, "runtime-parent", filepath.Dir(path), func(path string) error {
+		candidatePath = path
+		ownedRecovery = filepath.Join(root, "transaction-created-directory")
+		if err := os.Rename(path, ownedRecovery); err != nil {
+			return err
+		}
+		return os.Mkdir(path, 0o711)
+	})
+	err = tx.finish(err)
+	if err == nil || !strings.Contains(err.Error(), "transaction recovery retained at "+ownedRecovery) {
+		t.Fatalf("candidate replacement error = %v, want exact retained recovery", err)
+	}
+	unknown, err := os.Stat(candidatePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := unknown.Mode().Perm(), os.FileMode(0o711); got != want {
+		t.Fatalf("unknown candidate mode = %o, want %o", got, want)
+	}
+	owned, err := os.Stat(ownedRecovery)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := owned.Mode().Perm(), os.FileMode(0o755); got != want {
+		t.Fatalf("transaction-owned recovery mode = %o, want %o", got, want)
+	}
+	if _, err := os.Lstat(filepath.Dir(path)); !os.IsNotExist(err) {
+		t.Fatalf("unknown candidate was published at the runtime parent: %v", err)
+	}
+}
+
+func TestRuntimeDirectoryCandidateReplacementBeforePinIsNeverAdopted(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "runtime-parent", "runtime.lua")
+	tx, err := beginRuntimeFileTransaction([]string{path}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := tx.anchors[filepath.Dir(path)]
+	if parent == nil {
+		t.Fatal("missing begin-time runtime parent anchor")
+	}
+	var candidatePath string
+	var ownedRecovery string
+	_, err = tx.createAndJournalRuntimeDirectoryWithHooks(
+		parent,
+		"runtime-parent",
+		filepath.Dir(path),
+		func(createdPath string) error {
+			candidatePath = createdPath
+			ownedRecovery = filepath.Join(root, "created-directory-before-pin")
+			if err := os.Rename(createdPath, ownedRecovery); err != nil {
+				return err
+			}
+			return os.Mkdir(createdPath, 0o711)
+		},
+		nil,
+	)
+	err = tx.finish(err)
+	if err == nil || !strings.Contains(err.Error(), "changed before pin") {
+		t.Fatalf("candidate pre-pin replacement error = %v, want creator-token rejection", err)
+	}
+	unknown, err := os.Stat(candidatePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := unknown.Mode().Perm(), os.FileMode(0o711); got != want {
+		t.Fatalf("unknown candidate mode = %o, want %o", got, want)
+	}
+	owned, err := os.Stat(ownedRecovery)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := owned.Mode().Perm(), os.FileMode(0o700); got != want {
+		t.Fatalf("created candidate recovery mode = %o, want %o", got, want)
+	}
+	if _, err := os.Lstat(filepath.Dir(path)); !os.IsNotExist(err) {
+		t.Fatalf("unknown candidate was published at the runtime parent: %v", err)
+	}
+}
+
+func TestRuntimeRemovalQuarantinesRacedUnknownInsteadOfDeleting(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "hyprland.conf")
+	originalRecovery := filepath.Join(root, "original-managed.conf")
+	writeModeTestFile(t, path, "known managed bytes\n", 0o640)
+	state, err := snapshotRuntimePathState(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory, err := openPinnedRuntimeDirectory(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer directory.close()
+	quarantine, err := quarantineRuntimePathStateWithHook(path, state, directory, true, func() error {
+		if err := os.Rename(path, originalRecovery); err != nil {
+			return err
+		}
+		return os.WriteFile(path, []byte("raced unknown bytes\n"), 0o600)
+	})
+	if err == nil || !strings.Contains(err.Error(), "restored unknown entry") {
+		t.Fatalf("expected raced removal rejection, got quarantine=%v err=%v", quarantine, err)
+	}
+	assertTestFileState(t, path, "raced unknown bytes\n", 0o600)
+	assertTestFileState(t, originalRecovery, "known managed bytes\n", 0o640)
+	assertNoRuntimeTransactionResidue(t, root)
+}
+
+func TestRuntimeTransactionJournalFailureRollsBackVisibleMutation(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "runtime.lua")
+	injected := errors.New("injected journal failure")
+	tx, err := beginRuntimeFileTransactionWithJournalHook([]string{path}, nil, func(stage runtimeJournalStage, gotPath string) error {
+		if stage == runtimeJournalMutation && gotPath == path {
+			return injected
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tx.mutate(runtimeMutationWrite, path, func() (runtimePathState, error) {
+		return publishRuntimeRegularFile(path, []byte("must roll back\n"), 0o644, tx.states[path], tx.parents[filepath.Dir(path)])
+	})
+	err = tx.finish(err)
+	if !errors.Is(err, injected) {
+		t.Fatalf("transaction error = %v, want journal failure", err)
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatalf("journal failure left a visible runtime mutation: %v", err)
+	}
+	assertOnlyRuntimeRecoveryResidue(t, root, 1)
+}
+
+func TestRuntimeDirectoryJournalFailureRemovesExactCreatedChain(t *testing.T) {
+	root := t.TempDir()
+	parent := filepath.Join(root, "missing", "runtime-parent")
+	path := filepath.Join(parent, "runtime.lua")
+	injected := errors.New("injected directory journal failure")
+	tx, err := beginRuntimeFileTransactionWithJournalHook([]string{path}, nil, func(stage runtimeJournalStage, _ string) error {
+		if stage == runtimeJournalDirectory {
+			return injected
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := runtimeTransactionPlan{publications: []runtimePublication{{path: path}}}
+	err = tx.pinPublicationParents(plan)
+	err = tx.finish(err)
+	if !errors.Is(err, injected) {
+		t.Fatalf("transaction error = %v, want directory journal failure", err)
+	}
+	if _, err := os.Lstat(filepath.Join(root, "missing")); !os.IsNotExist(err) {
+		t.Fatalf("directory journal failure left a created chain: %v", err)
+	}
+	assertOnlyRuntimeRecoveryResidue(t, root, 1)
+}
+
+func TestRuntimeTransactionRollbackUsesPinnedParentAfterCanonicalSwap(t *testing.T) {
+	root := t.TempDir()
+	parent := filepath.Join(root, "runtime-parent")
+	if err := os.Mkdir(parent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(parent, "runtime.lua")
+	writeModeTestFile(t, path, "prior managed runtime\n", 0o640)
+	injected := errors.New("injected post-publication parent swap")
+	tx, err := beginRuntimeFileTransaction([]string{path}, func(operation, gotPath string) error {
+		if operation != runtimeMutationWrite || gotPath != path {
+			t.Fatalf("unexpected mutation hook: %s %s", operation, gotPath)
+		}
+		movedParent := filepath.Join(root, "pinned-parent-after-publication")
+		if err := os.Rename(parent, movedParent); err != nil {
+			return err
+		}
+		if err := os.Mkdir(parent, 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, []byte("concurrent canonical winner\n"), 0o600); err != nil {
+			return err
+		}
+		return injected
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.close()
+
+	err = tx.mutate(runtimeMutationWrite, path, func() (runtimePathState, error) {
+		return publishRuntimeRegularFile(path, []byte("transaction-owned result\n"), 0o644, tx.states[path], tx.parents[filepath.Dir(path)])
+	})
+	if err == nil || !strings.Contains(err.Error(), "after write") {
+		t.Fatalf("transaction error = %v, want post-publication rollback failure", err)
+	}
+	assertTestFileState(t, filepath.Join(root, "pinned-parent-after-publication", "runtime.lua"), "prior managed runtime\n", 0o640)
+	assertTestFileState(t, path, "concurrent canonical winner\n", 0o600)
+}
+
+func TestRemoveLegacyRuntimeFileAcceptsExactGeneratedPayloadAndProvenSymlink(t *testing.T) {
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	paths := legacyHyprlandRuntimePaths(home, hyprDir)
+	regular := paths[0]
+	payloads := knownLegacyRuntimePayloads(regular, home, hyprDir)
+	if len(payloads) == 0 {
+		t.Fatal("missing generated legacy payload fixture")
+	}
+	writeModeTestFile(t, regular, payloads[0], 0o640)
+	state, err := snapshotRuntimePathState(regular)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory, err := openPinnedDirectory(filepath.Dir(regular))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer directory.close()
+	if _, err := removeLegacyRuntimeFileWithState(regular, state, directory, home, hyprDir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(regular); !os.IsNotExist(err) {
+		t.Fatalf("known generated legacy regular remains: %v", err)
+	}
+
+	target := paths[5]
+	targetPayloads := knownLegacyRuntimePayloads(target, home, hyprDir)
+	if len(targetPayloads) == 0 {
+		t.Fatal("missing generated legacy target fixture")
+	}
+	writeModeTestFile(t, target, targetPayloads[0], 0o640)
+	link := paths[1]
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	state, err = snapshotRuntimePathState(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := removeLegacyRuntimeFileWithState(link, state, directory, home, hyprDir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(link); !os.IsNotExist(err) {
+		t.Fatalf("known generated legacy symlink remains: %v", err)
+	}
+	assertTestFileState(t, target, targetPayloads[0], 0o640)
+}
+
+func initializeRuntimeTransactionBaseline(t *testing.T, plan runtimeTransactionPlan, home string) {
+	t.Helper()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	legacy := make(map[string]bool, len(legacyHyprlandRuntimePaths(home, hyprDir)))
+	for _, path := range legacyHyprlandRuntimePaths(home, hyprDir) {
+		legacy[path] = true
+	}
+	for index, path := range plan.paths() {
+		if path == shellruntime.ActiveShellStatePath(home) || path == shellruntime.End4VariantStatePath(home) {
+			continue
+		}
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		if path == filepath.Join(hyprDir, "hyprland.lua") {
+			writeModeTestFile(t, path, knownTopLevelRuntimeEntrypoints(home)[0], 0o600|os.FileMode(index%8))
+			continue
+		}
+		if legacy[path] {
+			payloads := knownLegacyRuntimePayloads(path, home, hyprDir)
+			if len(payloads) == 0 {
+				t.Fatalf("missing known legacy fixture for %s", path)
+			}
+			writeModeTestFile(t, path, payloads[0], 0o600|os.FileMode(index%8))
+			continue
+		}
+		switch index % 2 {
+		case 0:
+			writeModeTestFile(t, path, fmt.Sprintf("old bytes %d\n", index), 0o600|os.FileMode(index%8))
+		case 1:
+			// Absence is part of the rollback contract.
+		}
+	}
+}
+
+func snapshotRuntimePlan(t *testing.T, plan runtimeTransactionPlan) map[string]runtimePathSnapshot {
+	t.Helper()
+	snapshots := make(map[string]runtimePathSnapshot, len(plan.paths()))
+	for _, path := range plan.paths() {
+		if _, ok := snapshots[path]; ok {
+			continue
+		}
+		snapshot, err := snapshotRuntimePath(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshots[path] = snapshot
+	}
+	return snapshots
+}
+
+func assertRuntimePlanSnapshot(t *testing.T, plan runtimeTransactionPlan, want map[string]runtimePathSnapshot) {
+	t.Helper()
+	for _, path := range plan.paths() {
+		got, err := snapshotRuntimePath(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got, want[path]) {
+			t.Fatalf("runtime path was not rolled back: %s\ngot:  %#v\nwant: %#v", path, got, want[path])
+		}
+	}
+}
+
+func assertNoRuntimeTransactionResidue(t *testing.T, root string) {
+	t.Helper()
+	var residue []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(entry.Name(), ".wahrwelt-runtime-") {
+			residue = append(residue, path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(residue) != 0 {
+		t.Fatalf("shell runtime transaction residue remains: %v", residue)
+	}
+}
+
+func assertOnlyRuntimeRecoveryResidue(t *testing.T, root string, minimum int) {
+	t.Helper()
+	var recoveries []string
+	var transient []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(entry.Name(), ".wahrwelt-runtime-") {
+			return nil
+		}
+		if strings.HasPrefix(entry.Name(), ".wahrwelt-runtime-recovery-") {
+			recoveries = append(recoveries, path)
+			return nil
+		}
+		transient = append(transient, path)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(transient) != 0 {
+		t.Fatalf("transient shell runtime transaction residue remains: %v", transient)
+	}
+	if len(recoveries) < minimum {
+		t.Fatalf("shell runtime recoveries = %v, want at least %d", recoveries, minimum)
+	}
+}
+
+func writeModeTestFile(t *testing.T, path, content string, mode os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), mode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertTestFileState(t *testing.T, path, content string, mode os.FileMode) {
+	t.Helper()
+	if got := readTestFile(t, path); got != content {
+		t.Fatalf("%s content = %q, want %q", path, got, content)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != mode.Perm() {
+		t.Fatalf("%s mode = %s, want %s", path, info.Mode(), mode)
+	}
+}
+
+func writeRuntimeProfileAssets(t *testing.T, home, hyprDir string, profile shellruntime.Profile) {
+	t.Helper()
+	files := []string{
+		filepath.Join(hyprDir, "user", "hyprland.lua"),
+		filepath.Join(hyprDir, "scripts", "start-shell.sh"),
+		filepath.Join(hyprDir, filepath.FromSlash(profile.Launcher)),
+	}
+	if shellruntime.IsEnd4Profile(profile.ID) {
+		files = append(files,
+			filepath.Join(hyprDir, "end4-adapter.lua"),
+			filepath.Join(hyprDir, "end4", "hyprland.lua"),
+			filepath.Join(hyprDir, "end4", "hyprlock.conf"),
+			filepath.Join(hyprDir, "end4", "hypridle.conf"),
+			filepath.Join(home, ".config", "quickshell", profile.QuickshellConfig, "shell.qml"),
+		)
+	} else {
+		files = append(files, filepath.Join(hyprDir, filepath.FromSlash(profile.Keybinds)))
+	}
+	for _, path := range files {
+		writeTestFile(t, path, "-- test asset\n")
+	}
+}
+
+func writeTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readTestFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func assertFileContains(t *testing.T, path, want string) {
+	t.Helper()
+	got := readTestFile(t, path)
+	if !strings.Contains(got, want) {
+		t.Fatalf("%s missing %q\n%s", path, want, got)
 	}
 }

@@ -42,6 +42,7 @@ let
         --set MYSETUP_REPO_ROOT ${wahrweltRuntimeSource}/NixOS \
         --set WAHRWELT_XKB_RULES_DIR ${flakePkgs.xkeyboard_config}/share/X11/xkb/rules \
         --set MYSETUP_XKB_RULES_DIR ${flakePkgs.xkeyboard_config}/share/X11/xkb/rules \
+        --set WAHRWELT_PRIVILEGED_PYTHON ${flakePkgs.python3}/bin/python3 \
         --prefix PATH : ${
           flakePkgs.lib.makeBinPath (
             with flakePkgs;
@@ -49,6 +50,7 @@ let
               coreutils
               findutils
               gnused
+              python3
               rsync
               mkpasswd
               nix

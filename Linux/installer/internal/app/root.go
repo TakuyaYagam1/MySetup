@@ -122,29 +122,24 @@ func applyCommand(opts *Options) *cobra.Command {
 		Use:   "apply",
 		Short: "Apply saved state to /etc/nixos and user dotfiles",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			state, err := config.LoadExisting(opts.ExistingStatePath())
+			state, loadedStateProof, err := loadApplyState(opts.Options, sourceChannel)
 			if err != nil {
 				return err
-			}
-			if sourceChannel != "" {
-				if !config.IsSourceChannel(sourceChannel) {
-					return fmt.Errorf("source channel must be stable or development")
-				}
-				state.Source.Channel = sourceChannel
 			}
 			secretValues, err := secrets.LoadFromFiles(userPasswordFile)
 			if err != nil {
 				return err
 			}
 			return apply.Run(cmd.Context(), apply.Options{
-				Paths:      opts.Options,
-				State:      state,
-				Secrets:    secretValues,
-				DryRun:     opts.DryRun,
-				AssumeYes:  opts.Yes,
-				SkipSwitch: noSwitch,
-				Layout:     apply.Layout(opts.Layout),
-				LockMode:   apply.LockMode(opts.LockMode),
+				Paths:            opts.Options,
+				State:            state,
+				LoadedStateProof: loadedStateProof,
+				Secrets:          secretValues,
+				DryRun:           opts.DryRun,
+				AssumeYes:        opts.Yes,
+				SkipSwitch:       noSwitch,
+				Layout:           apply.Layout(opts.Layout),
+				LockMode:         apply.LockMode(opts.LockMode),
 			})
 		},
 	}
@@ -154,12 +149,34 @@ func applyCommand(opts *Options) *cobra.Command {
 	return cmd
 }
 
+func loadApplyState(pathOptions paths.Options, sourceChannel string) (config.State, apply.LoadedStateProof, error) {
+	statePath, err := pathOptions.ExistingStatePath()
+	if err != nil {
+		return config.State{}, apply.LoadedStateProof{}, err
+	}
+	state, loadedStateProof, err := apply.LoadStateWithProof(statePath)
+	if err != nil {
+		return config.State{}, apply.LoadedStateProof{}, err
+	}
+	if sourceChannel != "" {
+		if !config.IsSourceChannel(sourceChannel) {
+			return config.State{}, apply.LoadedStateProof{}, fmt.Errorf("source channel must be stable or development")
+		}
+		state.Source.Channel = sourceChannel
+	}
+	return state, loadedStateProof, nil
+}
+
 func doctorCommand(opts *Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
 		Short: "Check current Wahrwelt installation health",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			state, err := loadDoctorState(opts.ExistingStatePath())
+			statePath, err := opts.ExistingStatePath()
+			if err != nil {
+				return err
+			}
+			state, err := loadDoctorState(statePath)
 			if err != nil {
 				return err
 			}
@@ -184,7 +201,11 @@ func cleanupCommand(opts *Options) *cobra.Command {
 		Use:   "cleanup",
 		Short: "Clean safe managed leftovers",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			state, err := loadDoctorState(opts.ExistingStatePath())
+			statePath, err := opts.ExistingStatePath()
+			if err != nil {
+				return err
+			}
+			state, err := loadDoctorState(statePath)
 			if err != nil {
 				return err
 			}
@@ -203,7 +224,11 @@ func printStateCommand(opts *Options) *cobra.Command {
 		Use:   "print-state",
 		Short: "Print the saved machine state as JSON",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			state, err := config.LoadExisting(opts.ExistingStatePath())
+			statePath, err := opts.ExistingStatePath()
+			if err != nil {
+				return err
+			}
+			state, err := config.LoadExisting(statePath)
 			if err != nil {
 				return err
 			}

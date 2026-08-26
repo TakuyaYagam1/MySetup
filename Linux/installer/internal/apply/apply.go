@@ -2,29 +2,45 @@ package apply
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/defaults"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/dots"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
+	"golang.org/x/sys/unix"
 )
 
 type Options struct {
-	Paths      paths.Options
-	State      config.State
-	Secrets    config.Secrets
-	DryRun     bool
-	AssumeYes  bool
-	SkipSwitch bool
-	Layout     Layout
-	LockMode   LockMode
-	Runner     run.CommandRunner
+	Paths            paths.Options
+	State            config.State
+	LoadedStateProof LoadedStateProof
+	Secrets          config.Secrets
+	DryRun           bool
+	AssumeYes        bool
+	SkipSwitch       bool
+	Layout           Layout
+	LockMode         LockMode
+	Runner           run.CommandRunner
+}
+
+// LoadedStateProof can only be created by LoadStateWithProof. Its fields stay
+// private so apply callers cannot assert ownership of arbitrary legacy state.
+type LoadedStateProof struct {
+	path       string
+	normalized []byte
+	info       os.FileInfo
 }
 
 type applyModes struct {
@@ -73,33 +89,55 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	printApplyHeader(src, opts.Paths.NixOSDest, modes)
 
-	staging, err := createStagingDir()
+	workspace, err := createStagingWorkspace()
 	if err != nil {
 		return fmt.Errorf("create staging: %w", err)
 	}
-	defer func() {
-		_ = os.RemoveAll(staging)
-	}()
+	runErr := runStagedApply(ctx, runner, src, workspace, opts, modes)
+	cleanupErr := workspace.cleanup(ctx, runner)
+	if cleanupErr != nil {
+		cleanupErr = workspace.retainedCleanupError(cleanupErr)
+	}
+	workspace.close()
+	if cleanupErr != nil {
+		if runErr != nil {
+			return errors.Join(runErr, cleanupErr)
+		}
+		return cleanupErr
+	}
+	return runErr
+}
 
-	if err := stageConfiguration(ctx, runner, src, staging, opts.State, modes.layout, modes.lockMode); err != nil {
+func runStagedApply(ctx context.Context, runner run.CommandRunner, src paths.Sources, workspace *stagingWorkspace, opts Options, modes applyModes) error {
+	validated, err := prepareStagedApply(ctx, runner, src, workspace.runtimePath, opts, modes, workspace.verifyVisible)
+	if err != nil {
 		return err
 	}
-	if err := prepareStagingHostLocal(ctx, runner, staging, opts.Paths.NixOSDest, opts.State, opts.Secrets, modes.layout); err != nil {
-		return err
-	}
-	if err := lockStagingFlake(ctx, runner, staging, modes.layout, modes.lockMode); err != nil {
-		return err
-	}
-	if err := dryBuildSystem(ctx, runner, staging, opts.State.Host.Hostname); err != nil {
-		return fmt.Errorf("dry-build failed; /etc/nixos was not modified: %w", err)
-	}
+	defer validated.close()
 	if opts.SkipSwitch {
 		fmt.Println("dry-build passed; --no-switch set, stopping before /etc/nixos or dotfile writes")
 		return nil
 	}
-	result, err := writeSystemConfiguration(ctx, runner, staging, opts, modes.layout)
+	if err := workspace.verifyVisible(); err != nil {
+		return fmt.Errorf("staging ownership changed before publication; /etc/nixos was not modified: %w", err)
+	}
+	if err := validated.verify(); err != nil {
+		return fmt.Errorf("validated staging became unavailable before publication; /etc/nixos was not modified: %w", err)
+	}
+	legacyStatePaths, canonicalStatePath := legacyStatePathsForApply(opts)
+	var legacyStateExpectation legacyStateExpectation
+	if canonicalStatePath {
+		legacyStateExpectation, err = legacyStateExpectationForApply(opts, legacyStatePaths)
+		if err != nil {
+			return fmt.Errorf("prepare legacy installer state cleanup proof; live configuration was not modified: %w", err)
+		}
+		if err := preflightLegacyStatePathsWithExpectation(ctx, legacyStatePaths, legacyStateExpectation); err != nil {
+			return fmt.Errorf("preflight legacy installer state cleanup; live configuration was not modified: %w", err)
+		}
+	}
+	result, err := writeSystemConfiguration(ctx, runner, validated.path, opts, modes.layout)
 	if err != nil {
-		return handlePreSwitchError(ctx, runner, opts.Paths.NixOSDest, result.BackupPath, err)
+		return handleSystemWriteFailure(ctx, runner, opts.Paths.NixOSDest, result, err)
 	}
 	if err := dots.Apply(ctx, dots.Options{
 		Sources: src,
@@ -107,7 +145,7 @@ func Run(ctx context.Context, opts Options) error {
 		DryRun:  opts.DryRun,
 		Runner:  runner,
 	}); err != nil {
-		return handlePreSwitchError(ctx, runner, opts.Paths.NixOSDest, result.BackupPath, err)
+		return handleSystemWriteFailure(ctx, runner, opts.Paths.NixOSDest, result, err)
 	}
 	switched, err := switchSystem(ctx, runner, opts)
 	if err != nil {
@@ -118,15 +156,633 @@ func Run(ctx context.Context, opts Options) error {
 		fmt.Println("state not written because system was not activated")
 		return nil
 	}
-	return writeState(ctx, runner, opts.Paths.StatePath, opts.State)
+	if err := writeState(ctx, runner, opts.Paths.StatePath, opts.State); err != nil {
+		return err
+	}
+	if canonicalStatePath {
+		return cleanupLegacyStatePathsWithExpectation(ctx, runner, legacyStatePaths, legacyStateExpectation)
+	}
+	return nil
+}
+
+func legacyStatePathsForApply(opts Options) ([]string, bool) {
+	destination := filepath.Clean(opts.Paths.NixOSDest)
+	canonical := filepath.Join(destination, filepath.Base(paths.DefaultStatePath))
+	if filepath.Clean(opts.Paths.StatePath) != canonical {
+		return nil, false
+	}
+	return []string{
+		filepath.Join(destination, "wahrwelt", "state.json"),
+		filepath.Join(destination, "mysetup", "state.json"),
+	}, true
+}
+
+func legacyStateExpectationForApply(opts Options, legacyStatePaths []string) (legacyStateExpectation, error) {
+	proof := opts.LoadedStateProof
+	if proof.path == "" && proof.info == nil && len(proof.normalized) == 0 {
+		return legacyStateExpectation{}, nil
+	}
+	if proof.path == "" || proof.info == nil || !proof.info.Mode().IsRegular() || len(proof.normalized) == 0 {
+		return legacyStateExpectation{}, fmt.Errorf("invalid loaded state proof")
+	}
+	loadedPath := filepath.Clean(proof.path)
+	allowed := loadedPath == filepath.Clean(opts.Paths.StatePath)
+	for _, candidate := range legacyStatePaths {
+		allowed = allowed || loadedPath == filepath.Clean(candidate)
+	}
+	if !allowed {
+		return legacyStateExpectation{}, fmt.Errorf("loaded state proof path is outside the canonical migration set: %s", loadedPath)
+	}
+	return legacyStateExpectation{
+		normalized: append([]byte(nil), proof.normalized...),
+		loadedPath: loadedPath,
+		loadedInfo: proof.info,
+	}, nil
+}
+
+func prepareStagedApply(ctx context.Context, runner run.CommandRunner, src paths.Sources, staging string, opts Options, modes applyModes, verifyBeforeSnapshot ...func() error) (*validatedStaging, error) {
+	if err := stageConfiguration(ctx, runner, src, staging, opts.State, modes.layout, modes.lockMode); err != nil {
+		return nil, err
+	}
+	if err := prepareStagingHostLocal(ctx, runner, staging, opts.Paths.NixOSDest, opts.State, opts.Secrets, modes.layout); err != nil {
+		return nil, err
+	}
+	if err := lockStagingFlake(ctx, runner, staging, modes.layout, modes.lockMode); err != nil {
+		return nil, err
+	}
+	for _, verify := range verifyBeforeSnapshot {
+		if verify == nil {
+			continue
+		}
+		if err := verify(); err != nil {
+			return nil, fmt.Errorf("staging ownership changed before validation: %w", err)
+		}
+	}
+	validated, err := createValidatedStaging(ctx, runner, staging)
+	if err != nil {
+		return nil, fmt.Errorf("create immutable staging candidate; /etc/nixos was not modified: %w", err)
+	}
+	if err := dryBuildSystem(ctx, runner, validated.path, opts.State.Host.Hostname); err != nil {
+		validated.close()
+		return nil, fmt.Errorf("dry-build failed; /etc/nixos was not modified: %w", err)
+	}
+	return validated, nil
+}
+
+type validatedStaging struct {
+	path      string
+	gcRootDir *os.File
+}
+
+func (v *validatedStaging) close() {
+	if v != nil && v.gcRootDir != nil {
+		_ = v.gcRootDir.Close()
+		v.gcRootDir = nil
+	}
+}
+
+func (v *validatedStaging) verify() error {
+	if v == nil || v.path == "" {
+		return fmt.Errorf("missing validated staging candidate")
+	}
+	if v.gcRootDir == nil {
+		return nil
+	}
+	if err := validateImmutableStagingPath(v.path); err != nil {
+		return err
+	}
+	rootPath := filepath.Join(fileDescriptorPath(v.gcRootDir), "root")
+	target, err := os.Readlink(rootPath)
+	if err != nil {
+		return fmt.Errorf("inspect staging GC root: %w", err)
+	}
+	if target != v.path {
+		return fmt.Errorf("staging GC root changed: got %q want %q", target, v.path)
+	}
+	runtime.KeepAlive(v.gcRootDir)
+	return nil
+}
+
+func createValidatedStaging(ctx context.Context, runner run.CommandRunner, staging string) (*validatedStaging, error) {
+	if runner.IsDryRun() {
+		return &validatedStaging{path: staging}, nil
+	}
+	nixPath, err := trustedValidationCommand("WAHRWELT_VALIDATION_NIX", "nix")
+	if err != nil {
+		return nil, err
+	}
+	nixStorePath, err := trustedValidationCommand("WAHRWELT_VALIDATION_NIX_STORE", "nix-store")
+	if err != nil {
+		return nil, err
+	}
+	// A path flake is copied into the Nix store during the existing dry-build.
+	// Materialising it first does not add a new secret class to the store; it
+	// makes the exact already-store-visible tree explicit so validation and
+	// publication cannot observe different same-UID-writable staging bytes.
+	output, err := runner.Output(ctx, nixPath,
+		"--extra-experimental-features", "nix-command",
+		"store", "add-path",
+		"--name", "wahrwelt-validated-system",
+		staging,
+	)
+	if err != nil {
+		return nil, err
+	}
+	snapshot := strings.TrimSpace(output)
+	if strings.ContainsAny(snapshot, "\r\n") {
+		return nil, fmt.Errorf("nix returned multiple staging paths")
+	}
+	if err := validateImmutableStagingPath(snapshot); err != nil {
+		return nil, err
+	}
+
+	rootDir, err := createPinnedGCRootDirectory(staging)
+	if err != nil {
+		return nil, err
+	}
+	candidate := &validatedStaging{path: snapshot, gcRootDir: rootDir}
+	rootPath := filepath.Join(fileDescriptorPath(rootDir), "root")
+	if err := runner.Command(ctx, nixStorePath, "--add-root", rootPath, "--indirect", "-r", snapshot); err != nil {
+		candidate.close()
+		return nil, fmt.Errorf("register staging GC root: %w", err)
+	}
+	if err := candidate.verify(); err != nil {
+		candidate.close()
+		return nil, err
+	}
+	return candidate, nil
+}
+
+func trustedValidationCommand(environment, name string) (string, error) {
+	candidate := strings.TrimSpace(os.Getenv(environment))
+	if candidate == "" {
+		var err error
+		candidate, err = exec.LookPath(name)
+		if err != nil {
+			return "", fmt.Errorf("locate trusted %s for staging validation: %w", name, err)
+		}
+	}
+	path, err := trustedPrivilegedExecutable(candidate)
+	if err != nil {
+		return "", fmt.Errorf("untrusted %s for staging validation %s: %w", name, candidate, err)
+	}
+	return path, nil
+}
+
+func validateImmutableStagingPath(path string) error {
+	clean := filepath.Clean(path)
+	if path == "" || clean != path || filepath.Dir(clean) != "/nix/store" {
+		return fmt.Errorf("nix returned unsafe staging store path %q", path)
+	}
+	groups, err := os.Getgroups()
+	if err != nil {
+		return fmt.Errorf("inspect caller groups for staging store trust: %w", err)
+	}
+	for _, current := range []string{"/nix", "/nix/store", clean} {
+		var info unix.Stat_t
+		if err := unix.Lstat(current, &info); err != nil {
+			return fmt.Errorf("inspect staging store path %s: %w", current, err)
+		}
+		if info.Mode&unix.S_IFMT != unix.S_IFDIR || info.Uid != 0 || writableByCurrentIdentity(info, groups) {
+			return fmt.Errorf("staging store path is not a root-owned immutable directory: %s", current)
+		}
+	}
+	return nil
+}
+
+func writableByCurrentIdentity(info unix.Stat_t, groups []int) bool {
+	if os.Geteuid() == 0 {
+		return false
+	}
+	if info.Mode&0o002 != 0 {
+		return true
+	}
+	if int64(os.Geteuid()) == int64(info.Uid) {
+		return info.Mode&0o200 != 0
+	}
+	if info.Mode&0o020 == 0 {
+		return false
+	}
+	for _, group := range groups {
+		if int64(group) == int64(info.Gid) {
+			return true
+		}
+	}
+	return false
+}
+
+func createPinnedGCRootDirectory(staging string) (*os.File, error) {
+	path, err := os.MkdirTemp(staging, ".wahrwelt-validation-root-")
+	if err != nil {
+		return nil, err
+	}
+	before, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	file, err := fileFromUnixDescriptor(fd, path)
+	if err != nil {
+		_ = unix.Close(fd)
+		return nil, err
+	}
+	opened, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	if !before.IsDir() || !os.SameFile(before, opened) {
+		_ = file.Close()
+		return nil, fmt.Errorf("staging GC-root directory changed while pinning: %s", path)
+	}
+	return file, nil
+}
+
+func handleSystemWriteFailure(ctx context.Context, runner run.CommandRunner, destination string, result systemWriteResult, cause error) error {
+	if !result.skipAutomaticRestore {
+		return handlePreSwitchError(ctx, runner, destination, result.BackupPath, cause)
+	}
+	if result.BackupPath == "" {
+		return cause
+	}
+	return fmt.Errorf("%w; skipped automatic /etc/nixos restore because a broad restore could remove concurrent canonical user data; backup retained at %s", cause, result.BackupPath)
 }
 
 func createStagingDir() (string, error) {
-	base := stagingBaseDir()
-	if err := os.MkdirAll(base, 0o700); err != nil {
+	workspace, err := createStagingWorkspace()
+	if err != nil {
 		return "", err
 	}
-	return os.MkdirTemp(base, defaults.StagingTempPattern)
+	workspace.close()
+	return workspace.path, nil
+}
+
+type stagingWorkspace struct {
+	path          string
+	runtimePath   string
+	name          string
+	containerName string
+	base          *os.File
+	parent        *os.File
+	directory     *os.File
+	baseStat      unix.Stat_t
+	parentStat    unix.Stat_t
+	dirStat       unix.Stat_t
+}
+
+const privilegedStagingCleanupPython = `
+import errno
+import os
+import stat
+import sys
+
+parent_path, name, expected_path, parent_token, expected_token, owner, group, mode_text = sys.argv[1:]
+owner = int(owner)
+group = int(group)
+original_mode = int(mode_text, 8)
+
+def token(value):
+    return f"{value.st_dev}:{value.st_ino}"
+
+def mount_id(fd):
+    with open(f"/proc/self/fdinfo/{fd}", "r", encoding="ascii") as handle:
+        for line in handle:
+            if line.startswith("mnt_id:"):
+                return int(line.split(":", 1)[1].strip())
+    raise RuntimeError("descriptor has no mount id")
+
+def public_stat(parent):
+    try:
+        return os.stat(name, dir_fd=parent, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+
+def require_public_expected(parent):
+    visible = public_stat(parent)
+    if visible is None or not stat.S_ISDIR(visible.st_mode) or token(visible) != expected_token:
+        raise RuntimeError("staging public name changed; replacement retained")
+
+def open_directory(parent, child_name, before):
+    child = os.open(child_name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+    actual = os.fstat(child)
+    if token(actual) != token(before):
+        os.close(child)
+        raise RuntimeError(f"staging child changed while pinning: {child_name}")
+    return child
+
+def freeze_tree(directory, tree_mount):
+    os.fchmod(directory, 0o500)
+    os.fchown(directory, 0, 0)
+    os.fchmod(directory, 0o500)
+    frozen = os.fstat(directory)
+    if frozen.st_uid != 0 or frozen.st_mode & 0o222:
+        raise RuntimeError("staging directory did not become root-only")
+    for child_name in os.listdir(directory):
+        before = os.stat(child_name, dir_fd=directory, follow_symlinks=False)
+        if not stat.S_ISDIR(before.st_mode):
+            continue
+        child = open_directory(directory, child_name, before)
+        try:
+            if mount_id(child) != tree_mount:
+                raise RuntimeError(f"staging mount boundary retained: {child_name}")
+            freeze_tree(child, tree_mount)
+        finally:
+            os.close(child)
+
+def purge_tree(directory, tree_mount):
+    for child_name in os.listdir(directory):
+        before = os.stat(child_name, dir_fd=directory, follow_symlinks=False)
+        if stat.S_ISDIR(before.st_mode):
+            child = open_directory(directory, child_name, before)
+            try:
+                if mount_id(child) != tree_mount:
+                    raise RuntimeError(f"staging mount boundary retained during purge: {child_name}")
+                purge_tree(child, tree_mount)
+            finally:
+                os.close(child)
+            os.rmdir(child_name, dir_fd=directory)
+        else:
+            os.unlink(child_name, dir_fd=directory)
+
+parent = os.open(parent_path, os.O_RDONLY | os.O_DIRECTORY)
+expected = os.open(expected_path, os.O_RDONLY | os.O_DIRECTORY)
+locked = False
+try:
+    parent_before = os.fstat(parent)
+    expected_before = os.fstat(expected)
+    if token(parent_before) != parent_token or token(expected_before) != expected_token:
+        raise RuntimeError("staging cleanup descriptor identity changed")
+    if parent_before.st_uid != owner or parent_before.st_gid != group or stat.S_IMODE(parent_before.st_mode) != original_mode:
+        raise RuntimeError("staging parent metadata changed; tree retained")
+    require_public_expected(parent)
+
+    locked = True
+    os.fchmod(parent, 0o500)
+    os.fchown(parent, 0, 0)
+    os.fchmod(parent, 0o500)
+    parent_locked = os.fstat(parent)
+    if parent_locked.st_uid != 0 or parent_locked.st_mode & 0o222:
+        raise RuntimeError("staging parent did not become root-only")
+    require_public_expected(parent)
+
+    tree = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+    try:
+        tree_before = os.fstat(tree)
+        if token(tree_before) != expected_token:
+            raise RuntimeError("staging tree changed after parent lock")
+        parent_mount = mount_id(parent)
+        tree_mount = mount_id(tree)
+        if tree_mount != parent_mount:
+            raise RuntimeError("staging root is a mount boundary; tree retained")
+        freeze_tree(tree, tree_mount)
+        purge_tree(tree, tree_mount)
+    finally:
+        os.close(tree)
+    os.rmdir(name, dir_fd=parent)
+finally:
+    os.close(expected)
+    if locked:
+        os.fchmod(parent, 0o500)
+        os.fchown(parent, owner, group)
+        os.fchmod(parent, original_mode)
+    os.close(parent)
+`
+
+func (w *stagingWorkspace) close() {
+	if w == nil {
+		return
+	}
+	closeFile(w.directory)
+	closeFile(w.parent)
+	closeFile(w.base)
+	w.directory = nil
+	w.parent = nil
+	w.base = nil
+}
+
+func (w *stagingWorkspace) ownedRecoveryPath() string {
+	if w == nil || w.directory == nil {
+		return "<unavailable>"
+	}
+	path, err := os.Readlink(fileDescriptorPath(w.directory))
+	if err != nil || path == "" {
+		return "<unavailable>"
+	}
+	return path
+}
+
+func (w *stagingWorkspace) retainedCleanupError(cause error) error {
+	return fmt.Errorf("staging retained at FD-resolved owned path %s because exact cleanup was refused: %w", w.ownedRecoveryPath(), cause)
+}
+
+func (w *stagingWorkspace) verifyContainerVisible() error {
+	if w == nil || w.base == nil || w.parent == nil {
+		return fmt.Errorf("missing pinned staging container")
+	}
+	baseFD, err := checkedFileDescriptor(w.base, "staging base")
+	if err != nil {
+		return err
+	}
+	var baseCurrent unix.Stat_t
+	if err := unix.Fstat(baseFD, &baseCurrent); err != nil {
+		return err
+	}
+	if baseCurrent.Dev != w.baseStat.Dev || baseCurrent.Ino != w.baseStat.Ino {
+		return fmt.Errorf("staging base descriptor identity changed")
+	}
+	var container unix.Stat_t
+	if err := unix.Fstatat(baseFD, w.containerName, &container, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return fmt.Errorf("staging outer container changed: %w", err)
+	}
+	if container.Mode&unix.S_IFMT != unix.S_IFDIR || container.Dev != w.parentStat.Dev || container.Ino != w.parentStat.Ino {
+		return fmt.Errorf("staging outer container changed; replacement retained")
+	}
+	return nil
+}
+
+func (w *stagingWorkspace) verifyVisible() error {
+	if err := w.verifyContainerVisible(); err != nil {
+		return err
+	}
+	parentFD, err := checkedFileDescriptor(w.parent, "staging parent")
+	if err != nil {
+		return err
+	}
+	var tree unix.Stat_t
+	if err := unix.Fstatat(parentFD, w.name, &tree, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return fmt.Errorf("staging tree changed: %w", err)
+	}
+	if tree.Mode&unix.S_IFMT != unix.S_IFDIR || tree.Dev != w.dirStat.Dev || tree.Ino != w.dirStat.Ino {
+		return fmt.Errorf("staging tree changed; replacement retained")
+	}
+	return nil
+}
+
+func (w *stagingWorkspace) cleanup(ctx context.Context, runner run.CommandRunner) error {
+	if w == nil || w.base == nil || w.parent == nil || w.directory == nil {
+		return fmt.Errorf("missing pinned staging workspace")
+	}
+	if err := w.verifyVisible(); err != nil {
+		return err
+	}
+	if runner.IsDryRun() {
+		fmt.Printf("WARN dry-run staging retained at %s because safe cleanup requires privileged execution\n", w.path)
+		return nil
+	}
+	pythonPath, err := privilegedPythonPath()
+	if err != nil {
+		return err
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	err = runner.Command(cleanupCtx, "sudo", pythonPath, "-c", privilegedStagingCleanupPython,
+		fileDescriptorPath(w.parent),
+		w.name,
+		fileDescriptorPath(w.directory),
+		fmt.Sprintf("%d:%d", w.parentStat.Dev, w.parentStat.Ino),
+		fmt.Sprintf("%d:%d", w.dirStat.Dev, w.dirStat.Ino),
+		strconv.FormatUint(uint64(w.parentStat.Uid), 10),
+		strconv.FormatUint(uint64(w.parentStat.Gid), 10),
+		strconv.FormatUint(uint64(w.parentStat.Mode&0o7777), 8),
+	)
+	runtime.KeepAlive(w.parent)
+	runtime.KeepAlive(w.directory)
+	runtime.KeepAlive(w.base)
+	if err != nil {
+		return err
+	}
+	parentFD, fdErr := checkedFileDescriptor(w.parent, "staging parent")
+	if fdErr != nil {
+		return fdErr
+	}
+	var visible unix.Stat_t
+	if err := unix.Fstatat(parentFD, w.name, &visible, unix.AT_SYMLINK_NOFOLLOW); err == nil {
+		return fmt.Errorf("privileged cleanup reported success but staging name remains")
+	} else if !errors.Is(err, unix.ENOENT) {
+		return err
+	}
+	return w.verifyContainerVisible()
+}
+
+func createStagingWorkspace() (*stagingWorkspace, error) {
+	base := stagingBaseDir()
+	if err := os.MkdirAll(base, 0o700); err != nil {
+		return nil, err
+	}
+	baseFD, err := unix.Open(base, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	baseDirectory, err := fileFromUnixDescriptor(baseFD, base)
+	if err != nil {
+		_ = unix.Close(baseFD)
+		return nil, err
+	}
+	var baseStat unix.Stat_t
+	if err := unix.Fstat(baseFD, &baseStat); err != nil {
+		closeFile(baseDirectory)
+		return nil, err
+	}
+	containerName, container, containerStat, err := createPinnedStagingChild(baseDirectory, base, ".wahrwelt-workspace-")
+	if err != nil {
+		closeFile(baseDirectory)
+		return nil, err
+	}
+	containerPath := filepath.Join(base, containerName)
+	name, directory, dirStat, err := createPinnedStagingChild(container, containerPath, defaults.StagingTempPattern)
+	if err != nil {
+		closeFile(container)
+		closeFile(baseDirectory)
+		return nil, err
+	}
+	return &stagingWorkspace{
+		path:          filepath.Join(containerPath, name),
+		runtimePath:   filepath.Join(fileDescriptorPath(container), name),
+		name:          name,
+		containerName: containerName,
+		base:          baseDirectory,
+		parent:        container,
+		directory:     directory,
+		baseStat:      baseStat,
+		parentStat:    containerStat,
+		dirStat:       dirStat,
+	}, nil
+}
+
+func createPinnedStagingChild(parent *os.File, displayParent, pattern string) (string, *os.File, unix.Stat_t, error) {
+	return createPinnedStagingChildWithBarrier(parent, displayParent, pattern, nil)
+}
+
+//nolint:gocyclo // The linear creator-token sequence is intentionally kept in one auditable transaction.
+func createPinnedStagingChildWithBarrier(parent *os.File, displayParent, pattern string, afterCreate func(name string, created unix.Stat_t) error) (string, *os.File, unix.Stat_t, error) {
+	parentFD, err := checkedFileDescriptor(parent, "staging parent")
+	if err != nil {
+		return "", nil, unix.Stat_t{}, err
+	}
+	prefix := strings.TrimSuffix(pattern, "*")
+	var name string
+	var created unix.Stat_t
+	allocated := false
+	for attempt := 0; attempt < 128; attempt++ {
+		random := make([]byte, 16)
+		if _, err := rand.Read(random); err != nil {
+			return "", nil, unix.Stat_t{}, err
+		}
+		name = prefix + hex.EncodeToString(random)
+		if err := unix.Mkdirat(parentFD, name, 0o700); err != nil {
+			if errors.Is(err, unix.EEXIST) {
+				continue
+			}
+			return "", nil, unix.Stat_t{}, err
+		}
+		if err := unix.Fstatat(parentFD, name, &created, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+			return "", nil, unix.Stat_t{}, err
+		}
+		if created.Mode&unix.S_IFMT != unix.S_IFDIR {
+			return "", nil, unix.Stat_t{}, fmt.Errorf("created staging entry is not a directory: %s", filepath.Join(displayParent, name))
+		}
+		allocated = true
+		break
+	}
+	if !allocated {
+		return "", nil, unix.Stat_t{}, fmt.Errorf("cannot allocate staging directory below %s", displayParent)
+	}
+	if afterCreate != nil {
+		if err := afterCreate(name, created); err != nil {
+			return "", nil, unix.Stat_t{}, err
+		}
+	}
+	directoryFD, err := unix.Openat(parentFD, name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return "", nil, unix.Stat_t{}, err
+	}
+	directory, err := fileFromUnixDescriptor(directoryFD, filepath.Join(displayParent, name))
+	if err != nil {
+		_ = unix.Close(directoryFD)
+		return "", nil, unix.Stat_t{}, err
+	}
+	var opened unix.Stat_t
+	if err := unix.Fstat(directoryFD, &opened); err != nil {
+		closeFile(directory)
+		return "", nil, unix.Stat_t{}, err
+	}
+	if created.Dev != opened.Dev || created.Ino != opened.Ino {
+		closeFile(directory)
+		return "", nil, unix.Stat_t{}, fmt.Errorf("created staging directory changed before exact open: %s; replacement retained", filepath.Join(displayParent, name))
+	}
+	var visible unix.Stat_t
+	if err := unix.Fstatat(parentFD, name, &visible, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		closeFile(directory)
+		return "", nil, unix.Stat_t{}, err
+	}
+	if visible.Mode&unix.S_IFMT != unix.S_IFDIR || visible.Dev != opened.Dev || visible.Ino != opened.Ino {
+		closeFile(directory)
+		return "", nil, unix.Stat_t{}, fmt.Errorf("created staging directory changed after exact open: %s; replacement retained", filepath.Join(displayParent, name))
+	}
+	return name, directory, opened, nil
 }
 
 func stagingBaseDir() string {

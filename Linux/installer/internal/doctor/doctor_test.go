@@ -82,6 +82,7 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 		"host-vars.nix",
 		"hardware-configuration.nix",
 		"configuration.nix",
+		"installer-state.json",
 	} {
 		fullPath := filepath.Join(dir, filepath.FromSlash(path))
 		if err := os.WriteFile(fullPath, []byte("{}"), 0o644); err != nil {
@@ -101,7 +102,7 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 	if err := os.MkdirAll(runtimeDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(hyprDir, "wahrwelt"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(hyprDir, "user"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(paths.ActiveShellStatePath(state.User.HomeDirectory), []byte("caelestia\n"), 0o644); err != nil {
@@ -116,13 +117,16 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(runtimeDir, "shell-profile.lua"), []byte(`hl.on("hyprland.start", function() hl.exec_cmd("/home/user/.config/hypr/scripts/start-shell.sh") end)`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(runtimeDir, "hyprland.lua"), []byte(`dofile("/home/user/.config/hypr/wahrwelt/hyprland.lua")`+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(runtimeDir, "hyprland.lua"), []byte(shellruntime.CanonicalEntrypoint()), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hyprDir, "wahrwelt", "hyprland.lua"), []byte("hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@120\", position = \"0x0\", scale = \"1\" })\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hyprDir, "user", "hyprland.lua"), []byte("hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@120\", position = \"0x0\", scale = \"1\" })\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(runtimeDir, "shell-keybinds.lua"), []byte(`require("caelestia.keybinds")`+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(runtimeDir, "shell-launcher.lua"), []byte(`require("caelestia.launcher")`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runtimeDir, "shell-keybinds.lua"), []byte(shellruntime.AdapterMarker(shellruntime.Caelestia)+"\n"+`require("caelestia.keybinds")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(state.User.HomeDirectory, ".config/quickshell", "wahrwelt-shell-selector"), 0o755); err != nil {
@@ -149,7 +153,7 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 	report, err := Report(context.Background(), Options{
 		Paths: paths.Options{
 			NixOSDest: dir,
-			StatePath: filepath.Join(dir, "wahrwelt/state.json"),
+			StatePath: filepath.Join(dir, "installer-state.json"),
 		},
 		State: state,
 	})
@@ -158,9 +162,11 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 	}
 	for _, want := range []string{
 		"== Wahrwelt doctor ==",
+		"OK   state:",
 		"OK   flake:",
 		"OK   shell state:",
 		"OK   shell entrypoint:",
+		"OK   shell launcher bindings:",
 		"OK   shell keybinds:",
 		"OK   shell selector config:",
 		"OK   hypr script executable:",
@@ -180,6 +186,7 @@ func TestReportUsesEnd4ProfileChecks(t *testing.T) {
 		"host-vars.nix",
 		"hardware-configuration.nix",
 		"configuration.nix",
+		"installer-state.json",
 	} {
 		fullPath := filepath.Join(dir, filepath.FromSlash(path))
 		if err := os.WriteFile(fullPath, []byte("{}"), 0o644); err != nil {
@@ -203,7 +210,9 @@ func TestReportUsesEnd4ProfileChecks(t *testing.T) {
 		filepath.Join(state.User.HomeDirectory, ".config/hypr/hyprlock.conf"):                                    "source=" + filepath.Join(runtimeDir, "hyprlock.conf") + "\n",
 		filepath.Join(state.User.HomeDirectory, ".config/hypr/hypridle.conf"):                                    "source=" + filepath.Join(runtimeDir, "hypridle.conf") + "\n",
 		filepath.Join(runtimeDir, "shell-profile.lua"):                                                           `hl.on("hyprland.start", function() hl.exec_cmd("/home/user/.config/hypr/scripts/start-shell.sh") end)` + "\n",
-		filepath.Join(runtimeDir, "hyprland.lua"):                                                                "dofile(os.getenv(\"HOME\") .. \"/.config/hypr/end4/hyprland.lua\")\n",
+		filepath.Join(runtimeDir, "hyprland.lua"):                                                                shellruntime.CanonicalEntrypoint(),
+		filepath.Join(runtimeDir, "shell-launcher.lua"):                                                          "require(\"end4.launcher\")\n",
+		filepath.Join(runtimeDir, "shell-keybinds.lua"):                                                          shellruntime.AdapterMarker(shellruntime.End4) + "\nrequire(\"end4-adapter\").load({ profile = \"end4\", quickshell_config = \"/home/user/.config/quickshell/ii\" })\n",
 		filepath.Join(runtimeDir, "hyprlock.conf"):                                                               "source=~/.config/hypr/end4/hyprlock.conf\n",
 		filepath.Join(runtimeDir, "hypridle.conf"):                                                               "source=~/.config/hypr/end4/hypridle.conf\n",
 		filepath.Join(state.User.HomeDirectory, ".config/hypr/end4/hyprland.lua"):                                "require(\"hyprland.env\")\n",
@@ -219,7 +228,7 @@ func TestReportUsesEnd4ProfileChecks(t *testing.T) {
 		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/close-active.sh"):                          "#!/bin/sh\n",
 		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/noctalia-launcher.sh"):                     "#!/bin/sh\n",
 		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/record-toggle.sh"):                         "#!/bin/sh\n",
-		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/shell-end4-overrides.sh"):                  "#!/bin/sh\n",
+		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/restore-lock.sh"):                          "#!/bin/sh\n",
 		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/shell-process.sh"):                         "#!/bin/sh\n",
 		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/shell-profile-sync.sh"):                    "#!/bin/sh\n",
 		filepath.Join(state.User.HomeDirectory, ".config/hypr/scripts/shell-runtime-env.sh"):                     "#!/bin/sh\n",
@@ -244,7 +253,7 @@ func TestReportUsesEnd4ProfileChecks(t *testing.T) {
 	report, err := Report(context.Background(), Options{
 		Paths: paths.Options{
 			NixOSDest: dir,
-			StatePath: filepath.Join(dir, "wahrwelt/state.json"),
+			StatePath: filepath.Join(dir, "installer-state.json"),
 		},
 		State: state,
 	})
@@ -253,9 +262,13 @@ func TestReportUsesEnd4ProfileChecks(t *testing.T) {
 	}
 
 	for _, want := range []string{
+		"OK   state:",
 		"OK   shell state:",
 		"OK   shell launcher:",
 		"OK   shell entrypoint:",
+		"OK   shell launcher bindings:",
+		"OK   shell keybinds:",
+		"WARN user hypr config missing:",
 		"OK   end4 hyprlock entrypoint:",
 		"OK   end4 hypridle entrypoint:",
 		"OK   end4 hypr config:",
@@ -270,14 +283,93 @@ func TestReportUsesEnd4ProfileChecks(t *testing.T) {
 			t.Fatalf("expected end4 report to contain %q, got:\n%s", want, report)
 		}
 	}
-	if strings.Contains(report, "shell keybinds") {
-		t.Fatalf("end4 doctor path must not run shell-keybind checks, got:\n%s", report)
+}
+
+func TestCheckShellRuntimeChecksRequiredUserHyprConfigForEveryProfile(t *testing.T) {
+	profiles := []string{
+		shellruntime.Caelestia,
+		shellruntime.Noctalia,
+		shellruntime.End4,
+		shellruntime.End4PC,
+	}
+	for _, profile := range profiles {
+		for _, present := range []bool{false, true} {
+			name := "missing"
+			if present {
+				name = "present"
+			}
+			t.Run(profile+"/"+name, func(t *testing.T) {
+				state := config.Default()
+				state.User.HomeDirectory = t.TempDir()
+				statePath := shellruntime.ActiveShellStatePath(state.User.HomeDirectory)
+				if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(statePath, []byte(profile+"\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+
+				userHypr := hyprConfigPath(state.User.HomeDirectory, "user/hyprland.lua")
+				want := "WARN user hypr config missing: " + userHypr
+				if present {
+					if err := os.MkdirAll(filepath.Dir(userHypr), 0o755); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(userHypr, []byte("-- managed user runtime\n"), 0o644); err != nil {
+						t.Fatal(err)
+					}
+					want = "OK   user hypr config: " + userHypr
+				}
+
+				out := &reportWriter{}
+				checkShellRuntime(out, Options{State: state})
+				report := out.String()
+				if !strings.Contains(report, want) {
+					t.Fatalf("profile %q did not report required user Hypr config:\n%s", profile, report)
+				}
+				if got := strings.Count(report, "user hypr config"); got != 1 {
+					t.Fatalf("profile %q checked required user Hypr config %d times, want 1:\n%s", profile, got, report)
+				}
+			})
+		}
+	}
+}
+
+func TestCheckShellRuntimeRejectsUserHyprDirectoryForEveryProfile(t *testing.T) {
+	for _, profile := range []string{
+		shellruntime.Caelestia,
+		shellruntime.Noctalia,
+		shellruntime.End4,
+		shellruntime.End4PC,
+	} {
+		t.Run(profile, func(t *testing.T) {
+			state := config.Default()
+			state.User.HomeDirectory = t.TempDir()
+			statePath := shellruntime.ActiveShellStatePath(state.User.HomeDirectory)
+			if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(statePath, []byte(profile+"\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			userHypr := hyprConfigPath(state.User.HomeDirectory, "user/hyprland.lua")
+			if err := os.MkdirAll(userHypr, 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			out := &reportWriter{}
+			checkShellRuntime(out, Options{State: state})
+			want := "WARN user hypr config is not a regular file: " + userHypr
+			if report := out.String(); !strings.Contains(report, want) {
+				t.Fatalf("profile %q false-green for user Hypr directory:\n%s", profile, report)
+			}
+		})
 	}
 }
 
 func TestCheckShellKeybindsWarnsOnProfileMismatch(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "shell-keybinds.lua")
-	if err := os.WriteFile(path, []byte(`require("caelestia.keybinds")`+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(shellruntime.AdapterMarker(shellruntime.Caelestia)+"\n"+`require("caelestia.keybinds")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	out := &reportWriter{}
@@ -297,7 +389,7 @@ func TestDetectActiveShellUsesRememberedEnd4PCVariant(t *testing.T) {
 	if err := os.MkdirAll(runtimeDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(runtimeDir, "hyprland.lua"), []byte(`dofile("/home/user/.config/hypr/end4/hyprland.lua")`+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(runtimeDir, "hyprland.lua"), doctorLegacyEnd4Fixture(t, shellruntime.End4), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	variantPath := filepath.Join(home, ".local", "state", "wahrwelt", "end4-variant")
@@ -310,13 +402,146 @@ func TestDetectActiveShellUsesRememberedEnd4PCVariant(t *testing.T) {
 	}
 }
 
+func TestCheckShellEntrypointWarnsForLegacyDirectEnd4Migration(t *testing.T) {
+	home := t.TempDir()
+	configHome := filepath.Join(home, ".config")
+	path := filepath.Join(home, "hyprland.lua")
+	if err := os.WriteFile(path, doctorLegacyEnd4Fixture(t, shellruntime.End4), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := &reportWriter{}
+
+	checkShellEntrypoint(out, path, shellruntime.End4, configHome)
+
+	if report := out.String(); !strings.Contains(report, "WARN shell entrypoint uses legacy direct End4 runtime and requires migration") {
+		t.Fatalf("expected legacy migration warning, got:\n%s", report)
+	}
+}
+
+func TestCheckShellEntrypointWarnsForLegacyUserNamespaceMigration(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, "hyprland.lua")
+	legacy := `-- Wahrwelt canonical Hyprland runtime entrypoint
+local home = os.getenv("HOME")
+if home == nil then
+    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
+end
+
+local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
+local hypr_root = config_home .. "/hypr"
+package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
+dofile(hypr_root .. "/wahrwelt/hyprland.lua")
+`
+	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := &reportWriter{}
+
+	checkShellEntrypoint(out, path, shellruntime.End4PC, filepath.Join(home, ".config"))
+
+	if report := out.String(); !strings.Contains(report, "WARN shell entrypoint uses legacy Wahrwelt user namespace and requires migration") {
+		t.Fatalf("expected legacy user namespace migration warning, got:\n%s", report)
+	}
+}
+
+func TestCheckShellEntrypointWarnsForUserNamespaceTransition(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hyprland.lua")
+	if err := os.WriteFile(path, []byte(shellruntime.UserNamespaceTransitionEntrypoint()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := &reportWriter{}
+
+	checkShellEntrypoint(out, path, shellruntime.Noctalia, t.TempDir())
+
+	report := out.String()
+	if !strings.Contains(report, "WARN shell entrypoint uses temporary user namespace transition and requires migration") {
+		t.Fatalf("expected user namespace transition warning, got:\n%s", report)
+	}
+	if strings.Contains(report, "OK   shell entrypoint") {
+		t.Fatalf("transition runtime must not be reported as canonical:\n%s", report)
+	}
+}
+
+func TestCheckShellEntrypointWarnsForHistoricalHomeManagerSeededRuntime(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hyprland.lua")
+	payload := `-- Active Hyprland profile: wahrwelt (caelestia)
+local home = os.getenv("HOME")
+if home == nil then
+    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
+end
+
+local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
+local state_home = os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")
+local hypr_root = config_home .. "/hypr"
+local runtime_root = state_home .. "/wahrwelt/hypr-runtime"
+package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
+dofile(hypr_root .. "/wahrwelt/hyprland.lua")
+dofile(runtime_root .. "/shell-profile.lua")
+`
+	if err := os.WriteFile(path, []byte(payload), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := &reportWriter{}
+
+	checkShellEntrypoint(out, path, shellruntime.Caelestia, t.TempDir())
+
+	if report := out.String(); !strings.Contains(report, "WARN shell entrypoint uses legacy Home Manager seeded runtime and requires migration") {
+		t.Fatalf("expected historical seeded runtime warning, got:\n%s", report)
+	}
+}
+
+func TestCheckShellEntrypointDoesNotTreatCustomEnd4SuffixAsLegacy(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, "hyprland.lua")
+	if err := os.WriteFile(path, []byte(`dofile("/tmp/custom/end4/hyprland.lua")`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := &reportWriter{}
+
+	checkShellEntrypoint(out, path, shellruntime.End4, filepath.Join(home, ".config"))
+
+	report := out.String()
+	if strings.Contains(report, "legacy direct End4") {
+		t.Fatalf("custom suffix-only entrypoint must not receive migration warning:\n%s", report)
+	}
+	if !strings.Contains(report, "is not the canonical Wahrwelt runtime") {
+		t.Fatalf("custom suffix-only entrypoint should be reported as unknown:\n%s", report)
+	}
+}
+
+func TestCheckShellEntrypointRejectsCanonicalLookalikes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hyprland.lua")
+	for name, content := range map[string]string{
+		"arbitrary suffix": `dofile("/tmp/arbitrary/wahrwelt/hyprland.lua")` + "\n",
+		"extra content":    shellruntime.CanonicalEntrypoint() + "-- user suffix\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			out := &reportWriter{}
+			checkShellEntrypoint(out, path, shellruntime.Caelestia, filepath.Join(t.TempDir(), ".config"))
+			if report := out.String(); !strings.Contains(report, "is not the canonical Wahrwelt runtime") {
+				t.Fatalf("canonical lookalike was accepted:\n%s", report)
+			}
+		})
+	}
+}
+
+func doctorLegacyEnd4Fixture(t *testing.T, profile string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("../../../NixOS/home/shells/legacy-hypr-runtime", profile+".lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
 func TestCheckShellKeybindsAcceptsHomeManagerSymlinkContent(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "store-keybinds.lua")
 	path := filepath.Join(dir, "shell-keybinds.lua")
-	if err := os.WriteFile(target, []byte(`$noctalia = noctalia-shell ipc call
-bindi = Super, Super_L, exec, $hypr/scripts/noctalia-launcher.sh press
-`), 0o644); err != nil {
+	if err := os.WriteFile(target, []byte(shellruntime.AdapterMarker(shellruntime.Noctalia)+"\n"+`require("noctalia.keybinds")`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(target, path); err != nil {

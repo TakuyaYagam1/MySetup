@@ -1,0 +1,59 @@
+# NixOS and Home Manager ownership
+
+The Wahrwelt NixOS flake owns the reproducible system and Home Manager layer.
+The main installation, shell switching, and validation guide is
+[`Linux/README.md`](../README.md). The binding reference is
+[`Linux/keybinds.md`](../keybinds.md).
+
+Home Manager owns the stable `~/.config/hypr` entrypoints, canonical Lua
+modules, executable shell scripts, top-level shared rules, selector assets,
+`end4-adapter.lua`, and one shared validated `hypr/end4` tree. Managed paths are
+store links and should be changed in this repository.
+
+The runtime owns writable profile files under
+`$XDG_STATE_HOME/wahrwelt/hypr-runtime` and the active profile state under
+`$XDG_STATE_HOME/wahrwelt`. Home Manager seeds missing runtime files but does
+not preseed `active-shell` or replace valid user state. `start-shell.sh` writes
+the active profile only after runtime preparation and shell startup succeed.
+
+Host-local NixOS modules belong in `/etc/nixos/user/`. Fresh installs import
+`./user` and create `/etc/nixos/user/default.nix` with mode 0644 only when the
+path is absent. The installer state is the adjacent
+`/etc/nixos/installer-state.json`, not a one-file `wahrwelt/` directory.
+Existing installs migrate `/etc/nixos/private/` to `/etc/nixos/user/` only
+when the target is absent. They read `/etc/nixos/wahrwelt/state.json` or
+`/etc/nixos/mysetup/state.json` as legacy input and remove those exact files
+only after the canonical state is written successfully. An exact empty legacy
+parent is retained under an identity-proven hidden quarantine name; nonempty or
+concurrently replaced parents are not removed. Unsupported nodes or coexisting
+old and new directories stop the operation without merging them.
+The first ordinary `nixos-update` activates this migration automatically. It
+builds and validates a candidate, then uses a pinned same-filesystem atomic
+exchange and retains the displaced
+tree beside `/etc/nixos` for manual recovery.
+
+`~/.config/hypr/user/default.lua` is user-owned. Activation creates the
+exact default aggregator only when no filesystem node exists, preserving
+regular files, symlinks, broken symlinks, and arbitrary user modules. The
+managed `~/.config/hypr/user/hyprland.lua` entrypoint is the exception
+inside that otherwise writable directory. The physical directory is `user/`,
+while user Lua modules keep the internal `wahrwelt.*` namespace.
+
+End4 Official (`end4`) and End4 pC (`end4-pc`) share the same Home
+Manager-owned Hypr tree. The top-level adapter supplies the exact profile and
+QuickShell path while preserving canonical input, gestures, rules, and runtime
+ordering. End4 does not install another top-level shared-rules hook.
+
+Activation migrates one legacy `~/.config/hypr/mysetup/` or
+`~/.config/hypr/wahrwelt/` user tree to `~/.config/hypr/user/`. It replaces
+only known generated runtime entrypoints. Unknown files and link targets are
+preserved, and ownership collisions fail closed.
+
+Useful checks from the repository root:
+
+```bash
+make -C Linux test-hypr-integration
+make -C Linux/installer nix-hm-eval
+make -C Linux nix-end4-hypr-build
+make -C Linux nix-end4-pc-quickshell-build
+```

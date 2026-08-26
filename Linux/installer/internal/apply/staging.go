@@ -196,24 +196,69 @@ func writeThinTemplates(staging string, state config.State, lockMode ...LockMode
 			return fmt.Errorf("write %s: %w", rel, err)
 		}
 	}
-	return writePrivateDefaultTemplate(staging)
+	return writeUserDefaultTemplate(staging)
 }
 
-func writePrivateDefaultTemplate(staging string) error {
-	rel := filepath.Join("private", "default.nix")
+func writeUserDefaultTemplate(staging string) error {
+	rel := filepath.Join("user", "default.nix")
 	path := filepath.Join(staging, rel)
-	if _, err := os.Stat(path); err == nil {
+	exists, err := preservableUserDefault(path)
+	if err != nil {
+		return err
+	}
+	if exists {
 		return nil
-	} else if !os.IsNotExist(err) {
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	if err := prepareGeneratedFile(path); err != nil {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		if os.IsExist(err) {
+			exists, checkErr := preservableUserDefault(path)
+			if checkErr != nil {
+				return checkErr
+			}
+			if exists {
+				return nil
+			}
+			return fmt.Errorf("user/default.nix disappeared while creating: %s", path)
+		}
 		return err
 	}
-	if err := os.WriteFile(path, []byte(PrivateDefaultNix()), 0o644); err != nil {
+	if _, err := file.WriteString(UserDefaultNix()); err != nil {
+		_ = file.Close()
 		return fmt.Errorf("write %s: %w", rel, err)
 	}
+	if err := file.Chmod(0o644); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("set mode for %s: %w", rel, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", rel, err)
+	}
+	created, err := preservableUserDefault(path)
+	if err != nil {
+		return err
+	}
+	if !created {
+		return fmt.Errorf("user/default.nix disappeared while writing: %s", path)
+	}
 	return nil
+}
+
+func preservableUserDefault(path string) (bool, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return true, nil
+	}
+	return false, fmt.Errorf("unsupported user/default.nix path: %s", path)
 }
 
 func prepareGeneratedFile(path string) error {

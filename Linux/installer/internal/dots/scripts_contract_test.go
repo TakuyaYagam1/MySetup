@@ -30,11 +30,22 @@ func TestSharedHyprKeybindsDoNotContainShellSpecificBindings(t *testing.T) {
 			t.Fatalf("shared Hypr keybinds must stay shell-neutral; found %q\n%s", forbidden, text)
 		}
 	}
-	if !strings.Contains(text, `wahrwelt.load_runtime("shell-keybinds.lua")`) {
-		t.Fatalf("shared Hypr keybinds must load the runtime profile layer\n%s", text)
+	if strings.Contains(text, "load_runtime") {
+		t.Fatalf("shared Hypr keybinds must not own runtime layer ordering\n%s", text)
 	}
-	if !strings.Contains(text, `wahrwelt.load_runtime("shell-launcher.lua")`) {
-		t.Fatalf("shared Hypr keybinds must load the runtime launcher layer\n%s", text)
+	entrypointData, err := os.ReadFile("../../../dots/hypr/hyprland.lua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entrypoint := string(entrypointData)
+	for _, want := range []string{
+		`wahrwelt.load_runtime("shell-profile.lua")`,
+		`wahrwelt.load_runtime("shell-launcher.lua")`,
+		`wahrwelt.load_runtime("shell-keybinds.lua")`,
+	} {
+		if !strings.Contains(entrypoint, want) {
+			t.Fatalf("canonical Hyprland entrypoint must own runtime order: missing %q\n%s", want, entrypoint)
+		}
 	}
 }
 
@@ -167,6 +178,54 @@ func TestHyprKeybindFilesDoNotContainUnexpectedDuplicateChords(t *testing.T) {
 	}
 }
 
+func TestEnd4PreservesWahrweltSpotifyWindowBehavior(t *testing.T) {
+	keybindsData, err := os.ReadFile("../../../dots/hypr/end4/keybinds.lua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keybinds := string(keybindsData)
+	if !strings.Contains(keybinds, `wahrwelt.bind_exec(v.kbCloseWindow, wahrwelt.hypr .. "/scripts/close-active.sh")`) {
+		t.Fatalf("end4 must use Wahrwelt's app-aware close handler\n%s", keybinds)
+	}
+	if strings.Contains(keybinds, `wahrwelt.bind_dispatch(v.kbCloseWindow, "killactive")`) {
+		t.Fatalf("end4 must not bypass the app-aware close handler with killactive\n%s", keybinds)
+	}
+	if !strings.Contains(keybinds, `"/user/default.lua"`) {
+		t.Fatalf("end4 keybind editor must target the canonical user Lua namespace\n%s", keybinds)
+	}
+
+	commonRulesData, err := os.ReadFile("../../../dots/hypr/shell-common-rules.lua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	commonRules := string(commonRulesData)
+	for _, want := range []string{
+		`spotify`,
+		`initial_title = "Spotify( Free)?"`,
+		`workspace = "special:music"`,
+	} {
+		if !strings.Contains(commonRules, want) {
+			t.Fatalf("shared Spotify window rules missing %q\n%s", want, commonRules)
+		}
+	}
+
+	canonicalRulesData, err := os.ReadFile("../../../dots/hypr/hyprland/rules.lua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(canonicalRulesData), `require("shell-common-rules")`) {
+		t.Fatalf("canonical Hyprland rules must load Wahrwelt's shared window rules\n%s", canonicalRulesData)
+	}
+
+	hyprPatchData, err := os.ReadFile("../../../NixOS/home/end4/patches/hypr.nix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(hyprPatchData), `dofile(config_home .. "/hypr/shell-common-rules.lua")`) {
+		t.Fatalf("End4 artifact must not load shared rules a second time\n%s", hyprPatchData)
+	}
+}
+
 func TestShellProfilesMatchRuntimeScriptContract(t *testing.T) {
 	profilesData, err := os.ReadFile("../../../NixOS/home/shells/profiles.nix")
 	if err != nil {
@@ -221,6 +280,7 @@ func manifestProfileIDs(profiles []struct {
 }
 
 func TestFreshHyprAndSelectorAssetsUseOnlyCanonicalBrand(t *testing.T) {
+	legacyRuntimeMatcher := filepath.Clean("../../../dots/hypr/scripts/shell-profile-sync.sh")
 	for _, root := range []string{
 		"../../../dots/hypr",
 		"../../../NixOS/home/shells/quickshell/wahrwelt-shell-selector",
@@ -239,8 +299,13 @@ func TestFreshHyprAndSelectorAssetsUseOnlyCanonicalBrand(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			if strings.Contains(strings.ToLower(string(data)), "mysetup") {
+			text := strings.ToLower(string(data))
+			if strings.Contains(text, "mysetup") && filepath.Clean(path) != legacyRuntimeMatcher {
 				t.Errorf("fresh managed asset keeps legacy text: %s", path)
+			}
+			if filepath.Clean(path) == legacyRuntimeMatcher &&
+				(strings.Count(text, "mysetup") != 1 || !strings.Contains(text, "for namespace in mysetup wahrwelt; do")) {
+				t.Errorf("runtime migration must allow only the exact legacy namespace matcher: %s", path)
 			}
 			return nil
 		})
@@ -283,7 +348,8 @@ func TestShellSelectorScriptTracksFocusedMonitorAndActiveShell(t *testing.T) {
 	}
 	text := string(data) + string(helper)
 	for _, want := range []string{
-		`state_dir="$runtime_dir/wahrwelt-shell-selector"`,
+		"wahrwelt_open_private_state_directory wahrwelt-shell-selector shell-selector-state",
+		`state_dir="$wahrwelt_private_state_directory_path"`,
 		`lock_dir="$state_dir/lock"`,
 		"selector_name=\"wahrwelt-shell-selector\"",
 		"WAHRWELT_SHELL_SELECTOR_MONITOR",
@@ -295,8 +361,10 @@ func TestShellSelectorScriptTracksFocusedMonitorAndActiveShell(t *testing.T) {
 		"detect_shell_from_processes()",
 		"detect_shell_from_entrypoint()",
 		"wahrwelt_noctalia_running",
-		"quickshell/ii([/[:space:]]|$)",
-		"wahrwelt/hyprland.lua",
+		"^WAHRWELT_END4_PROFILE=end4$",
+		"^WAHRWELT_END4_PROFILE=end4-pc$",
+		"wahrwelt_detect_shell_adapter",
+		"user/hyprland.lua",
 		"hyprctl monitors -j",
 		"active-shell",
 		"start-shell.sh",
@@ -320,7 +388,11 @@ func TestRecordToggleScriptUsesLockAndPidValidation(t *testing.T) {
 	}
 	text := string(data) + string(helper)
 	for _, want := range []string{
-		`mkdir "$lock_dir"`,
+		"wahrwelt_begin_new_lock_directory",
+		"wahrwelt_create_pinned_private_directory",
+		"wahrwelt_created_directory_identity",
+		"wahrwelt_finish_new_lock_directory",
+		"wahrwelt_release_owned_lock",
 		`lock_pid_file=`,
 		`lock_owner_file=`,
 		"wahrwelt_acquire_lock",
@@ -342,13 +414,13 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(data)
+	startText := string(data)
+	text := startText
 	for _, helper := range []string{
 		"shell-runtime.sh",
 		"shell-process.sh",
 		"shell-profile-sync.sh",
 		"shell-runtime-env.sh",
-		"shell-end4-overrides.sh",
 	} {
 		data, err := os.ReadFile(filepath.Join("../../../dots/hypr/scripts", helper))
 		if err != nil {
@@ -363,7 +435,6 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		"shell-process.sh",
 		"shell-profile-sync.sh",
 		"shell-runtime-env.sh",
-		"shell-end4-overrides.sh",
 		"wahrwelt_pid_matches",
 		"wahrwelt_noctalia_pids()",
 		"wahrwelt_noctalia_daemon_flag()",
@@ -371,6 +442,14 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		"start-shell\\.sh",
 		"running_count()",
 		"dedupe_shell()",
+		"cleanup_legacy_end4_processes()",
+		"wahrwelt_pid_is_legacy_end4_upgrade_token()",
+		"wahrwelt_legacy_end4_upgrade_pids()",
+		"wahrwelt_open_end4_upgrade_state()",
+		"wahrwelt_end4_upgrade_state_transaction()",
+		"wahrwelt_merge_end4_upgrade_tokens",
+		"wahrwelt_remove_end4_upgrade_tokens",
+		"wahrwelt-end4-upgrade",
 		"sync_runtime_shell_files()",
 		"validate_profile_ready()",
 		"prepare_profile_or_fallback()",
@@ -379,7 +458,10 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		"persistent_state_file=",
 		"selector_pattern=",
 		"caelestia_resizer_handle=",
-		"end4_pattern=",
+		"WAHRWELT_END4_PROFILE=\"$profile\"",
+		"WAHRWELT_QS_CONFIG=\"$end4_quickshell_path\"",
+		"ILLOGICAL_IMPULSE_DOTFILES_SOURCE=\"$wahrwelt_config_home\"",
+		"^WAHRWELT_END4_PROFILE=(end4|end4-pc)$",
 		"end4_idle_handle=",
 		"stop_shell_selector()",
 		"stop_caelestia_resizer()",
@@ -396,6 +478,10 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		`dedupe_shell "caelestia"`,
 		`dedupe_shell "caelestia resizer"`,
 		`dedupe_shell "noctalia"`,
+		`--legacy-direct-end4-upgrade-processes`,
+		`--persist-end4-upgrade-processes`,
+		`^[1-9][0-9]*:[1-9][0-9]*:(ii|end4-pC)`,
+		`if [ -n "$legacy_end4_upgrade_tokens" ]; then`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("start-shell script missing %q\n%s", want, text)
@@ -410,21 +496,85 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 	if strings.Contains(text, `(^|[ /])noctalia([[:space:]]|$)`) {
 		t.Fatalf("noctalia process detection must not match bare profile arguments\n%s", text)
 	}
+	if strings.Contains(startText, "legacy_end4_handle=") {
+		t.Fatalf("direct End4 argv recognition must not be a permanent runtime handle\n%s", startText)
+	}
+	if strings.Contains(string(data), "shell-end4-overrides.sh") {
+		t.Fatalf("start-shell must not source the retired End4 runtime override helper\n%s", data)
+	}
+	durableOpenIndex := strings.Index(startText, "if ! wahrwelt_open_end4_upgrade_state; then")
+	durableMergeIndex := strings.Index(startText, "wahrwelt_merge_end4_upgrade_tokens \"$requested_legacy_end4_upgrade_tokens\"")
+	prepareRuntimeIndex := strings.Index(startText, "\nprepare_runtime_environment\n")
+	acquireLockIndex := strings.Index(startText, "if ! acquire_lock; then")
+	if durableOpenIndex < 0 || durableMergeIndex < 0 || prepareRuntimeIndex < 0 || acquireLockIndex < 0 ||
+		durableOpenIndex >= durableMergeIndex || durableMergeIndex >= prepareRuntimeIndex ||
+		prepareRuntimeIndex >= acquireLockIndex {
+		t.Fatalf("start-shell must durably merge exact End4 upgrade provenance before runtime preparation and lock wait")
+	}
 
-	prepareIndex := strings.Index(text, "if ! prepare_profile_or_fallback; then")
-	stopIndex := strings.Index(text, `if [ "$previous" != "$profile" ] || [ -n "$requested_profile" ]; then`)
-	persistIndex := strings.Index(text, "persist_profile ||")
+	beginIndex := strings.LastIndex(startText, "if ! begin_switch_transaction; then")
+	prepareIndex := strings.LastIndex(startText, "if ! prepare_profile_or_fallback; then")
+	legacyCleanupIndex := strings.LastIndex(startText, "if ! cleanup_legacy_end4_processes; then")
+	legacyTouchedIndex := -1
+	if legacyCleanupIndex >= 0 {
+		legacyTouchedIndex = strings.LastIndex(startText[:legacyCleanupIndex], "shell_processes_touched=1")
+	}
+	stopIndex := strings.LastIndex(startText, `if [ "$previous" != "$profile" ] || [ -n "$requested_profile" ]; then`)
+	startIndex := strings.LastIndex(startText, "if ! start_profile_shell; then")
+	persistIndex := strings.LastIndex(startText, "if ! persist_profile; then")
+	commitIndex := strings.LastIndex(startText, "switch_transaction_active=0")
+	reloadIndex := strings.LastIndex(startText, "if ! reload_hypr; then")
+	propagateIndex := strings.LastIndex(startText, "\npropagate_runtime_environment\n")
 	for name, index := range map[string]int{
-		"prepare": prepareIndex,
-		"stop":    stopIndex,
-		"persist": persistIndex,
+		"begin":          beginIndex,
+		"prepare":        prepareIndex,
+		"legacy touched": legacyTouchedIndex,
+		"legacy cleanup": legacyCleanupIndex,
+		"stop":           stopIndex,
+		"start":          startIndex,
+		"persist":        persistIndex,
+		"commit":         commitIndex,
+		"reload":         reloadIndex,
+		"propagate":      propagateIndex,
 	} {
 		if index < 0 {
 			t.Fatalf("start-shell script missing %s ordering marker\n%s", name, text)
 		}
 	}
-	if prepareIndex >= stopIndex || stopIndex >= persistIndex {
-		t.Fatalf("start-shell must validate and sync before stopping shells or persisting profile")
+	if beginIndex >= prepareIndex || prepareIndex >= legacyTouchedIndex || legacyTouchedIndex >= legacyCleanupIndex || legacyCleanupIndex >= stopIndex || stopIndex >= startIndex ||
+		startIndex >= persistIndex || persistIndex >= reloadIndex || reloadIndex >= propagateIndex ||
+		propagateIndex >= commitIndex {
+		t.Fatalf("start-shell main flow must snapshot, prepare, clean legacy End4, stop, start, persist, reload, propagate, then commit")
+	}
+}
+
+func TestShellProfileSyncDoesNotMutateHomeManagerEnd4OrTopLevelLinks(t *testing.T) {
+	data, err := os.ReadFile("../../../dots/hypr/scripts/shell-profile-sync.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, forbidden := range []string{
+		`ln -s -- "$source" "$target"`,
+		`rm -rf -- "$target"`,
+		`$dir/monitors.conf`,
+		`$dir/workspaces.conf`,
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("shell profile sync contains forbidden End4 mutation %q\n%s", forbidden, text)
+		}
+	}
+	for _, want := range []string{
+		"validate_end4_profile_tree()",
+		"end4 profile path is not a Home Manager symlink",
+		`[ -L "$source" ] || return 1`,
+		`^[0-9a-df-np-sv-z]{32}-home-manager-files$`,
+		"-- Wahrwelt shell adapter: $profile",
+		`require(\"$adapter\").load({ profile = \"$profile\", quickshell_config = \"$quickshell_path\" })`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("shell profile sync missing contract %q\n%s", want, text)
+		}
 	}
 }
 
@@ -441,11 +591,47 @@ func TestRestoreLockScriptStartsProfileBeforeLocking(t *testing.T) {
 		"wait_for_profile()",
 		`hyprctl dispatch 'hl.dsp.global("caelestia:lock")'`,
 		"wahrwelt_noctalia_action lock",
-		`hyprlock -c "$wahrwelt_hypr_runtime_dir/hyprlock.conf"`,
+		`exec "$script_dir/lock-active.sh" "$profile"`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("restore-lock script missing %q\n%s", want, text)
 		}
+	}
+}
+
+func TestManagedEnd4LockHelperUsesExactProfileMarker(t *testing.T) {
+	helperData, err := os.ReadFile("../../../dots/hypr/scripts/lock-active.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	helper := string(helperData)
+	for _, want := range []string{
+		"shell-runtime.sh",
+		"wahrwelt_read_active_shell",
+		"wahrwelt_valid_end4_variant",
+		"wahrwelt_end4_profile_running",
+		"hyprctl dispatch global quickshell:lock",
+		`exec hyprlock -c "$wahrwelt_hypr_runtime_dir/hyprlock.conf"`,
+	} {
+		if !strings.Contains(helper, want) {
+			t.Fatalf("managed lock helper missing %q\n%s", want, helper)
+		}
+	}
+	if strings.Contains(helper, "pidof") {
+		t.Fatalf("managed lock helper must not use generic process names\n%s", helper)
+	}
+
+	patch := readTestFile(t, "../../../NixOS/home/end4/patches/hypr.nix")
+	for _, want := range []string{
+		`$lock_cmd = ${lib.escapeShellArg "${config.xdg.configHome}/hypr/scripts/lock-active.sh"}`,
+		"retained generic process-name lock fallback",
+	} {
+		if !strings.Contains(patch, want) {
+			t.Fatalf("End4 hypridle contract missing %q\n%s", want, patch)
+		}
+	}
+	if strings.Contains(patch, "pidof qs quickshell hyprlock") {
+		t.Fatalf("End4 hypridle retained generic pidof fallback\n%s", patch)
 	}
 }
 
@@ -458,56 +644,13 @@ func TestEnd4HyprPatchDisablesUpstreamShellLifecycle(t *testing.T) {
 	for _, want := range []string{
 		"Wahrwelt start-shell owns end4 QuickShell",
 		"Wahrwelt start-shell owns end4 hypridle",
+		"managed lock helper",
 		`/^    hl\.exec_cmd("qs -c \$qsConfig")$/`,
 		`/^    hl\.exec_cmd("hypridle")$/`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("end4 dotfile patch missing lifecycle guard %q\n%s", want, text)
 		}
-	}
-}
-
-func TestEnd4RuntimeOverrideParserPreservesKeyboardLayoutCommas(t *testing.T) {
-	if _, err := exec.LookPath("bash"); err != nil {
-		t.Skip("bash is not installed")
-	}
-	sourceData, err := os.ReadFile("../../../dots/hypr/scripts/shell-end4-overrides.sh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(sourceData), `hyprctl switchxkblayout all 0`) {
-		t.Fatalf("end4 runtime override must reset active XKB layout to the first configured layout\n%s", string(sourceData))
-	}
-
-	configPath := filepath.Join(t.TempDir(), "general.lua")
-	if err := os.WriteFile(configPath, []byte(`
-hl.config({
-    input = {
-        kb_layout = "us, ru",
-        kb_options = "grp:alt_shift_toggle",
-    },
-})
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	script, err := filepath.Abs("../../../dots/hypr/scripts/shell-end4-overrides.sh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command("bash", "-c", `
-set -eu
-. "$1"
-hypr_config_value "$2" kb_layout fallback
-printf '\n'
-hypr_config_value "$2" kb_options fallback
-`, "bash", script, configPath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("hypr_config_value failed: %v\n%s", err, string(output))
-	}
-	if got, want := strings.TrimSpace(string(output)), "us,ru\ngrp:alt_shift_toggle"; got != want {
-		t.Fatalf("unexpected parsed end4 keyboard values: got %q want %q", got, want)
 	}
 }
 

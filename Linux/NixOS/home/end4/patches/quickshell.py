@@ -488,6 +488,63 @@ def patch_vertical_bar(root: Path) -> None:
     path.write_text(text)
 
 
+def patch_managed_quickshell_lifecycle(root: Path) -> None:
+    ipc_old = '["qs", "-p", Quickshell.shellPath(""), "ipc", "call"'
+    ipc_new = '["qs", "-c", Quickshell.env("qsConfig"), "ipc", "call"'
+    ipc_rewrites = 0
+    for path in root.rglob("*.qml"):
+        text = path.read_text()
+        count = text.count(ipc_old)
+        if count:
+            path.write_text(text.replace(ipc_old, ipc_new))
+            ipc_rewrites += count
+    if ipc_rewrites != 12:
+        raise SystemExit(
+            f"expected 12 path-scoped QuickShell IPC calls, found {ipc_rewrites}"
+        )
+
+    replacements = [
+        (
+            root / "ii/services/FirstRunExperience.qml",
+            '        Quickshell.execDetached(["bash", "-c", `qs -p \'${root.welcomeQmlPath}\'`])',
+            '        Quickshell.execDetached(["notify-send", root.firstRunNotifSummary, root.firstRunNotifBody, "-a", "Shell"])',
+            "first-run welcome lifecycle",
+        ),
+        (
+            root / "ii/services/ConflictKiller.qml",
+            '                    Quickshell.execDetached(["qs", "-p", root.killDialogQmlPath])',
+            '                    Quickshell.execDetached(["notify-send", "Shell conflict", "Another notification daemon is already running", "-a", "Shell"])',
+            "conflict dialog lifecycle",
+        ),
+        (
+            root / "ii/modules/waffle/bar/StartButton.qml",
+            '                    Quickshell.execDetached(["qs", "-p", Quickshell.shellPath("settings.qml")]);',
+            '                    Quickshell.execDetached(["systemsettings"]);',
+            "waffle settings lifecycle",
+        ),
+        (
+            root / "ii/modules/ii/sidebarRight/SidebarRightContent.qml",
+            '                    Quickshell.execDetached(["qs", "-p", root.settingsQmlPath]);',
+            '                    Quickshell.execDetached(["systemsettings"]);',
+            "sidebar settings lifecycle",
+        ),
+        (
+            root / "ii/modules/waffle/actionCenter/mainPage/MainPageFooter.qml",
+            '            Quickshell.execDetached(["qs", "-p", Quickshell.shellPath("settings.qml")]);',
+            '            Quickshell.execDetached(["systemsettings"]);',
+            "action-center settings lifecycle",
+        ),
+    ]
+    for path, old, new, label in replacements:
+        text = path.read_text()
+        path.write_text(replace_once(text, old, new, label))
+
+    for path in root.rglob("*.qml"):
+        text = path.read_text()
+        if '["qs", "-p"' in text or "qs -p" in text:
+            raise SystemExit(f"unmanaged QuickShell lifecycle remains in {path}")
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         raise SystemExit("usage: quickshell.py <patched-quickshell-root>")
@@ -498,6 +555,7 @@ def main() -> None:
     patch_cheatsheet_tabs(root)
     patch_quick_config(root)
     patch_vertical_bar(root)
+    patch_managed_quickshell_lifecycle(root)
 
 
 if __name__ == "__main__":

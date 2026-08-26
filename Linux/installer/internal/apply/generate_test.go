@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -413,12 +414,12 @@ func TestThinTemplatesExposeSystemAndHomeOverrides(t *testing.T) {
 		strings.Contains(ConfigurationNix(), "services.desktopManager.plasma6") {
 		t.Fatalf("configuration.nix template must stay a clean Wahrwelt override\n%s", ConfigurationNix())
 	}
-	if !strings.Contains(ConfigurationNix(), "./private") {
-		t.Fatalf("configuration.nix template must import private defaults\n%s", ConfigurationNix())
+	if !strings.Contains(ConfigurationNix(), "./user") {
+		t.Fatalf("configuration.nix template must import user defaults\n%s", ConfigurationNix())
 	}
 	for _, want := range []string{"./ida-pro.nix", "./ida-mcp.nix", "./ida-plugins.nix"} {
-		if !strings.Contains(PrivateDefaultNix(), want) {
-			t.Fatalf("private/default.nix template missing %q\n%s", want, PrivateDefaultNix())
+		if !strings.Contains(UserDefaultNix(), want) {
+			t.Fatalf("user/default.nix template missing %q\n%s", want, UserDefaultNix())
 		}
 	}
 	if !strings.Contains(HomeNix(), "home.packages") {
@@ -519,6 +520,8 @@ func TestThinSyncDoesNotDeleteLegacyMirrorFiles(t *testing.T) {
 }
 
 func TestRunDryRunNoSwitchStopsAfterDryBuildWithoutWritingEtcDotsOrState(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	repo := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(repo, "Linux/NixOS"), 0o755); err != nil {
 		t.Fatal(err)
@@ -554,7 +557,7 @@ func TestRunDryRunNoSwitchStopsAfterDryBuildWithoutWritingEtcDotsOrState(t *test
 	dryBuild := strings.Index(out, "sudo nixos-rebuild dry-build --impure --flake ")
 	backup := strings.Index(out, "sudo cp -a")
 	dotsApply := strings.Index(out, "write hypr local config")
-	stateWrite := strings.LastIndex(out, filepath.Join(dest, "wahrwelt/state.json"))
+	stateWrite := strings.LastIndex(out, filepath.Join(dest, "installer-state.json"))
 	noSwitch := strings.Index(out, "dry-build passed; --no-switch set")
 	if dryBuild == -1 || noSwitch == -1 {
 		t.Fatalf("expected dry-build and no-switch output, got:\n%s", out)
@@ -574,13 +577,15 @@ func writeMinimalHyprDots(t *testing.T, repo string) {
 	t.Helper()
 
 	files := map[string]string{
+		"Linux/dots/hypr/end4-adapter.lua":             "return {}\n",
 		"Linux/dots/hypr/hyprland.lua":                 "require(\"hyprland.input\")\nrequire(\"hyprland.keybinds\")\n",
 		"Linux/dots/hypr/hyprland/input.lua":           "hl.config({ input = { kb_layout = \"us\", kb_options = \"grp:alt_shift_toggle\" } })\n",
-		"Linux/dots/hypr/hyprland/keybinds.lua":        "wahrwelt.load_runtime(\"shell-keybinds.lua\")\n",
+		"Linux/dots/hypr/hyprland/keybinds.lua":        "-- canonical keybinds\n",
 		"Linux/dots/hypr/scripts/start-shell.sh":       "#!/usr/bin/env bash\n",
 		"Linux/dots/hypr/caelestia/keybinds.lua":       "-- binds\n",
 		"Linux/dots/hypr/caelestia/launcher.lua":       "-- launcher\n",
 		"Linux/dots/hypr/shell-common-keybinds.lua":    "-- common\n",
+		"Linux/dots/hypr/shell-common-rules.lua":       "-- common rules\n",
 		"Linux/dots/hypr/shell-workspace-keybinds.lua": "-- workspace\n",
 		"Linux/dots/hypr/lib/wahrwelt.lua":             "return {}\n",
 		"Linux/dots/hypr/variables.lua":                "return {}\n",
@@ -619,6 +624,10 @@ func TestRunDoesNotWriteStateWhenDryBuildFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	bin := t.TempDir()
+	realNix, err := exec.LookPath("nix")
+	if err != nil {
+		t.Fatal(err)
+	}
 	writeExecutable(t, filepath.Join(bin, "rsync"), `#!/bin/sh
 last=
 prev=
@@ -630,6 +639,9 @@ mkdir -p "$last"
 cp -a "$prev"/. "$last"/
 `)
 	writeExecutable(t, filepath.Join(bin, "nix"), `#!/bin/sh
+case " $* " in
+  *" store add-path "*) exec "${WAHRWELT_TEST_REAL_NIX:?}" "$@" ;;
+esac
 exit 0
 `)
 	writeExecutable(t, filepath.Join(bin, "sudo"), `#!/bin/sh
@@ -637,15 +649,25 @@ if [ "$1" = "nixos-rebuild" ]; then
   echo "nix says no" >&2
   exit 42
 fi
+if [ "${2-}" = "-c" ] && [ -n "${4-}" ] && [ -n "${5-}" ] && [ -n "${6-}" ]; then
+  visible=$(stat -c '%d:%i' -- "$4/$5" 2>/dev/null || true)
+  expected=$(stat -Lc '%d:%i' -- "$6" 2>/dev/null || true)
+  [ -n "$visible" ] && [ "$visible" = "$expected" ] || exit 1
+  chmod -R u+w -- "$4/$5"
+  rm -rf -- "$4/$5"
+  exit 0
+fi
 exec "$@"
 `)
+	t.Setenv("WAHRWELT_TEST_REAL_NIX", realNix)
+	t.Setenv("WAHRWELT_VALIDATION_NIX", realNix)
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
 
 	state := config.Default()
 	state.User.Username = "tester"
 	state.User.HomeDirectory = "/home/tester"
 	state.Dots = config.Dots{}
-	err := Run(context.Background(), Options{
+	err = Run(context.Background(), Options{
 		Paths: pathsForTest(repo, dest),
 		State: state,
 	})
@@ -655,7 +677,7 @@ exec "$@"
 	if !strings.Contains(err.Error(), "nix says no") {
 		t.Fatalf("expected dry-build error details, got:\n%s", err)
 	}
-	if _, statErr := os.Stat(filepath.Join(dest, "wahrwelt/state.json")); !os.IsNotExist(statErr) {
+	if _, statErr := os.Stat(filepath.Join(dest, "installer-state.json")); !os.IsNotExist(statErr) {
 		t.Fatalf("state must not be written after failed dry-build, stat err: %v", statErr)
 	}
 }
@@ -810,23 +832,23 @@ func TestStageThinConfigurationWritesWrapperAndTemplates(t *testing.T) {
 		"host-vars.nix",
 		"configuration.nix",
 		"home.nix",
-		"private",
-		"private/default.nix",
+		"user",
+		"user/default.nix",
 	} {
 		info, err := os.Stat(filepath.Join(staging, rel))
 		if err != nil {
 			t.Fatalf("thin staging missing %s: %v", rel, err)
 		}
-		if rel == "private" && !info.IsDir() {
-			t.Fatalf("thin staging private should be a directory")
+		if rel == "user" && !info.IsDir() {
+			t.Fatalf("thin staging user should be a directory")
 		}
 	}
-	privateDefault, err := os.ReadFile(filepath.Join(staging, "private", "default.nix"))
+	privateDefault, err := os.ReadFile(filepath.Join(staging, "user", "default.nix"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(privateDefault), "./ida-pro.nix") {
-		t.Fatalf("thin staging private/default.nix missing IDA example imports\n%s", privateDefault)
+		t.Fatalf("thin staging user/default.nix missing IDA example imports\n%s", privateDefault)
 	}
 	for _, rel := range []string{"flake.lock", "dots", "installer", "hosts/NixOS/host-vars.nix"} {
 		if _, err := os.Stat(filepath.Join(staging, rel)); !os.IsNotExist(err) {
@@ -866,9 +888,9 @@ func TestPrepareThinHostLocalPreservesOverridesLockAndSecrets(t *testing.T) {
 		filepath.Join(staging, "flake.lock"):                 "existing-lock\n",
 		filepath.Join(staging, "configuration.nix"):          "{ config, ... }: { }\n",
 		filepath.Join(staging, "home.nix"):                   "{ pkgs, ... }: { }\n",
-		filepath.Join(staging, "private", "default.nix"):     PrivateDefaultNix(),
-		filepath.Join(staging, "private", "ida-pro.nix"):     "{ pkgs, ... }: { }\n",
-		filepath.Join(staging, "private", "ida.run"):         "binary payload\n",
+		filepath.Join(staging, "user", "default.nix"):        UserDefaultNix(),
+		filepath.Join(staging, "user", "ida-pro.nix"):        "{ pkgs, ... }: { }\n",
+		filepath.Join(staging, "user", "ida.run"):            "binary payload\n",
 		filepath.Join(staging, "secrets", "secrets.yaml"):    "secret: ENC\n",
 	} {
 		data, err := os.ReadFile(path)
@@ -1456,7 +1478,7 @@ func TestPrepareThinHostLocalOverwritesFreshNixOSOverrides(t *testing.T) {
 	}
 }
 
-func TestPrepareThinHostLocalPreservesPrivateDefault(t *testing.T) {
+func TestPrepareThinHostLocalStagesLegacyUserDefault(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
 	for path, content := range map[string]string{
@@ -1476,16 +1498,16 @@ func TestPrepareThinHostLocalPreservesPrivateDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(staging, "private", "default.nix"))
+	data, err := os.ReadFile(filepath.Join(staging, "user", "default.nix"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, want := string(data), "{ ... }: { imports = [ ./custom.nix ]; }\n"; got != want {
-		t.Fatalf("private/default.nix should be preserved, got %q", got)
+		t.Fatalf("legacy user default should be staged, got %q", got)
 	}
 }
 
-func TestPrepareThinHostLocalRejectsPrivateFile(t *testing.T) {
+func TestPrepareThinHostLocalRejectsLegacyUserFile(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
 	for path, content := range map[string]string{
@@ -1501,8 +1523,8 @@ func TestPrepareThinHostLocalRejectsPrivateFile(t *testing.T) {
 	}
 
 	err := prepareStagingHostLocal(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Default(), config.Secrets{}, LayoutThin)
-	if err == nil || !strings.Contains(err.Error(), "private path is not a directory") {
-		t.Fatalf("expected private file target error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "unsupported legacy user path") {
+		t.Fatalf("expected legacy user file error, got %v", err)
 	}
 }
 
@@ -1624,21 +1646,25 @@ func TestWriteStagedSecretsMigratesMissingThinSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fake := &fakeRunner{}
-	if err := writeStagedSecrets(context.Background(), fake, staging, dest, LayoutThin); err != nil {
+	bin := t.TempDir()
+	writeExecutable(t, filepath.Join(bin, "sudo"), "#!/bin/sh\nexec \"$@\"\n")
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	if err := writeStagedSecrets(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, LayoutThin); err != nil {
 		t.Fatal(err)
 	}
-
-	commands := commandSummary(fake.calls)
-	for _, want := range []string{
-		"sudo mkdir -p " + filepath.Join(dest, "secrets"),
-		"sudo rsync -a --delete --checksum --chown root:root",
-		filepath.Join(staging, "secrets") + "/",
-		filepath.Join(dest, "secrets") + "/",
-	} {
-		if !strings.Contains(commands, want) {
-			t.Fatalf("expected secrets migration command %q, got:\n%s", want, commands)
-		}
+	data, err := os.ReadFile(filepath.Join(dest, "secrets", "secrets.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(data), "secret: staged\n"; got != want {
+		t.Fatalf("published secrets = %q, want %q", got, want)
+	}
+	info, err := os.Stat(filepath.Join(dest, "secrets"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := info.Mode().Perm(), os.FileMode(0o700); got != want {
+		t.Fatalf("published secrets mode = %04o, want %04o", got, want)
 	}
 }
 
@@ -1875,23 +1901,20 @@ func TestWriteStagedHashedPasswordInstallsStagingArtifact(t *testing.T) {
 		t.Fatal(err)
 	}
 	bin := t.TempDir()
-	writeExecutable(t, filepath.Join(bin, "sudo"), `#!/bin/sh
-printf '%s\n' "$*"
-`)
+	writeExecutable(t, filepath.Join(bin, "sudo"), "#!/bin/sh\nexec \"$@\"\n")
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
 
-	var out bytes.Buffer
-	runner := run.Runner{Stdout: &out, Stderr: &out}
+	runner := run.Runner{Stdout: io.Discard, Stderr: io.Discard}
 	err := writeStagedHashedPassword(context.Background(), runner, staging, dest, config.Secrets{UserPassword: "secret"}, LayoutThin)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := out.String()
-	if !strings.Contains(got, source) {
-		t.Fatalf("expected staged hashed-password.nix to be installed, got:\n%s", got)
+	data, err := os.ReadFile(filepath.Join(dest, "hashed-password.nix"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if strings.Contains(got, "mkpasswd") {
-		t.Fatalf("write phase must not hash password again, got:\n%s", got)
+	if got, want := string(data), HashedPasswordNix("hash-from-dry-build"); got != want {
+		t.Fatalf("published hashed-password.nix = %q, want %q", got, want)
 	}
 }
 
@@ -1903,20 +1926,20 @@ func TestWriteStagedHashedPasswordMigratesMissingThinHash(t *testing.T) {
 		t.Fatal(err)
 	}
 	bin := t.TempDir()
-	writeExecutable(t, filepath.Join(bin, "sudo"), `#!/bin/sh
-printf '%s\n' "$*"
-`)
+	writeExecutable(t, filepath.Join(bin, "sudo"), "#!/bin/sh\nexec \"$@\"\n")
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
 
-	var out bytes.Buffer
-	runner := run.Runner{Stdout: &out, Stderr: &out}
+	runner := run.Runner{Stdout: io.Discard, Stderr: io.Discard}
 	err := writeStagedHashedPassword(context.Background(), runner, staging, dest, config.Secrets{}, LayoutThin)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := out.String()
-	if !strings.Contains(got, source) || !strings.Contains(got, filepath.Join(dest, "hashed-password.nix")) {
-		t.Fatalf("expected missing root hash to be installed, got:\n%s", got)
+	data, err := os.ReadFile(filepath.Join(dest, "hashed-password.nix"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(data), HashedPasswordNix("existing-hash"); got != want {
+		t.Fatalf("published hashed-password.nix = %q, want %q", got, want)
 	}
 }
 
@@ -2013,14 +2036,36 @@ func TestHomeShellModuleInstallsAllBoundScripts(t *testing.T) {
 		t.Fatalf("home shell module must source scripts from shell runtime manifest\n%s", text)
 	}
 	for _, want := range []string{
-		"hyprctl reload",
-		"start-shell.sh >/dev/null 2>&1 || true",
-		"wahrwelt/active-shell",
+		`run_live_shell_command()`,
+		`"$activation_helper" run-with-runtime-hex`,
+		`run_live_shell_command "$hyprctl_path" reload`,
+		`"${dotsRoot}/hypr/scripts/start-shell.sh"`,
+		`run_live_shell_command "${config.xdg.configHome}/hypr/scripts/start-shell.sh"`,
 		"wahrwelt/hypr-runtime",
 		`"quickshell/wahrwelt-shell-selector"`,
+		`"hypr/end4-adapter.lua"`,
+		`activate-user-dir`,
+		`"${defaultHyprUserConfig}"`,
+		`-- Wahrwelt shell adapter: ${defaultProfile.id}`,
+		`require("${defaultProfile.adapter}")`,
+		`"$activation_helper" activate-runtime-dir`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("home/shells/default.nix must include %q\n%s", want, text)
+		}
+	}
+	for _, forbidden := range []string{
+		`wahrwelt-active-shell-default`,
+		`hyprctl reload >/dev/null 2>&1 || true`,
+		`start-shell.sh >/dev/null 2>&1 || true`,
+		`"hypr/wahrwelt/default.lua" =`,
+		`wahrwelt/keybinds.lua`,
+		`wahrwelt/local.lua`,
+		`pruneWahrweltHyprBackups`,
+		`backupTargets`,
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("home/shells/default.nix must preserve user Lua ownership: found %q\n%s", forbidden, text)
 		}
 	}
 }
@@ -2029,7 +2074,7 @@ func pathsForTest(repo, dest string) paths.Options {
 	return paths.Options{
 		RepoRoot:  repo,
 		NixOSDest: dest,
-		StatePath: filepath.Join(dest, "wahrwelt", "state.json"),
+		StatePath: filepath.Join(dest, "installer-state.json"),
 		DraftPath: filepath.Join(dest, "draft.json"),
 	}
 }

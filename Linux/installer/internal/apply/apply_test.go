@@ -3,7 +3,9 @@ package apply
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -40,6 +42,41 @@ func (f *fakeRunner) Output(_ context.Context, name string, args ...string) (str
 func (f *fakeRunner) IsDryRun() bool { return f.dryRun }
 
 var _ run.CommandRunner = (*fakeRunner)(nil)
+
+func runValidatedStagingTestCommand(ctx context.Context, name string, args ...string) (bool, error) {
+	if name == "sudo" && len(args) >= 6 && args[1] == "-c" && args[2] == privilegedStagingCleanupPython {
+		parentPath := args[3]
+		stagingName := args[4]
+		expectedPath := args[5]
+		visible, err := os.Lstat(filepath.Join(parentPath, stagingName))
+		if err != nil {
+			return true, err
+		}
+		expected, err := os.Stat(expectedPath)
+		if err != nil {
+			return true, err
+		}
+		if !visible.IsDir() || !os.SameFile(visible, expected) {
+			return true, fmt.Errorf("test staging cleanup identity mismatch")
+		}
+		return true, os.RemoveAll(filepath.Join(parentPath, stagingName))
+	}
+	if filepath.Base(name) != "nix-store" {
+		return false, nil
+	}
+	return true, exec.CommandContext(ctx, name, args...).Run()
+}
+
+func runValidatedStagingTestOutput(ctx context.Context, name string, args ...string) (string, bool, error) {
+	if filepath.Base(name) != "nix" {
+		return "", false, nil
+	}
+	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	if err != nil {
+		return "", true, fmt.Errorf("%s failed: %w: %s", name, err, strings.TrimSpace(string(out)))
+	}
+	return strings.TrimSpace(string(out)), true, nil
+}
 
 func validState() config.State {
 	state := config.Default()
@@ -118,6 +155,8 @@ func commandSummary(calls []fakeCall) string {
 }
 
 func TestRunDryRunSkipSwitchHonoursInjectedRunner(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	repo, dest := fakeRepo(t)
 	fake := &fakeRunner{dryRun: true}
 
@@ -156,6 +195,8 @@ func TestRunDryRunSkipSwitchHonoursInjectedRunner(t *testing.T) {
 }
 
 func TestRunManagedThinLockUpdatesOnlyWahrwelt(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	repo, dest := fakeRepo(t)
 	fake := &fakeRunner{dryRun: true}
 

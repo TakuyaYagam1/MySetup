@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,25 +31,43 @@ func migrateCommand(opts *Options) *cobra.Command {
 				return fmt.Errorf("wahrwelt migration required: %s", strings.Join(legacy, ", "))
 			}
 
-			runner := run.New(opts.DryRun)
-			if err := runner.Command(cmd.Context(), "sudo", "systemctl", "start", "wahrwelt-brand-migration.service"); err != nil {
-				return fmt.Errorf("start system migration: %w; install the current generation with nixos-update first", err)
-			}
-
-			state, err := config.LoadExisting(opts.ExistingStatePath())
-			if err != nil {
-				return err
-			}
-			unit := "home-manager-" + state.User.Username + ".service"
-			if err := runner.Command(cmd.Context(), "sudo", "systemctl", "restart", unit); err != nil {
-				return fmt.Errorf("activate migrated user paths: %w", err)
-			}
-			fmt.Println("Wahrwelt migration completed")
-			return nil
+			return runMigration(cmd.Context(), opts, run.New(opts.DryRun))
 		},
 	}
 	cmd.Flags().BoolVar(&check, "check", false, "report managed legacy paths without changing them")
 	return cmd
+}
+
+func runMigration(ctx context.Context, opts *Options, runner run.CommandRunner) error {
+	// Restart, rather than start, so an already-active oneshot is forced to
+	// process namespace migrations introduced by a newer generation.
+	if err := runner.Command(ctx, "sudo", "systemctl", "restart", "wahrwelt-brand-migration.service"); err != nil {
+		return fmt.Errorf("restart system migration: %w; install the current generation with nixos-update first", err)
+	}
+
+	statePath, err := opts.ExistingStatePath()
+	if err != nil {
+		return err
+	}
+	state, err := config.LoadExisting(statePath)
+	if err != nil {
+		return err
+	}
+	unit := "home-manager-" + state.User.Username + ".service"
+	if err := runner.Command(ctx, "sudo", "systemctl", "restart", unit); err != nil {
+		return fmt.Errorf("activate migrated user paths: %w", err)
+	}
+	if !runner.IsDryRun() {
+		remaining, err := legacyInstallPaths(opts)
+		if err != nil {
+			return err
+		}
+		if len(remaining) != 0 {
+			return fmt.Errorf("wahrwelt migration incomplete; managed legacy paths remain: %s", strings.Join(remaining, ", "))
+		}
+	}
+	fmt.Println("Wahrwelt migration completed")
+	return nil
 }
 
 func legacyInstallPaths(opts *Options) ([]string, error) {
@@ -71,8 +90,11 @@ func legacyInstallPaths(opts *Options) ([]string, error) {
 
 	candidates := []string{
 		filepath.Join(opts.NixOSDest, "mysetup"),
+		filepath.Join(opts.NixOSDest, "private"),
+		filepath.Join(opts.NixOSDest, "wahrwelt", "state.json"),
 		filepath.Join(configHome, "mysetup"),
 		filepath.Join(configHome, "hypr", "mysetup"),
+		filepath.Join(configHome, "hypr", "wahrwelt"),
 		filepath.Join(configHome, "hypr", "lib", "mysetup.lua"),
 		filepath.Join(configHome, "quickshell", "mysetup-shell-selector"),
 		filepath.Join(stateHome, "mysetup"),
@@ -82,8 +104,8 @@ func legacyInstallPaths(opts *Options) ([]string, error) {
 	for _, candidate := range candidates {
 		if _, err := os.Lstat(candidate); err == nil {
 			found = append(found, candidate)
-		} else if !os.IsNotExist(err) && !os.IsPermission(err) {
-			return nil, err
+		} else if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("inspect managed migration path %s: %w", candidate, err)
 		}
 	}
 	return found, nil

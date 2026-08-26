@@ -1,6 +1,7 @@
 package shellruntime
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -60,7 +61,7 @@ func TestParseManifestRejectsEmptyProfileID(t *testing.T) {
 func TestParseManifestRejectsUnknownDefaultProfile(t *testing.T) {
 	_, err := parseManifest([]byte(`{
 		"defaultProfile":"ghost",
-		"profiles":[{"id":"caelestia","family":"caelestia"}]
+		"profiles":[{"id":"caelestia","family":"caelestia","adapter":"caelestia.keybinds"}]
 	}`))
 	if err == nil {
 		t.Fatal("expected error when defaultProfile is not listed in profiles")
@@ -74,8 +75,8 @@ func TestParseManifestRejectsDuplicateProfileID(t *testing.T) {
 	_, err := parseManifest([]byte(`{
 		"defaultProfile":"caelestia",
 		"profiles":[
-			{"id":"caelestia","family":"caelestia"},
-			{"id":"caelestia","family":"caelestia"}
+			{"id":"caelestia","family":"caelestia","adapter":"caelestia.keybinds"},
+			{"id":"caelestia","family":"caelestia","adapter":"caelestia.keybinds"}
 		]
 	}`))
 	if err == nil || !strings.Contains(err.Error(), "duplicate profile id") {
@@ -86,7 +87,7 @@ func TestParseManifestRejectsDuplicateProfileID(t *testing.T) {
 func TestParseManifestRequiresProfileFamily(t *testing.T) {
 	_, err := parseManifest([]byte(`{
 		"defaultProfile":"caelestia",
-		"profiles":[{"id":"caelestia"}]
+		"profiles":[{"id":"caelestia","adapter":"caelestia.keybinds"}]
 	}`))
 	if err == nil || !strings.Contains(err.Error(), "family is empty") {
 		t.Fatalf("expected missing family error, got %v", err)
@@ -97,8 +98,8 @@ func TestParseManifestRejectsDuplicateQuickshellConfigWithinFamily(t *testing.T)
 	_, err := parseManifest([]byte(`{
 		"defaultProfile":"end4",
 		"profiles":[
-			{"id":"end4","family":"end4","quickshellConfig":"ii","variantLabel":"Official"},
-			{"id":"end4-pc","family":"end4","quickshellConfig":"ii","variantLabel":"pC"}
+			{"id":"end4","family":"end4","adapter":"end4-adapter","quickshellConfig":"ii","variantLabel":"Official"},
+			{"id":"end4-pc","family":"end4","adapter":"end4-adapter","quickshellConfig":"ii","variantLabel":"pC"}
 		]
 	}`))
 	if err == nil || !strings.Contains(err.Error(), "duplicate quickshellConfig") {
@@ -114,12 +115,12 @@ func TestParseManifestRequiresEnd4VariantMetadata(t *testing.T) {
 	}{
 		{
 			name:    "quickshell config",
-			profile: `{"id":"end4","family":"end4","variantLabel":"Official"}`,
+			profile: `{"id":"end4","family":"end4","adapter":"end4-adapter","variantLabel":"Official"}`,
 			want:    "quickshellConfig is empty",
 		},
 		{
 			name:    "variant label",
-			profile: `{"id":"end4","family":"end4","quickshellConfig":"ii"}`,
+			profile: `{"id":"end4","family":"end4","adapter":"end4-adapter","quickshellConfig":"ii"}`,
 			want:    "variantLabel is empty",
 		},
 	}
@@ -129,6 +130,20 @@ func TestParseManifestRequiresEnd4VariantMetadata(t *testing.T) {
 			_, err := parseManifest([]byte(`{"defaultProfile":"end4","profiles":[` + tt.profile + `]}`))
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("expected %q error, got %v", tt.want, err)
+			}
+		})
+	}
+}
+
+func TestParseManifestRequiresSafeAdapterModule(t *testing.T) {
+	for _, adapter := range []string{"", "../end4", "end4/adapter", `end4\"adapter`, ".end4"} {
+		t.Run(adapter, func(t *testing.T) {
+			_, err := parseManifest([]byte(`{
+				"defaultProfile":"caelestia",
+				"profiles":[{"id":"caelestia","family":"caelestia","adapter":` + strconv.Quote(adapter) + `}]
+			}`))
+			if err == nil || !strings.Contains(err.Error(), "adapter is not a safe Lua module name") {
+				t.Fatalf("expected unsafe adapter error for %q, got %v", adapter, err)
 			}
 		})
 	}
@@ -144,12 +159,14 @@ func TestEmbeddedManifestDefinesEnd4Variants(t *testing.T) {
 		"end4": {
 			ID:               "end4",
 			Family:           "end4",
+			Adapter:          "end4-adapter",
 			QuickshellConfig: "ii",
 			VariantLabel:     "Official",
 		},
 		"end4-pc": {
 			ID:               "end4-pc",
 			Family:           "end4",
+			Adapter:          "end4-adapter",
 			QuickshellConfig: "end4-pC",
 			VariantLabel:     "pC",
 		},
@@ -163,7 +180,7 @@ func TestEmbeddedManifestDefinesEnd4Variants(t *testing.T) {
 			t.Fatalf("profile %q family must match its id, got %q", profile.ID, profile.Family)
 		}
 		if expected, ok := want[profile.ID]; ok {
-			if profile.Family != expected.Family || profile.QuickshellConfig != expected.QuickshellConfig || profile.VariantLabel != expected.VariantLabel {
+			if profile.Family != expected.Family || profile.Adapter != expected.Adapter || profile.QuickshellConfig != expected.QuickshellConfig || profile.VariantLabel != expected.VariantLabel {
 				t.Fatalf("profile %q metadata mismatch: got %#v want %#v", profile.ID, profile, expected)
 			}
 			delete(want, profile.ID)
@@ -171,5 +188,23 @@ func TestEmbeddedManifestDefinesEnd4Variants(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Fatalf("embedded manifest is missing end4 variants: %#v", want)
+	}
+}
+
+func TestEmbeddedManifestDefinesCanonicalAdapters(t *testing.T) {
+	want := map[string]string{
+		Noctalia:  "noctalia.keybinds",
+		Caelestia: "caelestia.keybinds",
+		End4:      "end4-adapter",
+		End4PC:    "end4-adapter",
+	}
+	for _, profile := range ProfileSpecs {
+		if got := profile.Adapter; got != want[profile.ID] {
+			t.Fatalf("profile %q adapter = %q, want %q", profile.ID, got, want[profile.ID])
+		}
+		delete(want, profile.ID)
+	}
+	if len(want) != 0 {
+		t.Fatalf("manifest is missing adapter profiles: %#v", want)
 	}
 }

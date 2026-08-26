@@ -49,7 +49,7 @@ func Run(ctx context.Context, opts Options) error {
 	if err := removeHomeManagerBackups(ctx, runner, filepath.Join(home, ".config")); err != nil {
 		return err
 	}
-	if err := repairActiveEnd4ProfileLink(ctx, runner, home); err != nil {
+	if err := validateActiveEnd4ProfileLink(home); err != nil {
 		return err
 	}
 	wallpaperDir := filepath.Join(home, "Pictures/Wallpapers")
@@ -129,7 +129,7 @@ func removeHomeManagerBackups(ctx context.Context, runner run.CommandRunner, con
 	return runner.Command(ctx, "find", configDir, "-type", "f", "-name", "*.backup", "-delete")
 }
 
-func repairActiveEnd4ProfileLink(ctx context.Context, runner run.CommandRunner, home string) error {
+func validateActiveEnd4ProfileLink(home string) error {
 	profile := shellruntime.ReadActiveShell(shellruntime.ActiveShellStatePath(home))
 	if profile == "" {
 		profile = shellruntime.ReadActiveShell(paths.LegacyActiveShellStatePath(home))
@@ -139,32 +139,18 @@ func repairActiveEnd4ProfileLink(ctx context.Context, runner run.CommandRunner, 
 	}
 	configDir := filepath.Join(home, ".config")
 	target := filepath.Join(configDir, "hypr", "end4")
-	if ok, err := shellruntime.RuntimeConfigExists(filepath.Join(target, "hyprland.lua")); err != nil || ok {
-		return err
-	}
-	source, err := shellruntime.End4SourceForProfileFromHomeManager(configDir, profile)
-	if err != nil || source == "" {
-		return err
-	}
-	if err := removeInvalidEnd4Target(ctx, runner, target); err != nil {
-		return err
-	}
-	return runner.Command(ctx, "ln", "-sfn", source, target)
-}
-
-func removeInvalidEnd4Target(ctx context.Context, runner run.CommandRunner, target string) error {
-	info, err := os.Lstat(target)
-	if err != nil {
+	if _, err := os.Lstat(target); err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
 		return err
 	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return runner.Command(ctx, "rm", "-f", "--", target)
+	sources, err := shellruntime.ProvenEnd4SourcesFromHomeManager(configDir)
+	if err != nil {
+		return err
 	}
-	if info.IsDir() {
-		return runner.Command(ctx, "rm", "-rf", "--", target)
+	if len(sources) == 0 {
+		return fmt.Errorf("refusing to mutate unowned End4 profile collision without an exact Home Manager source: %s", target)
 	}
-	return nil
+	return shellruntime.ValidateEnd4TargetOwnership(target, sources)
 }

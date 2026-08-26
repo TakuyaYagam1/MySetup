@@ -5,19 +5,44 @@ script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=Linux/dots/hypr/scripts/shell-runtime.sh
 . "$script_dir/shell-runtime.sh"
 
+requested_legacy_end4_upgrade_tokens=""
+legacy_end4_upgrade_tokens=""
+persist_end4_upgrade_only=0
+case "${1:-}" in
+  --legacy-direct-end4-upgrade-processes | --persist-end4-upgrade-processes)
+    [ "$#" -ge 2 ] || {
+      printf 'usage: %s [--legacy-direct-end4-upgrade-processes TOKENS] [PROFILE]\n' "$0" >&2
+      exit 2
+    }
+    if [ "$1" = --persist-end4-upgrade-processes ]; then
+      persist_end4_upgrade_only=1
+    fi
+    requested_legacy_end4_upgrade_tokens="$2"
+    shift 2
+    if [[ ! "$requested_legacy_end4_upgrade_tokens" =~ ^[1-9][0-9]*:[1-9][0-9]*:(ii|end4-pC)(,[1-9][0-9]*:[1-9][0-9]*:(ii|end4-pC))*$ ]]; then
+      printf 'invalid direct End4 upgrade process provenance\n' >&2
+      exit 2
+    fi
+    ;;
+esac
+[ "$persist_end4_upgrade_only" -eq 0 ] || [ "$#" -eq 0 ] || {
+  printf 'usage: %s --persist-end4-upgrade-processes TOKENS\n' "$0" >&2
+  exit 2
+}
+[ "$#" -le 1 ] || {
+  printf 'usage: %s [--legacy-direct-end4-upgrade-processes TOKENS] [PROFILE]\n' "$0" >&2
+  exit 2
+}
 requested_profile="${1:-}"
-config_home="$wahrwelt_config_home"
 runtime_dir="$wahrwelt_runtime_session_dir"
 persistent_state_file="$wahrwelt_active_shell_state"
 log_file="$wahrwelt_log_file"
 lock_dir="$runtime_dir/wahrwelt-shell.lock"
 lock_owner_file="$lock_dir/owner"
+lock_identity=""
 hypr_runtime_dir="$wahrwelt_hypr_runtime_dir"
 user_name="$wahrwelt_user_name"
 selector_pattern="$wahrwelt_selector_pattern"
-end4_pattern="$wahrwelt_end4_pattern"
-end4_official_pattern="$wahrwelt_end4_official_pattern"
-end4_pc_pattern="$wahrwelt_end4_pc_pattern"
 caelestia_pattern="$wahrwelt_caelestia_pattern"
 selector_handle='__selector__'
 caelestia_handle='__caelestia__'
@@ -29,17 +54,32 @@ end4_pc_handle='__end4_pc__'
 end4_idle_handle='__end4_idle__'
 end4_idle_config="$hypr_runtime_dir/hypridle.conf"
 end4_env_pattern="$wahrwelt_end4_env_pattern"
-end4_official_env_pattern="$wahrwelt_end4_official_env_pattern"
-end4_pc_env_pattern="$wahrwelt_end4_pc_env_pattern"
 
 # shellcheck source=Linux/dots/hypr/scripts/shell-runtime-env.sh
 . "$script_dir/shell-runtime-env.sh"
 # shellcheck source=Linux/dots/hypr/scripts/shell-profile-sync.sh
 . "$script_dir/shell-profile-sync.sh"
-# shellcheck source=Linux/dots/hypr/scripts/shell-end4-overrides.sh
-. "$script_dir/shell-end4-overrides.sh"
 # shellcheck source=Linux/dots/hypr/scripts/shell-process.sh
 . "$script_dir/shell-process.sh"
+
+if ! wahrwelt_open_end4_upgrade_state; then
+  printf 'End4 upgrade process state ownership collision\n' >&2
+  exit 1
+fi
+if [ -n "$requested_legacy_end4_upgrade_tokens" ]; then
+  if ! legacy_end4_upgrade_tokens="$(
+    wahrwelt_merge_end4_upgrade_tokens "$requested_legacy_end4_upgrade_tokens"
+  )"; then
+    printf 'Failed to persist End4 upgrade process provenance\n' >&2
+    exit 1
+  fi
+elif ! legacy_end4_upgrade_tokens="$(wahrwelt_read_end4_upgrade_tokens)"; then
+  printf 'Failed to read End4 upgrade process provenance\n' >&2
+  exit 1
+fi
+if [ "$persist_end4_upgrade_only" -eq 1 ]; then
+  exit 0
+fi
 
 prepare_runtime_environment
 
@@ -80,23 +120,63 @@ hypr_dir() {
 }
 
 acquire_lock() {
-  local attempt lock_owner lock_pid lock_profile
+  local attempt lock_owner lock_pid lock_profile stale_identity recovery publish_state
 
   for attempt in $(seq 1 80); do
-    if mkdir "$lock_dir" 2>/dev/null; then
-      printf '%s\n' "$$" >"$lock_dir/pid"
-      printf '%s\n' "$profile" >"$lock_dir/profile"
-      printf '%s\n' "wahrwelt-start-shell" >"$lock_owner_file"
-      return 0
+    if wahrwelt_begin_new_lock_directory "$lock_dir"; then
+      if ! wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" pid "$$
+" ||
+        ! wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" profile "$profile
+" ||
+        ! wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" owner "wahrwelt-start-shell
+"; then
+        wahrwelt_close_new_lock_directory
+        log "new start-shell lock changed before ownership record; retaining collision at $lock_dir"
+        return 1
+      fi
+      if wahrwelt_finish_new_lock_directory "$lock_dir"; then
+        if ! start_shell_known_lock_directory; then
+          log "published start-shell lock changed before ownership record; retaining collision at $lock_dir"
+          return 1
+        fi
+        lock_identity="$wahrwelt_acquired_lock_identity"
+        [ -n "$lock_identity" ] || return 1
+        return 0
+      fi
+      publish_state="$wahrwelt_new_lock_publish_state"
+      wahrwelt_close_new_lock_directory
+      if [ "$publish_state" != collision ]; then
+        log "new start-shell lock changed before atomic publication; retaining collision at $lock_dir"
+        return 1
+      fi
     fi
 
-    lock_owner="$(cat "$lock_owner_file" 2>/dev/null || true)"
-    lock_pid="$(cat "$lock_dir/pid" 2>/dev/null || true)"
-    lock_profile="$(cat "$lock_dir/profile" 2>/dev/null || true)"
+    if declare -F wahrwelt_after_new_lock_begin_failed_hook >/dev/null 2>&1; then
+      wahrwelt_after_new_lock_begin_failed_hook "$lock_dir" || return 1
+    fi
+
+    if ! start_shell_known_lock_directory; then
+      if wahrwelt_lock_path_absent "$lock_dir"; then
+        continue
+      fi
+      log "refusing unknown or nonempty stale start-shell lock; profile=$profile pid=unknown"
+      return 1
+    fi
+    lock_owner="$(wahrwelt_read_known_lock_field "$lock_dir" owner 2>/dev/null || true)"
+    lock_pid="$(wahrwelt_read_known_lock_field "$lock_dir" pid 2>/dev/null || true)"
+    lock_profile="$(wahrwelt_read_known_lock_field "$lock_dir" profile 2>/dev/null || true)"
+    if declare -F wahrwelt_after_lock_owner_read_hook >/dev/null 2>&1; then
+      wahrwelt_after_lock_owner_read_hook "$lock_dir" "$lock_pid" || return 1
+    fi
     if [ "$lock_owner" = "wahrwelt-start-shell" ] && wahrwelt_pid_matches "$lock_pid" '(^|[ /])start-shell\.sh([[:space:]]|$)'; then
       if [ "$lock_profile" = "$profile" ]; then
-        log "another start-shell instance is already running for profile=$profile pid=$lock_pid"
-        exit 0
+        if [ -z "$legacy_end4_upgrade_tokens" ]; then
+          log "another start-shell instance is already running for profile=$profile pid=$lock_pid"
+          exit 0
+        fi
+        log "waiting for start-shell upgrade lock; requested=$profile active=$lock_profile pid=$lock_pid"
+        sleep 0.25
+        continue
       fi
 
       log "waiting for start-shell switch lock; requested=$profile active=${lock_profile:-unknown} pid=$lock_pid"
@@ -104,16 +184,157 @@ acquire_lock() {
       continue
     fi
 
-    log "removing stale start-shell lock; profile=$profile pid=${lock_pid:-unknown}"
-    rm -rf "$lock_dir"
+    if ! start_shell_known_lock_directory; then
+      if wahrwelt_lock_path_absent "$lock_dir"; then
+        continue
+      fi
+      log "stale start-shell lock changed after classification; preserving collision at $lock_dir"
+      return 1
+    fi
+    stale_identity="$wahrwelt_known_lock_identity"
+    [ -n "$stale_identity" ] || return 1
+    if declare -F wahrwelt_after_lock_classification_hook >/dev/null 2>&1; then
+      wahrwelt_after_lock_classification_hook "$lock_dir" "$stale_identity" || return 1
+    fi
+    if ! wahrwelt_quarantine_owned_lock "$lock_dir" "$stale_identity" 2>/dev/null; then
+      if wahrwelt_lock_path_absent "$lock_dir"; then
+        continue
+      fi
+      log "stale start-shell lock changed during quarantine; preserving collision at $lock_dir"
+      return 1
+    fi
+    recovery="$wahrwelt_lock_recovery_exact_path"
+    if [ -z "$recovery" ]; then
+      log "stale start-shell lock quarantine lost its exact recovery; preserving collision at $lock_dir"
+      return 1
+    fi
+    log "stale start-shell lock retained at $recovery; profile=$profile pid=${lock_pid:-unknown}"
   done
 
   log "failed to acquire start-shell lock; profile=$profile"
   exit 1
 }
 
-acquire_lock
-trap 'rm -rf "$lock_dir" 2>/dev/null || true' EXIT
+start_shell_known_lock_directory() {
+  wahrwelt_known_lock_directory "$lock_dir" "$lock_dir/pid" "$lock_owner_file" \
+    "wahrwelt-start-shell" "profile:f"
+}
+
+if ! acquire_lock; then
+  exit 1
+fi
+runtime_bundle_snapshot_dir=""
+state_snapshot_dir=""
+switch_transaction_active=0
+shell_processes_touched=0
+profile_start_attempted=0
+hypr_reload_started=0
+previous=""
+runtime_bundle_path_list=()
+state_path_list=("$persistent_state_file" "$wahrwelt_end4_variant_state")
+
+discard_switch_snapshots() {
+  if [ -n "$runtime_bundle_snapshot_dir" ]; then
+    remove_exact_path_snapshot "$runtime_bundle_snapshot_dir" "${runtime_bundle_path_list[@]}" ||
+      log "runtime rollback snapshot cleanup refused; exact recovery retained"
+    runtime_bundle_snapshot_dir=""
+  fi
+  if [ -n "$state_snapshot_dir" ]; then
+    remove_exact_path_snapshot "$state_snapshot_dir" "${state_path_list[@]}" ||
+      log "state rollback snapshot cleanup refused; exact recovery retained"
+    state_snapshot_dir=""
+  fi
+}
+
+cleanup_start_shell() {
+  local recovery recovery_identity
+
+  trap - EXIT
+  if [ "$switch_transaction_active" -eq 1 ]; then
+    if [ "$shell_processes_touched" -eq 1 ] && [ "$profile_start_attempted" -eq 1 ]; then
+      cleanup_failed_profile_start "$profile"
+      profile_start_attempted=0
+    fi
+    if rollback_switch_transaction; then
+      if [ "$shell_processes_touched" -eq 1 ] && valid_profile "$previous"; then
+        profile="$previous"
+        if [ "$(wahrwelt_shell_family "$profile")" != end4 ]; then
+          stop_end4_idle
+        fi
+        if start_profile_shell; then
+          if [ "$hypr_reload_started" -eq 1 ]; then
+            reload_hypr
+          fi
+        else
+          log "failed to restart previous shell during transaction rollback; profile=$profile"
+          cleanup_failed_profile_start "$profile"
+        fi
+      fi
+      switch_transaction_active=0
+      shell_processes_touched=0
+      hypr_reload_started=0
+      discard_switch_snapshots
+    else
+      log "shell transaction rollback failed on exit; preserving private snapshots for recovery"
+    fi
+  else
+    discard_switch_snapshots
+  fi
+  if [ -n "$lock_identity" ]; then
+    if wahrwelt_release_owned_lock "$lock_dir" "$lock_identity" 2>/dev/null; then
+      recovery="${wahrwelt_lock_recovery_exact_path:-}"
+      recovery_identity="${wahrwelt_lock_recovery_identity:-}"
+      if [ -n "$recovery" ] && [ -n "$recovery_identity" ]; then
+        log "start-shell lock retained at exact recovery path: $recovery identity=$recovery_identity"
+      else
+        log "start-shell lock release lost its durable recovery report; preserving collision at $lock_dir"
+      fi
+    else
+      log "start-shell lock changed during cleanup; preserving collision at $lock_dir"
+    fi
+  fi
+}
+
+trap cleanup_start_shell EXIT
+
+begin_switch_transaction() {
+  mapfile -t runtime_bundle_path_list < <(runtime_bundle_paths)
+  wahrwelt_begin_exact_snapshot "$runtime_dir" .runtime-rollback- runtime || return 1
+  runtime_bundle_snapshot_dir="$wahrwelt_new_snapshot_dir"
+  if ! snapshot_exact_paths "$runtime_bundle_snapshot_dir" "${runtime_bundle_path_list[@]}"; then
+    discard_switch_snapshots
+    return 1
+  fi
+
+  if ! wahrwelt_begin_exact_snapshot "$runtime_dir" .state-switch-rollback- state; then
+    discard_switch_snapshots
+    return 1
+  fi
+  state_snapshot_dir="$wahrwelt_new_snapshot_dir"
+  if ! snapshot_exact_paths "$state_snapshot_dir" "${state_path_list[@]}"; then
+    discard_switch_snapshots
+    return 1
+  fi
+  switch_transaction_active=1
+}
+
+restore_runtime_bundle() {
+  [ -n "$runtime_bundle_snapshot_dir" ] || return 1
+  restore_exact_paths "$runtime_bundle_snapshot_dir" "${runtime_bundle_path_list[@]}"
+}
+
+restore_original_state() {
+  [ -n "$state_snapshot_dir" ] || return 1
+  restore_exact_paths "$state_snapshot_dir" "${state_path_list[@]}"
+}
+
+rollback_switch_transaction() {
+  local status=0
+
+  restore_runtime_bundle || status=1
+  restore_original_state || status=1
+  return "$status"
+}
 
 wait_for_session() {
   local attempt
@@ -253,7 +474,7 @@ start_profile_shell() {
       ;;
 
     end4 | end4-pc)
-      local end4_config end4_exact_handle
+      local end4_config end4_exact_handle end4_quickshell_path
 
       end4_config="$(wahrwelt_end4_quickshell_config "$profile")" || return 1
       if [ "$profile" = "end4-pc" ]; then
@@ -262,7 +483,7 @@ start_profile_shell() {
         end4_exact_handle="$end4_official_handle"
       fi
 
-      ensure_end4_idle || true
+      ensure_end4_idle || return 1
       dedupe_shell "end4" "$end4_handle" stop_end4 || true
 
       # A single end4 family process may survive an unclean state update. Do
@@ -273,16 +494,90 @@ start_profile_shell() {
       fi
 
       if command -v qs-end4 >/dev/null 2>&1; then
-        wahrwelt_export_end4_quickshell_config "$profile" || return 1
-        start_with_retry "end4 ($profile)" "$end4_exact_handle" qs-end4 -n -d -c "$end4_config" || return 1
-        sleep 0.5
-        apply_end4_hypr_runtime_overrides
+        end4_quickshell_path="$(wahrwelt_end4_quickshell_path "$profile")" || return 1
+        start_with_retry "end4 ($profile)" "$end4_exact_handle" \
+          env \
+          WAHRWELT_END4_PROFILE="$profile" \
+          WAHRWELT_QS_CONFIG="$end4_quickshell_path" \
+          qsConfig="$end4_quickshell_path" \
+          ILLOGICAL_IMPULSE_DOTFILES_SOURCE="$wahrwelt_config_home" \
+          ILLOGICAL_IMPULSE_VIRTUAL_ENV="$wahrwelt_state_home/quickshell/.venv" \
+          qs-end4 -n -d -c "$end4_config" || return 1
       else
         log "qs-end4 command not found"
         return 1
       fi
       ;;
   esac
+}
+
+cleanup_failed_profile_start() {
+  local failed_profile="$1"
+
+  case "$failed_profile" in
+    caelestia) stop_caelestia ;;
+    noctalia) stop_noctalia ;;
+    end4 | end4-pc)
+      stop_end4
+      stop_end4_idle
+      ;;
+  esac
+}
+
+attempt_previous_fallback() {
+  local failed_profile="$1"
+
+  valid_profile "$previous" || return 1
+  [ "$previous" != "$failed_profile" ] || return 1
+  if ! rollback_switch_transaction; then
+    log "failed to restore prior shell transaction before fallback profile=$previous"
+    return 1
+  fi
+
+  profile="$previous"
+  profile_start_attempted=0
+  log "attempting fallback to previous profile=$profile"
+  if [ "$(wahrwelt_shell_family "$profile")" != end4 ]; then
+    stop_end4_idle
+  fi
+  if ! prepare_profile_or_fallback; then
+    log "fallback preparation failed for profile=$profile"
+    rollback_switch_transaction || log "failed to restore shell transaction after fallback preparation error"
+    return 1
+  fi
+  profile_start_attempted=1
+  if ! start_profile_shell; then
+    log "fallback start failed for profile=$profile"
+    cleanup_failed_profile_start "$profile"
+    profile_start_attempted=0
+    rollback_switch_transaction || log "failed to restore shell transaction after fallback start error"
+    return 1
+  fi
+
+  if ! restore_runtime_bundle; then
+    log "failed to restore prior runtime bundle after fallback profile=$profile"
+    return 1
+  fi
+  if ! persist_profile; then
+    log "failed to persist runtime shell state for fallback profile=$profile"
+    restore_original_state || log "failed to restore prior shell state after fallback persistence error"
+    return 1
+  fi
+  if ! restore_original_state; then
+    log "failed to restore prior shell state after fallback profile=$profile"
+    return 1
+  fi
+
+  hypr_reload_started=1
+  if ! reload_hypr; then
+    log "failed to reload Hyprland for fallback profile=$profile"
+    return 1
+  fi
+  propagate_runtime_environment
+  hypr_reload_started=0
+  profile_start_attempted=0
+  shell_processes_touched=0
+  return 0
 }
 
 valid_profile() {
@@ -292,16 +587,30 @@ valid_profile() {
 log "requested profile=$profile input=${requested_profile:-auto}"
 wait_for_session
 
-previous=""
 if [ -f "$persistent_state_file" ]; then
   previous="$(tr -d '[:space:]' <"$persistent_state_file" 2>/dev/null || true)"
 fi
 
-if ! prepare_profile_or_fallback; then
-  log "aborting shell switch before stopping current shell; profile=$profile"
+if ! begin_switch_transaction; then
+  log "unable to snapshot shell runtime transaction; profile=$profile"
   exit 1
 fi
 
+if ! prepare_profile_or_fallback; then
+  log "aborting shell switch before stopping current shell; profile=$profile"
+  rollback_switch_transaction || log "failed to restore shell transaction after preparation error"
+  exit 1
+fi
+
+if [ -n "$legacy_end4_upgrade_tokens" ]; then
+  shell_processes_touched=1
+  if ! cleanup_legacy_end4_processes; then
+    log "aborting shell switch after pre-marker end4 cleanup failure; profile=$profile"
+    exit 1
+  fi
+fi
+
+shell_processes_touched=1
 if [ "$previous" != "$profile" ] || [ -n "$requested_profile" ]; then
   stop_quickshells
   sleep 0.2
@@ -313,26 +622,41 @@ if [ "$(wahrwelt_shell_family "$profile")" != "end4" ]; then
   stop_end4_idle
 fi
 
+profile_start_attempted=1
 if ! start_profile_shell; then
   failed_profile="$profile"
   log "shell start failed for profile=$failed_profile; active state was not changed"
-
-  if valid_profile "$previous" && [ "$previous" != "$failed_profile" ]; then
-    profile="$previous"
-    log "attempting fallback to previous profile=$profile"
-    if prepare_profile_or_fallback && start_profile_shell; then
-      persist_profile || log "failed to persist runtime shell state for fallback profile=$profile"
-      reload_hypr
-      apply_end4_hypr_runtime_overrides
-      propagate_runtime_environment
-      exit 1
-    fi
+  cleanup_failed_profile_start "$failed_profile"
+  profile_start_attempted=0
+  if attempt_previous_fallback "$failed_profile"; then
+    exit 1
   fi
-
+  rollback_switch_transaction || log "failed to restore shell transaction after start error"
   exit 1
 fi
 
-persist_profile || log "failed to persist runtime shell state for profile=$profile"
-reload_hypr
-apply_end4_hypr_runtime_overrides
+if ! persist_profile; then
+  failed_profile="$profile"
+  log "failed to persist runtime shell state for profile=$profile"
+  if [ "$previous" != "$failed_profile" ]; then
+    stop_quickshells
+    cleanup_failed_profile_start "$failed_profile"
+    profile_start_attempted=0
+    if valid_profile "$previous" && attempt_previous_fallback "$failed_profile"; then
+      exit 1
+    fi
+  fi
+  rollback_switch_transaction || log "failed to restore shell transaction after persistence error"
+  exit 1
+fi
+hypr_reload_started=1
+if ! reload_hypr; then
+  log "failed to reload Hyprland after runtime sync; rolling back transaction"
+  exit 1
+fi
 propagate_runtime_environment
+switch_transaction_active=0
+profile_start_attempted=0
+shell_processes_touched=0
+hypr_reload_started=0
+discard_switch_snapshots

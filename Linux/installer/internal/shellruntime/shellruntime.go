@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -20,6 +23,65 @@ const (
 	End4PC    = "end4-pc"
 
 	End4Family = "end4"
+
+	AdapterMarkerPrefix = "-- Wahrwelt shell adapter: "
+
+	canonicalEntrypoint = `-- Wahrwelt canonical Hyprland runtime entrypoint
+local home = os.getenv("HOME")
+if home == nil then
+    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
+end
+
+local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
+local hypr_root = config_home .. "/hypr"
+package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
+dofile(hypr_root .. "/user/hyprland.lua")
+`
+	legacyUserEntrypoint = `-- Wahrwelt canonical Hyprland runtime entrypoint
+local home = os.getenv("HOME")
+if home == nil then
+    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
+end
+
+local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
+local hypr_root = config_home .. "/hypr"
+package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
+dofile(hypr_root .. "/wahrwelt/hyprland.lua")
+`
+	userNamespaceTransitionEntrypoint = `-- Wahrwelt Hypr user namespace transition entrypoint
+local home = os.getenv("HOME")
+if home == nil then
+    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
+end
+
+local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
+local hypr_root = config_home .. "/hypr"
+package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
+
+local readable_adapters = {}
+for _, namespace in ipairs({ "user", "wahrwelt" }) do
+    local path = hypr_root .. "/" .. namespace .. "/hyprland.lua"
+    local file = io.open(path, "r")
+    if file ~= nil then
+        file:close()
+        table.insert(readable_adapters, path)
+    end
+end
+
+if #readable_adapters ~= 1 then
+    error(
+        "Wahrwelt user namespace transition: expected exactly one readable Hypr user adapter, found "
+            .. #readable_adapters
+    )
+end
+
+dofile(readable_adapters[1])
+`
+)
+
+var (
+	safeLuaModuleName        = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*(\.[A-Za-z_][A-Za-z0-9_-]*)*$`)
+	homeManagerFilesStoreDir = regexp.MustCompile(`^[0-9a-df-np-sv-z]{32}-home-manager-files$`)
 )
 
 //go:embed manifest.json
@@ -63,6 +125,7 @@ type Manifest struct {
 type Profile struct {
 	ID               string `json:"id"`
 	Family           string `json:"family"`
+	Adapter          string `json:"adapter"`
 	QuickshellConfig string `json:"quickshellConfig,omitempty"`
 	VariantLabel     string `json:"variantLabel,omitempty"`
 	Title            string `json:"title"`
@@ -92,6 +155,9 @@ func parseManifest(data []byte) (Manifest, error) {
 		}
 		if profile.Family == "" {
 			return Manifest{}, fmt.Errorf("shell runtime manifest profile %q family is empty", profile.ID)
+		}
+		if !safeLuaModuleName.MatchString(profile.Adapter) {
+			return Manifest{}, fmt.Errorf("shell runtime manifest profile %q adapter is not a safe Lua module name", profile.ID)
 		}
 		if profile.Family == End4Family {
 			if profile.QuickshellConfig == "" {
@@ -154,6 +220,32 @@ func IsEnd4Profile(profileID string) bool {
 	return IsFamily(profileID, End4Family)
 }
 
+func AdapterMarker(profileID string) string {
+	return AdapterMarkerPrefix + profileID
+}
+
+func CanonicalEntrypoint() string {
+	return canonicalEntrypoint
+}
+
+func HomeManagerInitialCanonicalEntrypoint() string {
+	return fmt.Sprintf(`-- Active Hyprland profile: wahrwelt (%s)
+local home = os.getenv("HOME")
+if home == nil then
+    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
+end
+
+local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
+local hypr_root = config_home .. "/hypr"
+package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
+dofile(hypr_root .. "/user/hyprland.lua")
+`, DefaultProfile)
+}
+
+func UserNamespaceTransitionEntrypoint() string {
+	return userNamespaceTransitionEntrypoint
+}
+
 func RuntimeDir(home string) string {
 	return filepath.Join(paths.XDGStateHome(home), "wahrwelt", "hypr-runtime")
 }
@@ -182,37 +274,75 @@ func ReadActiveShell(path string) string {
 }
 
 func ReadEnd4Variant(path string) string {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return End4
-	}
-	switch string(data) {
-	case End4 + "\n":
-		return End4
-	case End4PC + "\n":
+	if exactRegularFileNoFollow(path, End4PC+"\n") {
 		return End4PC
 	}
 	return End4
 }
 
+func exactRegularFileNoFollow(path, expected string) bool {
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
+	if err != nil {
+		return false
+	}
+	if fd < 0 {
+		return false
+	}
+	file := os.NewFile(uintptr(fd), path)
+	if file == nil {
+		_ = unix.Close(fd)
+		return false
+	}
+	defer func() { _ = file.Close() }()
+
+	openedInfo, err := file.Stat()
+	if err != nil || !regularFileSizeMatches(openedInfo, len(expected)) {
+		return false
+	}
+	if !pathNamesSameRegularFile(path, openedInfo) {
+		return false
+	}
+	data, err := io.ReadAll(io.LimitReader(file, int64(len(expected)+1)))
+	if err != nil || string(data) != expected {
+		return false
+	}
+	openedAfter, err := file.Stat()
+	if err != nil || !regularFileSizeMatches(openedAfter, len(data)) || !os.SameFile(openedInfo, openedAfter) {
+		return false
+	}
+	return pathNamesSameRegularFile(path, openedAfter)
+}
+
+func regularFileSizeMatches(info os.FileInfo, size int) bool {
+	return info.Mode().IsRegular() && info.Size() == int64(size)
+}
+
+func pathNamesSameRegularFile(path string, opened os.FileInfo) bool {
+	pathInfo, err := os.Lstat(path)
+	return err == nil && pathInfo.Mode().IsRegular() && os.SameFile(opened, pathInfo)
+}
+
 func DetectShellFromEntrypoint(entrypointPath, keybindsPath string) string {
-	return DetectShellFromEntrypointWithEnd4Variant(entrypointPath, keybindsPath, "")
+	return DetectShellFromEntrypointWithEnd4VariantForConfigHome(entrypointPath, keybindsPath, "", "")
 }
 
 func DetectShellFromEntrypointWithEnd4Variant(entrypointPath, keybindsPath, end4VariantPath string) string {
+	return DetectShellFromEntrypointWithEnd4VariantForConfigHome(entrypointPath, keybindsPath, end4VariantPath, "")
+}
+
+func DetectShellFromEntrypointWithEnd4VariantForConfigHome(entrypointPath, keybindsPath, end4VariantPath, _ string) string {
 	data, err := os.ReadFile(entrypointPath)
 	if err != nil {
 		return ""
 	}
 	text := string(data)
 	switch {
-	case strings.Contains(text, "end4/hyprland.lua"):
+	case isKnownGeneratedDirectEnd4Entrypoint(text):
 		if end4VariantPath != "" {
 			return ReadEnd4Variant(end4VariantPath)
 		}
 		return End4
-	case strings.Contains(text, "wahrwelt/hyprland.lua"),
-		strings.Contains(text, "mysetup/hyprland.lua"):
+	case isKnownCanonicalEntrypoint(text), isKnownLegacyUserEntrypoint(text), isKnownHistoricalHomeManagerSeededUserEntrypoint(text), text == userNamespaceTransitionEntrypoint:
 		return DetectShellFromKeybinds(keybindsPath)
 	default:
 		return ""
@@ -224,15 +354,108 @@ func DetectShellFromKeybinds(path string) string {
 	if err != nil {
 		return ""
 	}
-	text := string(data)
-	switch {
-	case strings.Contains(text, "noctalia.keybinds") || strings.Contains(text, "noctalia/keybinds.lua") || strings.Contains(text, "noctalia-shell ipc call") || strings.Contains(text, "noctalia-msg.sh") || strings.Contains(text, "noctalia-launcher.sh"):
-		return Noctalia
-	case strings.Contains(text, "caelestia.keybinds") || strings.Contains(text, "caelestia/keybinds.lua") || strings.Contains(text, "caelestia:launcher"):
-		return Caelestia
-	default:
-		return ""
+	firstLine, _, _ := strings.Cut(string(data), "\n")
+	for _, profile := range ProfileSpecs {
+		if firstLine == AdapterMarker(profile.ID) {
+			return profile.ID
+		}
 	}
+	return ""
+}
+
+func IsLegacyDirectEnd4Entrypoint(path string) bool {
+	return IsLegacyDirectEnd4EntrypointForConfigHome(path, "")
+}
+
+func IsLegacyDirectEnd4EntrypointForConfigHome(path, _ string) bool {
+	data, err := os.ReadFile(path)
+	return err == nil && isKnownGeneratedDirectEnd4Entrypoint(string(data))
+}
+
+func IsCanonicalEntrypoint(path string) bool {
+	data, err := os.ReadFile(path)
+	return err == nil && isKnownCanonicalEntrypoint(string(data))
+}
+
+func IsLegacyUserEntrypoint(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return isKnownLegacyUserEntrypoint(string(data))
+}
+
+func IsUserNamespaceTransitionEntrypoint(path string) bool {
+	data, err := os.ReadFile(path)
+	return err == nil && string(data) == userNamespaceTransitionEntrypoint
+}
+
+func IsHistoricalHomeManagerSeededUserEntrypoint(path string) bool {
+	data, err := os.ReadFile(path)
+	return err == nil && isKnownHistoricalHomeManagerSeededUserEntrypoint(string(data))
+}
+
+func legacyHomeManagerUserEntrypoint() string {
+	return fmt.Sprintf(`-- Active Hyprland profile: wahrwelt (%s)
+local home = os.getenv("HOME")
+if home == nil then
+    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
+end
+
+local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
+local hypr_root = config_home .. "/hypr"
+package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
+dofile(hypr_root .. "/wahrwelt/hyprland.lua")
+`, DefaultProfile)
+}
+
+func isKnownLegacyUserEntrypoint(text string) bool {
+	return text == legacyUserEntrypoint || text == legacyHomeManagerUserEntrypoint()
+}
+
+func isKnownHistoricalHomeManagerSeededUserEntrypoint(text string) bool {
+	return text == historicalHomeManagerSeededUserEntrypoint("wahrwelt") ||
+		text == historicalHomeManagerSeededUserEntrypoint("user")
+}
+
+func historicalHomeManagerSeededUserEntrypoint(namespace string) string {
+	return fmt.Sprintf(`-- Active Hyprland profile: wahrwelt (%s)
+local home = os.getenv("HOME")
+if home == nil then
+    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
+end
+
+local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
+local state_home = os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")
+local hypr_root = config_home .. "/hypr"
+local runtime_root = state_home .. "/wahrwelt/hypr-runtime"
+package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
+dofile(hypr_root .. "/%s/hyprland.lua")
+dofile(runtime_root .. "/shell-profile.lua")
+`, DefaultProfile, namespace)
+}
+
+func isKnownCanonicalEntrypoint(text string) bool {
+	return text == canonicalEntrypoint || text == HomeManagerInitialCanonicalEntrypoint()
+}
+
+func isKnownGeneratedDirectEnd4Entrypoint(text string) bool {
+	return text == legacyDirectEnd4Entrypoint(End4) || text == legacyDirectEnd4Entrypoint(End4PC)
+}
+
+func legacyDirectEnd4Entrypoint(profile string) string {
+	return fmt.Sprintf(`-- Active Hyprland profile: %s
+local home = os.getenv("HOME")
+if home == nil then
+    error("HOME is not set; cannot locate end4 Hyprland config")
+end
+
+local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
+local hypr_root = config_home .. "/hypr"
+local end4_root = hypr_root .. "/end4"
+package.path = end4_root .. "/?.lua;" .. end4_root .. "/?/init.lua;" .. hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
+dofile(end4_root .. "/hyprland.lua")
+`, profile)
 }
 
 func BootstrapActiveShell(home, hyprDir string) string {
@@ -243,10 +466,11 @@ func BootstrapActiveShell(home, hyprDir string) string {
 		return profile
 	}
 	variantPath := End4VariantStatePath(home)
-	if profile := DetectShellFromEntrypointWithEnd4Variant(RuntimeFile(home, "hyprland.lua"), RuntimeFile(home, "shell-keybinds.lua"), variantPath); profile != "" {
+	configHome := filepath.Dir(hyprDir)
+	if profile := DetectShellFromEntrypointWithEnd4VariantForConfigHome(RuntimeFile(home, "hyprland.lua"), RuntimeFile(home, "shell-keybinds.lua"), variantPath, configHome); profile != "" {
 		return profile
 	}
-	if profile := DetectShellFromEntrypointWithEnd4Variant(filepath.Join(hyprDir, "hyprland.lua"), filepath.Join(hyprDir, "shell-keybinds.lua"), variantPath); profile != "" {
+	if profile := DetectShellFromEntrypointWithEnd4VariantForConfigHome(filepath.Join(hyprDir, "hyprland.lua"), filepath.Join(hyprDir, "shell-keybinds.lua"), variantPath, configHome); profile != "" {
 		return profile
 	}
 	return DefaultProfile
@@ -257,15 +481,60 @@ func End4SourceFromHomeManager(configDir string) (string, error) {
 	return End4SourceForProfileFromHomeManager(configDir, ReadEnd4Variant(End4VariantStatePath(home)))
 }
 
-func End4SourceForProfileFromHomeManager(configDir, profileID string) (string, error) {
-	profile, ok := ProfileByID(profileID)
-	if !ok || profile.Family != End4Family {
-		profile, _ = ProfileByID(End4)
-	}
-	if source, err := end4SourceFromQuickshellLink(configDir, profile.QuickshellConfig); err != nil || source != "" {
-		return source, err
-	}
+func End4SourceForProfileFromHomeManager(configDir, _ string) (string, error) {
 	return end4SourceFromGCRoot(filepath.Dir(configDir))
+}
+
+func ProvenEnd4SourcesFromHomeManager(configDir string) ([]string, error) {
+	var sources []string
+	current, err := end4SourceFromGCRoot(filepath.Dir(configDir))
+	if err != nil {
+		return nil, err
+	}
+	if current != "" {
+		sources = append(sources, current)
+	}
+	immutable, err := immutableEnd4SourceFromTarget(filepath.Join(configDir, "hypr", "end4"))
+	if err != nil {
+		return nil, err
+	}
+	if immutable != "" && !slices.Contains(sources, immutable) {
+		sources = append(sources, immutable)
+	}
+	return sources, nil
+}
+
+func ValidateEnd4TargetOwnership(target string, sources []string) error {
+	targetLink, err := os.Lstat(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("end4 profile target is an unreadable or broken collision: %s", target)
+		}
+		return err
+	}
+	if targetLink.Mode()&os.ModeSymlink == 0 {
+		return fmt.Errorf("refusing to mutate unowned End4 profile collision: target is not a symlink: %s", target)
+	}
+	targetInfo, err := os.Stat(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("end4 profile target is an unreadable or broken collision: %s", target)
+		}
+		return err
+	}
+	if !targetInfo.IsDir() {
+		return fmt.Errorf("refusing to mutate unowned End4 profile collision: symlink does not resolve to a directory: %s", target)
+	}
+	for _, source := range sources {
+		sourceInfo, err := os.Stat(source)
+		if err != nil {
+			return fmt.Errorf("exact Home Manager End4 source is unreadable: %s: %w", source, err)
+		}
+		if sourceInfo.IsDir() && os.SameFile(targetInfo, sourceInfo) {
+			return nil
+		}
+	}
+	return fmt.Errorf("refusing to mutate unowned End4 profile collision: %s does not resolve to a proven Home Manager source", target)
 }
 
 func end4SourceFromGCRoot(home string) (string, error) {
@@ -277,32 +546,72 @@ func end4SourceFromGCRoot(home string) (string, error) {
 		}
 		return "", err
 	}
-	source := filepath.Join(target, "home-files", ".config", "hypr", "end4")
-	ok, err := RuntimeConfigExists(filepath.Join(source, "hyprland.lua"))
-	if err != nil || !ok {
-		return "", err
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(filepath.Dir(gcroot), target)
 	}
-	return source, nil
-}
-
-func end4SourceFromQuickshellLink(configDir, configName string) (string, error) {
-	qsPath := filepath.Join(configDir, "quickshell", configName)
-	target, err := os.Readlink(qsPath)
+	source := filepath.Join(target, "home-files", ".config", "hypr", "end4")
+	info, err := os.Lstat(source)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", nil
 		}
-		return "", nil
-	}
-	suffix := string(os.PathSeparator) + filepath.Join(".config", "quickshell", configName)
-	root, ok := strings.CutSuffix(target, suffix)
-	if !ok || root == "" {
-		return "", nil
-	}
-	source := filepath.Join(root, ".config", "hypr", "end4")
-	ok, err = RuntimeConfigExists(filepath.Join(source, "hyprland.lua"))
-	if err != nil || !ok {
 		return "", err
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		return "", nil
+	}
+	return validateEnd4Source(source)
+}
+
+func immutableEnd4SourceFromTarget(targetPath string) (string, error) {
+	info, err := os.Lstat(targetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		return "", nil
+	}
+	target, err := os.Readlink(targetPath)
+	if err != nil {
+		return "", err
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(filepath.Dir(targetPath), target)
+	}
+	target = filepath.Clean(target)
+	if !isImmutableHomeManagerEnd4Source(target) {
+		return "", nil
+	}
+	return validateEnd4Source(target)
+}
+
+func isImmutableHomeManagerEnd4Source(path string) bool {
+	rel, err := filepath.Rel(filepath.Clean("/nix/store"), filepath.Clean(path))
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return false
+	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	return len(parts) == 4 &&
+		homeManagerFilesStoreDir.MatchString(parts[0]) &&
+		parts[1] == ".config" &&
+		parts[2] == "hypr" &&
+		parts[3] == "end4"
+}
+
+func validateEnd4Source(source string) (string, error) {
+	entrypoint := filepath.Join(source, "hyprland.lua")
+	info, err := os.Stat(entrypoint)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", nil
 	}
 	return source, nil
 }

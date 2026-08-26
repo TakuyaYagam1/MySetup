@@ -51,8 +51,10 @@ Existing hosts do not need a manual migration. The old repository URL, `#mysetup
 `mysetup` executable, `nixosModules.mysetup`, `config.mysetup`, and
 `mysetup.lib.mkMySetupHost` remain supported aliases. The next Wahrwelt apply rewrites a
 recognized generated wrapper to the new `wahrwelt` input and constructor. The first
-successful update also moves managed system and user state to the canonical `wahrwelt`
-paths. If both an old and a new path contain conflicting data, migration stops before
+successful update also moves host-local modules to `/etc/nixos/user/`, installer state
+to `/etc/nixos/installer-state.json`, and writable Hypr modules to
+`~/.config/hypr/user/`. Internal runtime state remains under the `wahrwelt` namespace.
+If both an old and a new path contain conflicting data, migration stops before
 overwriting either one.
 
 This old command is therefore still valid:
@@ -143,7 +145,7 @@ sudo nixos-rebuild switch --flake /etc/nixos#NixOS --option max-jobs 4 --option 
 The installer writes machine-local state to:
 
 ```text
-/etc/nixos/wahrwelt/state.json
+/etc/nixos/installer-state.json
 ```
 
 The in-progress TUI draft is stored at:
@@ -273,16 +275,19 @@ configuration is also left untouched.
 
 The active Hyprland config is Lua-only and assumes Hyprland 0.55 or newer:
 
-- `~/.config/hypr/hyprland.lua` is the stable entrypoint owned by Home Manager.
-- That file loads `$XDG_STATE_HOME/wahrwelt/hypr-runtime/hyprland.lua`, which is
-  rewritten by the shell runtime when switching profiles.
-- Shared Wahrwelt modules live under `Linux/dots/hypr/hyprland/*.lua`,
-  `variables.lua`, `scheme/default.lua`, and `lib/wahrwelt.lua`.
-- Shell-specific binds and launchers live under
-  `Linux/dots/hypr/{caelestia,noctalia,end4}/*.lua`.
-- Common runtime fragments are `shell-common-keybinds.lua`,
-  `shell-workspace-keybinds.lua`, `shell-keybinds.lua`,
-  `shell-launcher.lua`, and `shell-profile.lua`.
+- Home Manager owns the stable entrypoints, canonical modules, scripts,
+  `shell-common-rules.lua`, `end4-adapter.lua`, and the shared patched
+  `hypr/end4` tree. These paths are managed store links and must be changed in
+  this repository.
+- `~/.config/hypr/hyprland.lua` loads the writable
+  `$XDG_STATE_HOME/wahrwelt/hypr-runtime/hyprland.lua`. The shell runtime owns
+  that file plus `shell-profile.lua`, `shell-launcher.lua`,
+  `shell-keybinds.lua`, `hyprlock.conf`, and `hypridle.conf` in the same state
+  directory.
+- `~/.config/hypr/user/` is an ordinary user directory. Its `hyprland.lua`
+  entrypoint is managed and refreshed, but `default.lua` and arbitrary user
+  modules are writable and preserved. Installer and Home Manager seed
+  `default.lua` only when no file or symlink already exists.
 
 `hyprlock.conf` and `hypridle.conf` intentionally stay in hyprlang because the
 Hyprland companion tools have not moved to Lua config here. Hyprland's old
@@ -293,46 +298,78 @@ Lua bind helpers call `hl.dsp.*` directly. This matters on Hyprland 0.55:
 legacy commands such as `hyprctl dispatch movewindow l` are parsed as Lua and
 will not behave like old hyprlang dispatchers.
 
-### Why everything under `~/.config/hypr/` is read-only
+### Canonical load order
 
-Every file under `~/.config/hypr/` is declared through Home Manager's
-`xdg.configFile`, so it becomes a symlink into `/nix/store/...` and can't be
-edited in place. This has nothing to do with where the files come from - the
-`hyprland/*.lua` files already live in this repo (`Linux/dots/hypr/`), not some
-external URL. It is just how `xdg.configFile` works: any declared dotfile turns
-into a read-only store symlink.
+The stable entrypoint loads the runtime entrypoint, which then loads
+`~/.config/hypr/user/hyprland.lua`. The canonical module order inside that
+file is exact:
 
-That trade-off is on purpose. It means every rebuild reproduces the exact same
-config, you can roll back to any past generation, and a fresh clone always
-builds. A plain `cp` at rebuild time would lose all of that - copying always
-would silently overwrite your edits on each update, and copying only-if-missing
-would mean your fixes to the shared config never reach machines that already
-have that file.
+1. `lib.wahrwelt` and base modules: `env`, `general`, `input`, `misc`,
+   `animations`, `decoration`, `group`, `execs`, `rules`, `gestures`,
+   `scrolling`, and `keybinds`.
+2. Runtime adapters: `shell-profile.lua`, `shell-launcher.lua`, then
+   `shell-keybinds.lua`.
+3. `vm-keybinds`.
+4. `wahrwelt.default` when it exists. Only when it is absent are the compatibility
+   modules `wahrwelt.execs`, `wahrwelt.general`, `wahrwelt.rules`, and `wahrwelt.keybinds`
+   loaded as fallbacks.
+
+There is no directory scan or automatic module discovery. The seeded
+`default.lua` explicitly opts into the four compatibility modules with
+`optional_require`, so existing per-file customizations keep working while a
+custom `default.lua` remains in full control.
+
+The physical directory is named `user/`, but its Lua namespace remains
+`wahrwelt.*`. A scoped loader maps only that namespace to files under
+`hypr/user/`. `lib.wahrwelt` and the internal
+`$XDG_STATE_HOME/wahrwelt/` runtime namespace are also unchanged.
 
 ### Customizing Hyprland without forking the repo
 
-`~/.config/hypr/wahrwelt/` is the escape hatch: files there are **not**
-Home Manager-managed, so they're real, writable, and survive rebuilds. Create
-whichever ones you need (all optional, loaded via `hl` config, same layout
-`end-4/dots-hyprland` itself uses for its own `custom/` folder):
+Edit `~/.config/hypr/user/default.lua`. It can use ordinary `require` for a
+required arbitrary module and `optional_require` for a file that may be absent:
 
-- `wahrwelt/env.lua` - loads right after the base `hyprland/env.lua`.
-- `wahrwelt/execs.lua`, `wahrwelt/general.lua`, `wahrwelt/rules.lua`,
-  `wahrwelt/keybinds.lua` - loaded last, after every default bind in this setup
-  (including the active shell profile's own binds) is already registered.
+```lua
+local wahrwelt = require("lib.wahrwelt")
 
-That last point matters for keybinds specifically: Hyprland does not
-auto-replace a duplicate bind - if you bind an already-used combo again, both
-actions fire. To cleanly override one, `hl.unbind()` it first, then rebind
+require("wahrwelt.my-host")
+wahrwelt.optional_require("wahrwelt.keybinds")
+```
+
+This loads `~/.config/hypr/user/my-host.lua` and, when present,
+`~/.config/hypr/user/keybinds.lua`. Nothing else in the directory is loaded
+unless `default.lua` requests it. In particular, `user.env` is not an
+implicit hook.
+
+For keybind overrides, Hyprland does not auto-replace a duplicate bind - if you
+bind an already-used combo again, both actions fire. To cleanly override one,
+`hl.unbind()` it first, then rebind
 ([Hyprland Wiki: Binds](https://wiki.hypr.land/Configuring/Basics/Binds/)).
-`wahrwelt/keybinds.lua` is pre-seeded on first apply with a commented example
-of exactly this - replacing the default AmneziaVPN launcher
-(`SUPER + SHIFT + Q`) with your own program:
 
 ```lua
 hl.unbind("SUPER + SHIFT + Q")
 hl.bind("SUPER + SHIFT + Q", hl.dsp.exec_cmd("openvpn --config ~/my.ovpn"))
 ```
+
+Apply edits without logging out:
+
+```bash
+hyprctl reload
+```
+
+### Shared window rules and app-aware close
+
+`hyprland/rules.lua` requires the Home Manager-owned top-level
+`shell-common-rules.lua`. The installer copies the same file during direct
+dotfile apply. It defines the four shared special-workspace routes:
+`special:sysmon`, `special:music`, `special:communication`, and `special:todo`.
+End4 does not load this file directly; the canonical base loads it before the
+profile adapter, avoiding duplicate rules.
+
+`Super+Q` runs `scripts/close-active.sh` in every profile. Normal windows close
+by exact address. Spotify is routed to `special:music`, or that workspace is
+toggled when Spotify is already there. A failed addressed close falls back to
+the active-window kill dispatcher.
 
 ## Runtime Shells
 
@@ -363,6 +400,9 @@ Runtime state:
 $XDG_STATE_HOME/wahrwelt/active-shell
 ```
 
+The file is not preseeded by Home Manager. `start-shell.sh` updates it only
+after the requested runtime is prepared and the shell starts successfully.
+
 Runtime log:
 
 ```text
@@ -384,7 +424,9 @@ The shell stack is intentionally split:
   Lua entrypoint with shared `shell-common-keybinds.lua` and
   `shell-workspace-keybinds.lua` fragments.
 - End4 Official and pC share the dedicated End4 Home Manager and patched
-  Hyprland layer. Official starts `qs -c ii` from
+  Hyprland tree. The top-level `end4-adapter.lua` loads that tree
+  in an isolated Lua scope after canonical input, gestures, shared rules, and keybinds.
+  Official starts `qs -c ii` from
   `~/.config/quickshell/ii`; pC starts `qs -c end4-pC` from
   `~/.config/quickshell/end4-pC`.
 - Both End4 variants read the same mutable
@@ -404,6 +446,15 @@ Ownership contract:
   may rewrite active-shell fragments during profile switches.
 - User/vendor state remains mutable under shell-specific config/cache paths,
   especially Caelestia/Noctalia JSON and end4 Illogical Impulse settings.
+
+Validate the complete runtime contracts and realize the independently
+validated End4 Hypr artifact with:
+
+```bash
+make -C Linux test-hypr-integration
+make -C Linux nix-end4-hypr-build
+make -C Linux nix-end4-pc-quickshell-build
+```
 
 ## Boot Theme
 
@@ -454,7 +505,8 @@ The installer applies changes defensively:
 2. Writes generated `host-vars.nix`, `configuration.nix`, and `home.nix`
    templates when they do not already exist.
 3. Preserves host-local `hardware-configuration.nix`, `hashed-password.nix`,
-   `private/`, and `secrets/`. Existing legacy MySetup thin installs also keep
+   `user/`, and `secrets/`. Existing `private/` trees are renamed to `user/`
+   only when the canonical target is absent. Existing legacy MySetup thin installs also keep
    `flake.lock`, `configuration.nix`, and `home.nix`; generated wrapper
    `flake.nix` files may be regenerated to pick up the selected lock mode.
    Stock NixOS or legacy non-thin configs are replaced with the generated thin
@@ -470,10 +522,15 @@ The installer applies changes defensively:
 8. Syncs the thin staging tree to `/etc/nixos` while preserving migration state.
 9. Applies selected user dotfiles and reloads Hypr when a session is running.
 10. Asks before `nixos-rebuild switch` in TUI mode.
-11. Writes `/etc/nixos/wahrwelt/state.json` only after switch succeeds.
+11. Writes `/etc/nixos/installer-state.json` only after switch succeeds, then
+    safely removes `/etc/nixos/wahrwelt/state.json` and
+    `/etc/nixos/mysetup/state.json`. An exact empty legacy parent is moved to an
+    identity-proven hidden quarantine inside `/etc/nixos`; a nonempty or
+    concurrently replaced parent is never deleted.
 12. A one-shot system migration validates and rebuilds the rewritten `/etc/nixos`
-    tree, activates the user-path migration, then removes old MySetup-era
-    `/etc/nixos.bak.*` backups after all post-checks pass.
+    tree, then publishes it through one pinned same-filesystem exact atomic
+    exchange. The displaced pre-migration tree is retained beside `/etc/nixos`
+    as a hidden recovery directory.
 
 Use `--layout full` to keep the old full-mirror behavior for debugging or
 migration fallback. Use `--lock-mode managed` with the thin layout when you want
@@ -500,18 +557,29 @@ The default installed layout is intentionally small:
 ├── configuration.nix      # system-level overrides
 ├── home.nix               # Home Manager overrides
 ├── hashed-password.nix    # generated when password is reset
-├── private/
+├── user/
 │   └── default.nix         # local-only Nix module imports
 ├── secrets/               # optional system sops-nix secrets
-└── wahrwelt/state.json    # written after successful activation
+└── installer-state.json   # written after successful activation
 ```
 
 Add NixOS packages, services, and system overrides to `configuration.nix`.
 Add user packages and Home Manager overrides to `home.nix`.
-Use `private/` for explicit local imports that must not live in the public
-repository. Fresh installs import `./private` from `configuration.nix`; add
-local modules to `private/default.nix`, which includes commented examples for
+Use `user/` for explicit local imports that must not live in the public
+repository. Fresh installs import `./user` from `configuration.nix`; add local
+modules to `user/default.nix`, which includes commented examples for
 `ida-pro.nix`, `ida-mcp.nix`, and `ida-plugins.nix`.
+
+On the first successful update of an existing installation, either a Wahrwelt
+apply or the one-shot service activated by the ordinary `nixos-update` flow
+migrates `/etc/nixos/private/` to `/etc/nixos/user/`. It reads legacy state
+from `/etc/nixos/wahrwelt/state.json` or `/etc/nixos/mysetup/state.json` and
+publishes `/etc/nixos/installer-state.json` only with a validated configuration.
+The automatic service retains the displaced tree beside `/etc/nixos` for
+manual recovery. Home Manager also migrates exactly one
+`~/.config/hypr/mysetup/` or
+`~/.config/hypr/wahrwelt/` tree to `~/.config/hypr/user/`. If old and new trees
+coexist, migration stops without merging or deleting either tree.
 
 ## Commands
 
@@ -559,7 +627,10 @@ Useful checks after changing installer or shell integration:
 | --- | --- |
 | `make -C Linux/installer check` | Before pushing or applying - full local CI: lint, fmt-check, hypr-bind-check, shell-check, tests, nix evals. |
 | `make -C Linux/installer shell-check` | After editing Hypr scripts, JSON, or Python patch sources under `Linux/dots/hypr/`. |
+| `make -C Linux test-hypr-integration` | After changing shell lifecycle, Lua adapters, shared rules, app-aware close behavior, or the selector model. |
 | `make -C Linux/installer nix-hm-eval` | After touching `home/`, End4 runtime-env, or shell-profile imports - evaluates the runtime shell module and all-on Home Manager imports including End4 Official and pC. |
+| `make -C Linux nix-end4-hypr-build` | Realize the exact Home Manager-owned validated End4 Hypr artifact and inspect lifecycle/rules contracts. |
+| `make -C Linux nix-end4-pc-quickshell-build` | Realize the managed End4 pC QuickShell tree and reject any direct QuickShell lifecycle launch. |
 | `make -C Linux/installer nix-installed-mirror-build` | After flake changes that affect an already-installed system - builds `wahrwelt` and the legacy `mysetup` alias from an `/etc/nixos`-style temporary mirror. |
 | `make all` (run from `Linux/`) | Aggregate: delegates to installer Makefile + `statix` + `deadnix` + json-lint. |
 
@@ -692,17 +763,29 @@ directly, and each module checks `wahrwelt.packages.preset` at evaluation time.
 ## Recovery
 
 The installer keeps unique `/etc/nixos.bak.<timestamp>.<pid>.<n>` backups
-before replacing `/etc/nixos`. During the one-time brand migration, old
-MySetup-era backups are removed only after the migrated system passes its build
-and post-checks. Later Wahrwelt applies create fresh backups normally.
+before replacing `/etc/nixos`. The one-time automatic namespace or brand migration
+also retains the displaced pre-migration tree as
+`/etc/.nixos.migration.<suffix>`. Wahrwelt does not delete either recovery form
+automatically. Review and remove an old copy manually only after the updated system
+and the next `nixos-update` both succeed.
 
-To recover manually, pick the most recent backup and roll it forward:
+To recover manually, first retain the current tree under a new, verified path.
+Then pick the most recent backup and roll it forward. Replace the timestamp in
+`CURRENT_RECOVERY` with a unique value and do not continue if that path exists:
 
 ```bash
 ls -dt /etc/nixos.bak.* | head -1                # most recent backup
+CURRENT_RECOVERY=/etc/nixos.before-manual-recovery.YYYYMMDD-HHMMSS
+sudo test ! -e "$CURRENT_RECOVERY"
+sudo cp -a --reflink=auto -- /etc/nixos "$CURRENT_RECOVERY"
+sudo test -f "$CURRENT_RECOVERY/flake.nix"
 sudo rsync -a --delete /etc/nixos.bak.<timestamp>.<pid>.<n>/ /etc/nixos/
 sudo nixos-rebuild switch --flake /etc/nixos#NixOS
 ```
+
+Keep `CURRENT_RECOVERY` until the rebuilt system and the next update both
+succeed. It contains files that were newer than the selected backup and would
+otherwise be removed by `rsync --delete`.
 
 Run Doctor for checks and recovery hints:
 
@@ -713,8 +796,11 @@ nix run "path:$PWD?dir=Linux/NixOS#wahrwelt" -- doctor
 For shell-switch issues, inspect:
 
 ```bash
-cat "${XDG_RUNTIME_DIR:-/tmp}/wahrwelt-shell.log"
+test -n "${XDG_RUNTIME_DIR:-}" && cat "$XDG_RUNTIME_DIR/wahrwelt-shell.log"
 ```
+
+There is intentionally no `/tmp` fallback. If `XDG_RUNTIME_DIR` is unset or
+unsafe, the shell runtime fails closed and preserves the colliding path.
 
 ## Troubleshooting
 
@@ -723,9 +809,11 @@ run `wahrwelt doctor` and check the relevant log.
 
 - **Shell-swap (Super+Shift+W) does nothing or freezes.** Check
   `$XDG_STATE_HOME/wahrwelt/active-shell` (should be one of `caelestia`,
-  `noctalia`, `end4`). Tail `$XDG_RUNTIME_DIR/wahrwelt-shell.log` while you
-  press the binding. Most failures are stale lockfiles under
-  `$XDG_STATE_HOME/wahrwelt/hypr-runtime/` - remove that directory and retry.
+  `noctalia`, `end4`, `end4-pc`). Tail
+  `$XDG_RUNTIME_DIR/wahrwelt-shell.log` while you press the binding. If the
+  log reports a stale lock or ownership collision, run `wahrwelt doctor`,
+  preserve any reported recovery path, and re-apply the selected profile.
+  Do not remove the whole `hypr-runtime/` directory.
 - **Hyprland keybinds are listed but do nothing.** Run `hyprctl configerrors`
   first. On Hyprland 0.55+, dispatch commands must use the Lua dispatcher API;
   Wahrwelt binds should go through `lib/wahrwelt.lua` helpers or direct

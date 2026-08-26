@@ -149,31 +149,32 @@ func TestRunUsesDirectRmInsteadOfShell(t *testing.T) {
 	}
 }
 
-func TestRunRepairsActiveEnd4ProfileLink(t *testing.T) {
+func TestRunOnlyValidatesActiveEnd4ProfileLink(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	hmRoot := filepath.Join(t.TempDir(), "hm-files")
-	end4Source := filepath.Join(hmRoot, ".config", "hypr", "end4")
-	if err := os.MkdirAll(end4Source, 0o755); err != nil {
+	hmGeneration := filepath.Join(t.TempDir(), "home-manager-generation")
+	end4Source := filepath.Join(hmGeneration, "home-files", ".config", "hypr", "end4")
+	end4Artifact := filepath.Join(t.TempDir(), "end4-artifact")
+	if err := os.MkdirAll(filepath.Dir(end4Source), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(end4Source, "hyprland.lua"), []byte("require(\"hyprland.env\")\n"), 0o644); err != nil {
+	if err := os.MkdirAll(end4Artifact, 0o755); err != nil {
 		t.Fatal(err)
 	}
-
-	qsTarget := filepath.Join(home, ".config", "quickshell")
-	if err := os.MkdirAll(qsTarget, 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(end4Artifact, "hyprland.lua"), []byte("require(\"hyprland.env\")\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	qsSource := filepath.Join(hmRoot, ".config", "quickshell", "ii")
-	if err := os.MkdirAll(qsSource, 0o755); err != nil {
+	if err := os.Symlink(end4Artifact, end4Source); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(qsSource, filepath.Join(qsTarget, "ii")); err != nil {
+	gcroot := filepath.Join(home, ".local", "state", "home-manager", "gcroots", "current-home")
+	if err := os.MkdirAll(filepath.Dir(gcroot), 0o755); err != nil {
 		t.Fatal(err)
 	}
-
+	if err := os.Symlink(hmGeneration, gcroot); err != nil {
+		t.Fatal(err)
+	}
 	stateDir := filepath.Join(home, ".local", "state", "wahrwelt")
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -182,38 +183,35 @@ func TestRunRepairsActiveEnd4ProfileLink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out := captureStdout(t, func() {
+	target := filepath.Join(home, ".config", "hypr", "end4")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(end4Source, target); err != nil {
+		t.Fatal(err)
+	}
+	originalTarget, err := os.Readlink(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	captureStdout(t, func() {
 		if err := Run(context.Background(), Options{DryRun: true, Yes: true}); err != nil {
 			t.Fatal(err)
 		}
 	})
-
-	for _, want := range []string{"ln -sfn", end4Source, filepath.Join(home, ".config", "hypr", "end4")} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("expected cleanup output to contain %q\n%s", want, out)
-		}
+	gotTarget, err := os.Readlink(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotTarget != originalTarget {
+		t.Fatalf("cleanup changed Home Manager End4 link: got %q want %q", gotTarget, originalTarget)
 	}
 }
 
-func TestRunRepairsActiveEnd4PCProfileLink(t *testing.T) {
+func TestRunRejectsUnownedActiveEnd4ProfileCollisionsWithoutMutation(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("XDG_STATE_HOME", "")
-
-	hmRoot := filepath.Join(t.TempDir(), "hm-files")
-	end4Source := filepath.Join(hmRoot, ".config", "hypr", "end4")
-	qsSource := filepath.Join(hmRoot, ".config", "quickshell", "end4-pC")
-	for _, dir := range []string{end4Source, qsSource, filepath.Join(home, ".config", "quickshell")} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(end4Source, "hyprland.lua"), []byte("require(\"hyprland.env\")\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(qsSource, filepath.Join(home, ".config", "quickshell", "end4-pC")); err != nil {
-		t.Fatal(err)
-	}
 
 	stateDir := filepath.Join(home, ".local", "state", "wahrwelt")
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
@@ -222,19 +220,31 @@ func TestRunRepairsActiveEnd4PCProfileLink(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(stateDir, "active-shell"), []byte("end4-pc\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(stateDir, "end4-variant"), []byte("end4-pc\n"), 0o644); err != nil {
+	target := filepath.Join(home, ".config", "hypr", "end4")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("foreign End4 file\n"), 0o640); err != nil {
 		t.Fatal(err)
 	}
 
-	out := captureStdout(t, func() {
-		if err := Run(context.Background(), Options{DryRun: true, Yes: true}); err != nil {
-			t.Fatal(err)
-		}
-	})
-	for _, want := range []string{"ln -sfn", end4Source, filepath.Join(home, ".config", "hypr", "end4")} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("expected cleanup output to contain %q\n%s", want, out)
-		}
+	err := Run(context.Background(), Options{DryRun: true, Yes: true, Stdout: io.Discard})
+	if err == nil || !strings.Contains(err.Error(), "refusing to mutate unowned End4 profile collision") {
+		t.Fatalf("cleanup must reject unowned End4 collision, err=%v", err)
+	}
+	data, readErr := os.ReadFile(target)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(data) != "foreign End4 file\n" {
+		t.Fatalf("cleanup changed unowned End4 collision: %q", data)
+	}
+	info, statErr := os.Stat(target)
+	if statErr != nil {
+		t.Fatal(statErr)
+	}
+	if info.Mode().Perm() != 0o640 {
+		t.Fatalf("cleanup changed unowned End4 collision mode: %o", info.Mode().Perm())
 	}
 }
 

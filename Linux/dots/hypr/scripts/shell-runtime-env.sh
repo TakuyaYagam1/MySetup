@@ -65,7 +65,43 @@ build_runtime_path() {
   dedupe_colon_path "/run/wrappers/bin:$HOME/.nix-profile/bin:/etc/profiles/per-user/$user_name/bin:/run/current-system/sw/bin:/nix/profile/bin:/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin${PATH:+:$PATH}"
 }
 
+clear_legacy_end4_environment() {
+  local name
+  local -a candidates=(
+    WAHRWELT_END4_PROFILE
+    WAHRWELT_QS_CONFIG
+    qsConfig
+    ILLOGICAL_IMPULSE_DOTFILES_SOURCE
+    ILLOGICAL_IMPULSE_VIRTUAL_ENV
+  )
+  local -a names=()
+  local -a empty_assignments=()
+  local -A seen=()
+
+  for name in "${candidates[@]}"; do
+    [[ "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    [ -z "${seen[$name]+x}" ] || continue
+    seen[$name]=1
+    names+=("$name")
+    empty_assignments+=("$name=")
+    unset "$name"
+  done
+
+  if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+    # D-Bus exposes no portable unset operation. Empty values remove the old
+    # exact marker semantics while preventing stale End4 values from reaching
+    # newly activated services.
+    dbus-update-activation-environment "${empty_assignments[@]}" >/dev/null 2>&1 || true
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user unset-environment "${names[@]}" >/dev/null 2>&1 || true
+  fi
+}
+
 prepare_runtime_environment() {
+  clear_legacy_end4_environment
+
   export XDG_DATA_DIRS
   export PATH
   export QS_ICON_THEME
@@ -90,7 +126,7 @@ propagate_runtime_environment() {
   )
 
   if command -v dbus-update-activation-environment >/dev/null 2>&1; then
-    dbus-update-activation-environment --systemd --all >/dev/null 2>&1 || true
+    dbus-update-activation-environment --systemd "${vars[@]}" >/dev/null 2>&1 || true
   fi
 
   if command -v systemctl >/dev/null 2>&1; then

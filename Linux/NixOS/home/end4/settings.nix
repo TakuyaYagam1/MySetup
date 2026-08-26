@@ -49,11 +49,6 @@ in
     hibernateTimeout = 3600;
   };
 
-  keyboard = {
-    layouts = hypr.keyboardLayouts or "us,ru";
-    toggle = hypr.keyboardToggle or "grp:alt_shift_toggle";
-  };
-
   window.opacity = toString (hypr.windowOpacity or "0.85");
 
   fallbackBaseConfig = {

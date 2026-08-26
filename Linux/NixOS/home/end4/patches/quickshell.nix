@@ -7,7 +7,7 @@
 
 let
   dotfilesSource = inputs.end4-dotfiles;
-  inherit (end4Lib) pythonEnv;
+  inherit (end4Lib) dotfilesLib pythonEnv;
   quickshellPatcher = ./quickshell.py;
 
   patchedQuickshell =
@@ -39,6 +39,10 @@ let
                          'root.downloadRunning = false;'
 
         patchShebangs $out
+
+        ${pkgs.bash}/bin/bash \
+          ${dotfilesLib.dotsRoot}/hypr/scripts/tests/end4-artifact-test.sh \
+          --quickshell "$out"
       '';
 in
 {

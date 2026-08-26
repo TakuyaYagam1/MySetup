@@ -91,7 +91,7 @@ func TestSummaryShowsPendingSecretsWithoutValues(t *testing.T) {
 	state := config.Default()
 	secrets := config.Secrets{UserPassword: "linux-secret"}
 
-	got := summary(state, secrets, secretAvailability{}, "/etc/nixos/wahrwelt/state.json")
+	got := summary(state, secrets, secretAvailability{}, "/etc/nixos/installer-state.json")
 	if !strings.Contains(got, "Passwords: linux-user=ready") {
 		t.Fatalf("expected summary to show ready secret status, got:\n%s", got)
 	}
@@ -106,7 +106,7 @@ func TestSummaryShowsExistingSecretsWithoutValues(t *testing.T) {
 		UserPassword: secretPresenceExists,
 	}
 
-	got := summary(state, config.Secrets{}, existingSecrets, "/etc/nixos/wahrwelt/state.json")
+	got := summary(state, config.Secrets{}, existingSecrets, "/etc/nixos/installer-state.json")
 	if !strings.Contains(got, "Passwords: linux-user=existing") {
 		t.Fatalf("expected summary to show existing secret status, got:\n%s", got)
 	}
@@ -114,12 +114,12 @@ func TestSummaryShowsExistingSecretsWithoutValues(t *testing.T) {
 
 func TestSummaryShowsGrafanaAccessWhenObservabilityEnabled(t *testing.T) {
 	state := config.Default()
-	if strings.Contains(summary(state, config.Secrets{}, secretAvailability{}, "/etc/nixos/wahrwelt/state.json"), "Grafana:") {
+	if strings.Contains(summary(state, config.Secrets{}, secretAvailability{}, "/etc/nixos/installer-state.json"), "Grafana:") {
 		t.Fatal("summary must not show Grafana access when observability is disabled")
 	}
 
 	state.Features.Observability = true
-	got := summary(state, config.Secrets{}, secretAvailability{}, "/etc/nixos/wahrwelt/state.json")
+	got := summary(state, config.Secrets{}, secretAvailability{}, "/etc/nixos/installer-state.json")
 	if !strings.Contains(got, "Grafana: http://127.0.0.1:3010 initial login admin/admin") {
 		t.Fatalf("expected summary to show Grafana access, got:\n%s", got)
 	}

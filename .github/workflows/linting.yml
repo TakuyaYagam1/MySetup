@@ -8,13 +8,15 @@ on:
       - dev
     paths:
       - "Linux/**"
+      - "README.md"
+      - ".gitignore"
       - ".github/dependabot.yml"
       - ".github/workflows/**"
 
 jobs:
   linting:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: read
 
@@ -46,8 +48,20 @@ jobs:
       - name: Lint GitHub Actions workflows
         run: nix run nixpkgs#actionlint -- .github/workflows/*.yml
 
-      - name: Run linting + tests
-        run: make -C Linux all
+      - name: Run shell, Lua, and selector integration gates
+        run: make -C Linux test-hypr-integration
+
+      - name: Run linting + Go tests
+        run: make -C Linux lint test-go
+
+      - name: Evaluate mixed-version Noctalia Home Manager module
+        run: make -C Linux/installer nix-noctalia-hm-compat
+
+      - name: Realize validated End4 Hypr artifact
+        run: make -C Linux nix-end4-hypr-build
+
+      - name: Realize managed End4 pC QuickShell artifact
+        run: make -C Linux nix-end4-pc-quickshell-build
 
       - name: Evaluate preset NixOS hosts
         run: |

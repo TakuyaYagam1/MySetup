@@ -26,9 +26,10 @@ Want your own logo on the GRUB/SDDM/Plymouth boot screens instead of the default
 image in `~/.config/wahrwelt/boot-theme/` - details in
 [Linux/README.md](Linux/README.md#boot-theme).
 
-Want your own Hyprland keybinds/rules/execs without forking the repo? Everything under
-`~/.config/hypr/` is Home Manager-managed and read-only, but `~/.config/hypr/wahrwelt/` isn't -
-details in
+Want your own Hyprland keybinds/rules/execs without forking the repo? Most
+`~/.config/hypr/` paths are managed, while `~/.config/hypr/user/default.lua`
+and arbitrary modules beside it are writable. The managed
+`~/.config/hypr/user/hyprland.lua` entrypoint is the one exception - details in
 [Linux/README.md](Linux/README.md#customizing-hyprland-without-forking-the-repo).
 
 Any image works as-is (sizing/format is handled automatically), but if you want the same
@@ -91,9 +92,10 @@ square instead of a circle.
 Existing installations remain compatible with the legacy repository URL, flake output, CLI
 name, module namespace, and host constructor. For example,
 `nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- doctor`
-continues to work. On the first successful Wahrwelt update, recognized legacy state and
-configuration paths are migrated automatically to `wahrwelt`; compatibility names remain
-available only as source/API aliases.
+continues to work. On the first successful update, installer state moves to
+`/etc/nixos/installer-state.json`, host-local modules move to `/etc/nixos/user/`, and writable
+Hypr modules move to `~/.config/hypr/user/`. The internal XDG runtime namespace remains
+`wahrwelt`; legacy source and API names remain available only as compatibility aliases.
 
 The installer asks about: Wahrwelt channel, username/password, package preset, display and
 keyboard layout, Secure Boot, GPU type, locale/timezone, CTF tools, and user dotfiles. After

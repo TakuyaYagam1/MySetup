@@ -1,8 +1,6 @@
 local wahrwelt = require("lib.wahrwelt")
 local v = require("variables")
 
-wahrwelt.load_runtime("shell-launcher.lua")
-
 local wsaction = wahrwelt.hypr .. "/scripts/wsaction.fish"
 
 for i = 1, 10 do
@@ -95,5 +93,3 @@ wahrwelt.bind_exec(
 	[[sleep 0.5s && ydotool type -d 1 "$(cliphist list | head -1 | cliphist decode)"]],
 	{ locked = true }
 )
-
-wahrwelt.load_runtime("shell-keybinds.lua")
