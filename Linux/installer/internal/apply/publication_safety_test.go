@@ -148,10 +148,10 @@ func (*userNamespaceCleanupRunner) Command(ctx context.Context, name string, arg
 }
 
 func runUserNamespaceCleanup(ctx context.Context, name string, args []string, transform func(string) string) error {
-	if name != "sudo" || len(args) < 11 || args[2] != privilegedStagingCleanupPython {
+	if name != "sudo" || len(args) < 12 || args[0] != "-n" || args[3] != privilegedStagingCleanupPython {
 		return fmt.Errorf("unexpected cleanup command %s %s", name, strings.Join(args, " "))
 	}
-	commandArgs := append([]string(nil), args...)
+	commandArgs := append([]string(nil), args[1:]...)
 	if transform != nil {
 		commandArgs[2] = transform(commandArgs[2])
 	}
@@ -672,6 +672,31 @@ func TestStagingCleanupFreezesAndRemovesExactTree(t *testing.T) {
 	}
 	if parentInfo.Mode().Perm() != os.FileMode(workspace.parentStat.Mode&0o777) {
 		t.Fatalf("staging parent mode = %04o, want restored %04o", parentInfo.Mode().Perm(), workspace.parentStat.Mode&0o777)
+	}
+}
+
+func TestStagingCleanupNeverStartsAnInteractiveSudoPrompt(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	workspace, err := createStagingWorkspace()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer workspace.close()
+	authUnavailable := errors.New("cached sudo credential unavailable")
+	runner := &fakeRunner{failOn: func(name string, args []string) error {
+		if name == "sudo" && len(args) > 0 && args[0] == "-n" {
+			return authUnavailable
+		}
+		return fmt.Errorf("interactive cleanup command attempted: %s %s", name, strings.Join(args, " "))
+	}}
+
+	err = workspace.cleanup(context.Background(), runner)
+	if !errors.Is(err, authUnavailable) {
+		t.Fatalf("non-interactive cleanup error = %v", err)
+	}
+	if len(runner.calls) != 1 || runner.calls[0].name != "sudo" || len(runner.calls[0].args) == 0 || runner.calls[0].args[0] != "-n" {
+		t.Fatalf("cleanup command can prompt interactively: %s", commandSummary(runner.calls))
 	}
 }
 

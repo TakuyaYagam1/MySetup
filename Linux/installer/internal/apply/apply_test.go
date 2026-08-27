@@ -62,6 +62,9 @@ func (f *fakeRunner) IsDryRun() bool { return f.dryRun }
 var _ run.CommandRunner = (*fakeRunner)(nil)
 
 func runValidatedStagingTestCommand(ctx context.Context, name string, args ...string) (bool, error) {
+	if name == "sudo" && len(args) > 0 && args[0] == "-n" {
+		args = args[1:]
+	}
 	if name == "sudo" && len(args) >= 6 && args[1] == "-c" && args[2] == privilegedStagingCleanupPython {
 		parentPath := args[3]
 		stagingName := args[4]
@@ -225,6 +228,40 @@ func TestRunDryRunSkipSwitchHonoursInjectedRunner(t *testing.T) {
 	}
 	if strings.Contains(commands, "nixos-rebuild switch") {
 		t.Errorf("SkipSwitch must skip activation; got:\n%s", commands)
+	}
+}
+
+func TestRunCanonicalApplyAuthenticatesBeforeCreatingStaging(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", cache)
+	repo, _ := fakeRepo(t)
+	authErr := errors.New("sudo authentication refused")
+	runner := &fakeRunner{failOn: func(name string, args []string) error {
+		if name == "sudo" && len(args) == 1 && args[0] == "-v" {
+			return authErr
+		}
+		return fmt.Errorf("command ran before sudo authentication: %s %s", name, strings.Join(args, " "))
+	}}
+
+	err := Run(context.Background(), Options{
+		Paths: paths.Options{
+			RepoRoot:  repo,
+			NixOSDest: "/etc/nixos",
+			StatePath: filepath.Join(t.TempDir(), "installer-state.json"),
+		},
+		State:  validState(),
+		Runner: runner,
+	})
+	if err == nil || !strings.Contains(err.Error(), "authenticate root access before staging") || !errors.Is(err, authErr) {
+		t.Fatalf("early sudo authentication error = %v", err)
+	}
+	if got := commandSummary(runner.calls); got != "sudo -v" {
+		t.Fatalf("commands before staging = %q, want %q", got, "sudo -v")
+	}
+	base := filepath.Join(cache, "wahrwelt", "staging")
+	if _, statErr := os.Lstat(base); !os.IsNotExist(statErr) {
+		t.Fatalf("staging was created before sudo authentication: %s: %v", base, statErr)
 	}
 }
 

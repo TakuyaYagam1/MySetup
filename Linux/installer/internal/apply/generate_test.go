@@ -643,6 +643,9 @@ esac
 exit 0
 `)
 	writeExecutable(t, filepath.Join(bin, "sudo"), `#!/bin/sh
+if [ "$1" = "-n" ]; then
+  shift
+fi
 if [ "$1" = "nixos-rebuild" ]; then
   echo "nix says no" >&2
   exit 42

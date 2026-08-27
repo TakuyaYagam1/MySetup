@@ -89,6 +89,9 @@ func Run(ctx context.Context, opts Options) error {
 		runner = run.New(opts.DryRun)
 	}
 	printApplyHeader(src, opts.Paths.NixOSDest, modes)
+	if err := authenticateRootAccessBeforeStaging(ctx, runner, opts.Paths.NixOSDest); err != nil {
+		return err
+	}
 
 	workspace, err := createStagingWorkspace()
 	if err != nil {
@@ -110,6 +113,17 @@ func Run(ctx context.Context, opts Options) error {
 		return runErr
 	}
 	fmt.Println("Wahrwelt apply finished without errors")
+	return nil
+}
+
+func authenticateRootAccessBeforeStaging(ctx context.Context, runner run.CommandRunner, destination string) error {
+	if runner.IsDryRun() || filepath.Clean(destination) != "/etc/nixos" {
+		return nil
+	}
+	fmt.Println("root access is required; authenticate sudo before staging")
+	if err := runner.Command(ctx, "sudo", "-v"); err != nil {
+		return fmt.Errorf("authenticate root access before staging: %w", err)
+	}
 	return nil
 }
 
@@ -703,7 +717,7 @@ func (w *stagingWorkspace) cleanup(ctx context.Context, runner run.CommandRunner
 	}
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
-	err = runner.Command(cleanupCtx, "sudo", pythonPath, "-c", privilegedStagingCleanupPython,
+	err = runner.Command(cleanupCtx, "sudo", "-n", pythonPath, "-c", privilegedStagingCleanupPython,
 		fileDescriptorPath(w.parent),
 		w.name,
 		fileDescriptorPath(w.directory),
