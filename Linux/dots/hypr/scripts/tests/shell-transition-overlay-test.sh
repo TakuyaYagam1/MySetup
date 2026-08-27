@@ -470,8 +470,8 @@ else
   if wahrwelt_shell_transition_reveal_and_wait; then
     fail 'stuck reveal unexpectedly completed'
   fi
-  assert_eq "$((reveal_start_us + 5750000))" "$(cat "$clock_file")" \
-    'reveal deadline was not exactly 5750ms monotonic'
+  assert_eq "$((reveal_start_us + 3750000))" "$(cat "$clock_file")" \
+    'reveal deadline was not exactly 3750ms monotonic'
   grep -Fqx forward "$wall_jumps" || fail 'reveal timing did not simulate a forward wall jump'
   grep -Fqx backward "$wall_jumps" || fail 'reveal timing did not simulate a backward wall jump'
 

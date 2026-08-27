@@ -56,8 +56,12 @@ const modelSource = fs.readFileSync(path.join(artifact, "transition-model.js"), 
 const transitionModel = {};
 vm.createContext(transitionModel);
 vm.runInContext(modelSource, transitionModel);
-assert.equal(transitionModel.create(["contract-screen"]).durationMs, 5000,
-  "visible reveal model contract must be exactly 5000 ms");
+assert.equal(transitionModel.create(["contract-screen"]).durationMs, 3000,
+  "visible reveal model contract must be exactly 3000 ms");
+
+const shellSource = fs.readFileSync(path.join(artifact, "shell.qml"), "utf8");
+assert.match(shellSource, /easing\.type: Easing\.Linear/,
+  "visible reveal must advance uniformly from center to display edges");
 
 const notice = fs.readFileSync(
   path.join(artifact, "shaders/LICENSE-Noctalia-MIT.txt"), "utf8");

@@ -24,7 +24,7 @@ function createTwoScreenModel() {
 {
   const model = createTwoScreenModel();
   assert.equal(transitionModel.status(model), "capturing");
-  assert.equal(model.durationMs, 5000, "the visible reveal must last exactly 5000 ms");
+  assert.equal(model.durationMs, 3000, "the visible reveal must last exactly 3000 ms");
   assert.equal(transitionModel.capture(model, "DP-1"), true);
   assert.equal(transitionModel.status(model), "capturing");
   assert.equal(transitionModel.capture(model, "DP-1"), false);
@@ -47,10 +47,10 @@ function createTwoScreenModel() {
   assert.equal(transitionModel.reveal(model), true);
   assert.equal(transitionModel.status(model), "revealing");
   assert.equal(transitionModel.progress(model, -1), 0);
-  assert.equal(transitionModel.progress(model, 2500), 0.5);
-  assert.equal(transitionModel.progress(model, 4999), 0.9998);
+  assert.equal(transitionModel.progress(model, 1500), 0.5);
+  assert.equal(transitionModel.progress(model, 2999), 0.9996666666666667);
   assert.equal(transitionModel.status(model), "revealing");
-  assert.equal(transitionModel.progress(model, 5000), 1);
+  assert.equal(transitionModel.progress(model, 3000), 1);
   assert.equal(
     transitionModel.status(model),
     "revealing",
@@ -129,7 +129,7 @@ assert.equal(
   const model = transitionModel.create(["DP-1"]);
   transitionModel.capture(model, "DP-1");
   assert.equal(transitionModel.reveal(model), true);
-  assert.equal(transitionModel.watchdogTimeoutMs(model), 6000);
+  assert.equal(transitionModel.watchdogTimeoutMs(model), 4000);
   assert.equal(transitionModel.expireWatchdog(model), true);
   assert.equal(transitionModel.status(model), "aborted");
 }

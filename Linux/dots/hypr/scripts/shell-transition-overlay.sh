@@ -374,7 +374,7 @@ wahrwelt_shell_transition_reveal_and_wait() {
     wahrwelt_shell_transition_abort
     return 1
   }
-  deadline_us=$((now_us + 5750000))
+  deadline_us=$((now_us + 3750000))
   command_timeout="$(wahrwelt_shell_transition_timeout_before "$deadline_us" 75000)" || {
     wahrwelt_shell_transition_abort
     return 1

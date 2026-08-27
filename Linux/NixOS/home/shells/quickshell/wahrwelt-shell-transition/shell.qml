@@ -91,8 +91,8 @@ ShellRoot {
     property: "transitionProgress"
     from: 0.0
     to: 1.0
-    duration: controller.transitionModel ? controller.transitionModel.durationMs : 5000
-    easing.type: Easing.InOutCubic
+    duration: controller.transitionModel ? controller.transitionModel.durationMs : 3000
+    easing.type: Easing.Linear
 
     onFinished: controller.completeReveal()
   }

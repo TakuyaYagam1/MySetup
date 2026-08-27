@@ -51,7 +51,7 @@ TestCase {
 
     verify(controller.reveal());
     compare(controller.state, "revealing");
-    compare(controller.watchdogInterval, 6000);
+    compare(controller.watchdogInterval, 4000);
     verify(controller.watchdogRunning);
     compare(exitSpy.count, 0);
 
