@@ -122,6 +122,32 @@ func TestCommandLogQuotesAndRedacts(t *testing.T) {
 	}
 }
 
+func TestCommandLogSummarizesMultilineArgument(t *testing.T) {
+	var stdout bytes.Buffer
+
+	err := Runner{DryRun: true, Stdout: &stdout}.Command(
+		context.Background(),
+		"python3",
+		"-c",
+		"import os\nraise RuntimeError('this is source, not an error')\n",
+		"/proc/123/fd/4",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := strings.TrimSpace(stdout.String())
+	if strings.Contains(got, "import os") || strings.Contains(got, "RuntimeError") {
+		t.Fatalf("multiline source leaked into command log: %q", got)
+	}
+	if strings.Count(got, "\n") != 0 {
+		t.Fatalf("one command produced a multiline log: %q", got)
+	}
+	if !strings.Contains(got, "'<multiline argument omitted>'") {
+		t.Fatalf("multiline argument omission was not visible: %q", got)
+	}
+}
+
 func TestOutputIncludesCapturedStderrOnFailure(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

@@ -106,7 +106,11 @@ func Run(ctx context.Context, opts Options) error {
 		}
 		return cleanupErr
 	}
-	return runErr
+	if runErr != nil {
+		return runErr
+	}
+	fmt.Println("Wahrwelt apply finished without errors")
+	return nil
 }
 
 func runStagedApply(ctx context.Context, runner run.CommandRunner, src paths.Sources, workspace *stagingWorkspace, opts Options, modes applyModes) error {

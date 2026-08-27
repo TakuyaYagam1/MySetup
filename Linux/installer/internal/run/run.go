@@ -146,6 +146,9 @@ func (r Runner) commandLog(name string, args []string) string {
 	parts := make([]string, 0, len(args)+1)
 	parts = append(parts, shellQuote(name))
 	for _, arg := range args {
+		if strings.ContainsAny(arg, "\r\n") {
+			arg = "<multiline argument omitted>"
+		}
 		parts = append(parts, shellQuote(arg))
 	}
 	line := "$ " + strings.Join(parts, " ")

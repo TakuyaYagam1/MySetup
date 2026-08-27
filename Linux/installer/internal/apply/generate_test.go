@@ -557,6 +557,9 @@ func TestRunDryRunNoSwitchStopsAfterDryBuildWithoutWritingEtcDotsOrState(t *test
 	if dryBuild == -1 || noSwitch == -1 {
 		t.Fatalf("expected dry-build and no-switch output, got:\n%s", out)
 	}
+	if !strings.HasSuffix(strings.TrimSpace(out), "Wahrwelt apply finished without errors") {
+		t.Fatalf("successful apply did not end with a final status:\n%s", out)
+	}
 	if backup != -1 {
 		t.Fatalf("--no-switch must stop before /etc backup/sync\n%s", out)
 	}
