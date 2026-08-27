@@ -280,7 +280,7 @@
       mysetupAppFor = system: {
         type = "app";
         program = "${wahrweltPackageFor system}/bin/mysetup";
-        meta.description = "Run the legacy MySetup-compatible NixOS installer entrypoint";
+        meta.description = "Run the supported MySetup compatibility NixOS installer entrypoint";
       };
 
       linuxNixosOutputs = (import ./Linux/NixOS/flake.nix).outputs inputs;
@@ -340,6 +340,7 @@
       packages = forSystems (system: {
         claude-desktop = claudeDesktopPackageFor system;
         wahrwelt = wahrweltPackageFor system;
+        wahrwelt-fs-helper = wahrweltPackageFor system;
         mysetup = self.packages.${system}.wahrwelt;
         omnirouter = omnirouterPackageFor system;
         default = self.packages.${system}.wahrwelt;

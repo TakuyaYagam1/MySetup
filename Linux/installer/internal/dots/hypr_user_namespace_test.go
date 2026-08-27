@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/shellruntime"
 	"golang.org/x/sys/unix"
 )
@@ -900,22 +901,12 @@ func TestCanonicalRuntimeUsesUserAdapterAndRecognizesOnlyExactLegacyAdapter(t *t
 	}
 	home := t.TempDir()
 	legacy := filepath.Join(home, "hyprland.lua")
-	legacyContent := `-- Wahrwelt canonical Hyprland runtime entrypoint
-local home = os.getenv("HOME")
-if home == nil then
-    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
-end
-
-local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-local hypr_root = config_home .. "/hypr"
-package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-dofile(hypr_root .. "/wahrwelt/hyprland.lua")
-`
+	legacyContent := migrationv1tov2.LegacyUserEntrypoint()
 	keybinds := filepath.Join(home, "shell-keybinds.lua")
 	if err := os.WriteFile(keybinds, []byte(shellruntime.AdapterMarker(shellruntime.End4PC)+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	legacyHomeManagerContent := strings.Replace(legacyContent, "-- Wahrwelt canonical Hyprland runtime entrypoint", "-- Active Hyprland profile: wahrwelt (caelestia)", 1)
+	legacyHomeManagerContent := migrationv1tov2.LegacyHomeManagerUserEntrypoint(shellruntime.DefaultProfile)
 	for fixtureName, fixture := range map[string]string{
 		"runtime":      legacyContent,
 		"home-manager": legacyHomeManagerContent,
@@ -924,11 +915,11 @@ dofile(hypr_root .. "/wahrwelt/hyprland.lua")
 			if err := os.WriteFile(legacy, []byte(fixture), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if !shellruntime.IsLegacyUserEntrypoint(legacy) {
+			if migrationv1tov2.RecognizeEntrypoint(fixture, shellruntime.DefaultProfile) != migrationv1tov2.EntrypointLegacyUser {
 				t.Fatal("exact generated Wahrwelt user adapter was not recognized as legacy")
 			}
-			if got := shellruntime.DetectShellFromEntrypoint(legacy, keybinds); got != shellruntime.End4PC {
-				t.Fatalf("legacy generated adapter profile = %q, want %q", got, shellruntime.End4PC)
+			if got := shellruntime.DetectShellFromEntrypoint(legacy, keybinds); got != "" {
+				t.Fatalf("fresh runtime detected legacy generated adapter as %q", got)
 			}
 			for form, content := range map[string]string{
 				"prefix":          "-- prefix\n" + fixture,
@@ -940,7 +931,7 @@ dofile(hypr_root .. "/wahrwelt/hyprland.lua")
 					if err := os.WriteFile(legacy, []byte(content), 0o644); err != nil {
 						t.Fatal(err)
 					}
-					if shellruntime.IsLegacyUserEntrypoint(legacy) {
+					if migrationv1tov2.RecognizeEntrypoint(content, shellruntime.DefaultProfile) != migrationv1tov2.EntrypointUnknown {
 						t.Fatalf("%s legacy fixture lookalike was accepted", form)
 					}
 					if got := shellruntime.DetectShellFromEntrypoint(legacy, keybinds); got != "" {

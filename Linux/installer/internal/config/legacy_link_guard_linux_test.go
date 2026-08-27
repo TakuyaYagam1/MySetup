@@ -14,10 +14,10 @@ import (
 	"time"
 )
 
-const homeManagerLegacyLinkGuard = "../../../NixOS/home/programs/legacy-link-guard.sh"
-const homeManagerLegacyCacheMerge = "../../../NixOS/home/programs/legacy-cache-merge.sh"
-const homeManagerLegacyNamespaceMove = "../../../NixOS/home/programs/legacy-namespace-move.sh"
-const homeManagerLegacyMarkerMigrate = "../../../NixOS/home/programs/legacy-marker-migrate.sh"
+const homeManagerLegacyLinkGuard = "../../../NixOS/home/migrations/v1_to_v2/link-guard.sh"
+const homeManagerLegacyCacheMerge = "../../../NixOS/home/migrations/v1_to_v2/cache-merge.sh"
+const homeManagerLegacyNamespaceMove = "../../../NixOS/home/migrations/v1_to_v2/namespace-move.sh"
+const homeManagerLegacyMarkerMigrate = "../../../NixOS/home/migrations/v1_to_v2/marker-migrate.sh"
 
 func runAtFDBarrier(
 	t *testing.T,
@@ -415,7 +415,7 @@ func TestHomeManagerLegacyLinkGuardRestoresReplacementMovedDuringQuarantine(t *t
 }
 
 func TestHomeManagerMigrationQuarantinesProvenLegacyLinksBeforeNamespaceMoves(t *testing.T) {
-	migration := readContractFile(t, "../../../NixOS/home/programs/wahrwelt-migration.nix")
+	migration := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/user-paths.nix")
 	for _, want := range []string{
 		`legacy-link-guard`,
 		`"check" "$old_link" "$expected_relative"`,
@@ -516,7 +516,7 @@ func renderHomeManagerMigrationForTest(
 	} else if err != nil {
 		t.Fatal(err)
 	}
-	modulePath, err := filepath.Abs("../../../NixOS/home/programs/wahrwelt-migration.nix")
+	modulePath, err := filepath.Abs("../../../NixOS/home/migrations/v1_to_v2/user-paths.nix")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1753,7 +1753,7 @@ func TestHomeManagerLegacyCacheAbsentParentTokenRejectsAncestorReplacement(t *te
 }
 
 func TestHomeManagerMigrationAvoidsDestructiveLegacyCleanup(t *testing.T) {
-	migration := readContractFile(t, "../../../NixOS/home/programs/wahrwelt-migration.nix")
+	migration := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/user-paths.nix")
 	for _, want := range []string{
 		`legacy-cache-merge`,
 		`"merge" "$old" "$new" "${cacheHome}"`,

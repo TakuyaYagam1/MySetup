@@ -3,7 +3,9 @@
 set -euo pipefail
 
 scripts_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+installer_dir="$(CDPATH='' cd -- "$scripts_dir/../../../installer" && pwd)"
 test_root="$(mktemp -d)"
+original_home="$HOME"
 lock_test_pid=""
 trap '[ -z "$lock_test_pid" ] || kill "$lock_test_pid" 2>/dev/null || true; rm -rf -- "$test_root"' EXIT
 
@@ -13,39 +15,11 @@ export XDG_STATE_HOME="$HOME/.local/state"
 export XDG_RUNTIME_DIR="$test_root/runtime"
 mkdir -p "$HOME" "$XDG_RUNTIME_DIR"
 chmod 0700 "$XDG_RUNTIME_DIR"
+export WAHRWELT_FS_HELPER="$test_root/wahrwelt-fs-helper"
+(cd "$installer_dir" && HOME="$original_home" go build -o "$WAHRWELT_FS_HELPER" ./cmd/wahrwelt-fs-helper)
 
 # shellcheck source=Linux/dots/hypr/scripts/shell-runtime.sh
 . "$scripts_dir/shell-runtime.sh"
-
-lock_race_dir="$test_root/stale-lock-race"
-lock_known_recovery="$test_root/stale-lock-original"
-mkdir -p "$lock_race_dir"
-printf '%s\n' 999999 >"$lock_race_dir/pid"
-printf '%s\n' wahrwelt-test-lock >"$lock_race_dir/owner"
-lock_expected_identity="$(wahrwelt_lock_identity "$lock_race_dir")"
-lock_swap_once=1
-wahrwelt_before_lock_exchange_hook() {
-  [ "$1" = "$lock_race_dir" ] || return 0
-  if [ "$lock_swap_once" -eq 1 ]; then
-    lock_swap_once=0
-    command mv -- "$lock_race_dir" "$lock_known_recovery"
-    mkdir -p "$lock_race_dir/unknown-tree"
-    printf '%s\n' preserve >"$lock_race_dir/unknown-tree/preserve"
-  fi
-}
-if stale_recovery="$(wahrwelt_release_owned_lock "$lock_race_dir" "$lock_expected_identity")"; then
-  printf 'FAIL: swapped stale lock unexpectedly released at %s\n' "$stale_recovery" >&2
-  exit 1
-fi
-unset -f wahrwelt_before_lock_exchange_hook
-if [ "$(tr -d '\n' <"$lock_race_dir/unknown-tree/preserve")" != preserve ]; then
-  printf 'FAIL: stale-lock cleanup changed swapped unknown tree\n' >&2
-  exit 1
-fi
-[ -f "$lock_known_recovery/owner" ] || {
-  printf 'FAIL: stale-lock race discarded original managed lock\n' >&2
-  exit 1
-}
 
 assert_eq() {
   local want="$1"
@@ -80,115 +54,6 @@ assert_not_matches() {
   fi
 }
 
-normal_lock_dir="$test_root/normal-lock"
-mkdir -p "$normal_lock_dir"
-printf '%s\n' 999999 >"$normal_lock_dir/pid"
-printf '%s\n' wahrwelt-shell-selector >"$normal_lock_dir/owner"
-normal_lock_identity="$(wahrwelt_lock_identity "$normal_lock_dir")"
-if ! wahrwelt_release_owned_lock "$normal_lock_dir" "$normal_lock_identity"; then
-  printf 'FAIL: owned lock cleanup did not retain its exact recovery\n' >&2
-  exit 1
-fi
-normal_lock_cleanup="$wahrwelt_lock_recovery_exact_path"
-assert_eq "$normal_lock_identity" "$wahrwelt_lock_recovery_identity" \
-  "owned lock cleanup binds its retained recovery identity"
-assert_matches '^/.*/\.wahrwelt-lock-quarantine-[^/]+$' "$normal_lock_cleanup" \
-  "owned lock cleanup reports its exact retained recovery"
-if [ -e "$normal_lock_dir" ] || [ -L "$normal_lock_dir" ]; then
-  printf 'FAIL: successful owned lock cleanup left the public lock name\n' >&2
-  exit 1
-fi
-if [ "$(tr -d '\n' <"$normal_lock_cleanup/owner")" != wahrwelt-shell-selector ]; then
-  printf 'FAIL: successful owned lock cleanup did not retain exact recovery\n' >&2
-  exit 1
-fi
-
-cleanup_race_lock="$test_root/cleanup-lock-race"
-mkdir -p "$cleanup_race_lock"
-printf '%s\n' 999999 >"$cleanup_race_lock/pid"
-printf '%s\n' wahrwelt-shell-selector >"$cleanup_race_lock/owner"
-cleanup_race_identity="$(wahrwelt_lock_identity "$cleanup_race_lock")"
-wahrwelt_before_lock_release_delete_hook() {
-  mkdir -p "$1/unknown-tree"
-  printf '%s\n' preserve >"$1/unknown-tree/preserve"
-}
-if wahrwelt_release_owned_lock "$cleanup_race_lock" "$cleanup_race_identity"; then
-  printf 'FAIL: lock cleanup deleted a post-validation unknown child\n' >&2
-  exit 1
-fi
-unset -f wahrwelt_before_lock_release_delete_hook
-cleanup_recovery="$wahrwelt_lock_recovery_exact_path"
-assert_eq "$cleanup_race_identity" "$wahrwelt_lock_recovery_identity" \
-  "lock cleanup collision retains the classified lock identity"
-if [ -z "$cleanup_recovery" ] || [ "$(tr -d '\n' <"$cleanup_recovery/unknown-tree/preserve")" != preserve ]; then
-  printf 'FAIL: lock cleanup did not retain injected unknown child\n' >&2
-  exit 1
-fi
-
-# A staged lock is not published until all metadata is durable. A same-UID
-# target created immediately before publication must remain untouched.
-new_lock_dir="$test_root/new-lock-race"
-new_lock_swap_once=1
-wahrwelt_before_lock_directory_publish_hook() {
-  [ "$1" = "$new_lock_dir" ] || return 0
-  [ "$new_lock_swap_once" -eq 1 ] || return 0
-  new_lock_swap_once=0
-  mkdir -p "$new_lock_dir"
-  printf '%s\n' preserve >"$new_lock_dir/unknown"
-}
-if wahrwelt_acquire_lock "$new_lock_dir" "$new_lock_dir/pid" "$new_lock_dir/owner" \
-  wahrwelt-shell-selector 'never-matches'; then
-  printf 'FAIL: lock acquisition accepted a parent replacement after mkdir\n' >&2
-  exit 1
-fi
-unset -f wahrwelt_before_lock_directory_publish_hook
-if [ "$(tr -d '\n' <"$new_lock_dir/unknown")" != preserve ] ||
-  [ -e "$new_lock_dir/pid" ] || [ -e "$new_lock_dir/owner" ]; then
-  printf 'FAIL: lock acquisition wrote metadata into a replacement lock directory\n' >&2
-  exit 1
-fi
-
-fifo_lock_dir="$test_root/fifo-lock-collision"
-mkdir -p "$fifo_lock_dir"
-mkfifo "$fifo_lock_dir/pid"
-printf '%s\n' wahrwelt-shell-selector >"$fifo_lock_dir/owner"
-if timeout 2 bash -c \
-  '. "$1"; wahrwelt_acquire_lock "$2" "$2/pid" "$2/owner" wahrwelt-shell-selector never-matches 1 0' \
-  bash "$scripts_dir/shell-runtime.sh" "$fifo_lock_dir"; then
-  printf 'FAIL: FIFO lock collision unexpectedly acquired or did not fail closed\n' >&2
-  exit 1
-fi
-if [ ! -p "$fifo_lock_dir/pid" ]; then
-  printf 'FAIL: FIFO lock collision was changed while being rejected\n' >&2
-  exit 1
-fi
-
-classified_lock_dir="$test_root/classified-stale-lock"
-classified_lock_original="$test_root/classified-stale-original"
-mkdir -p "$classified_lock_dir"
-printf '%s\n' 999999 >"$classified_lock_dir/pid"
-printf '%s\n' wahrwelt-shell-selector >"$classified_lock_dir/owner"
-classified_lock_swap_once=1
-wahrwelt_after_lock_classification_hook() {
-  [ "$1" = "$classified_lock_dir" ] || return 0
-  [ "$classified_lock_swap_once" -eq 1 ] || return 0
-  classified_lock_swap_once=0
-  mv -- "$classified_lock_dir" "$classified_lock_original"
-  mkdir -p "$classified_lock_dir/unknown-tree"
-  printf '%s\n' preserve >"$classified_lock_dir/unknown-tree/preserve"
-}
-if wahrwelt_acquire_lock "$classified_lock_dir" "$classified_lock_dir/pid" "$classified_lock_dir/owner" \
-  wahrwelt-shell-selector never-matches 1 0; then
-  printf 'FAIL: stale lock classification quarantined a replacement winner\n' >&2
-  exit 1
-fi
-unset -f wahrwelt_after_lock_classification_hook
-if [ "$(tr -d '\n' <"$classified_lock_dir/unknown-tree/preserve")" != preserve ] ||
-  [ ! -f "$classified_lock_original/owner" ]; then
-  printf 'FAIL: stale lock classification did not preserve both winner and original\n' >&2
-  exit 1
-fi
-
 # Runtime state must never be updated in place through a hardlink whose other
 # name lies outside the managed runtime tree.
 hardlink_root="$test_root/runtime-hardlink"
@@ -213,7 +78,7 @@ assert_not_matches "$wahrwelt_end4_env_pattern" "ILLOGICAL_IMPULSE_DOTFILES_SOUR
 assert_not_matches "$wahrwelt_end4_env_pattern" "WAHRWELT_END4_PROFILE=caelestia" "Caelestia with stale generic End4 variables is not End4"
 
 legacy_entrypoint="$test_root/legacy-hyprland.lua"
-legacy_fixture_dir="$scripts_dir/../../../NixOS/home/shells/legacy-hypr-runtime"
+legacy_fixture_dir="$scripts_dir/../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 for variant in end4 end4-pc; do
   cp -- "$legacy_fixture_dir/$variant.lua" "$legacy_entrypoint"
   wahrwelt_is_legacy_direct_end4_entrypoint "$legacy_entrypoint" "$XDG_CONFIG_HOME"
@@ -562,397 +427,6 @@ hypr_dir() {
 # shellcheck source=Linux/dots/hypr/scripts/shell-profile-sync.sh
 . "$scripts_dir/shell-profile-sync.sh"
 
-new_exact_test_snapshot() {
-  wahrwelt_begin_exact_snapshot "$wahrwelt_runtime_session_dir" "$1" test
-}
-
-if write_regular_file "$hardlink_target" managed-runtime; then
-  printf 'FAIL: runtime hardlink publication unexpectedly succeeded\n' >&2
-  exit 1
-fi
-assert_eq outside-bytes "$(tr -d '\n' <"$hardlink_outside")" \
-  "runtime hardlink collision leaves external bytes unchanged"
-
-# A link added after the initial nlink check is still harmless: replacement is
-# candidate/exchange based, so the external alias is never truncated.  The
-# changed old inode makes the transaction fail closed and is restored intact.
-late_hardlink_target="$test_root/runtime-late-hardlink"
-late_hardlink_outside="$test_root/runtime-late-hardlink-outside"
-printf '%s\n' managed-before-link >"$late_hardlink_target"
-wahrwelt_before_runtime_candidate_exchange_hook() {
-  [ "$1" = "$late_hardlink_target" ] || return 0
-  ln -- "$late_hardlink_target" "$late_hardlink_outside"
-}
-if write_regular_file "$late_hardlink_target" managed-after-link; then
-  printf 'FAIL: runtime publication accepted a post-preflight hardlink\n' >&2
-  exit 1
-fi
-unset -f wahrwelt_before_runtime_candidate_exchange_hook
-assert_eq managed-before-link "$(tr -d '\n' <"$late_hardlink_target")" \
-  "post-preflight hardlink restores the canonical managed entry"
-assert_eq managed-before-link "$(tr -d '\n' <"$late_hardlink_outside")" \
-  "post-preflight hardlink leaves the external alias unchanged"
-
-# Publishing is not committed until every enclosing transaction journal has
-# accepted the exact post-publication identity.  A journal write failure must
-# immediately restore a pre-existing entry, and must leave an absent target
-# absent while retaining its candidate for recovery.
-record_failure_target="$test_root/record-failure-existing"
-printf '%s\n' prior-record-failure >"$record_failure_target"
-new_exact_test_snapshot .record-failure-
-record_failure_snapshot="$wahrwelt_new_snapshot_dir"
-snapshot_exact_paths "$record_failure_snapshot" "$record_failure_target"
-record_exact_snapshot_mutation_original="$(declare -f record_exact_snapshot_mutation)"
-record_exact_snapshot_mutation() {
-  [ "$1" = "$record_failure_target" ] && return 1
-  return 1
-}
-if write_regular_file "$record_failure_target" candidate-record-failure; then
-  printf 'FAIL: publication unexpectedly committed after journal rejection\n' >&2
-  exit 1
-fi
-assert_eq prior-record-failure "$(tr -d '\n' <"$record_failure_target")" \
-  "journal rejection restores the exact prior regular entry"
-eval "$record_exact_snapshot_mutation_original"
-wahrwelt_unregister_exact_snapshot "$record_failure_snapshot"
-
-record_failure_absent="$test_root/record-failure-absent"
-new_exact_test_snapshot .record-failure-absent-
-record_failure_absent_snapshot="$wahrwelt_new_snapshot_dir"
-snapshot_exact_paths "$record_failure_absent_snapshot" "$record_failure_absent"
-record_exact_snapshot_mutation_original="$(declare -f record_exact_snapshot_mutation)"
-record_exact_snapshot_mutation() {
-  [ "$1" = "$record_failure_absent" ] && return 1
-  return 1
-}
-if write_regular_file "$record_failure_absent" candidate-record-failure; then
-  printf 'FAIL: absent publication unexpectedly committed after journal rejection\n' >&2
-  exit 1
-fi
-if [ -e "$record_failure_absent" ] || [ -L "$record_failure_absent" ]; then
-  printf 'FAIL: journal rejection left an owned candidate at the absent target\n' >&2
-  exit 1
-fi
-record_failure_recovery="$(find "$test_root" -maxdepth 1 -type f -name '.wahrwelt-runtime-quarantine-*' -print -quit)"
-if [ -z "$record_failure_recovery" ] ||
-  [ "$(tr -d '\n' <"$record_failure_recovery")" != candidate-record-failure ]; then
-  printf 'FAIL: journal rejection did not retain the absent candidate for recovery\n' >&2
-  exit 1
-fi
-eval "$record_exact_snapshot_mutation_original"
-wahrwelt_unregister_exact_snapshot "$record_failure_absent_snapshot"
-
-cleanup_snapshot_target="$test_root/snapshot-cleanup-target"
-printf '%s\n' snapshot-original >"$cleanup_snapshot_target"
-new_exact_test_snapshot .cleanup-snapshot-
-cleanup_snapshot_dir="$wahrwelt_new_snapshot_dir"
-snapshot_exact_paths "$cleanup_snapshot_dir" "$cleanup_snapshot_target"
-wahrwelt_before_snapshot_cleanup_delete_hook() {
-  mkdir -p "$1/unknown-tree"
-  printf '%s\n' preserve >"$1/unknown-tree/preserve"
-}
-if remove_exact_path_snapshot "$cleanup_snapshot_dir" "$cleanup_snapshot_target"; then
-  printf 'FAIL: snapshot cleanup deleted a post-validation unknown child\n' >&2
-  exit 1
-fi
-unset -f wahrwelt_before_snapshot_cleanup_delete_hook
-cleanup_snapshot_recovery="$cleanup_snapshot_dir"
-if [ "$(tr -d '\n' <"$cleanup_snapshot_recovery/unknown-tree/preserve")" != preserve ]; then
-  printf 'FAIL: snapshot cleanup did not retain injected unknown child\n' >&2
-  exit 1
-fi
-wahrwelt_unregister_exact_snapshot "$cleanup_snapshot_dir"
-
-# A committed replacement keeps the prior regular inode in a named stage file
-# until its last transaction snapshot is discarded. The stage stays as a
-# recovery because a same-UID writer can replace any pathname before unlink.
-stage_cleanup_target="$test_root/stage-cleanup-target"
-printf '%s\n' stage-cleanup-original >"$stage_cleanup_target"
-new_exact_test_snapshot .stage-cleanup-
-stage_cleanup_snapshot="$wahrwelt_new_snapshot_dir"
-snapshot_exact_paths "$stage_cleanup_snapshot" "$stage_cleanup_target"
-write_regular_file "$stage_cleanup_target" stage-cleanup-current
-stage_cleanup_stage="${wahrwelt_snapshot_owned_recoveries[$(snapshot_parent_key "$stage_cleanup_snapshot" 0)]:-}"
-if [ -z "$stage_cleanup_stage" ]; then
-  printf 'FAIL: replacement did not retain a stage recovery before commit\n' >&2
-  exit 1
-fi
-if ! remove_exact_path_snapshot "$stage_cleanup_snapshot" "$stage_cleanup_target"; then
-  printf 'FAIL: committed transaction snapshot did not retain its exact recovery\n' >&2
-  exit 1
-fi
-if [ "$(tr -d '\n' <"$stage_cleanup_stage")" != stage-cleanup-original ]; then
-  printf 'FAIL: committed transaction did not retain the exact stage recovery\n' >&2
-  exit 1
-fi
-assert_eq stage-cleanup-current "$(tr -d '\n' <"$stage_cleanup_target")" \
-  "stage cleanup preserves the committed runtime result"
-
-# Cleanup binds the stage identity before retention. A same-UID replacement
-# at the deterministic cleanup barrier is a collision, not a deletion target.
-stage_cleanup_race_target="$test_root/stage-cleanup-race-target"
-printf '%s\n' stage-cleanup-race-original >"$stage_cleanup_race_target"
-new_exact_test_snapshot .stage-cleanup-race-
-stage_cleanup_race_snapshot="$wahrwelt_new_snapshot_dir"
-snapshot_exact_paths "$stage_cleanup_race_snapshot" "$stage_cleanup_race_target"
-write_regular_file "$stage_cleanup_race_target" stage-cleanup-race-current
-stage_cleanup_race_stage="${wahrwelt_snapshot_owned_recoveries[$(snapshot_parent_key "$stage_cleanup_race_snapshot" 0)]:-}"
-if [ -z "$stage_cleanup_race_stage" ]; then
-  printf 'FAIL: race cleanup setup did not retain a stage recovery\n' >&2
-  exit 1
-fi
-wahrwelt_before_runtime_stage_cleanup_hook() {
-  mv -T --no-copy -- "$stage_cleanup_race_stage" "$stage_cleanup_race_stage.owned"
-  printf '%s\n' concurrent-winner >"$stage_cleanup_race_stage"
-}
-if remove_exact_path_snapshot "$stage_cleanup_race_snapshot" "$stage_cleanup_race_target"; then
-  printf 'FAIL: stage cleanup accepted a replacement winner\n' >&2
-  exit 1
-fi
-unset -f wahrwelt_before_runtime_stage_cleanup_hook
-assert_eq concurrent-winner "$(tr -d '\n' <"$stage_cleanup_race_stage")" \
-  "stage cleanup preserves a concurrent replacement winner"
-assert_eq stage-cleanup-race-original "$(tr -d '\n' <"$stage_cleanup_race_stage.owned")" \
-  "stage cleanup retains the owned recovery after a collision"
-wahrwelt_unregister_exact_snapshot "$stage_cleanup_race_snapshot"
-
-# Managed legacy generated regular files are quarantined with a recovery path
-# that rollback can consume. The path is part of the transaction journal, not
-# merely a diagnostic log line.
-legacy_regular_path="$hypr_runtime_dir/shell-profile.conf"
-mkdir -p "$(dirname -- "$legacy_regular_path")" "$wahrwelt_hypr_dir/wahrwelt"
-legacy_regular_expected="$(printf '# Runtime shell launcher\nexec-once = %s\n' "$(hypr_dir)/scripts/start-shell.sh")"
-printf '%s\n' "$legacy_regular_expected" >"$legacy_regular_path"
-new_exact_test_snapshot .legacy-regular-
-legacy_regular_snapshot="$wahrwelt_new_snapshot_dir"
-mapfile -t legacy_runtime_paths < <(legacy_hyprland_runtime_paths)
-snapshot_exact_paths "$legacy_regular_snapshot" "${legacy_runtime_paths[@]}"
-prune_legacy_hyprland_runtime_files
-if [ -e "$legacy_regular_path" ] || [ -L "$legacy_regular_path" ]; then
-  printf 'FAIL: known legacy regular runtime was not quarantined\n' >&2
-  exit 1
-fi
-if ! restore_exact_paths "$legacy_regular_snapshot" "${legacy_runtime_paths[@]}"; then
-  printf 'FAIL: known legacy regular runtime did not restore from recovery\n' >&2
-  exit 1
-fi
-assert_eq "$legacy_regular_expected" "$(cat "$legacy_regular_path")" \
-  "legacy regular runtime rollback restores exact bytes"
-wahrwelt_unregister_exact_snapshot "$legacy_regular_snapshot"
-
-# The symlink proof is equally exact. Use a later managed candidate so prune
-# can quarantine the link and its target in deterministic order.
-legacy_link_path="$hypr_runtime_dir/shell-profile.conf"
-legacy_link_target="$hypr_runtime_dir/shell-launcher.conf"
-legacy_link_expected="$(printf '# Active shell launcher profile: end4\nsource = %s\n' "$(hypr_dir)/end4/launcher.conf")"
-printf '%s\n' "$legacy_link_expected" >"$legacy_link_target"
-rm -f -- "$legacy_link_path"
-ln -s -- "$legacy_link_target" "$legacy_link_path"
-new_exact_test_snapshot .legacy-link-
-legacy_link_snapshot="$wahrwelt_new_snapshot_dir"
-mapfile -t legacy_runtime_paths < <(legacy_hyprland_runtime_paths)
-snapshot_exact_paths "$legacy_link_snapshot" "${legacy_runtime_paths[@]}"
-prune_legacy_hyprland_runtime_files
-if [ -e "$legacy_link_path" ] || [ -L "$legacy_link_path" ] ||
-  [ -e "$legacy_link_target" ] || [ -L "$legacy_link_target" ]; then
-  printf 'FAIL: known legacy runtime symlink and target were not quarantined\n' >&2
-  exit 1
-fi
-if ! restore_exact_paths "$legacy_link_snapshot" "${legacy_runtime_paths[@]}"; then
-  printf 'FAIL: known legacy runtime symlink rollback failed\n' >&2
-  exit 1
-fi
-if [ ! -L "$legacy_link_path" ] || [ "$(readlink -- "$legacy_link_path")" != "$legacy_link_target" ]; then
-  printf 'FAIL: legacy runtime symlink rollback did not restore exact link\n' >&2
-  exit 1
-fi
-wahrwelt_unregister_exact_snapshot "$legacy_link_snapshot"
-
-# Pruning uses the transaction's retained parent descriptor. A canonical
-# parent replacement after snapshot therefore stays untouched.
-rm -f -- "$legacy_link_path" "$legacy_link_target"
-printf '%s\n' "$legacy_regular_expected" >"$legacy_regular_path"
-new_exact_test_snapshot .legacy-prune-parent-
-legacy_prune_snapshot="$wahrwelt_new_snapshot_dir"
-mapfile -t legacy_runtime_paths < <(legacy_hyprland_runtime_paths)
-snapshot_exact_paths "$legacy_prune_snapshot" "${legacy_runtime_paths[@]}"
-legacy_prune_original="$test_root/legacy-prune-original-runtime"
-legacy_prune_swap_once=1
-wahrwelt_before_runtime_quarantine_exchange_hook() {
-  [ "$legacy_prune_swap_once" -eq 1 ] || return 0
-  legacy_prune_swap_once=0
-  mv -- "$hypr_runtime_dir" "$legacy_prune_original"
-  mkdir -p "$hypr_runtime_dir"
-  printf '%s\n' canonical-winner >"$hypr_runtime_dir/shell-profile.conf"
-}
-prune_legacy_hyprland_runtime_files
-unset -f wahrwelt_before_runtime_quarantine_exchange_hook
-assert_eq canonical-winner "$(tr -d '\n' <"$hypr_runtime_dir/shell-profile.conf")" \
-  "legacy prune preserves canonical parent-swap winner"
-wahrwelt_unregister_exact_snapshot "$legacy_prune_snapshot"
-
-parent_swap_root="$test_root/absent-parent-swap"
-managed_parent="$parent_swap_root/managed"
-managed_target="$managed_parent/absent.lua"
-mkdir -p "$managed_parent"
-new_exact_test_snapshot .parent-rollback-
-parent_snapshot="$wahrwelt_new_snapshot_dir"
-snapshot_exact_paths "$parent_snapshot" "$managed_target"
-mv -- "$managed_parent" "$parent_swap_root/original-managed"
-mkdir -p "$parent_swap_root/victim"
-mv -- "$parent_swap_root/victim" "$managed_parent"
-if preflight_regular_file_target "$managed_target"; then
-  printf 'FAIL: absent target under swapped ordinary parent passed preflight\n' >&2
-  exit 1
-fi
-if [ -e "$managed_target" ] || [ -L "$managed_target" ]; then
-  printf 'FAIL: absent target parent-swap preflight wrote into victim\n' >&2
-  exit 1
-fi
-wahrwelt_unregister_exact_snapshot "$parent_snapshot"
-
-write_swap_root="$test_root/write-parent-swap"
-write_swap_parent="$write_swap_root/managed"
-write_swap_target="$write_swap_parent/runtime.lua"
-mkdir -p "$write_swap_parent"
-printf '%s\n' original-runtime >"$write_swap_target"
-new_exact_test_snapshot .write-parent-rollback-
-write_swap_snapshot="$wahrwelt_new_snapshot_dir"
-snapshot_exact_paths "$write_swap_snapshot" "$write_swap_target"
-write_swap_once=1
-wahrwelt_after_runtime_preflight_hook() {
-  [ "$1" = "$write_swap_target" ] || return 0
-  [ "$write_swap_once" -eq 1 ] || return 0
-  write_swap_once=0
-  mv -- "$write_swap_parent" "$write_swap_root/original-managed"
-  mkdir -p "$write_swap_parent"
-  printf '%s\n' concurrent-runtime-winner >"$write_swap_target"
-}
-if write_regular_file "$write_swap_target" managed-runtime; then
-  printf 'FAIL: runtime write succeeded after canonical parent swap\n' >&2
-  exit 1
-fi
-unset -f wahrwelt_after_runtime_preflight_hook
-assert_eq concurrent-runtime-winner "$(tr -d '\n' <"$write_swap_target")" \
-  "pinned runtime write preserves canonical parent-swap winner"
-wahrwelt_unregister_exact_snapshot "$write_swap_snapshot"
-
-snapshot_swap_root="$test_root/snapshot-parent-swap"
-snapshot_swap_parent="$snapshot_swap_root/managed"
-snapshot_swap_target="$snapshot_swap_parent/absent-runtime-state"
-mkdir -p "$snapshot_swap_parent"
-new_exact_test_snapshot .snapshot-parent-rollback-
-snapshot_swap_dir="$wahrwelt_new_snapshot_dir"
-snapshot_swap_once=1
-wahrwelt_before_snapshot_parent_pin_hook() {
-  [ "$1" = "$snapshot_swap_target" ] || return 0
-  [ "$snapshot_swap_once" -eq 1 ] || return 0
-  snapshot_swap_once=0
-  mv -- "$snapshot_swap_parent" "$snapshot_swap_root/original-managed"
-  mkdir -p "$snapshot_swap_parent"
-}
-if snapshot_exact_paths "$snapshot_swap_dir" "$snapshot_swap_target"; then
-  printf 'FAIL: snapshot accepted an empty target after its parent swapped before pinning\n' >&2
-  exit 1
-fi
-unset -f wahrwelt_before_snapshot_parent_pin_hook
-if [ -e "$snapshot_swap_target" ] || [ -L "$snapshot_swap_target" ]; then
-  printf 'FAIL: snapshot parent-swap preflight created victim target\n' >&2
-  exit 1
-fi
-
-missing_snapshot_target="$test_root/snapshot-missing-parent/managed/absent-runtime-state"
-new_exact_test_snapshot .snapshot-missing-parent-
-missing_snapshot_dir="$wahrwelt_new_snapshot_dir"
-if snapshot_exact_paths "$missing_snapshot_dir" "$missing_snapshot_target"; then
-  printf 'FAIL: snapshot accepted a target with no begin-time parent anchor\n' >&2
-  exit 1
-fi
-if [ -e "$missing_snapshot_target" ] || [ -L "$missing_snapshot_target" ]; then
-  printf 'FAIL: missing-parent snapshot created a target\n' >&2
-  exit 1
-fi
-
-assert_pinned_rollback_preserves_swapped_parent() {
-  local prior_kind="$1"
-  local rollback_root="$test_root/rollback-parent-$prior_kind"
-  local rollback_parent="$rollback_root/managed"
-  local rollback_target="$rollback_parent/runtime-state"
-  local rollback_original="$rollback_root/original-managed"
-  local rollback_snapshot owned_type owned_identity owned_parent old_source new_source
-
-  mkdir -p "$rollback_parent"
-  case "$prior_kind" in
-    regular)
-      printf '%s\n' prior-regular >"$rollback_target"
-      ;;
-    symlink)
-      old_source="$rollback_root/prior-link-source"
-      printf '%s\n' prior-symlink >"$old_source"
-      ln -s -- "$old_source" "$rollback_target"
-      ;;
-    absent)
-      ;;
-  esac
-  new_exact_test_snapshot .rollback-parent-
-  rollback_snapshot="$wahrwelt_new_snapshot_dir"
-  snapshot_exact_paths "$rollback_snapshot" "$rollback_target"
-  case "$prior_kind" in
-    regular)
-      printf '%s\n' transaction-regular >"$rollback_target"
-      owned_type=regular
-      ;;
-    symlink)
-      new_source="$rollback_root/transaction-link-source"
-      printf '%s\n' transaction-symlink >"$new_source"
-      rm -f -- "$rollback_target"
-      ln -s -- "$new_source" "$rollback_target"
-      owned_type=symlink
-      ;;
-    absent)
-      printf '%s\n' transaction-created >"$rollback_target"
-      owned_type=regular
-      ;;
-  esac
-  owned_identity="$(runtime_state_identity "$rollback_target")"
-  owned_parent="$(runtime_parent_identity "$rollback_target")"
-  record_exact_snapshot_mutation "$rollback_target" "$owned_type" "$owned_identity" "$owned_parent"
-  mv -- "$rollback_parent" "$rollback_original"
-  mkdir -p "$rollback_parent"
-  printf '%s\n' canonical-winner >"$rollback_target"
-  if ! restore_exact_paths "$rollback_snapshot" "$rollback_target"; then
-    printf 'FAIL: %s rollback did not use pinned original parent after canonical swap\n' "$prior_kind" >&2
-    exit 1
-  fi
-  assert_eq canonical-winner "$(tr -d '\n' <"$rollback_target")" \
-    "$prior_kind rollback preserves canonical parent-swap winner"
-  case "$prior_kind" in
-    regular)
-      assert_eq prior-regular "$(tr -d '\n' <"$rollback_original/runtime-state")" \
-        "regular rollback restores detached original parent"
-      ;;
-    symlink)
-      if [ ! -L "$rollback_original/runtime-state" ]; then
-        printf 'FAIL: symlink rollback did not restore detached original parent\n' >&2
-        exit 1
-      fi
-      assert_eq "$old_source" "$(readlink -- "$rollback_original/runtime-state")" \
-        "symlink rollback restores detached original parent"
-      ;;
-    absent)
-      if [ -e "$rollback_original/runtime-state" ] || [ -L "$rollback_original/runtime-state" ]; then
-        printf 'FAIL: absent rollback left transaction result in detached original parent\n' >&2
-        exit 1
-      fi
-      ;;
-  esac
-  wahrwelt_unregister_exact_snapshot "$rollback_snapshot"
-}
-
-assert_pinned_rollback_preserves_swapped_parent regular
-assert_pinned_rollback_preserves_swapped_parent symlink
-assert_pinned_rollback_preserves_swapped_parent absent
-
 persist_profile
 assert_eq end4-pc "$(tr -d '[:space:]' <"$persistent_state_file")" "active profile persistence"
 assert_eq end4-pc "$(tr -d '[:space:]' <"$wahrwelt_end4_variant_state")" "variant persistence"
@@ -994,40 +468,6 @@ fi
 assert_eq "$variant_prior" "$(readlink -- "$wahrwelt_end4_variant_state")" "remembered variant symlink target rolls back"
 unset -f wahrwelt_after_runtime_publication_hook
 
-printf '%s\n' outer-prior-active >"$persistent_state_file"
-rm -f -- "$wahrwelt_end4_variant_state"
-printf '%s\n' end4 >"$wahrwelt_end4_variant_state"
-new_exact_test_snapshot .outer-state-rollback-
-outer_state_snapshot="$wahrwelt_new_snapshot_dir"
-snapshot_exact_paths "$outer_state_snapshot" "$persistent_state_file" "$wahrwelt_end4_variant_state"
-nested_state_write_attempt=0
-wahrwelt_after_runtime_publication_hook() {
-  case "$1" in
-    "$wahrwelt_end4_variant_state" | "$persistent_state_file") ;;
-    *) return 0 ;;
-  esac
-  nested_state_write_attempt=$((nested_state_write_attempt + 1))
-  if [ "$nested_state_write_attempt" -eq 2 ]; then
-    return 1
-  fi
-  return 0
-}
-profile=end4-pc
-if persist_profile; then
-  printf 'FAIL: nested state persistence failure unexpectedly succeeded\n' >&2
-  exit 1
-fi
-unset -f wahrwelt_after_runtime_publication_hook
-if ! restore_exact_paths "$outer_state_snapshot" "$persistent_state_file" "$wahrwelt_end4_variant_state"; then
-  printf 'FAIL: outer state snapshot treated inner rollback as a concurrent winner\n' >&2
-  exit 1
-fi
-assert_eq outer-prior-active "$(tr -d '\n' <"$persistent_state_file")" \
-  "outer rollback retains original active state after inner persistence rollback"
-assert_eq end4 "$(tr -d '\n' <"$wahrwelt_end4_variant_state")" \
-  "outer rollback retains original variant after inner persistence rollback"
-wahrwelt_unregister_exact_snapshot "$outer_state_snapshot"
-
 printf '%s\n' 'prior active transaction state' >"$persistent_state_file"
 rm -f -- "$wahrwelt_end4_variant_state"
 printf '%s\n' end4-pc >"$wahrwelt_end4_variant_state"
@@ -1047,7 +487,7 @@ fi
 unset -f wahrwelt_after_runtime_publication_hook
 assert_eq 'concurrent active-state winner' "$(tr -d '\n' <"$persistent_state_file")" \
   "state rollback preserves winner swapped between publication and ownership record"
-if ! find "$XDG_RUNTIME_DIR" -maxdepth 1 -type d -name '.state-rollback-*' -print -quit | grep -q .; then
+if ! find "$XDG_RUNTIME_DIR" -maxdepth 1 -type d -name '.state-switch-rollback-*' -print -quit | grep -q .; then
   printf 'FAIL: state concurrent winner did not retain rollback recovery\n' >&2
   exit 1
 fi
@@ -1168,6 +608,7 @@ cp -- "$scripts_dir/start-shell.sh" "$start_lock_fixture/start-shell.sh"
 chmod 0755 "$start_lock_fixture/start-shell.sh"
 printf '%s\n' \
   'wahrwelt_runtime_session_dir="$WAHRWELT_START_LOCK_FIXTURE/runtime"' \
+  'wahrwelt_runtime_session_public_dir="$WAHRWELT_START_LOCK_FIXTURE/runtime"' \
   'wahrwelt_active_shell_state="$WAHRWELT_START_LOCK_FIXTURE/state/active-shell"' \
   'wahrwelt_log_file="$WAHRWELT_START_LOCK_FIXTURE/start-shell.log"' \
   'wahrwelt_hypr_runtime_dir="$WAHRWELT_START_LOCK_FIXTURE/state/hypr-runtime"' \
@@ -1190,72 +631,15 @@ printf '%s\n' \
   'wahrwelt_remove_end4_upgrade_tokens() {' \
   '  : >"$WAHRWELT_START_LOCK_FIXTURE/durable-tokens"' \
   '}' \
-  'wahrwelt_begin_new_lock_directory() {' \
-  '  [ -f "$WAHRWELT_START_LOCK_FIXTURE/lock-available" ] || return 1' \
-  '  wahrwelt_new_lock_fd=99' \
-  '  return 0' \
-  '}' \
-  'wahrwelt_write_new_pinned_regular_file() { :; }' \
-  'wahrwelt_finish_new_lock_directory() {' \
-  '  if [ -f "$WAHRWELT_START_LOCK_FIXTURE/finish-collision" ]; then' \
-  '    wahrwelt_new_lock_publish_state=collision' \
-  '    return 1' \
-  '  fi' \
-  '  wahrwelt_acquired_lock_identity=1:2' \
-  '}' \
-  'wahrwelt_close_new_lock_directory() { :; }' \
-  'wahrwelt_fixture_known_calls=0' \
-  'wahrwelt_lock_path_absent() {' \
-  '  [ -f "$WAHRWELT_START_LOCK_FIXTURE/first-known-absent.consumed" ] ||' \
-  '    [ -f "$WAHRWELT_START_LOCK_FIXTURE/second-known-absent.consumed" ] ||' \
-  '    [ -f "$WAHRWELT_START_LOCK_FIXTURE/quarantine-absent.consumed" ]' \
-  '}' \
-  'wahrwelt_known_lock_directory() {' \
-  '  wahrwelt_fixture_known_calls=$((wahrwelt_fixture_known_calls + 1))' \
-  '  if [ -f "$WAHRWELT_START_LOCK_FIXTURE/first-known-absent" ] &&' \
-  '    [ "$wahrwelt_fixture_known_calls" -eq 1 ]; then' \
-  '    : >"$WAHRWELT_START_LOCK_FIXTURE/first-known-absent.consumed"' \
-  '    return 1' \
-  '  fi' \
-  '  if [ -f "$WAHRWELT_START_LOCK_FIXTURE/second-known-absent" ] &&' \
-  '    [ "$wahrwelt_fixture_known_calls" -eq 2 ]; then' \
-  '    : >"$WAHRWELT_START_LOCK_FIXTURE/second-known-absent.consumed"' \
-  '    return 1' \
-  '  fi' \
-  '  wahrwelt_known_lock_identity=1:2' \
-  '  return 0' \
-  '}' \
-  'wahrwelt_read_known_lock_field() {' \
-  '  case "$2" in' \
-  '    owner) printf "%s\n" wahrwelt-start-shell ;;' \
-  '    pid) printf "%s\n" 4242 ;;' \
-  '    profile) printf "%s\n" end4 ;;' \
-  '  esac' \
-  '}' \
-  'wahrwelt_pid_matches() {' \
-  '  if [ -f "$WAHRWELT_START_LOCK_FIXTURE/second-known-absent" ] &&' \
-  '    [ ! -f "$WAHRWELT_START_LOCK_FIXTURE/second-known-absent.consumed" ]; then return 1; fi' \
-  '  if [ -f "$WAHRWELT_START_LOCK_FIXTURE/quarantine-absent" ] &&' \
-  '    [ ! -f "$WAHRWELT_START_LOCK_FIXTURE/quarantine-absent.consumed" ]; then return 1; fi' \
-  '  return 0' \
-  '}' \
-  'wahrwelt_quarantine_owned_lock() {' \
-  '  if [ -f "$WAHRWELT_START_LOCK_FIXTURE/quarantine-absent" ]; then' \
-  '    : >"$WAHRWELT_START_LOCK_FIXTURE/quarantine-absent.consumed"' \
-  '  fi' \
-  '  return 1' \
-  '}' \
-  'sleep() { :; }' \
+  'wahrwelt_enter_runtime_lock_v2() { :; }' \
   >"$start_lock_fixture/shell-runtime.sh"
 printf '%s\n' 'prepare_runtime_environment() { :; }' \
   >"$start_lock_fixture/shell-runtime-env.sh"
 printf '%s\n' \
-  'runtime_bundle_paths() { :; }' \
-  'runtime_switch_bundle_paths() { :; }' \
+  'wahrwelt_fs_scavenge() { :; }' \
+  'runtime_bundle_fast_path_ready() { return 1; }' \
+  'runtime_full_bundle_paths() { :; }' \
   'wahrwelt_capture_exact_path_guards() { :; }' \
-  'wahrwelt_begin_exact_snapshot() { wahrwelt_new_snapshot_dir=snapshot; }' \
-  'snapshot_exact_paths() { :; }' \
-  'remove_exact_path_snapshot() { :; }' \
   'prepare_profile_or_fallback() { :; }' \
   >"$start_lock_fixture/shell-profile-sync.sh"
 printf '%s\n' \
@@ -1263,7 +647,6 @@ printf '%s\n' \
   '  printf "%s" "$legacy_end4_upgrade_tokens" >"$WAHRWELT_START_LOCK_FIXTURE/cleanup-tokens"' \
   '  legacy_end4_upgrade_tokens="$(wahrwelt_remove_end4_upgrade_tokens "$legacy_end4_upgrade_tokens")"' \
   '  switch_transaction_active=0' \
-  '  lock_identity=""' \
   '  exit 0' \
   '}' \
   >"$start_lock_fixture/shell-process.sh"
@@ -1281,76 +664,8 @@ if [ "$(cat "$start_lock_fixture/durable-tokens" 2>/dev/null || true)" != '5099:
 fi
 : >"$start_lock_fixture/durable-tokens"
 
-if ! WAHRWELT_START_LOCK_FIXTURE="$start_lock_fixture" \
-  "$start_lock_fixture/start-shell.sh" end4; then
-  printf 'FAIL: ordinary same-profile start-shell invocation did not reuse the active owner\n' >&2
-  exit 1
-fi
-if ! grep -Fq 'another start-shell instance is already running for profile=end4 pid=4242' \
-  "$start_lock_fixture/start-shell.log"; then
-  printf 'FAIL: ordinary same-profile start-shell reuse was not recorded\n' >&2
-  exit 1
-fi
+printf '%s' '5101:101:ii' >"$start_lock_fixture/durable-tokens"
 
-: >"$start_lock_fixture/lock-available"
-: >"$start_lock_fixture/finish-collision"
-: >"$start_lock_fixture/start-shell.log"
-if ! WAHRWELT_START_LOCK_FIXTURE="$start_lock_fixture" \
-  "$start_lock_fixture/start-shell.sh" end4; then
-  printf 'FAIL: staged start-shell publisher loser did not reuse the exact same-profile winner\n' >&2
-  exit 1
-fi
-if ! grep -Fq 'another start-shell instance is already running for profile=end4 pid=4242' \
-  "$start_lock_fixture/start-shell.log"; then
-  printf 'FAIL: staged start-shell publisher loser skipped exact winner classification\n' >&2
-  exit 1
-fi
-mv -- "$start_lock_fixture/lock-available" "$start_lock_fixture/lock-available.used"
-mv -- "$start_lock_fixture/finish-collision" "$start_lock_fixture/finish-collision.used"
-
-for absent_boundary in first-known-absent second-known-absent quarantine-absent; do
-  : >"$start_lock_fixture/$absent_boundary"
-  : >"$start_lock_fixture/start-shell.log"
-  if ! WAHRWELT_START_LOCK_FIXTURE="$start_lock_fixture" \
-    "$start_lock_fixture/start-shell.sh" end4; then
-    printf 'FAIL: start-shell treated transient %s as an ownership collision\n' "$absent_boundary" >&2
-    exit 1
-  fi
-  if [ ! -f "$start_lock_fixture/$absent_boundary.consumed" ] ||
-    ! grep -Fq 'another start-shell instance is already running for profile=end4 pid=4242' \
-      "$start_lock_fixture/start-shell.log"; then
-    printf 'FAIL: start-shell did not retry exact %s boundary\n' "$absent_boundary" >&2
-    exit 1
-  fi
-  mv -- "$start_lock_fixture/$absent_boundary" \
-    "$start_lock_fixture/$absent_boundary.used"
-  mv -- "$start_lock_fixture/$absent_boundary.consumed" \
-    "$start_lock_fixture/$absent_boundary.consumed.used"
-done
-
-: >"$start_lock_fixture/start-shell.log"
-if WAHRWELT_START_LOCK_FIXTURE="$start_lock_fixture" \
-  "$start_lock_fixture/start-shell.sh" \
-  --legacy-direct-end4-upgrade-processes 5101:101:ii end4; then
-  printf 'FAIL: token-bearing same-profile start-shell invocation silently reused another owner\n' >&2
-  exit 1
-fi
-if ! grep -Fq 'waiting for start-shell upgrade lock; requested=end4 active=end4 pid=4242' \
-  "$start_lock_fixture/start-shell.log"; then
-  printf 'FAIL: token-bearing same-profile start-shell invocation did not wait for ownership\n' >&2
-  exit 1
-fi
-if ! grep -Fq 'failed to acquire start-shell lock; profile=end4' \
-  "$start_lock_fixture/start-shell.log"; then
-  printf 'FAIL: token-bearing same-profile start-shell invocation did not fail closed\n' >&2
-  exit 1
-fi
-if [ "$(cat "$start_lock_fixture/durable-tokens" 2>/dev/null || true)" != '5101:101:ii' ]; then
-  printf 'FAIL: failed token-bearing start-shell run did not retain durable provenance\n' >&2
-  exit 1
-fi
-
-: >"$start_lock_fixture/lock-available"
 : >"$start_lock_fixture/start-shell.log"
 if ! WAHRWELT_START_LOCK_FIXTURE="$start_lock_fixture" \
   WAYLAND_DISPLAY=wayland-1 HYPRLAND_INSTANCE_SIGNATURE=test \

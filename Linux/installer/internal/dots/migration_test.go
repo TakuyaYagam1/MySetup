@@ -1687,7 +1687,7 @@ func TestMigrateLegacyUserPathsRejectsCanonicalNamespaceReplacementDuringCacheCo
 }
 
 func TestHomeManagerMigrationQuarantinesOnlyLegacyCacheConflicts(t *testing.T) {
-	data, err := os.ReadFile("../../../NixOS/home/programs/wahrwelt-migration.nix")
+	data, err := os.ReadFile("../../../NixOS/home/migrations/v1_to_v2/user-paths.nix")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1717,7 +1717,7 @@ func TestHomeManagerMigrationQuarantinesOnlyLegacyCacheConflicts(t *testing.T) {
 }
 
 func TestHomeManagerHyprMigrationCommitsCollisionSensitiveTreeBeforeOtherMutations(t *testing.T) {
-	data, err := os.ReadFile("../../../NixOS/home/programs/wahrwelt-migration.nix")
+	data, err := os.ReadFile("../../../NixOS/home/migrations/v1_to_v2/user-paths.nix")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1744,7 +1744,7 @@ func TestHomeManagerHyprMigrationCommitsCollisionSensitiveTreeBeforeOtherMutatio
 }
 
 func TestHomeManagerHyprFinalCommitUsesFailClosedRename(t *testing.T) {
-	data, err := os.ReadFile("../../../NixOS/home/programs/wahrwelt-migration.nix")
+	data, err := os.ReadFile("../../../NixOS/home/migrations/v1_to_v2/user-paths.nix")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1825,7 +1825,7 @@ func TestHomeManagerHyprFinalCommitNoCopyRenamePreservesCrossDeviceSource(t *tes
 }
 
 func TestHomeManagerMigrationPreflightsWholeSequenceAndDoesNotRewriteLegacyHyprTree(t *testing.T) {
-	data, err := os.ReadFile("../../../NixOS/home/programs/wahrwelt-migration.nix")
+	data, err := os.ReadFile("../../../NixOS/home/migrations/v1_to_v2/user-paths.nix")
 	if err != nil {
 		t.Fatal(err)
 	}

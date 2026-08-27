@@ -12,25 +12,104 @@ import (
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 )
 
-func TestCopyWallpapersReturnsPreviewCleanupError(t *testing.T) {
-	src := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(src, "Wallpapers"), 0o755); err != nil {
+func TestCopyWallpapersSeedsOnlyKnownRegularBasenames(t *testing.T) {
+	nixosSource := t.TempDir()
+	source := filepath.Join(nixosSource, "Wallpapers")
+	home := t.TempDir()
+	target := filepath.Join(home, "Pictures", "Wallpapers")
+	if err := os.MkdirAll(filepath.Join(source, "nested"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	bin := t.TempDir()
-	writeScript(t, filepath.Join(bin, "mkdir"), "exit 0")
-	writeScript(t, filepath.Join(bin, "find"), "exit 17")
-	writeScript(t, filepath.Join(bin, "rsync"), "exit 0")
-	t.Setenv("PATH", bin)
-
-	var out bytes.Buffer
-	runner := run.Runner{Stdout: &out, Stderr: &out}
-	err := copyWallpapers(context.Background(), runner, src, t.TempDir())
-	if err == nil {
-		t.Fatal("expected preview cleanup error")
+	if err := os.MkdirAll(filepath.Join(target, "user-nested"), 0o700); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(err.Error(), "find failed") {
-		t.Fatalf("expected find failure, got %v", err)
+	for name, content := range map[string]string{
+		"1.jpg":                "upstream existing\n",
+		"2.jpg":                "upstream new\n",
+		"preview-upstream.png": "upstream preview\n",
+	} {
+		if err := os.WriteFile(filepath.Join(source, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(source, "nested", "ignored.jpg"), []byte("ignored\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	userExisting := filepath.Join(target, "1.jpg")
+	userPreview := filepath.Join(target, "preview-user.png")
+	userNested := filepath.Join(target, "user-nested", "readonly-user.png")
+	for path, content := range map[string]string{
+		userExisting: "user existing\n",
+		userPreview:  "user preview\n",
+		userNested:   "user nested\n",
+	} {
+		if err := os.WriteFile(path, []byte(content), 0o640); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Chmod(userNested, 0o440); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := copyWallpapers(context.Background(), run.New(false), nixosSource, home); err != nil {
+		t.Fatal(err)
+	}
+	assertWallpaperFile(t, userExisting, "user existing\n", 0o640)
+	assertWallpaperFile(t, userPreview, "user preview\n", 0o640)
+	assertWallpaperFile(t, userNested, "user nested\n", 0o440)
+	assertWallpaperFile(t, filepath.Join(target, "2.jpg"), "upstream new\n", 0o644)
+	for _, absent := range []string{
+		filepath.Join(target, "preview-upstream.png"),
+		filepath.Join(target, "nested", "ignored.jpg"),
+	} {
+		if _, err := os.Lstat(absent); !os.IsNotExist(err) {
+			t.Fatalf("filtered source was copied to %s: %v", absent, err)
+		}
+	}
+}
+
+func TestCopyWallpapersDryRunHasNoBroadTargetMutation(t *testing.T) {
+	nixosSource := t.TempDir()
+	source := filepath.Join(nixosSource, "Wallpapers")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "1.jpg"), []byte("wallpaper\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "preview-upstream.png"), []byte("preview\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := copyWallpapers(context.Background(), run.Runner{DryRun: true, Stdout: &out}, nixosSource, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	commands := out.String()
+	if !strings.Contains(commands, filepath.Join(source, "1.jpg")) {
+		t.Fatalf("known wallpaper was not seeded:\n%s", commands)
+	}
+	for _, forbidden := range []string{"preview-upstream", "find ", "chmod -R", source + "/ "} {
+		if strings.Contains(commands, forbidden) {
+			t.Fatalf("wallpaper dry-run retained broad mutation %q:\n%s", forbidden, commands)
+		}
+	}
+}
+
+func assertWallpaperFile(t *testing.T, path, content string, mode os.FileMode) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != content {
+		t.Fatalf("%s content = %q, want %q", path, data, content)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != mode {
+		t.Fatalf("%s mode = %04o, want %04o", path, info.Mode().Perm(), mode)
 	}
 }
 

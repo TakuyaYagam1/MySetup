@@ -2,8 +2,11 @@
 set -euo pipefail
 
 source_scripts="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+installer_dir="$(CDPATH='' cd -- "$source_scripts/../../../installer" && pwd)"
 test_root="$(mktemp -d)"
 trap 'rm -rf -- "$test_root"' EXIT
+fs_helper="$test_root/wahrwelt-fs-helper"
+(cd "$installer_dir" && go build -o "$fs_helper" ./cmd/wahrwelt-fs-helper)
 
 environment_command_log="$test_root/environment-commands.log"
 : >"$environment_command_log"
@@ -34,6 +37,9 @@ mkdir -p "$instrumented_scripts"
 for helper in shell-runtime.sh shell-runtime-env.sh shell-profile-sync.sh shell-process.sh; do
   ln -s -- "$source_scripts/$helper" "$instrumented_scripts/$helper"
 done
+mkdir -p "$instrumented_scripts/migrations/v1_to_v2"
+ln -s -- "$source_scripts/migrations/v1_to_v2/runtime.sh" \
+  "$instrumented_scripts/migrations/v1_to_v2/runtime.sh"
 
 cat >"$early_hooks" <<'EOF'
 WAHRWELT_TRANSITION_EARLY_TEST_HOOKS=1
@@ -341,32 +347,29 @@ wait_for_session() {
   test_event wait-session
 }
 
+runtime_bundle_fast_path_ready() {
+  return 1
+}
+
 test_mutate_bundle() {
   local mutation_profile="$1"
-  local path index=0 owned_identity parent_identity owned_copy
+  local path index=0 owned_copy transaction
   local paths=()
 
-  mapfile -t paths < <(runtime_bundle_paths)
+  paths=("${runtime_bundle_path_list[@]}")
   for path in "${paths[@]}"; do
     index=$((index + 1))
+    transaction="$(wahrwelt_transaction_for_path "$path")" || return 1
     if [ "$index" -ge 8 ]; then
-      rm -f -- "$path"
-      parent_identity="$(runtime_parent_identity "$path" 2>/dev/null || true)"
-      record_exact_snapshot_mutation "$path" absent "" "$parent_identity" || return 1
+      wahrwelt_fs_remove "$transaction" "$path" || return 1
     else
-      mkdir -p -- "$(dirname -- "$path")"
-      rm -f -- "$path"
-      printf 'prepared profile=%s path=%s\n' "$mutation_profile" "$index" >"$path"
-      chmod 0644 "$path"
-      owned_identity="$(runtime_regular_inode "$path")"
-      parent_identity="$(runtime_parent_identity "$path")"
+      wahrwelt_fs_write "$transaction" "$path" "prepared profile=$mutation_profile path=$index" || return 1
       if [ "${WAHRWELT_TEST_REPLACE_AFTER_PUBLISH_INDEX:-}" = "$index" ]; then
         owned_copy="${path}.transaction-owned"
         mv -- "$path" "$owned_copy"
         printf 'concurrent bundle winner path=%s\n' "$index" >"$path"
         chmod 0600 "$path"
       fi
-      record_exact_snapshot_mutation "$path" regular "$owned_identity" "$parent_identity" || return 1
     fi
     if [ "${WAHRWELT_TEST_FAIL_PREPARE_INDEX:-}" = "$index" ]; then
       return 1
@@ -417,6 +420,44 @@ stop_end4() {
 stop_end4_idle() {
   test_event stop:end4-idle
   test_remove_process end4-idle
+}
+
+stop_quickshells() {
+  stop_shell_selector
+  stop_caelestia
+  stop_noctalia
+  stop_end4
+}
+
+stop_all_shells_for_switch() {
+  local requested="$1"
+
+  stop_quickshells
+  if [ "$(wahrwelt_shell_family "$requested")" != end4 ]; then
+    stop_end4_idle
+  fi
+}
+
+stop_inactive_shells() {
+  local requested="$1"
+
+  stop_shell_selector
+  case "$requested" in
+    caelestia)
+      stop_noctalia
+      stop_end4
+      stop_end4_idle
+      ;;
+    noctalia)
+      stop_caelestia
+      stop_end4
+      stop_end4_idle
+      ;;
+    end4 | end4-pc)
+      stop_caelestia
+      stop_noctalia
+      ;;
+  esac
 }
 
 start_profile_shell() {
@@ -747,10 +788,11 @@ run_switch() {
   local abort_after_propagate="${10:-}"
   local replace_after_publish_index="${11:-}"
   local fail_reload="${12:-}"
-  local switch_status command_summary
+  local switch_status command_summary attempt
   local args=()
 
   [ -z "$target" ] || args+=("$target")
+  rm -f -- "$root/spotify-async-done" "$root/spotify-async-done.started"
   HOME="$root/home" \
     XDG_CONFIG_HOME="$root/home/.config" \
     XDG_STATE_HOME="$root/home/.local/state" \
@@ -771,6 +813,8 @@ run_switch() {
     WAHRWELT_TEST_SPOTIFY_HIDE_STEALS_FOCUS="${WAHRWELT_TEST_SPOTIFY_HIDE_STEALS_FOCUS:-}" \
     WAHRWELT_TEST_FAIL_SPOTIFY_SNAPSHOT="${WAHRWELT_TEST_FAIL_SPOTIFY_SNAPSHOT:-}" \
     WAHRWELT_TEST_WATCHER_UNREADY="${WAHRWELT_TEST_WATCHER_UNREADY:-}" \
+    WAHRWELT_FS_HELPER="$fs_helper" \
+    WAHRWELT_SPOTIFY_ASYNC_DONE="$root/spotify-async-done" \
     WAHRWELT_TEST_FAIL_PREPARE="$fail_prepare" \
     WAHRWELT_TEST_FAIL_START="$fail_start" \
     WAHRWELT_TEST_FAIL_PERSIST="$fail_persist" \
@@ -783,6 +827,14 @@ run_switch() {
     WAHRWELT_TEST_FAIL_RELOAD="$fail_reload" \
     "$instrumented_scripts/start-shell.sh" "${args[@]}"
   switch_status=$?
+  if [ -e "$root/spotify-async-done.started" ]; then
+    attempt=0
+    while [ ! -e "$root/spotify-async-done" ] && [ "$attempt" -lt 200 ]; do
+      command sleep 0.01
+      attempt=$((attempt + 1))
+    done
+    [ -e "$root/spotify-async-done" ] || fail "Spotify async cleanup did not complete in the test budget"
+  fi
   if [ -s "$environment_command_log" ]; then
     command_summary="$(tr '\n' ';' <"$environment_command_log")"
     fail "instrumented start-shell reached live environment commands: $command_summary"

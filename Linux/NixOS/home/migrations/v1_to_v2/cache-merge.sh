@@ -12,7 +12,7 @@ new="$3"
 recovery_parent="${4:-}"
 preflight_token="${5:-}"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-temp_creator="${WAHRWELT_CACHE_TEMP_CREATOR:-$script_dir/legacy-namespace-move.py}"
+temp_creator="${WAHRWELT_CACHE_TEMP_CREATOR:-$script_dir/namespace-move.py}"
 temp_python="${WAHRWELT_CACHE_TEMP_PYTHON:-python3}"
 
 collision() {

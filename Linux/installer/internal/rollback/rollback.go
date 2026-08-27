@@ -6,12 +6,14 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/huh"
 
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
+	"golang.org/x/sys/unix"
 )
 
 type Options struct {
@@ -22,10 +24,18 @@ type Options struct {
 	Runner run.CommandRunner
 }
 
+//nolint:gocyclo // Selection, confirmation, descriptor pinning, and post-restore checks form one fail-closed operation.
 func Run(ctx context.Context, opts Options) error {
 	dest := opts.Paths.NixOSDest
 	if dest == "" {
 		return fmt.Errorf("destination path is empty; pass --dest or rely on default")
+	}
+	dest, err := filepath.Abs(dest)
+	if err != nil {
+		return fmt.Errorf("resolve destination path: %w", err)
+	}
+	if err := validateOrdinaryDirectory(dest, "destination"); err != nil {
+		return err
 	}
 	backup := opts.Backup
 	if backup == "" {
@@ -40,10 +50,8 @@ func Run(ctx context.Context, opts Options) error {
 			return err
 		}
 	}
-	if info, err := os.Stat(backup); err != nil {
-		return fmt.Errorf("backup not accessible %s: %w", backup, err)
-	} else if !info.IsDir() {
-		return fmt.Errorf("backup is not a directory: %s", backup)
+	if err := validateOrdinaryDirectory(backup, "backup"); err != nil {
+		return err
 	}
 
 	runner := opts.Runner
@@ -66,12 +74,115 @@ func Run(ctx context.Context, opts Options) error {
 		}
 	}
 
-	if err := runner.Command(ctx, "sudo", "rsync", "-a", "--delete", backup+"/", dest+"/"); err != nil {
+	destinationPin, err := pinOrdinaryDirectory(dest, "destination")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = destinationPin.Close() }()
+	backupPin, err := pinOrdinaryDirectory(backup, "backup")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = backupPin.Close() }()
+	if err := destinationPin.verifyVisible("destination"); err != nil {
+		return err
+	}
+	if err := backupPin.verifyVisible("backup"); err != nil {
+		return err
+	}
+	if err := runner.Command(
+		ctx,
+		"sudo",
+		"rsync",
+		"-a",
+		"--delete",
+		"--",
+		backupPin.procPath(),
+		destinationPin.procPath(),
+	); err != nil {
 		return fmt.Errorf("restore from %s: %w", backup, err)
+	}
+	if err := destinationPin.verifyVisible("destination after restore"); err != nil {
+		return fmt.Errorf("rollback used a pinned destination but its visible path changed: %w", err)
+	}
+	if err := backupPin.verifyVisible("backup after restore"); err != nil {
+		return fmt.Errorf("rollback source changed during restore: %w", err)
 	}
 	fmt.Println("Rollback complete.")
 	fmt.Println("To roll the active system generation back as well, run:")
 	fmt.Println("  sudo nixos-rebuild switch --rollback")
+	return nil
+}
+
+type pinnedDirectory struct {
+	file *os.File
+	info os.FileInfo
+	path string
+}
+
+func pinOrdinaryDirectory(path, label string) (*pinnedDirectory, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("resolve %s path: %w", label, err)
+	}
+	if err := validateOrdinaryDirectory(absolute, label); err != nil {
+		return nil, err
+	}
+	fd, err := unix.Open(absolute, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, fmt.Errorf("pin %s %s: %w", label, absolute, err)
+	}
+	file, wrapErr := fileFromDescriptor(fd, label)
+	if wrapErr != nil {
+		_ = unix.Close(fd)
+		return nil, fmt.Errorf("pin %s %s: %w", label, absolute, wrapErr)
+	}
+	info, err := file.Stat()
+	if err != nil || !info.IsDir() {
+		_ = file.Close()
+		return nil, fmt.Errorf("pin %s %s: directory changed while opening", label, absolute)
+	}
+	pinned := &pinnedDirectory{file: file, info: info, path: absolute}
+	if err := pinned.verifyVisible(label); err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	return pinned, nil
+}
+
+func fileFromDescriptor(fd int, label string) (*os.File, error) {
+	if fd < 0 {
+		return nil, fmt.Errorf("negative directory descriptor for %s", label)
+	}
+	file := os.NewFile(uintptr(fd), label)
+	if file == nil {
+		return nil, fmt.Errorf("wrap directory descriptor for %s", label)
+	}
+	return file, nil
+}
+
+func (p *pinnedDirectory) Close() error {
+	if p == nil || p.file == nil {
+		return nil
+	}
+	return p.file.Close()
+}
+
+func (p *pinnedDirectory) procPath() string {
+	return "/proc/" + strconv.Itoa(os.Getpid()) + "/fd/" + strconv.FormatUint(uint64(p.file.Fd()), 10) + "/"
+}
+
+func (p *pinnedDirectory) verifyVisible(label string) error {
+	if p == nil || p.file == nil {
+		return fmt.Errorf("%s is not pinned", label)
+	}
+	current, err := os.Lstat(p.path)
+	if err != nil {
+		return fmt.Errorf("%s not accessible %s: %w", label, p.path, err)
+	}
+	if current.Mode()&os.ModeSymlink != 0 || !current.IsDir() || !os.SameFile(current, p.info) {
+		return fmt.Errorf("%s changed after it was pinned: %s", label, p.path)
+	}
 	return nil
 }
 
@@ -85,7 +196,7 @@ func FindLatest(dest string) (string, error) {
 	}
 	candidates := make([]string, 0, len(matches))
 	for _, m := range matches {
-		info, err := os.Stat(m)
+		info, err := os.Lstat(m)
 		if err != nil || !info.IsDir() {
 			continue
 		}
@@ -102,14 +213,29 @@ func FindLatest(dest string) (string, error) {
 	return candidates[0], nil
 }
 
+func validateOrdinaryDirectory(path, label string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return fmt.Errorf("%s not accessible %s: %w", label, path, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("%s must be an ordinary directory: %s", label, path)
+	}
+	return nil
+}
+
 func validateBackupPath(backup, dest string) error {
 	abs, err := filepath.Abs(backup)
 	if err != nil {
 		return err
 	}
 	parent := filepath.Dir(abs)
-	if parent != filepath.Dir(dest) {
-		return fmt.Errorf("backup %s must live in %s", backup, filepath.Dir(dest))
+	destAbs, err := filepath.Abs(dest)
+	if err != nil {
+		return err
+	}
+	if parent != filepath.Dir(destAbs) {
+		return fmt.Errorf("backup %s must live in %s", backup, filepath.Dir(destAbs))
 	}
 	if !strings.HasPrefix(filepath.Base(abs), filepath.Base(dest)+".bak.") {
 		return fmt.Errorf("backup %s does not look like a %s.bak.* snapshot", backup, filepath.Base(dest))

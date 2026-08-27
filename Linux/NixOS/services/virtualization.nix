@@ -19,7 +19,9 @@ in
     (lib.mkIf developerOrMore {
       virtualisation = {
         docker = {
-          enable = true;
+          # Portainer may explicitly enable the rootful daemon. Developer
+          # presets otherwise use the rootless Podman socket below.
+          enable = lib.mkDefault false;
           daemon.settings = {
             inherit (wahrweltLib.defaults) dns;
             log-driver = "journald";
@@ -28,11 +30,17 @@ in
 
         podman = {
           enable = true;
-          dockerCompat = false;
+          dockerCompat = !config.services.portainer.enable;
+          # The system-wide compatibility socket is root-equivalent. Podman
+          # already enables the per-user socket at %t/podman/podman.sock.
           dockerSocket.enable = false;
           defaultNetwork.settings.dns_enabled = true;
         };
       };
+
+      home-manager.users.${cfg.user.username}.home.sessionVariables.DOCKER_HOST = lib.mkIf (
+        !config.services.portainer.enable
+      ) "unix://$XDG_RUNTIME_DIR/podman/podman.sock";
     })
 
     (lib.mkIf personal {

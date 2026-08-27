@@ -125,6 +125,26 @@ func TestEnd4HyprPatchDefersInputGesturesAndQsConfigToAdapter(t *testing.T) {
 	if strings.Contains(end4SourceBlock, "force = true;") {
 		t.Fatalf("Home Manager End4 tree must fail closed on ownership collisions\n%s", end4SourceBlock)
 	}
+	launcherStart := strings.Index(module, `end4SettingsLauncher = pkgs.writeShellApplication`)
+	launcherEnd := strings.Index(module, `patchedHypr =`)
+	if launcherStart < 0 || launcherEnd <= launcherStart {
+		t.Fatalf("managed End4 settings launcher block is unavailable\n%s", module)
+	}
+	launcher := module[launcherStart:launcherEnd]
+	for _, want := range []string{
+		`active_profile_file="$state_home/wahrwelt/active-shell"`,
+		`end4-pc)`,
+		`end4)`,
+	} {
+		if !strings.Contains(launcher, want) {
+			t.Fatalf("managed End4 settings launcher is missing %q\n%s", want, launcher)
+		}
+	}
+	for _, forbidden := range []string{`case ${qsConfig}`, `systemsettings`} {
+		if strings.Contains(launcher, forbidden) {
+			t.Fatalf("managed End4 settings launcher retained fallback %q\n%s", forbidden, launcher)
+		}
+	}
 }
 
 func TestHyprHomeManagerOwnsAdapterAndSeedsOnlyDefault(t *testing.T) {
@@ -148,13 +168,10 @@ func TestHyprHomeManagerOwnsAdapterAndSeedsOnlyDefault(t *testing.T) {
 		`-- Wahrwelt shell adapter: ${defaultProfile.id}`,
 		`require("${defaultProfile.adapter}")`,
 		`"$activation_helper" activate-runtime-dir`,
-		`"${legacyWahrweltRuntime}"`,
-		`"${legacyHomeManagerWahrweltRuntime}"`,
-		`"${legacySeededWahrweltRuntime}"`,
-		`"${legacySeededUserRuntime}"`,
-		`"${./legacy-hypr-runtime/end4.lua}"`,
-		`"${./legacy-hypr-runtime/end4-pc.lua}"`,
-		`"${./legacy-hypr-runtime/user-namespace-transition.lua}"`,
+		`"$hypr_runtime_source"`,
+		`wahrwelt_v1_to_v2_direct_end4_evidence`,
+		`"${../migrations/v1_to_v2/hypr-runtime/end4.lua}"`,
+		`"${../migrations/v1_to_v2/hypr-runtime/end4-pc.lua}"`,
 		`pkgs.python3`,
 	} {
 		if !strings.Contains(shells, want) {
@@ -169,18 +186,26 @@ func TestHyprHomeManagerOwnsAdapterAndSeedsOnlyDefault(t *testing.T) {
 		`pruneLegacyHyprlandRuntime`,
 		`pruneWahrweltHyprBackups`,
 		`backupTargets`,
+		`legacyWahrweltRuntime =`,
+		`legacyHomeManagerWahrweltRuntime =`,
+		`legacySeededWahrweltRuntime =`,
+		`legacySeededUserRuntime =`,
 	} {
 		if strings.Contains(shells, forbidden) {
 			t.Fatalf("Home Manager must preserve user Lua ownership: found %q\n%s", forbidden, shells)
 		}
 	}
 	canonicalStart := strings.Index(shells, `canonicalHyprRuntime = pkgs.writeText`)
-	canonicalEnd := strings.Index(shells, `legacyWahrweltRuntime = pkgs.writeText`)
+	canonicalEnd := strings.Index(shells, `defaultHyprUserConfig = pkgs.writeText`)
 	if canonicalStart < 0 || canonicalEnd <= canonicalStart {
 		t.Fatalf("Home Manager canonical runtime block is unavailable\n%s", shells)
 	}
 	if strings.Contains(shells[canonicalStart:canonicalEnd], `dofile(runtime_root .. "/shell-profile.lua")`) {
 		t.Fatalf("canonical runtime retained the historical shell-profile side effect\n%s", shells[canonicalStart:canonicalEnd])
+	}
+	migration := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/user-paths.nix")
+	if !strings.Contains(migration, `transitionHyprRuntime = ./hypr-runtime/user-namespace-transition.lua;`) {
+		t.Fatalf("v1 to v2 migration lost the historical namespace transition payload\n%s", migration)
 	}
 
 	environment := readContractFile(t, "../../../NixOS/home/end4/environment.nix")
@@ -196,7 +221,7 @@ func TestHyprHomeManagerOwnsAdapterAndSeedsOnlyDefault(t *testing.T) {
 }
 
 func TestHyprHomeManagerMigrationExplicitlyPrecedesPrepareAndLinkChecks(t *testing.T) {
-	migration := readContractFile(t, "../../../NixOS/home/programs/wahrwelt-migration.nix")
+	migration := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/user-paths.nix")
 	shells := readContractFile(t, "../../../NixOS/home/shells/default.nix")
 	if !strings.Contains(migration, `migrateWahrweltUserPaths = lib.hm.dag.entryBefore [ "checkLinkTargets" ]`) {
 		t.Fatalf("Hypr migration must remain before Home Manager link checks\n%s", migration)
@@ -211,9 +236,42 @@ func TestHyprHomeManagerMigrationExplicitlyPrecedesPrepareAndLinkChecks(t *testi
 	}
 }
 
+func TestEnd4V1AppSeedUsesFDQuarantineForExactHistoricalLinks(t *testing.T) {
+	migration := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/end4-app-seed.nix")
+	guard := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/link-guard.py")
+	for _, want := range []string{
+		`${./link-guard.py}`,
+		`check "$target" "$relative"`,
+		`quarantine "$target" "$relative"`,
+		`Wahrwelt v1_to_v2 End4 link recovery retained`,
+	} {
+		if !strings.Contains(migration, want) {
+			t.Fatalf("End4 v1 app migration is missing %q\n%s", want, migration)
+		}
+	}
+	for _, forbidden := range []string{`rm -f`, `readlink -- "$target"`, `stat -c`} {
+		if strings.Contains(migration, forbidden) {
+			t.Fatalf("End4 v1 app migration retained path-based link removal %q\n%s", forbidden, migration)
+		}
+	}
+	for _, want := range []string{
+		`".config/kitty": "directory"`,
+		`".config/fuzzel": "directory"`,
+		`".config/kdeglobals": "regular"`,
+		`".local/share/konsole/Profile 1.profile": "regular"`,
+		`".config/quickshell/ii/shell.qml"`,
+		`".config/hypr/end4/hyprland.conf"`,
+		`rename_noreplace(parent_fd, target_name, recovery_fd, "legacy-link")`,
+	} {
+		if !strings.Contains(guard, want) {
+			t.Fatalf("versioned link guard is missing End4 app ownership proof %q\n%s", want, guard)
+		}
+	}
+}
+
 func TestHomeManagerRuntimeActivationMigratesOnlyExactKnownEnd4Forms(t *testing.T) {
 	helper := "../../../NixOS/home/shells/runtime-activation.sh"
-	legacyDir := "../../../NixOS/home/shells/legacy-hypr-runtime"
+	legacyDir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 	canonical := filepath.Join(t.TempDir(), "canonical.lua")
 	canonicalContent := "-- canonical Wahrwelt runtime\n"
 	if err := os.WriteFile(canonical, []byte(canonicalContent), 0o644); err != nil {
@@ -331,7 +389,7 @@ func TestHomeManagerRuntimeMigrationUsesCandidateExchange(t *testing.T) {
 
 func TestHomeManagerRuntimeMigrationIgnoresPythonPathSitecustomize(t *testing.T) {
 	helper := "../../../NixOS/home/shells/runtime-activation.sh"
-	legacyDir := "../../../NixOS/home/shells/legacy-hypr-runtime"
+	legacyDir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 	legacyPaths := []string{
 		filepath.Join(legacyDir, "end4.lua"),
 		filepath.Join(legacyDir, "end4-pc.lua"),
@@ -452,7 +510,7 @@ func TestHomeManagerRuntimeActivationPreservesFinalMigrationRaceWinners(t *testi
 
 func TestHomeManagerRuntimeActivationPreservesSeparateProcessOpenWriter(t *testing.T) {
 	helper := "../../../NixOS/home/shells/runtime-activation.sh"
-	legacyDir := "../../../NixOS/home/shells/legacy-hypr-runtime"
+	legacyDir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 	legacyPaths := []string{
 		filepath.Join(legacyDir, "end4.lua"),
 		filepath.Join(legacyDir, "end4-pc.lua"),

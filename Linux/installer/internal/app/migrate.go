@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
+	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 )
 
@@ -41,7 +42,7 @@ func migrateCommand(opts *Options) *cobra.Command {
 func runMigration(ctx context.Context, opts *Options, runner run.CommandRunner) error {
 	// Restart, rather than start, so an already-active oneshot is forced to
 	// process namespace migrations introduced by a newer generation.
-	if err := runner.Command(ctx, "sudo", "systemctl", "restart", "wahrwelt-brand-migration.service"); err != nil {
+	if err := runner.Command(ctx, "sudo", "systemctl", "restart", "wahrwelt-v1-to-v2-migration.service"); err != nil {
 		return fmt.Errorf("restart system migration: %w; install the current generation with nixos-update first", err)
 	}
 
@@ -88,18 +89,7 @@ func legacyInstallPaths(opts *Options) ([]string, error) {
 		cacheHome = value
 	}
 
-	candidates := []string{
-		filepath.Join(opts.NixOSDest, "mysetup"),
-		filepath.Join(opts.NixOSDest, "private"),
-		filepath.Join(opts.NixOSDest, "wahrwelt", "state.json"),
-		filepath.Join(configHome, "mysetup"),
-		filepath.Join(configHome, "hypr", "mysetup"),
-		filepath.Join(configHome, "hypr", "wahrwelt"),
-		filepath.Join(configHome, "hypr", "lib", "mysetup.lua"),
-		filepath.Join(configHome, "quickshell", "mysetup-shell-selector"),
-		filepath.Join(stateHome, "mysetup"),
-		filepath.Join(cacheHome, "mysetup"),
-	}
+	candidates := migrationv1tov2.LegacyInstallPaths(opts.NixOSDest, configHome, stateHome, cacheHome)
 	found := make([]string, 0, len(candidates))
 	for _, candidate := range candidates {
 		if _, err := os.Lstat(candidate); err == nil {

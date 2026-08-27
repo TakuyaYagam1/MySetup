@@ -80,6 +80,51 @@ wait_until_stopped() {
   ! is_running "$handle"
 }
 
+# Stop every handle against one shared deadline. This avoids paying a separate
+# two-second wait for each shell family during one profile transition.
+stop_matching_group() {
+  local handle pid attempt running=0
+  local -a handles=("$@") pids=()
+
+  for handle in "${handles[@]}"; do
+    while read -r pid; do
+      [ -n "$pid" ] && pids+=("$pid")
+    done < <(matching_pids "$handle")
+  done
+  [ "${#pids[@]}" -gt 0 ] || return 0
+  while read -r pid; do
+    [ -n "$pid" ] && kill -TERM "$pid" >/dev/null 2>&1 || true
+  done < <(printf '%s\n' "${pids[@]}" | sort -u)
+
+  for attempt in $(seq 1 10); do
+    running=0
+    for handle in "${handles[@]}"; do
+      if is_running "$handle"; then
+        running=1
+        break
+      fi
+    done
+    [ "$running" -eq 1 ] || return 0
+    sleep 0.05
+  done
+
+  for handle in "${handles[@]}"; do
+    kill_matching_pids "$handle" KILL
+  done
+  for attempt in $(seq 1 5); do
+    running=0
+    for handle in "${handles[@]}"; do
+      if is_running "$handle"; then
+        running=1
+        break
+      fi
+    done
+    [ "$running" -eq 1 ] || return 0
+    sleep 0.02
+  done
+  return 1
+}
+
 cleanup_legacy_end4_processes() {
   local tokens
   local attempt pid
@@ -146,7 +191,6 @@ dedupe_shell() {
 
   log "found duplicate $name instances count=$count; restarting requested profile"
   "$stop_func"
-  sleep 0.2
   return 1
 }
 
@@ -160,16 +204,17 @@ start_with_retry() {
     return 0
   fi
 
-  local attempt
+  local attempt probe
   for attempt in 1 2 3 4 5; do
     log "starting $name attempt $attempt: $*"
     ("$@" >>"$log_file" 2>&1 &)
-    sleep 0.7
-
-    if is_running "$pattern"; then
-      log "$name started"
-      return 0
-    fi
+    for probe in $(seq 1 12); do
+      if is_running "$pattern"; then
+        log "$name started"
+        return 0
+      fi
+      sleep 0.05
+    done
   done
 
   log "failed to observe running $name after retries"

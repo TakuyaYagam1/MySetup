@@ -3,7 +3,6 @@ package dots
 import (
 	"bytes"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -12,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/shellruntime"
 	"golang.org/x/sys/unix"
 )
@@ -53,7 +53,8 @@ type hyprUserRuntimeTransition struct {
 
 func publishHyprUserNamespaceTransition(home, hyprDir, dotsSource string) (hyprUserRuntimeTransition, error) {
 	var result hyprUserRuntimeTransition
-	if !hyprUserRuntimePublicationRelevant(hyprDir, shellruntime.UserNamespaceTransitionEntrypoint()) {
+	transitionEntrypoint := migrationv1tov2.UserNamespaceTransitionEntrypoint()
+	if !hyprUserRuntimePublicationRelevant(hyprDir, transitionEntrypoint) {
 		return result, nil
 	}
 	var err error
@@ -68,7 +69,7 @@ func publishHyprUserNamespaceTransition(home, hyprDir, dotsSource string) (hyprU
 		}
 		result.directEnd4Deferred = deferred
 	}
-	if err := publishHyprUserNamespaceRuntimeTargets(result.targets, shellruntime.UserNamespaceTransitionEntrypoint(), nil); err != nil {
+	if err := publishHyprUserNamespaceRuntimeTargets(result.targets, transitionEntrypoint, nil); err != nil {
 		return result, err
 	}
 	return result, nil
@@ -100,7 +101,7 @@ func finalizeHyprUserNamespaceRuntime(
 
 func hyprUserRuntimePublicationRelevant(hyprDir, desired string) bool {
 	canonicalReadable, legacyReadable := readableHyprUserAdapters(hyprDir)
-	if desired == shellruntime.UserNamespaceTransitionEntrypoint() {
+	if desired == migrationv1tov2.UserNamespaceTransitionEntrypoint() {
 		return canonicalReadable != legacyReadable
 	}
 	return canonicalReadable && !legacyReadable
@@ -200,12 +201,8 @@ func managedUserNamespaceRuntimeTargets(home, hyprDir string) (hyprUserRuntimeTr
 }
 
 func isDirectEnd4RuntimeContent(content string) bool {
-	for _, profile := range []string{shellruntime.End4, shellruntime.End4PC} {
-		if content == legacyDirectEnd4RuntimeEntrypoint(profile) {
-			return true
-		}
-	}
-	return false
+	kind := migrationv1tov2.RecognizeEntrypoint(content, shellruntime.DefaultProfile)
+	return kind == migrationv1tov2.EntrypointDirectEnd4 || kind == migrationv1tov2.EntrypointDirectEnd4PC
 }
 
 func prepareDirectEnd4RuntimeMigration(home, hyprDir, dotsSource, profileID string) (bool, error) {
@@ -357,23 +354,6 @@ func safeDirectEnd4MigrationAssetPath(rel string) bool {
 	clean := filepath.Clean(filepath.FromSlash(rel))
 	return clean != "." && !filepath.IsAbs(clean) && filepath.ToSlash(clean) == rel &&
 		clean != ".." && !strings.HasPrefix(clean, ".."+string(os.PathSeparator))
-}
-
-var historicalDirectEnd4MigrationAssetSHA256 = map[string][]string{
-	"hyprland.lua":                  {"24229642cd871aa3eb3d27c44b0d72357395951aec076a09d173b45ca17231a0"},
-	"lib/wahrwelt.lua":              {"5e9d935004de1ca3cff466fad857d8c4576377a14b76f42219b88afd84c933bb"},
-	"hyprland/keybinds.lua":         {"d2fddcdfb7a6bfa0ee78ad001671498bb70ccae0498125e0979d2017aaffceab"},
-	"hyprland/rules.lua":            {"555ca50800228be02331e08a6a0a59f79bb5cf410ffa7860e13970f89306b4d2"},
-	"scripts/start-shell.sh":        {"0111a0fa50477b20452ecb3d11dcf749afb5c91bf65b562cd398fb6c034c1c56"},
-	"scripts/shell-runtime.sh":      {"3ce850afb7e88ff9916fa506ce8315cc3b8d2a6ecd2d5197f2c0cee6443c5ee1"},
-	"scripts/shell-runtime-env.sh":  {"59f97d24ddc727b4bbee44229570aa75406d7dca7234a825ec296d6d400e1501"},
-	"scripts/shell-profile-sync.sh": {"a0623406522ad1fa29a6178e8fab829a764f0052e5b353960ca0b1d6748cf780"},
-	"scripts/shell-process.sh":      {"cf6eb94d4e8cb3db695e6d7854a69b085ba956debd66ac535041ff9fa4ca761f"},
-	"scripts/restore-lock.sh":       {"352fcf918656c47996d5279a1a714bf59aaaeb989dfae21b24896bf869c88681"},
-	"scripts/shell-selector.sh":     {"10f22897ef5d5b470196c00be7bbbf02f5a236ac65d1f44edfe4d288f1da01b4"},
-	"scripts/record-toggle.sh":      {"7d48d039280736b4ad482857e6aeba643ad28de68eb21cb489b548843298d1d3"},
-	"scripts/noctalia-launcher.sh":  {"fc6575dc117a30d755e64459bca14f3f5885d78fd38451bfe7c9815c464e64dc"},
-	"scripts/close-active.sh":       {"2f1667514bb97840ebeab4310d26d1c6af5ac1e9d51ca27b31d9eb4522f004b5"},
 }
 
 const historicalCanonicalHyprUserAdapter = `local wahrwelt = require("lib.wahrwelt")
@@ -601,13 +581,7 @@ func directEnd4MigrationRegularAssetReady(publication runtimePublication, state 
 }
 
 func isHistoricalDirectEnd4MigrationAsset(sourceRel string, content []byte) bool {
-	digest := fmt.Sprintf("%x", sha256.Sum256(content))
-	for _, known := range historicalDirectEnd4MigrationAssetSHA256[sourceRel] {
-		if digest == known {
-			return true
-		}
-	}
-	return false
+	return migrationv1tov2.IsHistoricalDirectEnd4Asset(sourceRel, content)
 }
 
 func directEnd4MigrationAssetIsCurrentHomeManagerSymlink(
@@ -661,36 +635,19 @@ func isManagedUserNamespaceRuntimeContent(content string) bool {
 	for _, candidate := range []string{
 		shellruntime.CanonicalEntrypoint(),
 		shellruntime.HomeManagerInitialCanonicalEntrypoint(),
-		shellruntime.UserNamespaceTransitionEntrypoint(),
-		legacyUserRuntimeEntrypoint(),
-		legacyHomeManagerUserRuntimeEntrypoint(),
-		legacySeededHomeManagerUserRuntimeEntrypoint("wahrwelt"),
-		legacySeededHomeManagerUserRuntimeEntrypoint("user"),
-		legacyDirectEnd4RuntimeEntrypoint(shellruntime.End4),
-		legacyDirectEnd4RuntimeEntrypoint(shellruntime.End4PC),
+		migrationv1tov2.UserNamespaceTransitionEntrypoint(),
+		migrationv1tov2.LegacyUserEntrypoint(),
+		migrationv1tov2.LegacyHomeManagerUserEntrypoint(shellruntime.DefaultProfile),
+		migrationv1tov2.HistoricalHomeManagerSeededUserEntrypoint(shellruntime.DefaultProfile, migrationv1tov2.LegacyWahrweltNamespace),
+		migrationv1tov2.HistoricalHomeManagerSeededUserEntrypoint(shellruntime.DefaultProfile, migrationv1tov2.CanonicalUserNamespace),
+		migrationv1tov2.DirectEnd4Entrypoint(shellruntime.End4),
+		migrationv1tov2.DirectEnd4Entrypoint(shellruntime.End4PC),
 	} {
 		if content == candidate {
 			return true
 		}
 	}
 	return false
-}
-
-func legacySeededHomeManagerUserRuntimeEntrypoint(namespace string) string {
-	return fmt.Sprintf(`-- Active Hyprland profile: wahrwelt (%s)
-local home = os.getenv("HOME")
-if home == nil then
-    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
-end
-
-local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-local state_home = os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")
-local hypr_root = config_home .. "/hypr"
-local runtime_root = state_home .. "/wahrwelt/hypr-runtime"
-package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-dofile(hypr_root .. "/%s/hyprland.lua")
-dofile(runtime_root .. "/shell-profile.lua")
-`, shellruntime.DefaultProfile, namespace)
 }
 
 func supportedStableTopLevelRuntime(home, path string, state runtimePathState) bool {
@@ -746,8 +703,45 @@ func writeHyprRuntimeShellState(home, hyprDir string) error {
 	return writeHyprRuntimeShellStateWithHook(home, hyprDir, nil)
 }
 
+func bootstrapActiveShellForUpgrade(home, hyprDir string) string {
+	if profile := shellruntime.ReadActiveShell(shellruntime.ActiveShellStatePath(home)); profile != "" {
+		return profile
+	}
+	legacyState := migrationv1tov2.LegacyActiveShellStatePath(filepath.Join(home, ".local", "state"))
+	if profile := shellruntime.ReadActiveShell(legacyState); profile != "" {
+		return profile
+	}
+	variantPath := shellruntime.End4VariantStatePath(home)
+	for _, candidate := range []struct {
+		entrypoint string
+		keybinds   string
+	}{
+		{shellruntime.RuntimeFile(home, "hyprland.lua"), shellruntime.RuntimeFile(home, "shell-keybinds.lua")},
+		{filepath.Join(hyprDir, "hyprland.lua"), filepath.Join(hyprDir, "shell-keybinds.lua")},
+	} {
+		if profile := shellruntime.DetectShellFromEntrypointWithEnd4Variant(candidate.entrypoint, candidate.keybinds, variantPath); profile != "" {
+			return profile
+		}
+		data, err := os.ReadFile(candidate.entrypoint)
+		if err != nil {
+			continue
+		}
+		switch migrationv1tov2.RecognizeEntrypoint(string(data), shellruntime.DefaultProfile) {
+		case migrationv1tov2.EntrypointDirectEnd4, migrationv1tov2.EntrypointDirectEnd4PC:
+			return shellruntime.ReadEnd4Variant(variantPath)
+		case migrationv1tov2.EntrypointLegacyUser,
+			migrationv1tov2.EntrypointHomeManagerSeededUser,
+			migrationv1tov2.EntrypointNamespaceTransition:
+			if profile := shellruntime.DetectShellFromKeybinds(candidate.keybinds); profile != "" {
+				return profile
+			}
+		}
+	}
+	return shellruntime.DefaultProfile
+}
+
 func writeHyprRuntimeShellStateWithHook(home, hyprDir string, hook runtimeMutationHook) (resultErr error) {
-	profile := shellruntime.BootstrapActiveShell(home, hyprDir)
+	profile := bootstrapActiveShellForUpgrade(home, hyprDir)
 	return writeHyprRuntimeShellStateForProfileWithHook(home, hyprDir, profile, hook, false)
 }
 
@@ -1073,75 +1067,24 @@ func knownTopLevelRuntimeEntrypoints(home string) []string {
 		stableRuntimeSourceConfig(runtimeEntrypoint, "Wahrwelt stable Hyprland entrypoint."),
 		shellruntime.CanonicalEntrypoint(),
 		shellruntime.HomeManagerInitialCanonicalEntrypoint(),
-		shellruntime.UserNamespaceTransitionEntrypoint(),
-		legacySeededHomeManagerUserRuntimeEntrypoint("wahrwelt"),
-		legacySeededHomeManagerUserRuntimeEntrypoint("user"),
-		legacyUserRuntimeEntrypoint(),
-		legacyHomeManagerUserRuntimeEntrypoint(),
-		legacyDirectEnd4RuntimeEntrypoint(shellruntime.End4),
-		legacyDirectEnd4RuntimeEntrypoint(shellruntime.End4PC),
+		migrationv1tov2.UserNamespaceTransitionEntrypoint(),
+		migrationv1tov2.HistoricalHomeManagerSeededUserEntrypoint(shellruntime.DefaultProfile, migrationv1tov2.LegacyWahrweltNamespace),
+		migrationv1tov2.HistoricalHomeManagerSeededUserEntrypoint(shellruntime.DefaultProfile, migrationv1tov2.CanonicalUserNamespace),
+		migrationv1tov2.LegacyUserEntrypoint(),
+		migrationv1tov2.LegacyHomeManagerUserEntrypoint(shellruntime.DefaultProfile),
+		migrationv1tov2.DirectEnd4Entrypoint(shellruntime.End4),
+		migrationv1tov2.DirectEnd4Entrypoint(shellruntime.End4PC),
 	}
 }
 
-func legacyUserRuntimeEntrypoint() string {
-	return `-- Wahrwelt canonical Hyprland runtime entrypoint
-local home = os.getenv("HOME")
-if home == nil then
-    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
-end
-
-local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-local hypr_root = config_home .. "/hypr"
-package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-dofile(hypr_root .. "/wahrwelt/hyprland.lua")
-`
-}
-
-func legacyHomeManagerUserRuntimeEntrypoint() string {
-	return fmt.Sprintf(`-- Active Hyprland profile: wahrwelt (%s)
-local home = os.getenv("HOME")
-if home == nil then
-    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
-end
-
-local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-local hypr_root = config_home .. "/hypr"
-package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-dofile(hypr_root .. "/wahrwelt/hyprland.lua")
-`, shellruntime.DefaultProfile)
-}
-
-func legacyDirectEnd4RuntimeEntrypoint(profile string) string {
-	return fmt.Sprintf(`-- Active Hyprland profile: %s
-local home = os.getenv("HOME")
-if home == nil then
-    error("HOME is not set; cannot locate end4 Hyprland config")
-end
-
-local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-local hypr_root = config_home .. "/hypr"
-local end4_root = hypr_root .. "/end4"
-package.path = end4_root .. "/?.lua;" .. end4_root .. "/?/init.lua;" .. hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-dofile(end4_root .. "/hyprland.lua")
-`, profile)
-}
-
-func legacyDirectEnd4LauncherPlaceholder(profile string) string {
-	return fmt.Sprintf("-- Active shell launcher profile: %s\n-- end4 registers launcher bindings from its own Hyprland Lua modules.\n", profile)
-}
-
-func legacyDirectEnd4KeybindsPlaceholder(profile string) string {
-	return fmt.Sprintf("-- Active shell keybind profile: %s\n-- end4 registers keybinds from its own Hyprland Lua modules.\n", profile)
-}
-
 func isLegacyDirectEnd4LauncherPlaceholder(content string) bool {
-	return content == legacyDirectEnd4LauncherPlaceholder(shellruntime.End4) ||
-		content == legacyDirectEnd4LauncherPlaceholder(shellruntime.End4PC)
+	return content == migrationv1tov2.DirectEnd4LauncherPlaceholder(shellruntime.End4) ||
+		content == migrationv1tov2.DirectEnd4LauncherPlaceholder(shellruntime.End4PC)
 }
 
 func isLegacyDirectEnd4KeybindsPlaceholder(content string) bool {
-	return content == legacyDirectEnd4KeybindsPlaceholder(shellruntime.End4) ||
-		content == legacyDirectEnd4KeybindsPlaceholder(shellruntime.End4PC)
+	return content == migrationv1tov2.DirectEnd4KeybindsPlaceholder(shellruntime.End4) ||
+		content == migrationv1tov2.DirectEnd4KeybindsPlaceholder(shellruntime.End4PC)
 }
 
 func isKnownLegacyRuntimeFile(path string, snapshot runtimePathSnapshot, home, hyprDir string) bool {

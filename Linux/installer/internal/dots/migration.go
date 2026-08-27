@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 	"golang.org/x/sys/unix"
@@ -40,10 +41,7 @@ func migrateLegacyUserPathsWithHooks(ctx context.Context, runner run.CommandRunn
 	if err != nil {
 		return err
 	}
-	legacyLinks := []string{
-		filepath.Join(homes.configHome, "hypr", "lib", "mysetup.lua"),
-		filepath.Join(homes.configHome, "quickshell", "mysetup-shell-selector"),
-	}
+	legacyLinks := migrationv1tov2.LegacyManagedLinks(homes.configHome)
 	preflight, err := preflightLegacyUserPaths(homes.home, homes.configHome, homes.stateHome, homes.cacheHome, legacyLinks)
 	if err != nil {
 		return fmt.Errorf("wahrwelt migration conflict: %w", err)
@@ -63,8 +61,9 @@ func migrateLegacyUserPathsWithHooks(ctx context.Context, runner run.CommandRunn
 		return rollback(err)
 	}
 
-	cacheOld := filepath.Join(homes.cacheHome, "mysetup")
-	cacheNew := filepath.Join(homes.cacheHome, "wahrwelt")
+	cacheMove := migrationv1tov2.LegacyCacheMove(homes.cacheHome)
+	cacheOld := cacheMove.Source
+	cacheNew := cacheMove.Target
 	deferCacheMerge, err := prepareLegacyCacheCommit(cacheOld, cacheNew, preflight.cacheSource, preflight.cacheTarget)
 	if err != nil {
 		return rollback(err)
@@ -458,33 +457,28 @@ func preflightLegacyUserPaths(home, configHome, stateHome, cacheHome string, leg
 		return result, err
 	}
 	result.hyprMigration = hyprMigration
-	for _, path := range []string{
-		filepath.Join(configHome, "hypr", "wahrwelt"),
-		filepath.Join(configHome, "hypr", "mysetup"),
-	} {
+	for _, path := range migrationv1tov2.LegacyHyprUserDirectories(filepath.Join(configHome, "hypr")) {
 		snapshot, err := snapshotLegacyPath(path)
 		if err != nil {
 			return result, err
 		}
 		result.hyprPaths = append(result.hyprPaths, snapshot)
 	}
-	for _, pair := range [][2]string{
-		{filepath.Join(configHome, "mysetup"), filepath.Join(configHome, "wahrwelt")},
-		{filepath.Join(stateHome, "mysetup"), filepath.Join(stateHome, "wahrwelt")},
-	} {
-		snapshot, err := preflightMoveLegacyPath(pair[0], pair[1])
+	for _, pair := range migrationv1tov2.LegacyNamespaceMoves(configHome, stateHome) {
+		snapshot, err := preflightMoveLegacyPath(pair.Source, pair.Target)
 		if err != nil {
 			return result, err
 		}
 		result.namespaceMoves = append(result.namespaceMoves, legacyNamespaceMove{
-			source:         pair[0],
-			target:         pair[1],
+			source:         pair.Source,
+			target:         pair.Target,
 			sourceSnapshot: snapshot,
 		})
 	}
+	cacheMove := migrationv1tov2.LegacyCacheMove(cacheHome)
 	result.cacheSource, result.cacheTarget, err = preflightMergeLegacyCache(
-		filepath.Join(cacheHome, "mysetup"),
-		filepath.Join(cacheHome, "wahrwelt"),
+		cacheMove.Source,
+		cacheMove.Target,
 	)
 	if err != nil {
 		return result, err

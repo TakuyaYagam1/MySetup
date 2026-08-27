@@ -107,7 +107,7 @@ func (r *migrationCommandRunner) Command(_ context.Context, name string, args ..
 	r.calls = append(r.calls, strings.Join(append([]string{name}, args...), " "))
 	if name == "sudo" && len(args) == 3 && args[0] == "systemctl" && args[1] == "restart" {
 		switch args[2] {
-		case "wahrwelt-brand-migration.service":
+		case "wahrwelt-v1-to-v2-migration.service":
 			if r.onSystem != nil {
 				return r.onSystem()
 			}
@@ -172,7 +172,7 @@ func TestRunMigrationRestartsOneshotAndVerifiesNewLegacyNamespaces(t *testing.T)
 		t.Fatal(err)
 	}
 	commands := strings.Join(runner.calls, "\n")
-	if !strings.Contains(commands, "sudo systemctl restart wahrwelt-brand-migration.service") {
+	if !strings.Contains(commands, "sudo systemctl restart wahrwelt-v1-to-v2-migration.service") {
 		t.Fatalf("migration must force the already-active oneshot to rerun:\n%s", commands)
 	}
 }

@@ -16,6 +16,22 @@ let
   homeLibs = import ./lib { inherit lib pkgs; };
   avatarSource =
     if builtins.pathExists ./avatar.jpg then ./avatar.jpg else ../themes/sddm-theme/icons/logo.png;
+  wallpaperSource = ../Wallpapers;
+  wallpaperNames = lib.attrNames (
+    lib.filterAttrs (name: type: type == "regular" && !(lib.hasPrefix "preview-" name)) (
+      builtins.readDir wallpaperSource
+    )
+  );
+  seedWallpaperFiles = lib.concatMapStringsSep "\n" (
+    name:
+    let
+      source = "${wallpaperSource}/${name}";
+    in
+    ''
+      wallpaper_name=${lib.escapeShellArg name}
+      seed_if_missing "$WALLS_DST/$wallpaper_name" ${lib.escapeShellArg source} || exit $?
+    ''
+  ) wallpaperNames;
   generatedConfigFiles = [
     "foot/foot.ini"
     "btop/btop.conf"
@@ -30,7 +46,7 @@ let
     ./stylix.nix
     ./theming.nix
     ./programs/boot-theme.nix
-    ./programs/wahrwelt-migration.nix
+    ./migrations/v1_to_v2/user-paths.nix
     ./programs/git.nix
     ./programs/fish.nix
     ./programs/shell-tools.nix
@@ -89,18 +105,12 @@ in
 
     activation.copyWallpapers = lib.mkIf wahrwelt.wallpapers.enable (
       lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        WALLS_SRC="${./../Wallpapers}"
         WALLS_DST="${config.home.homeDirectory}/Pictures/Wallpapers"
+        ${homeLibs.dotfiles.mutableJsonShellHelpers}
 
-        $DRY_RUN_CMD mkdir -p "$WALLS_DST"
-        if [ -d "$WALLS_SRC" ]; then
-          $DRY_RUN_CMD ${pkgs.findutils}/bin/find "$WALLS_DST" -maxdepth 1 -type f -name 'preview-*' -delete
-          for wall in "$WALLS_SRC"/*; do
-            [ -e "$wall" ] || continue
-            $DRY_RUN_CMD ${pkgs.coreutils}/bin/cp -n --no-preserve=mode "$wall" "$WALLS_DST/"
-          done
-          $DRY_RUN_CMD ${pkgs.coreutils}/bin/chmod -R u+w "$WALLS_DST"
-        fi
+        ensure_real_directory "${config.home.homeDirectory}/Pictures" || exit $?
+        ensure_real_directory "$WALLS_DST" || exit $?
+        ${seedWallpaperFiles}
       ''
     );
   };

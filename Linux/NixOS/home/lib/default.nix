@@ -10,7 +10,7 @@ in
   qtDefaults.platformTheme = "qt6ct";
   transparency = import ./transparency-defaults.nix;
   shellSeed = import ./shell-seed.nix {
-    inherit lib pkgs;
+    inherit lib;
     dotfilesLib = dotfiles;
   };
   shellSelectorOptions = import ./shell-selector-options.nix { inherit lib pkgs; };

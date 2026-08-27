@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
 )
 
 type Options struct {
@@ -22,9 +24,8 @@ type Sources struct {
 
 const (
 	DefaultStatePath        = "/etc/nixos/installer-state.json"
-	LegacyWahrweltStatePath = "/etc/nixos/wahrwelt/state.json"
-	LegacyMySetupStatePath  = "/etc/nixos/mysetup/state.json"
-	LegacyStatePath         = LegacyMySetupStatePath
+	DefaultPasswordHashPath = "/etc/wahrwelt/hashed-password"   //nolint:gosec // This is a public filesystem location, not credential material.
+	PasswordHashMarkerName  = ".wahrwelt-password-hash-enabled" //nolint:gosec // This is an empty feature marker name, not credential material.
 )
 
 func DefaultOptions() Options {
@@ -55,14 +56,6 @@ func ActiveShellStatePath(home string) string {
 	return filepath.Join(XDGStateHome(home), "wahrwelt", "active-shell")
 }
 
-func LegacyDraftPath(home string) string {
-	return filepath.Join(XDGStateHome(home), "mysetup", "draft.json")
-}
-
-func LegacyActiveShellStatePath(home string) string {
-	return filepath.Join(XDGStateHome(home), "mysetup", "active-shell")
-}
-
 func ExistingFile(primary, legacy string) string {
 	if exists(primary) || legacy == "" || !exists(legacy) {
 		return primary
@@ -74,7 +67,11 @@ func (o Options) ExistingStatePath() (string, error) {
 	if o.StatePath != DefaultStatePath {
 		return existingStatePath(o.StatePath)
 	}
-	return existingStatePath(o.StatePath, LegacyWahrweltStatePath, LegacyMySetupStatePath)
+	return existingStatePath(
+		o.StatePath,
+		migrationv1tov2.LegacyWahrweltStatePath,
+		migrationv1tov2.LegacyMySetupStatePath,
+	)
 }
 
 func existingStatePath(canonical string, fallbacks ...string) (string, error) {
@@ -130,7 +127,7 @@ func (o Options) ExistingDraftPath() string {
 	if o.DraftPath != defaultDraft {
 		return o.DraftPath
 	}
-	return ExistingFile(o.DraftPath, LegacyDraftPath(home))
+	return ExistingFile(o.DraftPath, migrationv1tov2.LegacyDraftPath(XDGStateHome(home)))
 }
 
 func ResolveSources(repoRoot string) (Sources, error) {

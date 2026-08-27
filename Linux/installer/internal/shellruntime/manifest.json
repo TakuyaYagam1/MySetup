@@ -61,6 +61,7 @@
   "hyprScripts": [
     "close-active.sh",
     "lock-active.sh",
+    "migrations/v1_to_v2/runtime.sh",
     "noctalia-launcher.sh",
     "noctalia-msg.sh",
     "record-toggle.sh",

@@ -108,7 +108,7 @@ func TestDetectSecretPathReportsMissingForEmptyPath(t *testing.T) {
 
 func TestPasswordPathHelpersJoinUnderNixosDest(t *testing.T) {
 	opts := paths.Options{NixOSDest: "/srv/nixos"}
-	if got := userPasswordHashPath(opts); got != "/srv/nixos/hashed-password.nix" {
+	if got := userPasswordHashPath(opts); got != paths.DefaultPasswordHashPath {
 		t.Fatalf("user password path mismatch: %q", got)
 	}
 }

@@ -61,7 +61,7 @@ func runSecretForm(values *secretFormValues, errors secretFormErrors, existingSe
 			Description(secretFormStatus(existingSecrets)),
 		huh.NewInput().
 			Title("Linux user password").
-			Description(passwordFieldDescription("Written as hashed-password.nix during Apply.", existingSecrets.UserPassword, errors.userPassword)).
+			Description(passwordFieldDescription("Stored as a root-owned hash outside the flake source during Apply.", existingSecrets.UserPassword, errors.userPassword)).
 			EchoMode(huh.EchoModePassword).
 			Value(&values.userPassword),
 		huh.NewInput().

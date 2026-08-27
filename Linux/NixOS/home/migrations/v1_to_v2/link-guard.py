@@ -25,7 +25,13 @@ STALE_END4_LINKS = {
         "hypr/end4/workspaces.conf",
     ),
 }
-SUPPORTED_PATHS = STORE_MANAGED_PATHS | STALE_END4_LINKS.keys()
+END4_APP_LINK_TYPES = {
+    ".config/kitty": "directory",
+    ".config/fuzzel": "directory",
+    ".config/kdeglobals": "regular",
+    ".local/share/konsole/Profile 1.profile": "regular",
+}
+SUPPORTED_PATHS = STORE_MANAGED_PATHS | STALE_END4_LINKS.keys() | END4_APP_LINK_TYPES.keys()
 HISTORICAL_STORE = re.compile(
     r"^/nix/store/[0-9abcdfghijklmnpqrsvwxyz]{32}-home-manager-files/(.+)$"
 )
@@ -102,6 +108,7 @@ def generation_candidates(generation: str, expected_relative: str) -> set[str]:
 
 def is_managed_target(
     raw_target: str,
+    display_path: str,
     expected_relative: str,
     generations: tuple[str, str],
     recovery_parent: str,
@@ -111,8 +118,32 @@ def is_managed_target(
         return raw_target == os.path.join(os.path.normpath(recovery_parent), stale_end4[1])
     clean = normalized_absolute(raw_target)
     if clean is None:
+        clean = normalized_absolute(os.path.join(os.path.dirname(display_path), raw_target))
+    if clean is None:
         return False
     historical = HISTORICAL_STORE.fullmatch(clean)
+    expected_type = END4_APP_LINK_TYPES.get(expected_relative)
+    if expected_type is not None:
+        if historical is None or historical.group(1) != expected_relative:
+            return False
+        generation = clean[: -(len(expected_relative) + 1)]
+        try:
+            asset = os.stat(clean)
+            quickshell_marker = os.stat(
+                os.path.join(generation, ".config/quickshell/ii/shell.qml")
+            )
+            hypr_marker = os.stat(
+                os.path.join(generation, ".config/hypr/end4/hyprland.conf")
+            )
+        except OSError:
+            return False
+        if not stat.S_ISREG(quickshell_marker.st_mode) or not stat.S_ISREG(
+            hypr_marker.st_mode
+        ):
+            return False
+        if expected_type == "directory":
+            return stat.S_ISDIR(asset.st_mode)
+        return stat.S_ISREG(asset.st_mode)
     if historical is not None and historical.group(1) == expected_relative:
         return True
     return any(clean in generation_candidates(generation, expected_relative) for generation in generations)
@@ -131,7 +162,7 @@ def classify_public_target(
     if not stat.S_ISLNK(info.st_mode):
         ownership_collision(target)
     if not is_managed_target(
-        os.readlink(target), expected_relative, generations, recovery_parent
+        os.readlink(target), target, expected_relative, generations, recovery_parent
     ):
         ownership_collision(target)
     return True
@@ -272,7 +303,11 @@ def pinned_target(
         ownership_collision(display_path)
     raw_target = os.readlink(name, dir_fd=parent_fd)
     if not is_managed_target(
-        raw_target, expected_relative, generations, recovery_parent
+        raw_target,
+        display_path,
+        expected_relative,
+        generations,
+        recovery_parent,
     ):
         ownership_collision(display_path)
     return info, raw_target

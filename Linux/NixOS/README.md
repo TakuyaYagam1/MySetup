@@ -28,9 +28,26 @@ parent is retained under an identity-proven hidden quarantine name; nonempty or
 concurrently replaced parents are not removed. Unsupported nodes or coexisting
 old and new directories stop the operation without merging them.
 The first ordinary `nixos-update` activates this migration automatically. It
-builds and validates a candidate, then uses a pinned same-filesystem atomic
-exchange and retains the displaced
-tree beside `/etc/nixos` for manual recovery.
+uses the versioned `system/migrations/v1_to_v2` recognizer, rewrites only an
+exact installer-generated v1 wrapper and its root lock keys, and preserves the
+locked revision and `narHash`. It builds the candidate offline, then uses a
+pinned same-filesystem atomic exchange and retains the displaced tree beside
+`/etc/nixos` for manual recovery. Arbitrary user modules and the supported
+`mysetup` compatibility API are not rewritten.
+The service is scheduled only when an exact v1 path exists: `private/`, one of
+the two historical state files, or a generated legacy password module. A fresh
+canonical tree does not load the v1 recognizers. Successful migration records
+the one-shot root-owned `v1_to_v2.complete` marker under
+`/var/lib/wahrwelt/migration`; remaining v1 evidence after that marker is an
+ownership collision. A real `./private` path in any top-level module other
+than the installer-owned `configuration.nix` is preserved and must be updated
+manually before retrying.
+
+The Linux password hash lives at root-owned
+`/etc/wahrwelt/hashed-password`, outside the flake source. The installed tree
+contains only `.wahrwelt-password-hash-enabled`, which has no secret content.
+Known v1 `hashed-password.nix` modules are migration inputs only; unknown files
+or symlinks are ownership collisions.
 
 `~/.config/hypr/user/default.lua` is user-owned. Activation creates the
 exact default aggregator only when no filesystem node exists, preserving

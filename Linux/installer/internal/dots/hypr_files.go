@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 	"golang.org/x/sys/unix"
 )
@@ -21,16 +22,6 @@ wahrwelt.optional_require("wahrwelt.general")
 wahrwelt.optional_require("wahrwelt.rules")
 wahrwelt.optional_require("wahrwelt.keybinds")
 `
-
-var historicalManagedHyprEntrypointDigests = map[string]struct{}{
-	"cecf44b96c7afd4886d498abe0de382b2574c66281a5cf78bbac06586c1b071c": {},
-	"e28d16bde1d68fa2fa43c755630284f00b3c6a14f75656e89cfb5514f8633263": {},
-	"18c3eb7f48101e0bd0b57918a683778784c74c833a215af7f7b0f1d416a0a5df": {},
-	"24229642cd871aa3eb3d27c44b0d72357395951aec076a09d173b45ca17231a0": {},
-	"1d8e001faf0c6078a7d9a34e4c592fcb523afd817d2ff56099c7b2fe16407506": {},
-	"a547d710e9fd13ca8829e17caa378a14ee9d6a0d114426731e0ab363e9328118": {},
-	"3666c398dbba460e9b3dac54f396a7f53ad2093f49967c05e4588e66c41f08eb": {},
-}
 
 type managedHyprEntrypointTargets map[string]struct{}
 
@@ -417,10 +408,7 @@ func preflightHyprUserMigrationWithTargets(
 	activeHomeManagerTargets managedHyprEntrypointTargets,
 ) (hyprUserMigration, error) {
 	user := filepath.Join(hyprDir, "user")
-	legacyPaths := []string{
-		filepath.Join(hyprDir, "wahrwelt"),
-		filepath.Join(hyprDir, "mysetup"),
-	}
+	legacyPaths := migrationv1tov2.LegacyHyprUserDirectories(hyprDir)
 	hyprInfo, hyprExists, err := inspectHyprConfigParent(hyprDir)
 	if err != nil {
 		return hyprUserMigration{}, err
@@ -548,7 +536,11 @@ func activeHomeManagerHyprEntrypointTargets(home string) managedHyprEntrypointTa
 	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return targets
 	}
-	for _, namespace := range []string{"user", "wahrwelt", "mysetup"} {
+	for _, namespace := range []string{
+		migrationv1tov2.CanonicalUserNamespace,
+		migrationv1tov2.LegacyWahrweltNamespace,
+		migrationv1tov2.LegacyMySetupNamespace,
+	} {
 		targets[filepath.Join(homeFiles, ".config", "hypr", namespace, "hyprland.lua")] = struct{}{}
 	}
 	return targets
@@ -677,8 +669,7 @@ func recognizedManagedHyprEntrypointHash(hash [sha256.Size]byte, currentEntrypoi
 	if len(currentEntrypoint) != 0 && hash == sha256.Sum256(currentEntrypoint) {
 		return true
 	}
-	_, ok := historicalManagedHyprEntrypointDigests[fmt.Sprintf("%x", hash)]
-	return ok
+	return migrationv1tov2.IsHistoricalManagedHyprEntrypointDigest(hash)
 }
 
 func sameManagedHyprEntrypointState(left, right managedHyprEntrypointState) bool {

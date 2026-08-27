@@ -144,7 +144,7 @@ jobs:
           body: |
             ## What
 
-            Bumps the pinned `portainer/portainer-ce` image tag to `${{ steps.release.outputs.version }}`.
+            Bumps the `portainer/portainer-ce` version tag to `${{ steps.release.outputs.version }}`.
 
             ## Why
 

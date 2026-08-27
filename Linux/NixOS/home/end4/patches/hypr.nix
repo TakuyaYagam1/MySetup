@@ -126,26 +126,35 @@ let
 
   end4SettingsLauncher = pkgs.writeShellApplication {
     name = "wahrwelt-end4-settings";
+    runtimeInputs = [ pkgs.coreutils ];
     text = ''
       config_home="''${XDG_CONFIG_HOME:-$HOME/.config}"
+      state_home="''${XDG_STATE_HOME:-$HOME/.local/state}"
+      active_profile_file="$state_home/wahrwelt/active-shell"
       official_config="$config_home/quickshell/ii"
       pc_config="$config_home/quickshell/end4-pC"
 
-      case "''${qsConfig:-}" in
-        "$official_config")
+      if [ -L "$active_profile_file" ] || [ ! -f "$active_profile_file" ]; then
+        printf 'refusing missing or unsafe active shell state: %s\n' "$active_profile_file" >&2
+        exit 64
+      fi
+      active_profile="$(tr -d '[:space:]' < "$active_profile_file")"
+
+      case "$active_profile" in
+        end4)
           export WAHRWELT_END4_PROFILE=end4
           export WAHRWELT_QS_CONFIG="$official_config"
           export qsConfig="$official_config"
           exec qs-end4 -n -d -p "$official_config/settings.qml"
           ;;
-        "$pc_config")
+        end4-pc)
           export WAHRWELT_END4_PROFILE=end4-pc
           export WAHRWELT_QS_CONFIG="$pc_config"
           export qsConfig="$pc_config"
           exec qs-end4 -c end4-pC ipc call settings open
           ;;
         *)
-          printf 'refusing unmanaged End4 QuickShell config: %s\n' "''${qsConfig:-unset}" >&2
+          printf 'refusing non-End4 active shell profile: %s\n' "''${active_profile:-unset}" >&2
           exit 64
           ;;
       esac

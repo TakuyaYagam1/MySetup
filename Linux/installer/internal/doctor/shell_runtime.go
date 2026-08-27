@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/shellruntime"
 )
 
@@ -71,13 +72,14 @@ func checkShellLauncher(out *reportWriter, path string) {
 }
 
 func checkWahrweltProfile(out *reportWriter, home, profile string) {
-	checkShellEntrypoint(out, hyprRuntimePath(home, "hyprland.lua"), profile, filepath.Join(home, ".config"))
+	checkShellEntrypoint(out, hyprRuntimePath(home, "hyprland.lua"), profile)
 	checkShellLauncherBindings(out, hyprRuntimePath(home, "shell-launcher.lua"), profile)
 	checkShellKeybinds(out, hyprRuntimePath(home, "shell-keybinds.lua"), profile)
 }
 
-func checkShellEntrypoint(out *reportWriter, path, profile, configHome string) {
-	if _, err := os.ReadFile(path); err != nil {
+func checkShellEntrypoint(out *reportWriter, path, profile string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
 		out.printf("WARN shell entrypoint missing: %s\n", path)
 		return
 	}
@@ -85,19 +87,17 @@ func checkShellEntrypoint(out *reportWriter, path, profile, configHome string) {
 		out.printf("OK   shell entrypoint: %s -> %s\n", path, profile)
 		return
 	}
-	if shellruntime.IsUserNamespaceTransitionEntrypoint(path) {
+	switch migrationv1tov2.RecognizeEntrypoint(string(data), shellruntime.DefaultProfile) {
+	case migrationv1tov2.EntrypointNamespaceTransition:
 		out.printf("WARN shell entrypoint uses temporary user namespace transition and requires migration: %s\n", path)
 		return
-	}
-	if shellruntime.IsHistoricalHomeManagerSeededUserEntrypoint(path) {
+	case migrationv1tov2.EntrypointHomeManagerSeededUser:
 		out.printf("WARN shell entrypoint uses legacy Home Manager seeded runtime and requires migration: %s\n", path)
 		return
-	}
-	if shellruntime.IsLegacyDirectEnd4EntrypointForConfigHome(path, configHome) {
+	case migrationv1tov2.EntrypointDirectEnd4, migrationv1tov2.EntrypointDirectEnd4PC:
 		out.printf("WARN shell entrypoint uses legacy direct End4 runtime and requires migration: %s\n", path)
 		return
-	}
-	if shellruntime.IsLegacyUserEntrypoint(path) {
+	case migrationv1tov2.EntrypointLegacyUser:
 		out.printf("WARN shell entrypoint uses legacy Wahrwelt user namespace and requires migration: %s\n", path)
 		return
 	}
@@ -156,7 +156,7 @@ func checkEnd4Profile(out *reportWriter, home, profileID string) {
 	if !ok || profile.Family != shellruntime.End4Family {
 		profile, _ = shellruntime.ProfileByID(shellruntime.End4)
 	}
-	checkShellEntrypoint(out, hyprRuntimePath(home, "hyprland.lua"), profile.ID, filepath.Join(home, ".config"))
+	checkShellEntrypoint(out, hyprRuntimePath(home, "hyprland.lua"), profile.ID)
 	checkShellLauncherBindings(out, hyprRuntimePath(home, "shell-launcher.lua"), profile.ID)
 	checkShellKeybinds(out, hyprRuntimePath(home, "shell-keybinds.lua"), profile.ID)
 	checkRuntimeConfig(out, "end4 hyprlock entrypoint", hyprRuntimePath(home, "hyprlock.conf"), "end4/hyprlock.conf")
@@ -199,7 +199,7 @@ func detectActiveShell(home string) string {
 		{hyprRuntimePath(home, "hyprland.lua"), hyprRuntimePath(home, "shell-keybinds.lua")},
 		{hyprConfigPath(home, "hyprland.lua"), hyprConfigPath(home, "shell-keybinds.lua")},
 	} {
-		if profile := shellruntime.DetectShellFromEntrypointWithEnd4VariantForConfigHome(candidate.entrypoint, candidate.keybinds, variantPath, filepath.Join(home, ".config")); profile != "" {
+		if profile := detectShellFromEntrypointForUpgrade(candidate.entrypoint, candidate.keybinds, variantPath); profile != "" {
 			return profile
 		}
 	}
@@ -212,6 +212,26 @@ func detectActiveShell(home string) string {
 		}
 	}
 	return ""
+}
+
+func detectShellFromEntrypointForUpgrade(entrypointPath, keybindsPath, variantPath string) string {
+	if profile := shellruntime.DetectShellFromEntrypointWithEnd4Variant(entrypointPath, keybindsPath, variantPath); profile != "" {
+		return profile
+	}
+	data, err := os.ReadFile(entrypointPath)
+	if err != nil {
+		return ""
+	}
+	switch migrationv1tov2.RecognizeEntrypoint(string(data), shellruntime.DefaultProfile) {
+	case migrationv1tov2.EntrypointDirectEnd4, migrationv1tov2.EntrypointDirectEnd4PC:
+		return shellruntime.ReadEnd4Variant(variantPath)
+	case migrationv1tov2.EntrypointLegacyUser,
+		migrationv1tov2.EntrypointHomeManagerSeededUser,
+		migrationv1tov2.EntrypointNamespaceTransition:
+		return shellruntime.DetectShellFromKeybinds(keybindsPath)
+	default:
+		return ""
+	}
 }
 
 func detectShellFromKeybinds(path string) string {

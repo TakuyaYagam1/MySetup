@@ -45,7 +45,7 @@ source, then the installer writes a small `/etc/nixos` wrapper that tracks
 the selected `github:TakuyaYagam1/wahrwelt/main?dir=Linux/NixOS/presets/<preset>`
 entrypoint by default.
 
-### Legacy MySetup compatibility
+### Supported MySetup compatibility
 
 Existing hosts do not need a manual migration. The old repository URL, `#mysetup` output,
 `mysetup` executable, `nixosModules.mysetup`, `config.mysetup`, and
@@ -57,7 +57,7 @@ to `/etc/nixos/installer-state.json`, and writable Hypr modules to
 If both an old and a new path contain conflicting data, migration stops before
 overwriting either one.
 
-This old command is therefore still valid:
+This compatibility command remains valid:
 
 ```bash
 nix run --refresh 'github:TakuyaYagam1/MySetup?dir=Linux/NixOS#mysetup' -- doctor
@@ -156,18 +156,22 @@ $XDG_STATE_HOME/wahrwelt/draft.json
 
 Plain passwords are never stored in state or draft JSON.
 
-Managed secret files:
+The Linux password hash is stored outside the flake source:
 
 ```text
-/etc/nixos/hashed-password.nix
+/etc/wahrwelt/hashed-password
 ```
 
-Optional sops-nix files are split by scope:
+It is owned by root and is not copied into the Nix store. The non-secret marker
+`/etc/nixos/.wahrwelt-password-hash-enabled` only tells the host module to use
+that external file. Existing `hashed-password.nix` files are accepted only as
+v1-to-v2 migration inputs and are removed from the live flake tree after the
+external hash is published safely.
+
+Optional sops-nix system secrets live at:
 
 - `/etc/nixos/secrets/secrets.yaml`: system secrets, decrypted through the host
   SSH key.
-- `Linux/NixOS/home/secrets/default.nix`: user secrets from
-  `home/secrets/secrets.yaml`, decrypted through the user's age key.
 
 System secret bootstrap:
 
@@ -179,24 +183,12 @@ sops /etc/nixos/secrets/secrets.yaml
 ```
 
 Put the public age key into `/etc/nixos/secrets/.sops.yaml`. In the default thin
-layout, `mkWahrweltHost` automatically wires `/etc/nixos/secrets/secrets.yaml`
-into sops-nix when that file exists. The legacy full layout still supports
-`hosts/NixOS/secrets/sops.nix`.
+layout, `mkWahrweltHost` wires `/etc/nixos/secrets/secrets.yaml` into sops-nix
+when that file exists. Declare the required `sops.secrets.<name>` entries in an
+imported local system module under `/etc/nixos/user/`.
 
-User secret bootstrap:
-
-```bash
-age-keygen -o ~/.config/sops/age/keys.txt
-age-keygen -y ~/.config/sops/age/keys.txt
-sops home/secrets/secrets.yaml
-systemctl --user enable --now sops-nix.service
-```
-
-Put the generated public key into the relevant `.sops.yaml` recipient list. For
-services that depend on decrypted user secrets, add an explicit user unit
-ordering such as `After=sops-nix.service`.
-
-On repeat TUI runs, the `Passwords` section checks those paths and shows
+On repeat TUI runs, the `Passwords` section checks the external hash and known
+v1 migration paths, then shows
 `already exists` when a value is present. Leaving both password and confirmation
 blank preserves the existing value. Enter a new value only when changing it.
 
@@ -242,9 +234,18 @@ breakdown is in the [root README](../README.md#package-presets); in short:
 - `personal`: `developer` plus the full private-workstation load - extra apps,
   IDEs, additional AI tools, and games. This is the heaviest build.
 
-How it works under the hood: `hosts/NixOS/default.nix` imports every local
-module, and each module turns itself on or off based on `wahrwelt.packages.preset`.
-That way all four presets run through the same code path.
+Firefox 102 ESR is not part of any preset. Enable
+`wahrwelt.features.firefoxLegacy = true` only in an explicit lab or CTF host
+module when an old-browser target requires it.
+
+Steam does not open Remote Play, dedicated-server, or local-transfer firewall
+ports automatically. Opt in to only the ports required by the current host.
+
+How it works under the hood: `lib/mk-host.nix` composes the shared
+`modules/mysetup-stack.nix`, and that stack imports the base, desktop,
+developer, and feature profile layers. Each module turns itself on or off based
+on `wahrwelt.packages.preset`, so all four presets run through the same code
+path.
 
 Each preset has a public flake and its own lock under
 `Linux/NixOS/presets/<preset>`. `minimal` contains only core inputs and does not
@@ -504,14 +505,17 @@ The installer applies changes defensively:
 1. Creates a temporary staging wrapper flake for `/etc/nixos`.
 2. Writes generated `host-vars.nix`, `configuration.nix`, and `home.nix`
    templates when they do not already exist.
-3. Preserves host-local `hardware-configuration.nix`, `hashed-password.nix`,
-   `user/`, and `secrets/`. Existing `private/` trees are renamed to `user/`
+3. Preserves host-local `hardware-configuration.nix`, `user/`, and `secrets/`.
+   Existing `hashed-password.nix` files are handled only as exact v1 migration
+   inputs. Existing `private/` trees are renamed to `user/`
    only when the canonical target is absent. Existing legacy MySetup thin installs also keep
    `flake.lock`, `configuration.nix`, and `home.nix`; generated wrapper
    `flake.nix` files may be regenerated to pick up the selected lock mode.
    Stock NixOS or legacy non-thin configs are replaced with the generated thin
    wrapper and clean override templates.
-4. Copies or generates `hashed-password.nix` for the staging build.
+4. Publishes the password hash as root-owned
+   `/etc/wahrwelt/hashed-password`; the staging flake contains only a non-secret
+   enable marker.
 5. Runs `nix flake update --flake <staging>` for the default thin wrapper, so
    the installed host owns the important external input revisions in
    `/etc/nixos/flake.lock`. Use `--lock-mode managed` to keep the compatibility
@@ -527,10 +531,11 @@ The installer applies changes defensively:
     `/etc/nixos/mysetup/state.json`. An exact empty legacy parent is moved to an
     identity-proven hidden quarantine inside `/etc/nixos`; a nonempty or
     concurrently replaced parent is never deleted.
-12. A one-shot system migration validates and rebuilds the rewritten `/etc/nixos`
-    tree, then publishes it through one pinned same-filesystem exact atomic
-    exchange. The displaced pre-migration tree is retained beside `/etc/nixos`
-    as a hidden recovery directory.
+12. When exact v1 evidence exists, a versioned one-shot migration rewrites only
+    known generated wrapper and lock fields. It validates with an offline build
+    from the revision already present in the current generation, then publishes
+    through one pinned same-filesystem exact atomic exchange. It never updates a
+    mutable branch during boot and never rewrites arbitrary user modules.
 
 Use `--layout full` to keep the old full-mirror behavior for debugging or
 migration fallback. Use `--lock-mode managed` with the thin layout when you want
@@ -556,7 +561,7 @@ The default installed layout is intentionally small:
 ├── hardware-configuration.nix
 ├── configuration.nix      # system-level overrides
 ├── home.nix               # Home Manager overrides
-├── hashed-password.nix    # generated when password is reset
+├── .wahrwelt-password-hash-enabled # non-secret external-hash marker
 ├── user/
 │   └── default.nix         # local-only Nix module imports
 ├── secrets/               # optional system sops-nix secrets
@@ -631,7 +636,7 @@ Useful checks after changing installer or shell integration:
 | `make -C Linux/installer nix-hm-eval` | After touching `home/`, End4 runtime-env, or shell-profile imports - evaluates the runtime shell module and all-on Home Manager imports including End4 Official and pC. |
 | `make -C Linux nix-end4-hypr-build` | Realize the exact Home Manager-owned validated End4 Hypr artifact and inspect lifecycle/rules contracts. |
 | `make -C Linux nix-end4-pc-quickshell-build` | Realize the managed End4 pC QuickShell tree and reject any direct QuickShell lifecycle launch. |
-| `make -C Linux/installer nix-installed-mirror-build` | After flake changes that affect an already-installed system - builds `wahrwelt` and the legacy `mysetup` alias from an `/etc/nixos`-style temporary mirror. |
+| `make -C Linux/installer nix-installed-mirror-build` | After flake changes that affect an already-installed system - builds `wahrwelt` and the supported `mysetup` compatibility alias from an `/etc/nixos`-style temporary mirror. |
 | `make all` (run from `Linux/`) | Aggregate: delegates to installer Makefile + `statix` + `deadnix` + json-lint. |
 
 The scheduled flake updater also enforces the pC dependency boundary: the
@@ -649,13 +654,11 @@ Linux/NixOS/
 ├── presets/                       # minimal / desktop / developer / personal
 │   └── <preset>/                  # public flake.nix + isolated flake.lock
 ├── modules/
-│   ├── mysetup-options.nix        # `wahrwelt.*` options + legacy aliases
+│   ├── mysetup-options.nix        # `wahrwelt.*` + supported compatibility aliases
 │   └── mysetup-stack.nix          # reusable workstation stack
 ├── hosts/NixOS/
-│   ├── default.nix
 │   ├── host-vars.nix
 │   ├── secrets/                   # optional sops-nix system secrets
-│   ├── hashed-password.nix        # generated locally when password is reset
 │   └── hardware-configuration.nix # host-local, preserved from /etc/nixos
 ├── lib/                           # flake glue: layout, hosts, packages,
 │   │                              # overlays, modules, presets, ports,
@@ -674,7 +677,6 @@ Linux/NixOS/
 │   ├── programs/                  # btop, cava, fastfetch, fish, foot, git,
 │   │                              # packages (preset-gated home pkgs),
 │   │                              # starship, thunar, vesktop, uwsm, …
-│   ├── secrets/                   # optional sops-nix user secrets
 │   └── shells/
 │       └── quickshell/wahrwelt-shell-selector/  # Super+Shift+W picker
 ├── pkgs/                          # pure derivations
@@ -707,9 +709,8 @@ Linux/dots/
 └── zen/
     └── chrome/                    # Zen Browser Catppuccin chrome
 
-Linux/installer/                   # Go TUI/CLI (`wahrwelt`, legacy `mysetup` alias)
+Linux/installer/                   # Go TUI/CLI (`wahrwelt` plus supported `mysetup` alias)
 ├── cmd/wahrwelt/                  # primary binary entrypoint
-├── cmd/mysetup/                   # legacy source entrypoint
 ├── internal/                      # app, apply, cleanup, config, defaults,
 │                                  # doctor, dots, paths, rollback, run,
 │                                  # secrets, shellruntime, tui, zenutil
@@ -757,8 +758,9 @@ same preset helpers via `home/programs/packages.nix`.
 Compositional note: there is no separate `profiles/personal.nix` file. The
 `personal` preset is just `developer` + `desktop` + everything gated on
 `presets.personal` (e.g. games in `home/programs/packages.nix`).
-`hosts/NixOS/default.nix` imports `profiles/{base,desktop,developer,features}.nix`
-directly, and each module checks `wahrwelt.packages.preset` at evaluation time.
+`modules/mysetup-stack.nix` imports
+`profiles/{base,desktop,developer,features}.nix`, and each module checks
+`wahrwelt.packages.preset` at evaluation time.
 
 ## Recovery
 

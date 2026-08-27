@@ -56,17 +56,19 @@ END4_PC_QUICKSHELL_EXPR := $(subst hm.config.xdg.configFile."hypr/end4".source,h
 ##@ Build & run
 
 .PHONY: build
-build: ## Build wahrwelt and the legacy mysetup alias
+build: ## Build wahrwelt and the supported mysetup compatibility alias
 	@mkdir -p bin
 	go build -trimpath -o bin/wahrwelt ./cmd/wahrwelt
+	go build -trimpath -o bin/wahrwelt-fs-helper ./cmd/wahrwelt-fs-helper
 	ln -sfn wahrwelt bin/mysetup
 
 .PHONY: install
-install: build ## Install wahrwelt and the legacy mysetup alias into $$HOME/.local/bin
+install: build ## Install wahrwelt and the supported mysetup compatibility alias into $$HOME/.local/bin
 	@install -d "$$HOME/.local/bin"
 	install -m 0755 bin/wahrwelt "$$HOME/.local/bin/wahrwelt"
+	install -m 0755 bin/wahrwelt-fs-helper "$$HOME/.local/bin/wahrwelt-fs-helper"
 	ln -sfn wahrwelt "$$HOME/.local/bin/mysetup"
-	@echo "installed: $$HOME/.local/bin/wahrwelt (legacy alias: mysetup)"
+	@echo "installed: $$HOME/.local/bin/wahrwelt (supported compatibility alias: mysetup)"
 
 .PHONY: run
 run: ## Run the installer
@@ -155,12 +157,12 @@ cover: ## Unit-test coverage report (HTML)
 ##@ Nix
 
 .PHONY: nix-build
-nix-build: ## Build Wahrwelt and its legacy mysetup flake alias
+nix-build: ## Build Wahrwelt and its supported mysetup flake compatibility alias
 	nix build $(NIX_CACHE_ARGS) --no-link --no-write-lock-file "path:$(REPO_ROOT)?dir=Linux/NixOS#wahrwelt"
 	nix build $(NIX_CACHE_ARGS) --no-link --no-write-lock-file "path:$(REPO_ROOT)?dir=Linux/NixOS#mysetup"
 
 .PHONY: nix-package-eval
-nix-package-eval: ## Eval Wahrwelt and its legacy mysetup package alias
+nix-package-eval: ## Eval Wahrwelt and its supported mysetup package compatibility alias
 	nix eval $(NIX_CACHE_ARGS) --no-write-lock-file --impure --raw --expr 'let flake = builtins.getFlake "path:$(REPO_ROOT)?dir=Linux/NixOS"; in flake.packages.x86_64-linux.wahrwelt.pname' >/dev/null
 	nix eval $(NIX_CACHE_ARGS) --no-write-lock-file --impure --raw --expr 'let flake = builtins.getFlake "path:$(REPO_ROOT)?dir=Linux/NixOS"; in flake.packages.x86_64-linux.mysetup.pname' >/dev/null
 
@@ -202,8 +204,13 @@ nix-profile-eval: ## Eval Home Manager imports for every package preset
 			eval_hm_full "$$preset" "hm.config.home.username"; \
 		done'
 
+.PHONY: nix-hardening-contract
+nix-hardening-contract: ## Check Nix security defaults and scoped v1_to_v2 migration behavior
+	cd $(REPO_ROOT) && bash Linux/installer/scripts/nix-brand-migration-v1-to-v2-test.sh
+	cd $(REPO_ROOT) && bash Linux/installer/scripts/nix-hardening-contract-test.sh
+
 .PHONY: nix-installed-mirror-build
-nix-installed-mirror-build: ## Build Wahrwelt and its legacy alias from an /etc/nixos-style mirror
+nix-installed-mirror-build: ## Build Wahrwelt and its supported compatibility alias from an /etc/nixos-style mirror
 	@tmp="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmp"' EXIT; \
 	rsync -a ../NixOS/ "$$tmp"/; \
@@ -224,6 +231,7 @@ check: ## Run the full local verification suite and remove build artefacts
 	if [ $$status -eq 0 ]; then $(MAKE) test || status=$$?; fi; \
 	if [ $$status -eq 0 ]; then $(MAKE) build || status=$$?; fi; \
 	if [ $$status -eq 0 ]; then $(MAKE) nix-package-eval || status=$$?; fi; \
+	if [ $$status -eq 0 ]; then $(MAKE) nix-hardening-contract || status=$$?; fi; \
 	if [ $$status -eq 0 ]; then $(MAKE) nix-profile-eval || status=$$?; fi; \
 	if [ $$status -eq 0 ]; then $(MAKE) nix-build || status=$$?; fi; \
 	if [ $$status -eq 0 ]; then $(MAKE) nix-noctalia-hm-compat || status=$$?; fi; \

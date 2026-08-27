@@ -2,8 +2,10 @@ package dots
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
@@ -137,32 +139,55 @@ func refreshThumbnailDaemons(ctx context.Context, runner run.CommandRunner, user
 	_ = runner.Command(ctx, "pkill", "-u", username, "-f", "tumbler-1/tumblerd")
 }
 
+//nolint:gocyclo // Source and destination ownership checks remain linear so every collision fails before copying.
 func copyWallpapers(ctx context.Context, runner run.CommandRunner, nixosSrc, home string) error {
 	src := filepath.Join(nixosSrc, "Wallpapers")
-	if _, err := os.Stat(src); err != nil {
+	sourceInfo, err := os.Lstat(src)
+	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
 		return err
 	}
+	if !sourceInfo.IsDir() {
+		return fmt.Errorf("wallpaper source is not a real directory: %s", src)
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	knownSources := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "preview-") || entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			return infoErr
+		}
+		if info.Mode().IsRegular() {
+			knownSources = append(knownSources, filepath.Join(src, entry.Name()))
+		}
+	}
 	dst := filepath.Join(home, "Pictures", "Wallpapers")
+	if targetInfo, targetErr := os.Lstat(dst); targetErr == nil && !targetInfo.IsDir() {
+		return fmt.Errorf("wallpaper destination ownership collision: %s", dst)
+	} else if targetErr != nil && !os.IsNotExist(targetErr) {
+		return targetErr
+	}
 	if err := runner.Command(ctx, "mkdir", "-p", dst); err != nil {
 		return err
 	}
-	if err := runner.Command(ctx, "find", dst, "-maxdepth", "1", "-type", "f", "-name", "preview-*", "-delete"); err != nil {
-		return err
+	if len(knownSources) == 0 {
+		return nil
 	}
-	if same, err := sourceSubsetMatches(src, dst, nil); err != nil {
-		return err
-	} else if same {
-		return runner.Command(ctx, "chmod", "-R", "u+w", dst)
-	}
-	if err := runner.Command(ctx,
+	args := make([]string, 0, 6+len(knownSources))
+	args = append(args,
 		"rsync", "-a", "--ignore-existing",
 		"--chmod=Du=rwx,Dg=rx,Do=rx,Fu=rw,Fg=r,Fo=r",
-		src+"/", dst+"/",
-	); err != nil {
-		return err
-	}
-	return runner.Command(ctx, "chmod", "-R", "u+w", dst)
+		"--",
+	)
+	args = append(args, knownSources...)
+	args = append(args, dst+"/")
+	return runner.Command(ctx, args[0], args[1:]...)
 }

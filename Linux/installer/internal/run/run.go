@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 )
 
@@ -20,6 +21,13 @@ type CommandRunner interface {
 	Command(ctx context.Context, name string, args ...string) error
 	Output(ctx context.Context, name string, args ...string) (string, error)
 	IsDryRun() bool
+}
+
+// PinnedDirectoryOutputRunner runs exact argv with cwd pinned by an inherited
+// directory descriptor. It avoids converting a /proc/<pid>/fd path itself into
+// command input when the command recursively archives its operand.
+type PinnedDirectoryOutputRunner interface {
+	OutputInPinnedDirectory(ctx context.Context, directory *os.File, name string, args ...string) (string, error)
 }
 
 type Runner struct {
@@ -72,6 +80,42 @@ func (r Runner) Output(ctx context.Context, name string, args ...string) (string
 	cmd.Stdout = &out
 	cmd.Stderr = io.MultiWriter(writerOrDefault(r.Stderr, os.Stderr), &stderrBuf)
 	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("%s failed: %w%s", name, err, formatCommandFailureOutput(out.String(), stderrBuf.String()))
+	}
+	return strings.TrimSpace(out.String()), nil
+}
+
+func (r Runner) OutputInPinnedDirectory(ctx context.Context, directory *os.File, name string, args ...string) (string, error) {
+	if directory == nil {
+		return "", fmt.Errorf("missing pinned command directory")
+	}
+	info, err := directory.Stat()
+	if err != nil {
+		return "", fmt.Errorf("inspect pinned command directory: %w", err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("pinned command cwd is not a directory")
+	}
+	stdout := writerOrDefault(r.Stdout, os.Stdout)
+	if _, err := fmt.Fprintln(stdout, r.commandLog(name, args)); err != nil {
+		return "", fmt.Errorf("write command log: %w", err)
+	}
+	if r.DryRun {
+		return "", nil
+	}
+	cmd := exec.CommandContext(ctx, resolveCommandName(name), args...)
+	// Go changes cwd before exec. Resolve the caller's still-live pinned
+	// descriptor here; the resulting child cwd remains the exact inode even if
+	// its public name is concurrently renamed or replaced. Using /proc/self with
+	// ExtraFiles is invalid because chdir precedes the child FD remap.
+	cmd.Dir = fmt.Sprintf("/proc/%d/fd/%d", os.Getpid(), directory.Fd())
+	var out bytes.Buffer
+	stderrBuf := newTailBuffer(tailBufferSize)
+	cmd.Stdout = &out
+	cmd.Stderr = io.MultiWriter(writerOrDefault(r.Stderr, os.Stderr), &stderrBuf)
+	err = cmd.Run()
+	runtime.KeepAlive(directory)
+	if err != nil {
 		return "", fmt.Errorf("%s failed: %w%s", name, err, formatCommandFailureOutput(out.String(), stderrBuf.String()))
 	}
 	return strings.TrimSpace(out.String()), nil

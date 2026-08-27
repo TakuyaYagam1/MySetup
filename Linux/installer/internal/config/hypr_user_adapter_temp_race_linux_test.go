@@ -25,7 +25,7 @@ func TestHyprUserAdapterGuardCurrentDigestMatchesGoAndShellAllowlists(t *testing
 	for name, source := range map[string]string{
 		"activation": readContractFile(t, "../../../NixOS/home/shells/runtime-activation.sh"),
 		"shell":      readContractFile(t, hyprUserAdapterGuard),
-		"go":         readContractFile(t, "../dots/hypr_files.go"),
+		"go-v1":      readContractFile(t, "../migrations/v1_to_v2/recognizers.go"),
 	} {
 		if !strings.Contains(source, currentHyprUserAdapterDigest) {
 			t.Fatalf("%s adapter allowlist is missing current digest %s", name, currentHyprUserAdapterDigest)
@@ -140,7 +140,7 @@ func TestHomeManagerDefaultSeedFailsClosedWhenParentIsReplaced(t *testing.T) {
 func TestHyprUserAdapterGuardRetainsHistoricalRecovery(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "hyprland.lua")
-	legacy := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/user-adapter-wahrwelt-v1.lua")
+	legacy := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua")
 	if err := os.WriteFile(target, []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestHyprUserAdapterGuardRetainsHistoricalRecovery(t *testing.T) {
 func TestHyprUserAdapterGuardFailsClosedOnRecoveryReplacement(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "hyprland.lua")
-	legacy := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/user-adapter-wahrwelt-v1.lua")
+	legacy := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua")
 	current := readContractFile(t, "../../../dots/hypr/hyprland.lua")
 	if err := os.WriteFile(target, []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
@@ -286,7 +286,7 @@ func TestHyprUserAdapterGuardPinsParentDuringHistoricalPublication(t *testing.T)
 	}
 	target := filepath.Join(liveDir, "hyprland.lua")
 	victimTarget := filepath.Join(victimDir, "hyprland.lua")
-	legacy := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/user-adapter-wahrwelt-v1.lua")
+	legacy := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua")
 	if err := os.WriteFile(target, []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -343,7 +343,7 @@ exec "$WAHRWELT_REAL_CP" "$@"
 }
 
 func TestHyprUserAdapterGuardPublicationFailureRollsBackWithoutReplacingWinner(t *testing.T) {
-	legacy := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/user-adapter-wahrwelt-v1.lua")
+	legacy := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua")
 	realCurrent := "../../../dots/hypr/hyprland.lua"
 
 	for _, mode := range []string{"target-absent", "race-regular", "race-symlink"} {
@@ -422,7 +422,7 @@ exit 1
 }
 
 func TestHyprUserAdapterGuardRestoresReplacementMovedDuringPreparation(t *testing.T) {
-	legacy := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/user-adapter-wahrwelt-v1.lua")
+	legacy := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua")
 	realMv, err := exec.LookPath("mv")
 	if err != nil {
 		t.Fatal(err)

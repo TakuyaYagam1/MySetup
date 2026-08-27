@@ -302,7 +302,7 @@ func TestHomeManagerRuntimeActivationRejectsUnknownManagedEntrypoint(t *testing.
 
 func TestHomeManagerActivationExchangeRollbackRequiresExactPairAndContent(t *testing.T) {
 	legacyPaths, runtimeLegacy := runtimeLegacyFixtures(t)
-	adapterLegacy := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/user-adapter-wahrwelt-v1.lua")
+	adapterLegacy := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua")
 	adapterCurrent := readContractFile(t, "../../../dots/hypr/hyprland.lua")
 	for _, tree := range []string{"adapter", "runtime"} {
 		for _, race := range []string{"recovery-replacement", "candidate-write"} {
@@ -630,7 +630,7 @@ func TestHomeManagerUserActivationMigratesAdapterAndSeedsDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	adapter := filepath.Join(userDir, "hyprland.lua")
-	legacy := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/user-adapter-wahrwelt-v1.lua")
+	legacy := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua")
 	if err := os.WriteFile(adapter, []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -678,7 +678,7 @@ func TestHomeManagerUserActivationRejectsAdapterSwapBeforeFinalSuccess(t *testin
 		t.Fatal(err)
 	}
 	target := filepath.Join(userDir, "hyprland.lua")
-	legacy := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/user-adapter-wahrwelt-v1.lua")
+	legacy := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua")
 	current := readContractFile(t, "../../../dots/hypr/hyprland.lua")
 	if err := os.WriteFile(target, []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
@@ -792,7 +792,7 @@ func TestHomeManagerUserActivationPreservesOwnedDefaultNodes(t *testing.T) {
 }
 
 func TestHomeManagerUserActivationAcceptsOnlyExactOldGenerationAdapterLink(t *testing.T) {
-	legacy := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/user-adapter-wahrwelt-v1.lua")
+	legacy := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua")
 	for _, owned := range []bool{true, false} {
 		name := "unowned"
 		if owned {
@@ -852,7 +852,7 @@ func TestHomeManagerUserActivationAcceptsOnlyExactOldGenerationAdapterLink(t *te
 
 func runtimeLegacyFixtures(t *testing.T) ([]string, []byte) {
 	t.Helper()
-	legacyDir := "../../../NixOS/home/shells/legacy-hypr-runtime"
+	legacyDir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 	paths := []string{
 		filepath.Join(legacyDir, "end4.lua"),
 		filepath.Join(legacyDir, "end4-pc.lua"),

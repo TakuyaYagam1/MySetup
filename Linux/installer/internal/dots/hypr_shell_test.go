@@ -199,6 +199,11 @@ func TestShellProfileSyncMirrorsGoRuntimeRendering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fsHelper := filepath.Join(t.TempDir(), "wahrwelt-fs-helper")
+	buildHelper := exec.Command("go", "build", "-o", fsHelper, "../../cmd/wahrwelt-fs-helper")
+	if output, err := buildHelper.CombinedOutput(); err != nil {
+		t.Fatalf("build filesystem helper: %v\n%s", err, output)
+	}
 
 	for _, profile := range shellruntime.ProfileSpecs {
 		profile := profile
@@ -224,6 +229,11 @@ func TestShellProfileSyncMirrorsGoRuntimeRendering(t *testing.T) {
 			for _, path := range paths {
 				want[path] = readTestFile(t, path)
 			}
+			for _, path := range paths {
+				if err := os.Remove(path); err != nil {
+					t.Fatal(err)
+				}
+			}
 
 			cmd := exec.Command(bash, "-c", `
 set -eu
@@ -235,17 +245,18 @@ log() { :; }
 hypr_dir() { wahrwelt_hypr_dir_path; }
 . "$3"
 mapfile -t runtime_bundle_path_list < <(runtime_bundle_paths)
-wahrwelt_begin_exact_snapshot "$wahrwelt_runtime_session_dir" .runtime-render-test- render
-runtime_bundle_snapshot_dir="$wahrwelt_new_snapshot_dir"
-snapshot_exact_paths "$runtime_bundle_snapshot_dir" "${runtime_bundle_path_list[@]}"
+runtime_bundle_snapshot_dir="$(
+  wahrwelt_fs_begin runtime "$wahrwelt_runtime_session_public_dir" "${runtime_bundle_path_list[@]}"
+)"
 sync_runtime_shell_files
-remove_exact_path_snapshot "$runtime_bundle_snapshot_dir" "${runtime_bundle_path_list[@]}"
+wahrwelt_fs_commit "$runtime_bundle_snapshot_dir"
 `, "bash", runtimeScript, profile.ID, script)
 			cmd.Env = append(os.Environ(),
 				"HOME="+home,
 				"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
 				"XDG_RUNTIME_DIR="+runtimeDir,
 				"XDG_STATE_HOME="+filepath.Join(home, ".local", "state"),
+				"WAHRWELT_FS_HELPER="+fsHelper,
 			)
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("shell runtime sync failed: %v\n%s", err, output)

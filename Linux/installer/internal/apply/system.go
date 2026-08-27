@@ -34,6 +34,16 @@ func closeFile(file *os.File) {
 	}
 }
 
+func closeFileDirectory(directory interface{ Close() error }) {
+	if directory != nil {
+		_ = directory.Close()
+	}
+}
+
+func currentEffectiveUID() uint32 {
+	return uint32(os.Geteuid()) //nolint:gosec // Linux uid_t is an unsigned 32-bit value exposed by os as int.
+}
+
 func (e *legacyUserMigrationCollisionError) Error() string {
 	return fmt.Sprintf("cannot migrate legacy user directory: target appeared during migration: %s", e.path)
 }
@@ -188,6 +198,33 @@ func privilegedPythonPath() (string, error) {
 	return "", fmt.Errorf("locate trusted python3 for privileged directory pinning: %w", errors.Join(failures...))
 }
 
+func privilegedFSHelperPath() (string, error) {
+	configured := strings.TrimSpace(os.Getenv("WAHRWELT_PRIVILEGED_FS_HELPER"))
+	if configured != "" {
+		path, err := trustedPrivilegedExecutable(configured)
+		if err != nil {
+			return "", fmt.Errorf("untrusted privileged filesystem helper %s: %w", configured, err)
+		}
+		return path, nil
+	}
+	candidates := []string{
+		"/run/current-system/sw/bin/wahrwelt-fs-helper",
+		"/nix/var/nix/profiles/default/bin/wahrwelt-fs-helper",
+	}
+	if path, err := exec.LookPath("wahrwelt-fs-helper"); err == nil {
+		candidates = append(candidates, path)
+	}
+	var failures []error
+	for _, candidate := range candidates {
+		path, err := trustedPrivilegedExecutable(candidate)
+		if err == nil {
+			return path, nil
+		}
+		failures = append(failures, fmt.Errorf("%s: %w", candidate, err))
+	}
+	return "", fmt.Errorf("locate trusted privileged filesystem helper: %w", errors.Join(failures...))
+}
+
 //nolint:gocyclo // Trust validation is intentionally an explicit, linear checklist for auditability.
 func trustedPrivilegedExecutable(path string) (string, error) {
 	if !filepath.IsAbs(path) {
@@ -335,7 +372,7 @@ parent_display=$6
 python_bin=$7
 
 case "$kind" in
-	state|user-default|hashed-password) ;;
+	state|user-default|hashed-password|password-hash) ;;
 	*) printf '%s\n' "unsupported privileged publish kind: $kind" >&2; exit 2 ;;
 esac
 case "$target_name" in
@@ -393,7 +430,7 @@ collision() {
 }
 
 payload_mode=644
-if [ "$kind" = hashed-password ]; then payload_mode=600; fi
+case "$kind" in hashed-password|password-hash) payload_mode=600 ;; esac
 install -m "$payload_mode" -- "$source_fd" payload
 exec 9<payload
 payload_id=$(stat -Lc '%d:%i' -- /proc/self/fd/9)
@@ -417,7 +454,7 @@ user-default)
 	fi
 	discard_owned_payload
 	;;
-state|hashed-password)
+state|hashed-password|password-hash)
 	if [ "$expected_fd" = - ]; then
 		# Publish the exact opened payload inode. A mutable quarantine pathname is
 		# never used as the source of a fresh public target.

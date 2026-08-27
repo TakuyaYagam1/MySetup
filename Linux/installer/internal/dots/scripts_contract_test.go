@@ -324,11 +324,10 @@ func TestNoctaliaLauncherScriptIsGuarded(t *testing.T) {
 	for _, want := range []string{
 		"active_file=",
 		"interrupt_file=",
-		"lock_dir=",
-		"lock_owner_file=",
+		"wahrwelt_enter_runtime_lock_v2",
+		"wahrwelt-noctalia-launcher-v2.lock",
 		"wahrwelt-noctalia-launcher",
-		"noctalia-launcher\\.sh",
-		"acquire_lock",
+		"wahrwelt_open_managed_regular_file",
 		"wahrwelt_noctalia_action launcher-toggle",
 	} {
 		if !strings.Contains(text, want) {
@@ -346,17 +345,24 @@ func TestShellSelectorScriptTracksFocusedMonitorAndActiveShell(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(data) + string(helper)
+	selectorText := string(data)
+	helperText := string(helper)
+	text := selectorText + helperText
 	for _, want := range []string{
 		"wahrwelt_open_private_state_directory wahrwelt-shell-selector shell-selector-state",
-		`state_dir="$wahrwelt_private_state_directory_path"`,
-		`lock_dir="$state_dir/lock"`,
+		"wahrwelt_enter_runtime_lock_v2",
+		"wahrwelt-shell-selector-v2.lock",
+		"kernel-owned abstract AF_UNIX lock",
+		"wahrwelt_lock_fs_helper_path()",
+		`"$helper" runtime-lock-run`,
+		`--root "$wahrwelt_runtime_session_public_dir"`,
+		`--name "$name"`,
+		`--wait-ms "$wait_ms"`,
 		"selector_name=\"wahrwelt-shell-selector\"",
 		"WAHRWELT_SHELL_SELECTOR_MONITOR",
 		"WAHRWELT_ACTIVE_SHELL",
 		"WAHRWELT_SHELL_SELECTOR_MONITOR",
 		"WAHRWELT_ACTIVE_SHELL",
-		"acquire_lock()",
 		"wait_for_selector_spawn()",
 		"detect_shell_from_processes()",
 		"detect_shell_from_entrypoint()",
@@ -375,6 +381,20 @@ func TestShellSelectorScriptTracksFocusedMonitorAndActiveShell(t *testing.T) {
 			t.Fatalf("shell selector script missing %q\n%s", want, text)
 		}
 	}
+	for _, forbidden := range []string{
+		`state_dir=`,
+		`lock_dir=`,
+		`lock_pid_file=`,
+		`lock_owner_file=`,
+		`lock_identity=`,
+		"acquire_lock()",
+		"cleanup_lock()",
+		"trap cleanup_lock",
+	} {
+		if strings.Contains(selectorText, forbidden) {
+			t.Fatalf("shell selector still contains filesystem lock state %q\n%s", forbidden, selectorText)
+		}
+	}
 }
 
 func TestRecordToggleScriptUsesLockAndPidValidation(t *testing.T) {
@@ -388,16 +408,12 @@ func TestRecordToggleScriptUsesLockAndPidValidation(t *testing.T) {
 	}
 	text := string(data) + string(helper)
 	for _, want := range []string{
-		"wahrwelt_begin_new_lock_directory",
-		"wahrwelt_create_pinned_private_directory",
-		"wahrwelt_created_directory_identity",
-		"wahrwelt_finish_new_lock_directory",
-		"wahrwelt_release_owned_lock",
-		`lock_pid_file=`,
-		`lock_owner_file=`,
-		"wahrwelt_acquire_lock",
+		"wahrwelt_enter_runtime_lock_v2",
+		"wahrwelt-record-toggle-v2.lock",
+		"wahrwelt_open_private_state_directory wahrwelt-recording record-toggle-state",
+		"wahrwelt_open_managed_regular_file",
+		`pid_file="/proc/`,
 		"wahrwelt-record-toggle",
-		"record-toggle\\.sh",
 		`ps -p "$pid" -o args=`,
 		"gpu-screen-recorder",
 		"WAHRWELT_RECORD_TARGET",
@@ -429,8 +445,8 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		text += string(data)
 	}
 	for _, want := range []string{
-		"lock_owner_file=",
-		"wahrwelt-start-shell",
+		"wahrwelt_enter_runtime_lock_v2",
+		"wahrwelt-shell-v2.lock",
 		"shell-runtime.sh",
 		"shell-process.sh",
 		"shell-profile-sync.sh",
@@ -439,14 +455,12 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		"wahrwelt_noctalia_pids()",
 		"wahrwelt_noctalia_daemon_flag()",
 		`pgrep -u "$wahrwelt_user_name" -x noctalia`,
-		"start-shell\\.sh",
 		"running_count()",
 		"dedupe_shell()",
 		"cleanup_legacy_end4_processes()",
 		"wahrwelt_pid_is_legacy_end4_upgrade_token()",
 		"wahrwelt_legacy_end4_upgrade_pids()",
 		"wahrwelt_open_end4_upgrade_state()",
-		"wahrwelt_end4_upgrade_state_transaction()",
 		"wahrwelt_merge_end4_upgrade_tokens",
 		"wahrwelt_remove_end4_upgrade_tokens",
 		"wahrwelt-end4-upgrade",
@@ -505,11 +519,10 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 	durableOpenIndex := strings.Index(startText, "if ! wahrwelt_open_end4_upgrade_state; then")
 	durableMergeIndex := strings.Index(startText, "wahrwelt_merge_end4_upgrade_tokens \"$requested_legacy_end4_upgrade_tokens\"")
 	prepareRuntimeIndex := strings.Index(startText, "\nprepare_runtime_environment\n")
-	acquireLockIndex := strings.Index(startText, "if ! acquire_lock; then")
+	acquireLockIndex := strings.Index(startText, "wahrwelt_enter_runtime_lock_v2")
 	if durableOpenIndex < 0 || durableMergeIndex < 0 || prepareRuntimeIndex < 0 || acquireLockIndex < 0 ||
-		durableOpenIndex >= durableMergeIndex || durableMergeIndex >= prepareRuntimeIndex ||
-		prepareRuntimeIndex >= acquireLockIndex {
-		t.Fatalf("start-shell must durably merge exact End4 upgrade provenance before runtime preparation and lock wait")
+		acquireLockIndex >= durableOpenIndex || durableOpenIndex >= durableMergeIndex || durableMergeIndex >= prepareRuntimeIndex {
+		t.Fatalf("start-shell must acquire the v2 process lock before durably merging End4 upgrade provenance and preparing runtime")
 	}
 
 	beginIndex := strings.LastIndex(startText, "if ! begin_switch_transaction; then")
@@ -693,7 +706,7 @@ func TestShellBrandingUsesNixOSLogoOutsideSelector(t *testing.T) {
 	}
 }
 
-func TestCaelestiaActivationRepairsInvalidShellJson(t *testing.T) {
+func TestCaelestiaActivationSeedsShellJSONWithoutReplacingUserFiles(t *testing.T) {
 	data, err := os.ReadFile("../../../NixOS/home/caelestia/default.nix")
 	if err != nil {
 		t.Fatal(err)
@@ -702,16 +715,20 @@ func TestCaelestiaActivationRepairsInvalidShellJson(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(data) + string(helpers)
+	seedHelper, err := os.ReadFile("../../../NixOS/home/lib/mutable-seed.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data) + string(helpers) + string(seedHelper)
 	for _, want := range []string{
-		`jq -e 'type == "object"'`,
-		`$target.bak.`,
-		`seed_if_missing "$target" "$source"`,
-		`ensure_json_object "$target" "$source"`,
-		`${pkgs.coreutils}/bin/install -m 644 "$source" "$target"`,
+		`seed_json_object "$HOME/.config/caelestia/shell.json"`,
+		`seed-json-object "$HOME" "$target" "$source"`,
+		`os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK`,
+		`existing JSON requires a managed transform and was preserved`,
+		`publish_file_if_absent(`,
 	} {
 		if !strings.Contains(text, want) {
-			t.Fatalf("caelestia activation missing invalid shell.json repair guard %q\n%s", want, text)
+			t.Fatalf("caelestia activation missing create-if-absent shell.json ownership contract %q\n%s", want, text)
 		}
 	}
 }
@@ -799,12 +816,17 @@ func TestObservabilityGrafanaUsesPersistentSecretFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(data)
+	helper, err := os.ReadFile("../../../NixOS/services/grafana-secret-key.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data) + string(helper)
 	for _, want := range []string{
-		`grafanaSecretKeyPath = "/var/lib/grafana/secret_key";`,
-		`pkgs.writeShellScript "wahrwelt-grafana-secret-key"`,
-		`${pkgs.openssl}/bin/openssl rand -hex 32 > "$secret_key"`,
-		`${pkgs.coreutils}/bin/chmod 0600 "$secret_key"`,
+		`grafanaSecretDirectory = "/var/lib/wahrwelt/grafana";`,
+		`grafanaSecretKeyPath = "${grafanaSecretDirectory}/secret_key";`,
+		`pkgs.writeText "wahrwelt-grafana-secret-key.py"`,
+		`os.O_RDWR | os.O_TMPFILE | os.O_CLOEXEC`,
+		`os.urandom(32).hex().encode("ascii")`,
 		`security.secret_key = "$__file{${grafanaSecretKeyPath}}";`,
 		`before = [ "grafana.service" ];`,
 		`requiredBy = [ "grafana.service" ];`,

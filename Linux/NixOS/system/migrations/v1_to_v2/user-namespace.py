@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed migration for host-local user config and installer state."""
+"""One-shot v1_to_v2 migration for host-local config and installer state."""
 
 from __future__ import annotations
 
@@ -815,15 +815,12 @@ def rewrite_private_paths(source: str) -> str:
     return rewritten
 
 
-def root_nix_files(root: Path) -> list[Path]:
-    files: list[Path] = []
-    for path in sorted(root.iterdir()):
-        if not path.name.endswith(".nix") or path.name == "hashed-password.nix":
-            continue
-        info = lstat_optional(path)
-        if info is not None and stat.S_ISREG(info.st_mode):
-            files.append(path)
-    return files
+def root_nix_entries(root: Path) -> list[Path]:
+    return [
+        path
+        for path in sorted(root.iterdir())
+        if path.name.endswith(".nix") and path.name != "hashed-password.nix"
+    ]
 
 
 def read_regular(path: Path) -> str:
@@ -867,12 +864,34 @@ def write_regular(path: Path, content: str) -> None:
         os.close(fd)
 
 
-def has_legacy_nix_path(root: Path) -> bool:
-    for path in root_nix_files(root):
+def configuration_migration_plan(root: Path) -> tuple[Path, str, str] | None:
+    """Plan the one owned root rewrite without mutating arbitrary modules."""
+    plan: tuple[Path, str, str] | None = None
+    for path in root_nix_entries(root):
+        info = lstat_optional(path)
+        if info is None:
+            continue
+        if not stat.S_ISREG(info.st_mode):
+            if path.name == "configuration.nix":
+                raise MigrationError(
+                    f"ownership collision: owned v1 target {path} must be an ordinary regular file"
+                )
+            continue
         source = read_regular(path)
-        if rewrite_private_paths(source) != source:
-            return True
-    return False
+        migrated = rewrite_private_paths(source)
+        if migrated == source:
+            continue
+        if path.name != "configuration.nix":
+            raise MigrationError(
+                f"ownership collision: unowned top-level module {path} contains a real "
+                "./private Nix path token; move that reference manually before retrying"
+            )
+        plan = path, source, migrated
+    return plan
+
+
+def has_legacy_nix_path(root: Path) -> bool:
+    return configuration_migration_plan(root) is not None
 
 
 def legacy_state_validation_barrier() -> None:
@@ -935,6 +954,120 @@ def renameat2_noreplace(
         if error_number in (errno.EEXIST, errno.ENOTEMPTY):
             raise FileExistsError(error_number, os.strerror(error_number), target_name)
         raise OSError(error_number, os.strerror(error_number), source_name)
+
+
+COMPLETION_NAME = "v1_to_v2.complete"
+COMPLETION_PAYLOAD = b"wahrwelt-v1-to-v2-complete\n"
+
+
+def inspect_completion(root: Path) -> str:
+    root_fd = duplicate_directory(root)
+    try:
+        root_info = os.fstat(root_fd)
+        if root_info.st_uid != os.geteuid() or root_info.st_mode & 0o022:
+            raise MigrationError(
+                f"ownership collision: completion root {root} must be owned by the caller "
+                "and not group/world-writable"
+            )
+        try:
+            visible = os.stat(COMPLETION_NAME, dir_fd=root_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            return "absent"
+        if not stat.S_ISREG(visible.st_mode) or visible.st_nlink != 1:
+            raise MigrationError(
+                f"ownership collision: completion marker {root / COMPLETION_NAME} "
+                "must be an ordinary single-link regular file"
+            )
+        if visible.st_uid != os.geteuid() or stat.S_IMODE(visible.st_mode) != 0o600:
+            raise MigrationError(
+                f"ownership collision: completion marker {root / COMPLETION_NAME} "
+                "must be caller-owned with mode 0600"
+            )
+        flags = os.O_RDONLY | os.O_CLOEXEC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        marker_fd = os.open(COMPLETION_NAME, flags, dir_fd=root_fd)
+        try:
+            before = os.fstat(marker_fd)
+            payload = os.read(marker_fd, len(COMPLETION_PAYLOAD) + 1)
+            after = os.fstat(marker_fd)
+            final_visible = os.stat(
+                COMPLETION_NAME, dir_fd=root_fd, follow_symlinks=False
+            )
+        finally:
+            os.close(marker_fd)
+        identity = lambda info: (
+            info.st_dev,
+            info.st_ino,
+            info.st_mode,
+            info.st_nlink,
+            info.st_uid,
+            info.st_gid,
+            info.st_size,
+            info.st_mtime_ns,
+            info.st_ctime_ns,
+        )
+        if identity(before) != identity(after) or identity(after) != identity(final_visible):
+            raise MigrationError(
+                f"ownership collision: completion marker {root / COMPLETION_NAME} changed while being validated"
+            )
+        if payload != COMPLETION_PAYLOAD:
+            raise MigrationError(
+                f"ownership collision: completion marker {root / COMPLETION_NAME} has unknown content"
+            )
+        return "complete"
+    finally:
+        os.close(root_fd)
+
+
+def publish_completion(root: Path) -> None:
+    if inspect_completion(root) != "absent":
+        raise MigrationError(
+            f"ownership collision: completion marker already exists at {root / COMPLETION_NAME}"
+        )
+    root_fd = duplicate_directory(root)
+    marker_fd = -1
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        try:
+            marker_fd = os.open(COMPLETION_NAME, flags, 0o600, dir_fd=root_fd)
+        except FileExistsError as error:
+            raise MigrationError(
+                f"ownership collision: completion marker appeared at {root / COMPLETION_NAME}; it was preserved"
+            ) from error
+        view = memoryview(COMPLETION_PAYLOAD)
+        while view:
+            written = os.write(marker_fd, view)
+            if written == 0:
+                raise MigrationError(
+                    f"short write while publishing completion marker {root / COMPLETION_NAME}"
+                )
+            view = view[written:]
+        os.fsync(marker_fd)
+        created = os.fstat(marker_fd)
+        visible = os.stat(COMPLETION_NAME, dir_fd=root_fd, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(created.st_mode)
+            or created.st_nlink != 1
+            or created.st_uid != os.geteuid()
+            or stat.S_IMODE(created.st_mode) != 0o600
+            or (created.st_dev, created.st_ino) != (visible.st_dev, visible.st_ino)
+        ):
+            raise MigrationError(
+                f"ownership collision: completion marker changed during publication at {root / COMPLETION_NAME}; "
+                "the visible entry was preserved"
+            )
+        os.fsync(root_fd)
+    finally:
+        if marker_fd >= 0:
+            os.close(marker_fd)
+        os.close(root_fd)
+    if inspect_completion(root) != "complete":
+        raise MigrationError(
+            f"completion marker could not be verified at {root / COMPLETION_NAME}"
+        )
 
 
 def directory_entry_identity(parent_fd: int, name: str) -> tuple[int, int] | None:
@@ -1010,6 +1143,7 @@ def quarantine_exact_empty_legacy_state_parent(
 
 def migrate_stage(root: Path) -> None:
     state = inspect_namespace(root)
+    configuration_plan = configuration_migration_plan(root)
 
     legacy_state_path = state["legacy_state_path"]
     legacy_state_proof = state["legacy_state_proof"]
@@ -1068,11 +1202,13 @@ def migrate_stage(root: Path) -> None:
     if state["legacy_user"]:
         os.rename(root / "private", root / "user")
 
-    for path in root_nix_files(root):
-        source = read_regular(path)
-        migrated = rewrite_private_paths(source)
-        if migrated != source:
-            write_regular(path, migrated)
+    if configuration_plan is not None:
+        path, source, migrated = configuration_plan
+        if read_regular(path) != source:
+            raise MigrationError(
+                f"ownership collision: owned v1 target {path} changed after validation"
+            )
+        write_regular(path, migrated)
 
     validate_migrated(root)
 
@@ -1639,6 +1775,12 @@ def main(arguments: list[str]) -> int:
 
     root = Path(os.path.abspath(arguments[1]))
 
+    if command == "completion-status" and len(arguments) == 2:
+        print(inspect_completion(root))
+        return 0
+    if command == "publish-completion" and len(arguments) == 2:
+        publish_completion(root)
+        return 0
     if command == "needs-migration" and len(arguments) == 2:
         state = inspect_namespace(root)
         return 0 if state["legacy_user"] or state["legacy_state"] or has_legacy_nix_path(root) else 1

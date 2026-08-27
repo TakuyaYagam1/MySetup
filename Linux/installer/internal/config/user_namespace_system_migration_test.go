@@ -11,14 +11,19 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"golang.org/x/sys/unix"
 )
 
-const systemUserNamespaceHelper = "../../../NixOS/system/user-namespace-migration.py"
+const (
+	systemUserNamespaceHelper  = "../../../NixOS/system/migrations/v1_to_v2/user-namespace.py"
+	systemBrandMigrationHelper = "../../../NixOS/system/migrations/v1_to_v2/brand.py"
+)
 
 func TestSystemUserNamespaceMigrationRewritesOnlyNixPathTokens(t *testing.T) {
 	root := t.TempDir()
@@ -113,6 +118,103 @@ func TestSystemUserNamespaceMigrationRewritesOnlyNixPathTokens(t *testing.T) {
 		if _, err := os.Lstat(legacy); !os.IsNotExist(err) {
 			t.Fatalf("legacy path %s was not removed: %v", legacy, err)
 		}
+	}
+}
+
+func TestSystemUserNamespaceMigrationRejectsUnownedTopLevelPrivateReference(t *testing.T) {
+	root := t.TempDir()
+	configuration := filepath.Join(root, "configuration.nix")
+	custom := filepath.Join(root, "custom.nix")
+	privateFile := filepath.Join(root, "private", "default.nix")
+	state := filepath.Join(root, "wahrwelt", "state.json")
+	mustWriteSystemMigrationFixture(t, configuration, "imports = [ ./private ];\n")
+	mustWriteSystemMigrationFixture(t, custom, "# user-owned module\nimports = [ ./private ];\n")
+	mustWriteSystemMigrationFixture(t, privateFile, "{ ... }: {}\n")
+	mustWriteSystemMigrationFixture(t, state, systemMigrationStatePayload(7))
+	if err := os.Chmod(custom, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	beforeInfo, err := os.Stat(custom)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeCustom := mustReadSystemMigrationFixture(t, custom)
+	beforeConfiguration := mustReadSystemMigrationFixture(t, configuration)
+	beforeState := mustReadSystemMigrationFixture(t, state)
+
+	output := runSystemUserNamespaceHelperOutput(t, 2, "migrate-stage", root)
+	if !strings.Contains(output, "unowned top-level module") ||
+		!strings.Contains(output, "move that reference manually") {
+		t.Fatalf("unowned module rejection was not actionable:\n%s", output)
+	}
+	afterInfo, err := os.Stat(custom)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(beforeInfo, afterInfo) || afterInfo.Mode().Perm() != 0o640 {
+		t.Fatalf("unowned module identity/mode changed: before=%v after=%v", beforeInfo, afterInfo)
+	}
+	if got := mustReadSystemMigrationFixture(t, custom); got != beforeCustom {
+		t.Fatalf("unowned module bytes changed: %q", got)
+	}
+	if got := mustReadSystemMigrationFixture(t, configuration); got != beforeConfiguration {
+		t.Fatalf("owned configuration changed before collision was rejected: %q", got)
+	}
+	if got := mustReadSystemMigrationFixture(t, state); got != beforeState {
+		t.Fatalf("legacy state changed before collision was rejected: %q", got)
+	}
+	if got := mustReadSystemMigrationFixture(t, privateFile); got != "{ ... }: {}\n" {
+		t.Fatalf("legacy private tree changed before collision was rejected: %q", got)
+	}
+}
+
+func TestSystemUserNamespaceMigrationCompletionMarkerIsExclusive(t *testing.T) {
+	root := t.TempDir()
+	if output := runSystemUserNamespaceHelperOutput(t, 0, "completion-status", root); output != "absent\n" {
+		t.Fatalf("initial completion status = %q", output)
+	}
+	runSystemUserNamespaceHelper(t, 0, "publish-completion", root)
+	marker := filepath.Join(root, "v1_to_v2.complete")
+	before, err := os.Stat(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.Mode().Perm() != 0o600 || !before.Mode().IsRegular() {
+		t.Fatalf("completion marker metadata = %v", before.Mode())
+	}
+	if output := runSystemUserNamespaceHelperOutput(t, 0, "completion-status", root); output != "complete\n" {
+		t.Fatalf("published completion status = %q", output)
+	}
+	output := runSystemUserNamespaceHelperOutput(t, 2, "publish-completion", root)
+	if !strings.Contains(output, "completion marker already exists") {
+		t.Fatalf("duplicate publication error was unclear:\n%s", output)
+	}
+	after, err := os.Stat(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(before, after) || mustReadSystemMigrationFixture(t, marker) != "wahrwelt-v1-to-v2-complete\n" {
+		t.Fatal("duplicate completion publication changed the exact marker")
+	}
+}
+
+func TestSystemUserNamespaceMigrationCompletionMarkerPreservesCollision(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(t.TempDir(), "foreign")
+	mustWriteSystemMigrationFixture(t, target, "foreign\n")
+	marker := filepath.Join(root, "v1_to_v2.complete")
+	if err := os.Symlink(target, marker); err != nil {
+		t.Fatal(err)
+	}
+	output := runSystemUserNamespaceHelperOutput(t, 2, "completion-status", root)
+	if !strings.Contains(output, "ownership collision") {
+		t.Fatalf("completion collision was not explicit:\n%s", output)
+	}
+	if link, err := os.Readlink(marker); err != nil || link != target {
+		t.Fatalf("completion collision changed: link=%q err=%v", link, err)
+	}
+	if got := mustReadSystemMigrationFixture(t, target); got != "foreign\n" {
+		t.Fatalf("completion collision target changed: %q", got)
 	}
 }
 
@@ -1846,8 +1948,16 @@ func TestSystemUserNamespaceCandidateSyncPreservesHardlinksAndXattrs(t *testing.
 func TestSystemUserNamespaceMigrationServiceContract(t *testing.T) {
 	module := readContractFile(t, "../../../NixOS/system/wahrwelt-migration.nix")
 	for _, want := range []string{
-		`userNamespaceMigrationSource = pkgs.writeText`,
-		`builtins.readFile ./user-namespace-migration.py`,
+		`v1ToV2NamespaceSource = pkgs.writeText`,
+		`builtins.readFile ./migrations/v1_to_v2/user-namespace.py`,
+		`v1ToV2BrandSource = pkgs.writeText`,
+		`builtins.readFile ./migrations/v1_to_v2/brand.py`,
+		`password-evidence "$destination" "$password_hash_target"`,
+		`name = "wahrwelt-v1-to-v2-migration"`,
+		`systemd.services.wahrwelt-v1-to-v2-migration`,
+		`fs_helper=${lib.escapeShellArg "${inputs.wahrwelt.packages.${pkgs.stdenv.hostPlatform.system}.wahrwelt}/bin/wahrwelt-fs-helper"}`,
+		`"completion-status" "$work_root_fd"`,
+		`"publish-completion" "$work_root_fd"`,
 		`"needs-migration"`,
 		`"migrate-stage"`,
 		`"snapshot-live"`,
@@ -1859,19 +1969,39 @@ func TestSystemUserNamespaceMigrationServiceContract(t *testing.T) {
 		`creation_barrier`,
 		`pin_created_directory`,
 		`pin_created_file`,
+		`require_private_created_directory`,
 		`namespace_snapshot="/proc/self/fd/$namespace_snapshot_fd"`,
-		`restartTriggers = [ userNamespaceMigrationSource ];`,
+		`restartTriggers = [`,
+		`v1ToV2NamespaceSource`,
+		`v1ToV2BrandSource`,
+		`ConditionPathExists = [`,
+		`"|${destination}/private"`,
+		`"|${destination}/wahrwelt/state.json"`,
+		`"|${destination}/mysetup/state.json"`,
+		`"|${destination}/hashed-password.nix"`,
+		`"|${destination}/hosts/NixOS/hashed-password.nix"`,
 		`rsync -aHAX "$stage_pinned/" "$candidate_pinned/"`,
+		`--no-overwrite-dir --sparse -xpf -`,
+		`--offline`,
 		`exec 9<"$work_root"`,
 		`work_root_fd="/proc/self/fd/9"`,
+		`destination_pinned="/proc/self/fd/$destination_fd"`,
 		`flock 9`,
 		`stage_pinned="/proc/self/fd/$stage_fd"`,
+		`tar --acls --xattrs --xattrs-include='*' --numeric-owner --no-recursion -cpf - .`,
+		`"$fs_helper" remove-migration-temporary \
+        --kind staging --name "$stage_name" --expected "$stage_token"`,
+		`"$fs_helper" remove-migration-temporary \
+        --kind namespace --name "$namespace_snapshot_name" --expected "$namespace_snapshot_token"`,
 	} {
 		if !strings.Contains(module, want) {
 			t.Fatalf("system migration service missing %q\n%s", want, module)
 		}
 	}
 	for _, forbidden := range []string{
+		`system/user-namespace-migration.py`,
+		`systemd.services.wahrwelt-migration`,
+		`"|${destination}/flake.nix"`,
 		`rsync -a --delete "$stage/" "$destination/"`,
 		`rsync -a --delete "$rollback/" "$destination/"`,
 		`[ "$status" -eq 0 ] || [ "$publish_started" -eq 0 ]`,
@@ -1886,6 +2016,10 @@ func TestSystemUserNamespaceMigrationServiceContract(t *testing.T) {
 		`rsync -aHAX --delete`,
 		`rm -rf -- "$stage_pinned"`,
 		`rm -f "$namespace_snapshot"`,
+		`cp -a "$destination/." "$stage_pinned/"`,
+		`nix flake update`,
+		`grep -RIl`,
+		`-iname '*mysetup*'`,
 	} {
 		if strings.Contains(module, forbidden) {
 			t.Fatalf("live tree must never be a broad rsync destination: found %q\n%s", forbidden, module)
@@ -1917,6 +2051,21 @@ func TestSystemUserNamespaceMigrationServiceContract(t *testing.T) {
 	}
 }
 
+func TestBootThemeUsesOnlyCanonicalWahrweltNamespace(t *testing.T) {
+	module := readContractFile(t, "../../../NixOS/lib/boot-theme.nix")
+	if !strings.Contains(module, `dir = "${homeDirectory}/.config/wahrwelt/boot-theme";`) {
+		t.Fatalf("boot theme must resolve only the canonical namespace\n%s", module)
+	}
+	for _, forbidden := range []string{
+		`.config/mysetup/boot-theme`,
+		`legacyDir`,
+	} {
+		if strings.Contains(module, forbidden) {
+			t.Fatalf("boot theme retained v1 runtime fallback %q\n%s", forbidden, module)
+		}
+	}
+}
+
 func TestSystemMigrationServiceMigratesNamespaceWithoutRewritingCanonicalCompatibilityAliases(t *testing.T) {
 	root := t.TempDir()
 	destination := filepath.Join(root, "nixos")
@@ -1945,6 +2094,62 @@ func TestSystemMigrationServiceMigratesNamespaceWithoutRewritingCanonicalCompati
 	}
 	if _, err := os.Lstat(filepath.Join(destination, "wahrwelt", "canonical.txt")); err != nil {
 		t.Fatalf("canonical Wahrwelt tree changed: %v", err)
+	}
+}
+
+func TestSystemMigrationServicePreservesDestinationRootMetadata(t *testing.T) {
+	root := t.TempDir()
+	destination := filepath.Join(root, "nixos")
+	writeSystemMigrationServiceFixture(t, destination, "# Generated by Wahrwelt installer.", true)
+	if err := os.Chmod(destination, 0o751); err != nil {
+		t.Fatal(err)
+	}
+	xattrSupported := true
+	if err := unix.Setxattr(destination, "user.wahrwelt-root", []byte("preserved"), 0); err != nil {
+		if errors.Is(err, unix.ENOTSUP) || errors.Is(err, unix.EOPNOTSUPP) || errors.Is(err, unix.EPERM) {
+			xattrSupported = false
+		} else {
+			t.Fatal(err)
+		}
+	}
+	before, err := os.Stat(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeStat, ok := before.Sys().(*syscall.Stat_t)
+	if !ok {
+		t.Fatal("destination stat does not expose Unix metadata")
+	}
+
+	output, err := runRenderedSystemMigrationService(t, destination)
+	if err != nil {
+		t.Fatalf("metadata-preserving namespace migration failed: %v\n%s", err, output)
+	}
+	after, err := os.Stat(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterStat, ok := after.Sys().(*syscall.Stat_t)
+	if !ok {
+		t.Fatal("published destination stat does not expose Unix metadata")
+	}
+	if after.Mode().Perm() != before.Mode().Perm() ||
+		afterStat.Uid != beforeStat.Uid || afterStat.Gid != beforeStat.Gid {
+		t.Fatalf(
+			"published root metadata = mode %04o uid %d gid %d, want mode %04o uid %d gid %d",
+			after.Mode().Perm(), afterStat.Uid, afterStat.Gid,
+			before.Mode().Perm(), beforeStat.Uid, beforeStat.Gid,
+		)
+	}
+	if xattrSupported {
+		value := make([]byte, 64)
+		size, getErr := unix.Getxattr(destination, "user.wahrwelt-root", value)
+		if getErr != nil {
+			t.Fatal(getErr)
+		}
+		if got := string(value[:size]); got != "preserved" {
+			t.Fatalf("published root xattr = %q, want preserved", got)
+		}
 	}
 }
 
@@ -1986,6 +2191,113 @@ func TestSystemMigrationServiceCanonicalCompatibilityTreeWithoutNamespaceIsNoOp(
 	}
 }
 
+func TestSystemMigrationServiceFreshCanonicalTreeDoesNotLoadV1Recognizers(t *testing.T) {
+	root := t.TempDir()
+	destination := filepath.Join(root, "nixos")
+	writeSystemMigrationServiceFixture(t, destination, "# Generated by Wahrwelt installer.", false)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	harness := prepareRenderedSystemMigrationService(ctx, t, destination)
+	if err := harness.cmd.Run(); err != nil {
+		t.Fatalf("fresh canonical migration prefilter failed: %v\n%s", err, harness.output.String())
+	}
+	if _, err := os.Lstat(harness.workRoot); !os.IsNotExist(err) {
+		t.Fatalf("fresh canonical tree entered the v1 migration runtime: %v\n%s", err, harness.output.String())
+	}
+}
+
+func TestSystemMigrationServiceUnknownPasswordModuleIsNotV1Evidence(t *testing.T) {
+	root := t.TempDir()
+	destination := filepath.Join(root, "nixos")
+	writeSystemMigrationServiceFixture(t, destination, "# Generated by Wahrwelt installer.", false)
+	module := filepath.Join(destination, "hashed-password.nix")
+	mustWriteSystemMigrationFixture(t, module, "user-owned password module\n")
+	if err := os.Chmod(module, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before := snapshotSystemMigrationTree(t, destination)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	harness := prepareRenderedSystemMigrationService(ctx, t, destination)
+	if err := harness.cmd.Run(); err != nil {
+		t.Fatalf("unknown password module prefilter failed: %v\n%s", err, harness.output.String())
+	}
+	if _, err := os.Lstat(harness.workRoot); !os.IsNotExist(err) {
+		t.Fatalf("unknown password module entered the v1 migration runtime: %v\n%s", err, harness.output.String())
+	}
+	if after := snapshotSystemMigrationTree(t, destination); after != before {
+		t.Fatalf("unknown password module was changed by the v1 prefilter:\nwant:\n%s\ngot:\n%s", before, after)
+	}
+}
+
+func TestSystemMigrationServiceFunctionalPasswordStubWithExternalHashIsNoOp(t *testing.T) {
+	root := t.TempDir()
+	destination := filepath.Join(root, "nixos")
+	writeSystemMigrationServiceFixture(t, destination, "# Generated by Wahrwelt installer.", false)
+	module := filepath.Join(destination, "hashed-password.nix")
+	const stub = `{ config, ... }:
+
+{
+  users.users.${config.mysetup.user.username}.hashedPasswordFile = "/etc/wahrwelt/hashed-password";
+}
+`
+	mustWriteSystemMigrationFixture(t, module, stub)
+	if err := os.Chmod(module, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	externalParent := filepath.Join(root, "wahrwelt")
+	if err := os.MkdirAll(externalParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(externalParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	external := filepath.Join(externalParent, "hashed-password")
+	passwordHash := "$6$rounds=5000$testsalt$" + strings.Repeat("A", 86)
+	mustWriteSystemMigrationFixture(t, external, passwordHash+"\n")
+	if err := os.Chmod(external, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	beforeTree := snapshotSystemMigrationTree(t, destination)
+	beforeExternal := mustReadSystemMigrationFixture(t, external)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	harness := prepareRenderedSystemMigrationService(ctx, t, destination)
+	if err := os.MkdirAll(harness.workRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	completion := filepath.Join(harness.workRoot, "v1_to_v2.complete")
+	mustWriteSystemMigrationFixture(t, completion, "wahrwelt-v1-to-v2-complete\n")
+	if err := os.Chmod(completion, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	completionBefore, err := os.Stat(completion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := harness.cmd.Run(); err != nil {
+		t.Fatalf("functional password stub no-op failed: %v\n%s", err, harness.output.String())
+	}
+	completionAfter, err := os.Stat(completion)
+	if err != nil || !os.SameFile(completionBefore, completionAfter) || completionAfter.Mode().Perm() != 0o600 {
+		t.Fatalf("completed password stub changed its completion marker: before=%v after=%v err=%v", completionBefore, completionAfter, err)
+	}
+	if entries, err := os.ReadDir(harness.workRoot); err != nil || len(entries) != 1 || entries[0].Name() != "v1_to_v2.complete" {
+		t.Fatalf("completed password stub entered the v1 migration runtime: entries=%v err=%v\n%s", entries, err, harness.output.String())
+	}
+	if _, err := os.Lstat(filepath.Join(harness.testRoot, "fs-helper.log")); !os.IsNotExist(err) {
+		t.Fatalf("completed password stub invoked cleanup helper: %v", err)
+	}
+	if after := snapshotSystemMigrationTree(t, destination); after != beforeTree {
+		t.Fatalf("completed password stub changed the live tree:\nwant:\n%s\ngot:\n%s", beforeTree, after)
+	}
+	if got := mustReadSystemMigrationFixture(t, external); got != beforeExternal {
+		t.Fatal("completed password stub changed the external password hash")
+	}
+}
+
 func TestSystemMigrationServiceMigratesMySetupStateUnderCanonicalMarker(t *testing.T) {
 	root := t.TempDir()
 	destination := filepath.Join(root, "nixos")
@@ -2012,22 +2324,211 @@ func TestSystemMigrationServiceMigratesMySetupStateUnderCanonicalMarker(t *testi
 func TestSystemMigrationServiceLegacyMySetupMarkerStillRunsBrandMigration(t *testing.T) {
 	root := t.TempDir()
 	destination := filepath.Join(root, "nixos")
-	mustWriteSystemMigrationFixture(t, filepath.Join(destination, "flake.nix"), "{\n  # Generated by MySetup installer.\n}\n")
-	mustWriteSystemMigrationFixture(t, filepath.Join(destination, "flake.lock"), "{}\n")
+	writeSystemMigrationServiceFixture(t, destination, "# Generated by MySetup installer.", false)
 	mustWriteSystemMigrationFixture(t, filepath.Join(destination, "mysetup-module.nix"), "# MySetup mysetup compatibility\n")
 
 	output, err := runRenderedSystemMigrationService(t, destination)
 	if err != nil {
 		t.Fatalf("recognized legacy brand migration failed: %v\n%s", err, output)
 	}
-	if got := mustReadSystemMigrationFixture(t, filepath.Join(destination, "wahrwelt-module.nix")); got != "# Wahrwelt wahrwelt compatibility\n" {
-		t.Fatalf("legacy brand content was not migrated: %q", got)
+	if got := mustReadSystemMigrationFixture(t, filepath.Join(destination, "mysetup-module.nix")); got != "# MySetup mysetup compatibility\n" {
+		t.Fatalf("supported compatibility module was rewritten: %q", got)
 	}
-	if _, err := os.Lstat(filepath.Join(destination, "mysetup-module.nix")); !os.IsNotExist(err) {
-		t.Fatalf("legacy brand path remains after recognized migration: %v", err)
+	if _, err := os.Lstat(filepath.Join(destination, "wahrwelt-module.nix")); !os.IsNotExist(err) {
+		t.Fatalf("migration invented a renamed user module: %v", err)
 	}
 	if flake := mustReadSystemMigrationFixture(t, filepath.Join(destination, "flake.nix")); !strings.Contains(flake, "# Generated by Wahrwelt installer.") {
 		t.Fatalf("legacy installer marker was not migrated:\n%s", flake)
+	}
+	lock := mustReadSystemMigrationFixture(t, filepath.Join(destination, "flake.lock"))
+	if strings.Contains(lock, `"mysetup"`) ||
+		!strings.Contains(lock, `"wahrwelt"`) ||
+		!strings.Contains(lock, `"rev": "0123456789abcdef0123456789abcdef01234567"`) ||
+		!strings.Contains(lock, `"narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="`) ||
+		strings.Count(lock, `"repo": "wahrwelt"`) != 2 ||
+		!strings.Contains(lock, `"lastModified": 1234567890`) ||
+		!strings.Contains(lock, `"ref": "main"`) ||
+		strings.Count(lock, `"dir": "Linux/NixOS/presets/personal"`) != 2 {
+		t.Fatalf("brand migration did not preserve the locked source identity:\n%s", lock)
+	}
+}
+
+func TestSystemBrandMigrationRejectsLockSourceDriftBeforeWriting(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(map[string]any, map[string]any)
+	}{
+		{
+			name: "locked owner",
+			mutate: func(locked, _ map[string]any) {
+				locked["owner"] = "someone-else"
+			},
+		},
+		{
+			name: "locked repo",
+			mutate: func(locked, _ map[string]any) {
+				locked["repo"] = "wahrwelt"
+			},
+		},
+		{
+			name: "original repo",
+			mutate: func(_, original map[string]any) {
+				original["repo"] = "wahrwelt"
+			},
+		},
+		{
+			name: "locked dir",
+			mutate: func(locked, _ map[string]any) {
+				locked["dir"] = "Linux/NixOS/presets/developer"
+			},
+		},
+		{
+			name: "original ref",
+			mutate: func(_, original map[string]any) {
+				original["ref"] = "dev"
+			},
+		},
+		{
+			name: "missing lastModified",
+			mutate: func(locked, _ map[string]any) {
+				delete(locked, "lastModified")
+			},
+		},
+		{
+			name: "short rev",
+			mutate: func(locked, _ map[string]any) {
+				locked["rev"] = "fixture-rev"
+			},
+		},
+		{
+			name: "invalid narHash",
+			mutate: func(locked, _ map[string]any) {
+				locked["narHash"] = "sha256-fixture"
+			},
+		},
+		{
+			name: "unknown original field",
+			mutate: func(_, original map[string]any) {
+				original["unexpected"] = true
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			destination := filepath.Join(t.TempDir(), "nixos")
+			writeSystemMigrationServiceFixture(t, destination, "# Generated by MySetup installer.", false)
+			lockPath := filepath.Join(destination, "flake.lock")
+			var lock map[string]any
+			if err := json.Unmarshal([]byte(mustReadSystemMigrationFixture(t, lockPath)), &lock); err != nil {
+				t.Fatal(err)
+			}
+			nodes := lock["nodes"].(map[string]any)
+			node := nodes["mysetup"].(map[string]any)
+			locked := node["locked"].(map[string]any)
+			original := node["original"].(map[string]any)
+			test.mutate(locked, original)
+			payload, err := json.MarshalIndent(lock, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			mustWriteSystemMigrationFixture(t, lockPath, string(payload)+"\n")
+			flakePath := filepath.Join(destination, "flake.nix")
+			beforeFlake := mustReadSystemMigrationFixture(t, flakePath)
+			beforeLock := mustReadSystemMigrationFixture(t, lockPath)
+
+			output, commandErr := exec.Command(
+				"python3", systemBrandMigrationHelper, "migrate", destination,
+			).CombinedOutput()
+			if commandErr == nil || !strings.Contains(string(output), "ownership collision") {
+				t.Fatalf("invalid lock source was accepted: err=%v\n%s", commandErr, output)
+			}
+			if got := mustReadSystemMigrationFixture(t, flakePath); got != beforeFlake {
+				t.Fatal("invalid lock source changed flake.nix before rejection")
+			}
+			if got := mustReadSystemMigrationFixture(t, lockPath); got != beforeLock {
+				t.Fatal("invalid lock source changed flake.lock before rejection")
+			}
+		})
+	}
+}
+
+func TestSystemMigrationServiceExternalizesGeneratedLegacyPassword(t *testing.T) {
+	passwordHash := "$6$rounds=5000$testsalt$" + strings.Repeat("A", 86)
+	tests := []struct {
+		name            string
+		marker          string
+		moduleNamespace string
+		moduleRelative  string
+	}{
+		{
+			name:            "MySetup root module",
+			marker:          "# Generated by MySetup installer.",
+			moduleNamespace: "mysetup",
+			moduleRelative:  "hashed-password.nix",
+		},
+		{
+			name:            "Wahrwelt historical host module",
+			marker:          "# Generated by Wahrwelt installer.",
+			moduleNamespace: "wahrwelt",
+			moduleRelative:  "hosts/NixOS/hashed-password.nix",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			destination := filepath.Join(root, "nixos")
+			writeSystemMigrationServiceFixture(t, destination, test.marker, false)
+			writeSystemMigrationLegacyPasswordFixture(
+				t,
+				destination,
+				test.moduleRelative,
+				test.moduleNamespace,
+				passwordHash,
+			)
+			lockBefore := mustReadSystemMigrationFixture(t, filepath.Join(destination, "flake.lock"))
+
+			output, err := runRenderedSystemMigrationService(t, destination)
+			if err != nil {
+				t.Fatalf("legacy password migration failed: %v\n%s", err, output)
+			}
+			if strings.Contains(output, passwordHash) {
+				t.Fatal("legacy password migration leaked the hash in command output")
+			}
+
+			external := filepath.Join(root, "wahrwelt", "hashed-password")
+			if got := mustReadSystemMigrationFixture(t, external); got != passwordHash+"\n" {
+				t.Fatalf("external password payload = %q", got)
+			}
+			var externalStat unix.Stat_t
+			if statErr := unix.Lstat(external, &externalStat); statErr != nil || externalStat.Mode&0o777 != 0o600 || externalStat.Nlink != 1 || externalStat.Uid != uint32(os.Geteuid()) {
+				t.Fatalf("external password metadata is not private, owned, and singly linked: stat=%+v err=%v", externalStat, statErr)
+			}
+
+			flake := mustReadSystemMigrationFixture(t, filepath.Join(destination, "flake.nix"))
+			if !strings.Contains(flake, "# Generated by Wahrwelt installer.") ||
+				!strings.Contains(flake, "hashedPasswordFile =") ||
+				!strings.Contains(flake, `"/etc/wahrwelt/hashed-password"`) ||
+				strings.Contains(flake, "hashedPassword =") {
+				t.Fatalf("legacy password wrapper was not migrated exactly:\n%s", flake)
+			}
+			marker := filepath.Join(destination, ".wahrwelt-password-hash-enabled")
+			if info, statErr := os.Stat(marker); statErr != nil || info.Mode().Perm() != 0o644 || info.Size() != 0 {
+				t.Fatalf("password marker metadata is invalid: info=%v err=%v", info, statErr)
+			}
+			if _, statErr := os.Lstat(filepath.Join(destination, test.moduleRelative)); !os.IsNotExist(statErr) {
+				t.Fatalf("generated password module remains in migrated candidate: %v", statErr)
+			}
+			if strings.Contains(snapshotSystemMigrationTree(t, destination), passwordHash) {
+				t.Fatal("migrated candidate still contains the password hash")
+			}
+			if test.marker == "# Generated by Wahrwelt installer." {
+				if lockAfter := mustReadSystemMigrationFixture(t, filepath.Join(destination, "flake.lock")); lockAfter != lockBefore {
+					t.Fatal("password-only migration changed the canonical lock file")
+				}
+			}
+		})
 	}
 }
 
@@ -2260,8 +2761,75 @@ cp -a "$source/." "$stage/"
 
 func writeSystemMigrationServiceFixture(t *testing.T, destination, marker string, withNamespace bool) {
 	t.Helper()
-	mustWriteSystemMigrationFixture(t, filepath.Join(destination, "flake.nix"), "{\n  "+marker+"\n}\n")
-	mustWriteSystemMigrationFixture(t, filepath.Join(destination, "flake.lock"), "{}\n")
+	brand := "wahrwelt"
+	repo := "wahrwelt"
+	description := "Host-local Wahrwelt NixOS wrapper"
+	constructor := "mkWahrweltHost"
+	if marker == "# Generated by MySetup installer." {
+		brand = "mysetup"
+		repo = "MySetup"
+		description = "Host-local MySetup NixOS wrapper"
+		constructor = "mkMySetupHost"
+	}
+	if marker == "# Generated by Wahrwelt installer." || marker == "# Generated by MySetup installer." {
+		wrapper := fmt.Sprintf(`{
+  %s
+  description = %q;
+  inputs = {
+    %s = {
+      url = "github:TakuyaYagam1/%s/main?dir=Linux/NixOS/presets/personal";
+    };
+  };
+  outputs = inputs@{ %s, ... }:
+    let
+      hostVars = import ./host-vars.nix;
+      hostname = hostVars.host.hostname;
+    in {
+      nixosConfigurations.${hostname} = %s.lib.%s {
+        hostVars = ./host-vars.nix;
+        hardware = ./hardware-configuration.nix;
+        extraModules = [ ./configuration.nix ];
+        homeExtraModules = if builtins.pathExists ./home.nix then [ ./home.nix ] else [ ];
+      };
+    };
+}
+`, marker, description, brand, repo, brand, brand, constructor)
+		mustWriteSystemMigrationFixture(t, filepath.Join(destination, "flake.nix"), wrapper)
+		lock := fmt.Sprintf(`{
+  "nodes": {
+    "root": {
+      "inputs": {
+        %q: %q
+      }
+    },
+    %q: {
+      "locked": {
+        "dir": "Linux/NixOS/presets/personal",
+        "lastModified": 1234567890,
+        "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "owner": "TakuyaYagam1",
+        "repo": %q,
+        "rev": "0123456789abcdef0123456789abcdef01234567",
+        "type": "github"
+      },
+      "original": {
+        "dir": "Linux/NixOS/presets/personal",
+        "owner": "TakuyaYagam1",
+        "ref": "main",
+        "repo": %q,
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
+`, brand, brand, brand, repo, repo)
+		mustWriteSystemMigrationFixture(t, filepath.Join(destination, "flake.lock"), lock)
+	} else {
+		mustWriteSystemMigrationFixture(t, filepath.Join(destination, "flake.nix"), "{\n  "+marker+"\n}\n")
+		mustWriteSystemMigrationFixture(t, filepath.Join(destination, "flake.lock"), "{}\n")
+	}
 	mustWriteSystemMigrationFixture(t, filepath.Join(destination, "wahrwelt", "canonical.txt"), "canonical Wahrwelt tree\n")
 	mustWriteSystemMigrationFixture(t, filepath.Join(destination, "mysetup", "compatibility.txt"), "canonical mysetup compatibility alias\n")
 	mustWriteSystemMigrationFixture(t, filepath.Join(destination, "mysetup-compat.nix"), "# canonical mysetup compatibility text\n")
@@ -2272,6 +2840,38 @@ func writeSystemMigrationServiceFixture(t *testing.T, destination, marker string
 	mustWriteSystemMigrationFixture(t, filepath.Join(destination, "configuration.nix"), "imports = [ ./private ./mysetup-compat.nix ];\n")
 	mustWriteSystemMigrationFixture(t, filepath.Join(destination, "private", "custom.nix"), "custom\n")
 	mustWriteSystemMigrationFixture(t, filepath.Join(destination, "wahrwelt", "state.json"), systemMigrationStatePayload(7))
+}
+
+func writeSystemMigrationLegacyPasswordFixture(
+	t *testing.T,
+	destination string,
+	moduleRelative string,
+	moduleNamespace string,
+	passwordHash string,
+) {
+	t.Helper()
+	flakePath := filepath.Join(destination, "flake.nix")
+	flake := mustReadSystemMigrationFixture(t, flakePath)
+	const hardwareLine = "        hardware = ./hardware-configuration.nix;\n"
+	if strings.Count(flake, hardwareLine) != 1 {
+		t.Fatalf("generated wrapper fixture lacks one hardware argument:\n%s", flake)
+	}
+	legacyPassword := hardwareLine + `        hashedPassword =
+          if builtins.pathExists ./hashed-password.nix then ./hashed-password.nix else null;
+`
+	mustWriteSystemMigrationFixture(t, flakePath, strings.Replace(flake, hardwareLine, legacyPassword, 1))
+
+	modulePath := filepath.Join(destination, filepath.FromSlash(moduleRelative))
+	module := fmt.Sprintf(`{ config, ... }:
+
+{
+  users.users.${config.%s.user.username}.initialHashedPassword = %q;
+}
+`, moduleNamespace, passwordHash)
+	mustWriteSystemMigrationFixture(t, modulePath, module)
+	if err := os.Chmod(modulePath, 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 type renderedSystemMigrationService struct {
@@ -2303,12 +2903,28 @@ func prepareRenderedSystemMigrationService(
 	if err != nil {
 		t.Fatal(err)
 	}
+	brandHelperPath, err := filepath.Abs(systemBrandMigrationHelper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testRoot := t.TempDir()
+	workRoot := filepath.Join(testRoot, "work")
+	fakeBin := filepath.Join(testRoot, "bin")
+	if err := os.MkdirAll(fakeBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fakeFSHelper := filepath.Join(fakeBin, "wahrwelt-fs-helper")
+	writeRenderedSystemMigrationFSHelper(t, fakeFSHelper)
+	passwordHashTarget := filepath.Join(filepath.Dir(destination), "wahrwelt", "hashed-password")
 	replacements := map[string]string{
-		"${lib.escapeShellArg destination}":                             shellQuoteSystemMigrationTest(destination),
-		"${lib.escapeShellArg hostname}":                                shellQuoteSystemMigrationTest("test-host"),
-		"${lib.escapeShellArg \"${pkgs.python3}/bin/python3\"}":         shellQuoteSystemMigrationTest("python3"),
-		"${lib.escapeShellArg userNamespaceMigrationSource}":            shellQuoteSystemMigrationTest(helperPath),
-		`if [ "$owner" != 0 ] || [ "$((8#$mode & 0022))" -ne 0 ]; then`: `if false; then`,
+		"${lib.escapeShellArg destination}":                     shellQuoteSystemMigrationTest(destination),
+		"${lib.escapeShellArg hostname}":                        shellQuoteSystemMigrationTest("test-host"),
+		"${lib.escapeShellArg \"${pkgs.python3}/bin/python3\"}": shellQuoteSystemMigrationTest("python3"),
+		"${lib.escapeShellArg v1ToV2NamespaceSource}":           shellQuoteSystemMigrationTest(helperPath),
+		"${lib.escapeShellArg v1ToV2BrandSource}":               shellQuoteSystemMigrationTest(brandHelperPath),
+		"${lib.escapeShellArg \"${inputs.wahrwelt.packages.${pkgs.stdenv.hostPlatform.system}.wahrwelt}/bin/wahrwelt-fs-helper\"}": shellQuoteSystemMigrationTest(fakeFSHelper),
+		"${lib.escapeShellArg \"/etc/wahrwelt/hashed-password\"}":                                                                  shellQuoteSystemMigrationTest(passwordHashTarget),
+		`if [ "$owner" != 0 ] || [ "$((8#$mode & 0022))" -ne 0 ]; then`:                                                            `if false; then`,
 	}
 	for old, replacement := range replacements {
 		if strings.Count(script, old) != 1 {
@@ -2318,12 +2934,6 @@ func prepareRenderedSystemMigrationService(
 	}
 	script = strings.ReplaceAll(script, "''${", "${")
 
-	testRoot := t.TempDir()
-	workRoot := filepath.Join(testRoot, "work")
-	fakeBin := filepath.Join(testRoot, "bin")
-	if err := os.MkdirAll(fakeBin, 0o755); err != nil {
-		t.Fatal(err)
-	}
 	fakeNix := filepath.Join(fakeBin, "nix")
 	mustWriteSystemMigrationFixture(t, fakeNix, "#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' \"$*\" >> \"$WAHRWELT_TEST_NIX_LOG\"\n")
 	if err := os.Chmod(fakeNix, 0o755); err != nil {
@@ -2340,6 +2950,8 @@ func prepareRenderedSystemMigrationService(
 		os.Environ(),
 		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"WAHRWELT_MIGRATION_WORK_ROOT="+workRoot,
+		"WAHRWELT_TEST_FS_HELPER_ROOT="+workRoot,
+		"WAHRWELT_TEST_FS_HELPER_LOG="+filepath.Join(testRoot, "fs-helper.log"),
 		"WAHRWELT_TEST_NIX_LOG="+filepath.Join(testRoot, "nix.log"),
 	)
 	harness := &renderedSystemMigrationService{
@@ -2352,6 +2964,79 @@ func prepareRenderedSystemMigrationService(
 	return harness
 }
 
+func writeRenderedSystemMigrationFSHelper(t *testing.T, path string) {
+	t.Helper()
+	const helper = `#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -ne 7 ] ||
+  [ "$1" != remove-migration-temporary ] ||
+  [ "$2" != --kind ] ||
+  [ "$4" != --name ] ||
+  [ "$6" != --expected ]; then
+  printf '%s\n' 'fake fs helper received an unsupported command shape' >&2
+  exit 2
+fi
+
+kind=$3
+name=$5
+expected=$7
+case "$kind" in
+  staging | namespace) ;;
+  *) printf '%s\n' 'fake fs helper received an unsupported kind' >&2; exit 2 ;;
+esac
+name_pattern="^${kind}\\.[0-9a-f]{16}$"
+if [[ ! "$name" =~ $name_pattern ]] || [[ ! "$expected" =~ ^[0-9]+:[1-9][0-9]*$ ]]; then
+  printf '%s\n' 'fake fs helper received an invalid name or identity' >&2
+  exit 2
+fi
+
+root="${WAHRWELT_TEST_FS_HELPER_ROOT:?}"
+case "$root" in
+  /*) ;;
+  *) printf '%s\n' 'fake fs helper root must be absolute' >&2; exit 2 ;;
+esac
+if [ -L "$root" ] || [ ! -d "$root" ] || [ "$(realpath -e -- "$root")" != "$root" ]; then
+  printf '%s\n' 'fake fs helper root must be a canonical directory' >&2
+  exit 2
+fi
+target="$root/$name"
+if [ "$(dirname -- "$target")" != "$root" ] || [ -L "$target" ]; then
+  printf '%s\n' 'fake fs helper target escaped its work root' >&2
+  exit 2
+fi
+if [ "$(stat -c '%d:%i' -- "$target")" != "$expected" ] ||
+  [ "$(stat -c '%u' -- "$target")" != "$(id -u)" ]; then
+  printf '%s\n' 'fake fs helper target identity changed' >&2
+  exit 2
+fi
+
+case "$kind" in
+  staging)
+    if [ ! -d "$target" ] || [ "$(stat -c '%a' -- "$target")" != 700 ]; then
+      printf '%s\n' 'fake fs helper staging target metadata is invalid' >&2
+      exit 2
+    fi
+    rm -rf -- "$target"
+    ;;
+  namespace)
+    if [ ! -f "$target" ] ||
+      [ "$(stat -c '%a' -- "$target")" != 600 ] ||
+      [ "$(stat -c '%h' -- "$target")" != 1 ]; then
+      printf '%s\n' 'fake fs helper namespace target metadata is invalid' >&2
+      exit 2
+    fi
+    rm -f -- "$target"
+    ;;
+esac
+printf '%s\t%s\t%s\n' "$kind" "$name" "$expected" >> "${WAHRWELT_TEST_FS_HELPER_LOG:?}"
+`
+	mustWriteSystemMigrationFixture(t, path, helper)
+	if err := os.Chmod(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func runRenderedSystemMigrationService(t *testing.T, destination string) (string, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -2361,7 +3046,55 @@ func runRenderedSystemMigrationService(t *testing.T, destination string) (string
 	if ctx.Err() != nil {
 		t.Fatalf("system migration service timed out: %v\n%s", ctx.Err(), harness.output.String())
 	}
+	if err == nil {
+		assertRenderedSystemMigrationCleanup(t, harness)
+	}
 	return harness.output.String(), err
+}
+
+func assertRenderedSystemMigrationCleanup(t *testing.T, harness *renderedSystemMigrationService) {
+	t.Helper()
+	entries, err := os.ReadDir(harness.workRoot)
+	if os.IsNotExist(err) {
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "v1_to_v2.complete" {
+		names := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			names = append(names, entry.Name())
+		}
+		t.Fatalf("successful system migration work root must contain only its completion marker: %v", names)
+	}
+	completion := filepath.Join(harness.workRoot, "v1_to_v2.complete")
+	completionInfo, err := os.Stat(completion)
+	if err != nil || completionInfo.Mode().Perm() != 0o600 || !completionInfo.Mode().IsRegular() {
+		t.Fatalf("system migration completion marker metadata is invalid: info=%v err=%v", completionInfo, err)
+	}
+	if payload := mustReadSystemMigrationFixture(t, completion); payload != "wahrwelt-v1-to-v2-complete\n" {
+		t.Fatalf("system migration completion marker payload = %q", payload)
+	}
+
+	logPath := filepath.Join(harness.testRoot, "fs-helper.log")
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("successful system migration did not record exact helper cleanup: %v", err)
+	}
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	wantKinds := []string{"staging", "namespace"}
+	if len(lines) != len(wantKinds) {
+		t.Fatalf("successful system migration cleanup calls = %q, want staging and namespace", lines)
+	}
+	identityPattern := regexp.MustCompile(`^[0-9]+:[1-9][0-9]*$`)
+	for index, kind := range wantKinds {
+		fields := strings.Split(lines[index], "\t")
+		namePattern := regexp.MustCompile(`^` + kind + `\.[0-9a-f]{16}$`)
+		if len(fields) != 3 || fields[0] != kind || !namePattern.MatchString(fields[1]) || !identityPattern.MatchString(fields[2]) {
+			t.Fatalf("successful system migration cleanup call %d = %q, want exact %s name and identity", index, lines[index], kind)
+		}
+	}
 }
 
 func shellQuoteSystemMigrationTest(value string) string {

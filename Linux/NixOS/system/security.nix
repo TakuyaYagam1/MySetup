@@ -1,4 +1,4 @@
-{ config, ... }:
+_:
 
 {
   security = {
@@ -22,22 +22,10 @@
         Defaults timestamp_type=tty,timestamp_timeout=60
       '';
 
-      # Let the primary user run nixos-rebuild without re-entering sudo password.
-      extraRules = [
-        {
-          users = [ config.wahrwelt.user.username ];
-          commands = [
-            {
-              command = "/run/current-system/sw/bin/nixos-rebuild";
-              options = [ "NOPASSWD" ];
-            }
-            {
-              command = "/run/current-system/sw/bin/nix-collect-garbage";
-              options = [ "NOPASSWD" ];
-            }
-          ];
-        }
-      ];
+      # Rebuild and garbage-collection commands use the ordinary sudo
+      # credential cache. An unrestricted passwordless nixos-rebuild is equivalent
+      # to passwordless root because a flake can define arbitrary activation
+      # scripts.
     };
   };
 

@@ -7,12 +7,6 @@
         "nix-command"
         "flakes"
       ];
-      trusted-users = [
-        "root"
-        "@wheel"
-        config.wahrwelt.user.username
-      ];
-
       # Optional private netrc for GitHub API auth during flake input updates.
       # Keep the file outside git, owned by root:root and chmod 0600.
       # Expected entries:
@@ -76,7 +70,7 @@
 
   nixpkgs.config = {
     allowUnfree = true;
-    allowInsecurePredicate = _: true;
+    permittedInsecurePackages = import ../lib/permitted-insecure-packages.nix;
     android_sdk.accept_license = true;
   };
 }

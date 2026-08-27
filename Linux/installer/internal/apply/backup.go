@@ -21,7 +21,54 @@ func backupExisting(ctx context.Context, runner run.CommandRunner, dest string) 
 	if err != nil {
 		return "", err
 	}
-	return backup, runner.Command(ctx, "sudo", "cp", "-a", dest, backup)
+	helper := ""
+	if filepath.Clean(dest) == "/etc/nixos" {
+		helper, err = privilegedFSHelperPath()
+		if err != nil {
+			return "", err
+		}
+	}
+	if err := runner.Command(ctx, "sudo", "cp", "-a", dest, backup); err != nil {
+		return backup, err
+	}
+	if err := markNixOSBackup(ctx, runner, dest, backup, helper); err != nil {
+		return backup, fmt.Errorf("mark generated NixOS backup %s: %w", backup, err)
+	}
+	return backup, nil
+}
+
+func markNixOSBackup(ctx context.Context, runner run.CommandRunner, dest, backup, helper string) error {
+	if filepath.Clean(dest) != "/etc/nixos" {
+		return nil
+	}
+	if helper == "" {
+		return fmt.Errorf("missing privileged filesystem helper")
+	}
+	return runner.Command(ctx, "sudo", helper, "mark-nixos-backup", "--backup", backup)
+}
+
+func pruneNixOSBackups(ctx context.Context, runner run.CommandRunner, dest, helper string) error {
+	if filepath.Clean(dest) != "/etc/nixos" {
+		return nil
+	}
+	if helper == "" {
+		return fmt.Errorf("missing privileged filesystem helper")
+	}
+	return runner.Command(ctx, "sudo", helper, "prune-nixos-backups", "--parent", "/etc", "--keep", "3")
+}
+
+func pruneOwnedNixOSBackups(ctx context.Context, runner run.CommandRunner, dest string) error {
+	if filepath.Clean(dest) != "/etc/nixos" {
+		return nil
+	}
+	helper, err := privilegedFSHelperPath()
+	if err != nil {
+		return err
+	}
+	if err := pruneNixOSBackups(ctx, runner, dest, helper); err != nil {
+		return fmt.Errorf("prune generated NixOS backups: %w", err)
+	}
+	return nil
 }
 
 func uniqueBackupPath(target string) (string, error) {

@@ -42,21 +42,27 @@ func detectSecretPath(path string) secretPresence {
 	if path == "" {
 		return secretPresenceMissing
 	}
-	if _, err := os.Stat(path); err == nil {
-		return secretPresenceExists
-	} else if os.IsNotExist(err) {
+	info, err := os.Lstat(path)
+	if err == nil {
+		if info.Mode().IsRegular() {
+			return secretPresenceExists
+		}
+		return secretPresenceUnknown
+	}
+	if os.IsNotExist(err) {
 		return secretPresenceMissing
 	}
 	return secretPresenceUnknown
 }
 
-func userPasswordHashPath(opts paths.Options) string {
-	return filepath.Join(opts.NixOSDest, "hashed-password.nix")
+func userPasswordHashPath(_ paths.Options) string {
+	return paths.DefaultPasswordHashPath
 }
 
 func userPasswordHashPaths(opts paths.Options) []string {
 	return []string{
 		userPasswordHashPath(opts),
+		filepath.Join(opts.NixOSDest, "hashed-password.nix"),
 		filepath.Join(opts.NixOSDest, "hosts", "NixOS", "hashed-password.nix"),
 	}
 }

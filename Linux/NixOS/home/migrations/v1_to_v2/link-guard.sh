@@ -2,4 +2,4 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-exec python3 "$script_dir/legacy-namespace-move.py" "$@"
+exec python3 "$script_dir/link-guard.py" "$@"

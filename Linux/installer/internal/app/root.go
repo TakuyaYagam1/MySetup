@@ -145,7 +145,7 @@ func applyCommand(opts *Options) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&noSwitch, "no-switch", false, "stop after dry-build without switching or writing activated state")
 	cmd.Flags().StringVar(&sourceChannel, "source-channel", "", "override saved Wahrwelt channel: stable or development")
-	cmd.Flags().StringVar(&userPasswordFile, "user-password-file", "", "read initial user password from file for hashed-password.nix")
+	cmd.Flags().StringVar(&userPasswordFile, "user-password-file", "", "read the initial user password from a private file")
 	return cmd
 }
 

@@ -22,7 +22,7 @@ var legacyHyprUserAdapterFixtures = map[string]string{
 }
 
 func TestHyprUserAdapterLegacyFixturesAreExact(t *testing.T) {
-	fixtureDir := "../../../NixOS/home/shells/legacy-hypr-runtime"
+	fixtureDir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 	for name, wantDigest := range legacyHyprUserAdapterFixtures {
 		data, err := os.ReadFile(filepath.Join(fixtureDir, name))
 		if err != nil {
@@ -36,7 +36,7 @@ func TestHyprUserAdapterLegacyFixturesAreExact(t *testing.T) {
 
 func TestHyprUserAdapterGuardAcceptsOnlyActiveGenerationSymlink(t *testing.T) {
 	current := "../../../dots/hypr/hyprland.lua"
-	legacyData := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/user-adapter-wahrwelt-v1.lua")
+	legacyData := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua")
 	oldGeneration := t.TempDir()
 	expected := filepath.Join(oldGeneration, "home-files", ".config", "hypr", "wahrwelt", "hyprland.lua")
 	if err := os.MkdirAll(filepath.Dir(expected), 0o755); err != nil {
@@ -95,7 +95,7 @@ func TestHyprUserAdapterGuardAcceptsOnlyActiveGenerationSymlink(t *testing.T) {
 
 func TestHyprUserAdapterGuardPreparesOnlyExactRegularFixture(t *testing.T) {
 	current := "../../../dots/hypr/hyprland.lua"
-	legacy := "../../../NixOS/home/shells/legacy-hypr-runtime/user-adapter-wahrwelt-v1.lua"
+	legacy := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua"
 	currentData := readContractFile(t, current)
 
 	for _, tc := range []struct {
@@ -138,7 +138,7 @@ func TestHyprUserAdapterGuardPreparesOnlyExactRegularFixture(t *testing.T) {
 func TestHyprUserAdapterGuardRejectsPostPublicationTargetSwap(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "hyprland.lua")
-	legacy := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/user-adapter-wahrwelt-v1.lua")
+	legacy := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua")
 	current := readContractFile(t, "../../../dots/hypr/hyprland.lua")
 	if err := os.WriteFile(target, []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
@@ -178,7 +178,7 @@ func TestHyprUserAdapterGuardRejectsPostPublicationTargetSwap(t *testing.T) {
 func TestHyprUserAdapterGuardRejectsRecoveryDirectorySwapBeforePin(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "hyprland.lua")
-	legacy := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/user-adapter-wahrwelt-v1.lua")
+	legacy := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua")
 	if err := os.WriteFile(target, []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestHyprUserAdapterGuardRejectsRecoveryDirectorySwapBeforePin(t *testing.T)
 }
 
 func TestHomeManagerHyprUserAdapterPublicationIsGuardedAndNonForced(t *testing.T) {
-	migration := readContractFile(t, "../../../NixOS/home/programs/wahrwelt-migration.nix")
+	migration := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/user-paths.nix")
 	shells := readContractFile(t, "../../../NixOS/home/shells/default.nix")
 	for _, want := range []string{
 		`hypr-user-adapter-guard`,
@@ -262,8 +262,8 @@ func TestHomeManagerHyprUserAdapterPublicationIsGuardedAndNonForced(t *testing.T
 }
 
 func TestHomeManagerInternalNamespaceMovesCannotNestConcurrentTargets(t *testing.T) {
-	migration := readContractFile(t, "../../../NixOS/home/programs/wahrwelt-migration.nix")
-	helper := readContractFile(t, "../../../NixOS/home/programs/legacy-namespace-move.py")
+	migration := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/user-paths.nix")
+	helper := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/namespace-move.py")
 	for _, want := range []string{
 		`legacy-namespace-move`,
 		`check "$old" "$new"`,

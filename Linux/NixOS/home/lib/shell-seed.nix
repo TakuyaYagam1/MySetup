@@ -1,12 +1,11 @@
 {
-  pkgs,
   lib,
   dotfilesLib,
 }:
 
 {
   # Build a home-manager activation hook for seeding mutable JSON config files.
-  # `dirs` are mkdir -p'd before `body` runs. `body` typically calls
+  # `dirs` are created through the no-follow mutable seed helper before `body` runs.
   # `seed_json_object`, provided by dotfilesLib.mutableJsonShellHelpers.
   mkSeedActivation =
     {
@@ -17,7 +16,7 @@
     lib.hm.dag.entryAfter after ''
       ${dotfilesLib.mutableJsonShellHelpers}
 
-      ${lib.concatMapStringsSep "\n" (d: ''$DRY_RUN_CMD ${pkgs.coreutils}/bin/mkdir -p "${d}"'') dirs}
+      ${lib.concatMapStringsSep "\n" (d: ''ensure_real_directory "${d}" || exit $?'') dirs}
 
       ${body}
     '';

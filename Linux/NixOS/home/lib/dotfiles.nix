@@ -24,6 +24,13 @@ let
     then ${path} = ${jqBool value}
     else .
     end'';
+  mutableSeedHelper = pkgs.writeShellApplication {
+    name = "wahrwelt-mutable-seed";
+    runtimeInputs = [ pkgs.python3 ];
+    text = ''
+      exec python3 ${./mutable-seed.py} "$@"
+    '';
+  };
 in
 {
   inherit
@@ -31,6 +38,7 @@ in
     layout
     mkBoolDefault
     mkOpacityFallback
+    mutableSeedHelper
     ;
 
   hyprRuntimeFiles = shellRuntimeManifest.runtimeFiles;
@@ -72,18 +80,19 @@ in
   };
 
   mutableJsonShellHelpers = ''
-    drop_store_symlink() {
+    ensure_real_directory() {
       local target="$1"
-      local resolved
 
-      if [ -L "$target" ]; then
-        resolved="$(${pkgs.coreutils}/bin/readlink -f "$target" 2>/dev/null || true)"
-        case "$resolved" in
-          /nix/store/*)
-            $DRY_RUN_CMD ${pkgs.coreutils}/bin/rm -f "$target"
-            ;;
-        esac
-      fi
+      $DRY_RUN_CMD "${mutableSeedHelper}/bin/wahrwelt-mutable-seed" \
+        ensure-dir "$HOME" "$target"
+    }
+
+    seed_directory_if_missing() {
+      local target="$1"
+      local source="$2"
+
+      $DRY_RUN_CMD "${mutableSeedHelper}/bin/wahrwelt-mutable-seed" \
+        seed-tree "$HOME" "$target" "$source"
     }
 
     seed_if_missing() {
@@ -91,47 +100,19 @@ in
       local source="$2"
       local home_replacement="''${3:-}"
 
-      if [ ! -e "$target" ]; then
-        $DRY_RUN_CMD ${pkgs.coreutils}/bin/install -m 644 "$source" "$target"
-        if [ -n "$home_replacement" ]; then
-          $DRY_RUN_CMD ${pkgs.gnused}/bin/sed -i "s|@HOME@|$home_replacement|g" "$target"
-        fi
-      fi
+      $DRY_RUN_CMD "${mutableSeedHelper}/bin/wahrwelt-mutable-seed" \
+        seed-file "$HOME" "$target" "$source" "$home_replacement"
     }
 
-    ensure_json_object() {
+    seed_with_replaced_line_if_missing() {
       local target="$1"
       local source="$2"
-      local home_replacement="''${3:-}"
-      local backup
+      local line_prefix="$3"
+      local replacement_line="$4"
 
-      if [ -z "''${DRY_RUN_CMD:-}" ] && [ -e "$target" ]; then
-        if ! ${pkgs.jq}/bin/jq -e 'type == "object"' "$target" >/dev/null 2>&1; then
-          backup="$target.bak.$(${pkgs.coreutils}/bin/date +%Y%m%d%H%M%S)"
-          ${pkgs.coreutils}/bin/cp -f "$target" "$backup" 2>/dev/null || true
-          ${pkgs.coreutils}/bin/install -m 644 "$source" "$target"
-          if [ -n "$home_replacement" ]; then
-            ${pkgs.gnused}/bin/sed -i "s|@HOME@|$home_replacement|g" "$target"
-          fi
-        fi
-      fi
-    }
-
-    apply_jq_defaults() {
-      local target="$1"
-      local filter="$2"
-      local tmp
-
-      shift 2 || true
-
-      if [ -z "''${DRY_RUN_CMD:-}" ] && [ -e "$target" ]; then
-        tmp="$target.tmp.$$"
-        if ${pkgs.jq}/bin/jq "$@" "$filter" "$target" > "$tmp"; then
-          ${pkgs.coreutils}/bin/mv "$tmp" "$target"
-        else
-          ${pkgs.coreutils}/bin/rm -f "$tmp"
-        fi
-      fi
+      $DRY_RUN_CMD "${mutableSeedHelper}/bin/wahrwelt-mutable-seed" \
+        seed-file-replace-line "$HOME" "$target" "$source" \
+        "$line_prefix" "$replacement_line"
     }
 
     seed_json_object() {
@@ -142,13 +123,9 @@ in
 
       shift 4 || shift "$#"
 
-      drop_store_symlink "$target"
-      seed_if_missing "$target" "$source" "$home_replacement"
-      ensure_json_object "$target" "$source" "$home_replacement"
-
-      if [ -n "$filter" ]; then
-        apply_jq_defaults "$target" "$filter" "$@"
-      fi
+      $DRY_RUN_CMD "${mutableSeedHelper}/bin/wahrwelt-mutable-seed" \
+        seed-json-object "$HOME" "$target" "$source" "$home_replacement" \
+        "${pkgs.jq}/bin/jq" "$filter" "$@"
     }
   '';
 }

@@ -12,10 +12,78 @@ import (
 	"testing"
 
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
+	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/shellruntime"
 )
+
+func legacyUserRuntimeEntrypoint() string {
+	return migrationv1tov2.LegacyUserEntrypoint()
+}
+
+func legacyDirectEnd4RuntimeEntrypoint(profile string) string {
+	return migrationv1tov2.DirectEnd4Entrypoint(profile)
+}
+
+func legacyDirectEnd4LauncherPlaceholder(profile string) string {
+	return migrationv1tov2.DirectEnd4LauncherPlaceholder(profile)
+}
+
+func legacyDirectEnd4KeybindsPlaceholder(profile string) string {
+	return migrationv1tov2.DirectEnd4KeybindsPlaceholder(profile)
+}
+
+func TestBootstrapActiveShellForUpgradeOwnsV1Fallbacks(t *testing.T) {
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	runtimeDir := shellruntime.RuntimeDir(home)
+	if err := os.MkdirAll(runtimeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(hyprDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	entrypoint := shellruntime.RuntimeFile(home, "hyprland.lua")
+	keybinds := shellruntime.RuntimeFile(home, "shell-keybinds.lua")
+	if err := os.WriteFile(entrypoint, []byte(migrationv1tov2.DirectEnd4Entrypoint(shellruntime.End4)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	variant := shellruntime.End4VariantStatePath(home)
+	if err := os.MkdirAll(filepath.Dir(variant), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(variant, []byte(shellruntime.End4PC+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := bootstrapActiveShellForUpgrade(home, hyprDir); got != shellruntime.End4PC {
+		t.Fatalf("upgrade bootstrap direct End4 variant = %q, want %q", got, shellruntime.End4PC)
+	}
+	if got := shellruntime.BootstrapActiveShell(home, hyprDir); got != shellruntime.DefaultProfile {
+		t.Fatalf("fresh bootstrap consumed v1 direct End4 entrypoint: %q", got)
+	}
+
+	if err := os.WriteFile(entrypoint, []byte(migrationv1tov2.LegacyUserEntrypoint()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keybinds, []byte(shellruntime.AdapterMarker(shellruntime.Noctalia)+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := bootstrapActiveShellForUpgrade(home, hyprDir); got != shellruntime.Noctalia {
+		t.Fatalf("upgrade bootstrap legacy user profile = %q, want %q", got, shellruntime.Noctalia)
+	}
+
+	legacyState := migrationv1tov2.LegacyActiveShellStatePath(filepath.Join(home, ".local", "state"))
+	if err := os.MkdirAll(filepath.Dir(legacyState), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyState, []byte(shellruntime.End4+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := bootstrapActiveShellForUpgrade(home, hyprDir); got != shellruntime.End4 {
+		t.Fatalf("upgrade bootstrap legacy state = %q, want %q", got, shellruntime.End4)
+	}
+}
 
 func TestSetupV2rayNSkipsWhenTargetRootMissing(t *testing.T) {
 	home := t.TempDir()
@@ -214,7 +282,7 @@ func TestApplyKeepsTransitionRuntimeLoadableWhenMigrationFailsBeforeRename(t *te
 				if stage != hyprUserMigrationBeforeRename {
 					t.Fatalf("unexpected migration stage %q", stage)
 				}
-				if got := readTestFile(t, runtimePath); got != shellruntime.UserNamespaceTransitionEntrypoint() {
+				if got := readTestFile(t, runtimePath); got != migrationv1tov2.UserNamespaceTransitionEntrypoint() {
 					t.Fatalf("transition was not published before migration commit:\n%s", got)
 				}
 				return injected
@@ -230,7 +298,7 @@ func TestApplyKeepsTransitionRuntimeLoadableWhenMigrationFailsBeforeRename(t *te
 	if _, statErr := os.Lstat(filepath.Join(hyprDir, "user")); !os.IsNotExist(statErr) {
 		t.Fatalf("canonical adapter appeared after failed migration: %v", statErr)
 	}
-	if got := readTestFile(t, runtimePath); got != shellruntime.UserNamespaceTransitionEntrypoint() {
+	if got := readTestFile(t, runtimePath); got != migrationv1tov2.UserNamespaceTransitionEntrypoint() {
 		t.Fatalf("failed migration did not retain its loadable transition runtime:\n%s", got)
 	}
 }
@@ -260,7 +328,7 @@ func TestApplyRollsFinalizationBackToLoadableTransitionOnPublicationFailure(t *t
 	if info, statErr := os.Lstat(filepath.Join(hyprDir, "user")); statErr != nil || !info.IsDir() {
 		t.Fatalf("canonical adapter missing after final publication failure: info=%v err=%v", info, statErr)
 	}
-	if got := readTestFile(t, runtimePath); got != shellruntime.UserNamespaceTransitionEntrypoint() {
+	if got := readTestFile(t, runtimePath); got != migrationv1tov2.UserNamespaceTransitionEntrypoint() {
 		t.Fatalf("failed finalization did not roll back to the loadable transition:\n%s", got)
 	}
 }
@@ -984,7 +1052,7 @@ func TestApplyKeepsTransitionRuntimeLoadableAfterLateMigrationRollback(t *testin
 	if _, statErr := os.Lstat(filepath.Join(hyprDir, "user")); !os.IsNotExist(statErr) {
 		t.Fatalf("canonical adapter remains after late rollback: %v", statErr)
 	}
-	if got := readTestFile(t, runtimePath); got != shellruntime.UserNamespaceTransitionEntrypoint() {
+	if got := readTestFile(t, runtimePath); got != migrationv1tov2.UserNamespaceTransitionEntrypoint() {
 		t.Fatalf("late rollback did not retain its loadable transition runtime:\n%s", got)
 	}
 }

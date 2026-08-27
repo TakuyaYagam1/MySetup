@@ -241,7 +241,8 @@ end
 test_optional_require()
 
 local function test_user_namespace_transition()
-	local transition_path = source_root .. "/../../NixOS/home/shells/legacy-hypr-runtime/user-namespace-transition.lua"
+	local transition_path = source_root
+		.. "/../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-namespace-transition.lua"
 	local hypr_root = "/config/test/hypr"
 
 	local function run_transition(readable_namespaces, adapter_error)

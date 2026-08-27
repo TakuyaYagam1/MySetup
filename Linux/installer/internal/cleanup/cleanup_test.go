@@ -34,10 +34,13 @@ func TestRunDryRunPrintsCleanupCommands(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"rm -rf", "preview-*", ".cache/noctalia", "*.backup"} {
+	for _, want := range []string{"rm -rf", ".cache/noctalia"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected cleanup output to contain %q\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "preview-") {
+		t.Fatalf("cleanup must not claim unmarked wallpaper previews:\n%s", out)
 	}
 }
 
@@ -46,11 +49,9 @@ func TestReportForHomeListsCleanupCandidates(t *testing.T) {
 	report := ReportForHome(home)
 	for _, want := range []string{
 		"== Safe cleanup candidates ==",
-		filepath.Join(home, "Pictures/Wallpapers/preview-*"),
 		filepath.Join(home, ".cache/noctalia"),
 		filepath.Join(home, ".cache/nvim/treesitter"),
 		filepath.Join(home, ".local/share/nvim/treesitter"),
-		filepath.Join(home, ".config/**/*.backup"),
 	} {
 		if !strings.Contains(report, want) {
 			t.Fatalf("expected cleanup report to contain %q, got:\n%s", want, report)
@@ -59,9 +60,15 @@ func TestReportForHomeListsCleanupCandidates(t *testing.T) {
 	if strings.Contains(report, ".cache/thumbnails") {
 		t.Fatalf("thumbnail cache must not be a managed cleanup target, got:\n%s", report)
 	}
+	if strings.Contains(report, "*.backup") {
+		t.Fatalf("unowned Home Manager-style backups must not be cleanup targets, got:\n%s", report)
+	}
+	if strings.Contains(report, "preview-") {
+		t.Fatalf("unmarked wallpaper previews must not be cleanup targets, got:\n%s", report)
+	}
 }
 
-func TestRunSkipsMissingWallpaperDir(t *testing.T) {
+func TestRunDoesNotInvokeWallpaperFind(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	bin := t.TempDir()
 	if err := os.WriteFile(filepath.Join(bin, "rm"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
@@ -73,7 +80,7 @@ func TestRunSkipsMissingWallpaperDir(t *testing.T) {
 	t.Setenv("PATH", bin)
 
 	if err := Run(context.Background(), Options{Yes: true}); err != nil {
-		t.Fatalf("missing wallpaper dir should be skipped, got %v", err)
+		t.Fatalf("cleanup invoked the forbidden wallpaper find command: %v", err)
 	}
 }
 
@@ -81,7 +88,7 @@ func TestRunUsesStateHomeWhenProvided(t *testing.T) {
 	home := t.TempDir()
 	otherHome := t.TempDir()
 	t.Setenv("HOME", otherHome)
-	if err := os.MkdirAll(filepath.Join(home, "Pictures/Wallpapers"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".cache/noctalia"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -92,7 +99,7 @@ func TestRunUsesStateHomeWhenProvided(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if !strings.Contains(out, filepath.Join(home, "Pictures/Wallpapers/preview-*")) {
+	if !strings.Contains(out, filepath.Join(home, ".cache/noctalia")) {
 		t.Fatalf("cleanup should use state home, got:\n%s", out)
 	}
 	if strings.Contains(out, otherHome) {
@@ -103,14 +110,11 @@ func TestRunUsesStateHomeWhenProvided(t *testing.T) {
 func TestRunReturnsCleanupCommandError(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	if err := os.MkdirAll(filepath.Join(home, "Pictures/Wallpapers"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, ".cache/noctalia"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "rm"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(bin, "find"), []byte("#!/bin/sh\nexit 23\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(bin, "rm"), []byte("#!/bin/sh\nexit 23\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin)
@@ -119,8 +123,78 @@ func TestRunReturnsCleanupCommandError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected cleanup command error")
 	}
-	if !strings.Contains(err.Error(), "find failed") {
-		t.Fatalf("expected find failure, got %v", err)
+	if !strings.Contains(err.Error(), "rm failed") {
+		t.Fatalf("expected rm failure, got %v", err)
+	}
+}
+
+func TestRunPreservesUnmarkedWallpaperContentAndModes(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	wallpapers := filepath.Join(home, "Pictures", "Wallpapers")
+	nested := filepath.Join(wallpapers, "nested")
+	if err := os.MkdirAll(nested, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	preview := filepath.Join(wallpapers, "preview-user.png")
+	readonly := filepath.Join(nested, "readonly-user.png")
+	if err := os.WriteFile(preview, []byte("preview\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(readonly, []byte("nested\n"), 0o440); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Run(context.Background(), Options{Yes: true, Stdout: io.Discard}); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []struct {
+		path    string
+		content string
+		mode    os.FileMode
+	}{
+		{path: preview, content: "preview\n", mode: 0o640},
+		{path: readonly, content: "nested\n", mode: 0o440},
+	} {
+		data, err := os.ReadFile(item.path)
+		if err != nil || string(data) != item.content {
+			t.Fatalf("cleanup changed %s: data=%q err=%v", item.path, data, err)
+		}
+		info, err := os.Stat(item.path)
+		if err != nil || info.Mode().Perm() != item.mode {
+			t.Fatalf("cleanup changed %s mode: info=%v err=%v", item.path, info, err)
+		}
+	}
+}
+
+func TestRunPreservesUnownedHomeManagerStyleBackups(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	backup := filepath.Join(home, ".config", "nvim", "init.lua.backup")
+	if err := os.MkdirAll(filepath.Dir(backup), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	want := []byte("user-owned backup\n")
+	if err := os.WriteFile(backup, want, 0o640); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Run(context.Background(), Options{Yes: true, Stdout: io.Discard}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(backup)
+	if err != nil {
+		t.Fatalf("cleanup removed an unowned backup: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("cleanup changed an unowned backup: got %q want %q", got, want)
+	}
+	info, err := os.Stat(backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o640 {
+		t.Fatalf("cleanup changed backup mode: got %04o want 0640", info.Mode().Perm())
 	}
 }
 

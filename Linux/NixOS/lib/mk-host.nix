@@ -12,7 +12,7 @@
   hostname ? "NixOS",
   hostVars,
   hardware ? null,
-  hashedPassword ? null,
+  hashedPasswordFile ? null,
   secretsDir ? null,
   extraModules ? [ ],
   homeExtraModules ? [ ],
@@ -36,7 +36,7 @@ let
     localSystem = system;
     config = {
       allowUnfree = true;
-      allowInsecurePredicate = _: true;
+      permittedInsecurePackages = import ./permitted-insecure-packages.nix;
     };
   };
 
@@ -113,6 +113,12 @@ let
     lib.mkIf (homeExtraModules != [ ]) {
       home-manager.users.${config.wahrwelt.user.username}.imports = homeExtraModules;
     };
+
+  passwordModule =
+    { config, ... }:
+    lib.mkIf (hashedPasswordFile != null) {
+      users.users.${config.wahrwelt.user.username}.hashedPasswordFile = hashedPasswordFile;
+    };
 in
 nixpkgs.lib.nixosSystem {
   inherit system;
@@ -131,7 +137,7 @@ nixpkgs.lib.nixosSystem {
     hostModule
   ]
   ++ optionalPath hardware
-  ++ optionalPath hashedPassword
+  ++ lib.optional (hashedPasswordFile != null) passwordModule
   ++ [
     flakeModules.overlaysModule
     extraOverlaysModule

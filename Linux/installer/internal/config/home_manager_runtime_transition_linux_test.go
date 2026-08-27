@@ -64,32 +64,36 @@ func TestRenderedHomeManagerMigrationKeepsRuntimeLoadableAtFailureBoundaries(t *
 	}
 
 	for _, tt := range []struct {
-		name             string
-		fault            homeManagerRuntimeFault
-		wantNamespace    string
-		wantRuntime      string
-		wantAdapterProbe string
+		name              string
+		fault             homeManagerRuntimeFault
+		wantFailureMarker string
+		wantNamespace     string
+		wantRuntime       string
+		wantAdapterProbe  string
 	}{
 		{
-			name:             "failure before namespace move",
-			fault:            failHyprNamespaceMove,
-			wantNamespace:    "wahrwelt",
-			wantRuntime:      "transition",
-			wantAdapterProbe: "wahrwelt",
+			name:              "failure before namespace move",
+			fault:             failHyprNamespaceMove,
+			wantFailureMarker: "injected failure before Hypr namespace move",
+			wantNamespace:     "wahrwelt",
+			wantRuntime:       "transition",
+			wantAdapterProbe:  "wahrwelt",
 		},
 		{
-			name:             "failure immediately after namespace move",
-			fault:            failRuntimeFinalize,
-			wantNamespace:    "user",
-			wantRuntime:      "transition",
-			wantAdapterProbe: "user",
+			name:              "failure immediately after namespace move",
+			fault:             failRuntimeFinalize,
+			wantFailureMarker: "injected failure before runtime finalization",
+			wantNamespace:     "user",
+			wantRuntime:       "transition",
+			wantAdapterProbe:  "user",
 		},
 		{
-			name:             "later activation failure",
-			fault:            failAfterRuntime,
-			wantNamespace:    "user",
-			wantRuntime:      "canonical",
-			wantAdapterProbe: "user",
+			name:              "later activation failure",
+			fault:             failAfterRuntime,
+			wantFailureMarker: "injected later activation failure",
+			wantNamespace:     "user",
+			wantRuntime:       "canonical",
+			wantAdapterProbe:  "user",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -97,6 +101,9 @@ func TestRenderedHomeManagerMigrationKeepsRuntimeLoadableAtFailureBoundaries(t *
 			output, err := fixture.runMigration()
 			if err == nil {
 				t.Fatalf("faulted activation unexpectedly succeeded\n%s", output)
+			}
+			if !strings.Contains(output, tt.wantFailureMarker) {
+				t.Fatalf("faulted activation failed before intended boundary %q: %v\n%s", tt.wantFailureMarker, err, output)
 			}
 			fixture.assertNamespace(t, tt.wantNamespace)
 			fixture.assertRuntime(t, tt.wantRuntime)
@@ -152,7 +159,7 @@ func TestRenderedHomeManagerMigrationPreflightsEnd4BundleAssetsBeforeMutation(t 
 		t.Skipf("nix is unavailable: %v", err)
 	}
 
-	direct := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/end4.lua")
+	direct := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/end4.lua")
 	fixture := newHomeManagerRuntimeFixture(t, failMissingBundleAsset, "wahrwelt", direct)
 	ancillaryPaths := make([]string, 0, 5)
 	for _, name := range []string{
@@ -372,7 +379,7 @@ func TestRenderedHomeManagerMigrationTransitionsExactDirectTopLevelRuntime(t *te
 		t.Fatalf("faulted activation unexpectedly succeeded\n%s", output)
 	}
 	fixture.assertNamespace(t, "user")
-	transition := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/user-namespace-transition.lua")
+	transition := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-namespace-transition.lua")
 	if got := readContractFile(t, topLevel); got != transition {
 		t.Fatalf("direct top-level runtime is not interruption-safe:\n%s", got)
 	}
@@ -383,7 +390,7 @@ func TestRenderedHomeManagerMigrationPreservesDirectEnd4UntilCoherentBundleActiv
 		t.Skipf("nix is unavailable: %v", err)
 	}
 
-	legacyDir := "../../../NixOS/home/shells/legacy-hypr-runtime"
+	legacyDir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 	for _, profile := range []string{"end4", "end4-pc"} {
 		t.Run(profile, func(t *testing.T) {
 			direct := readContractFile(t, filepath.Join(legacyDir, profile+".lua"))
@@ -412,7 +419,7 @@ func TestRenderedHomeManagerMigrationStagesTopOnlyDirectEnd4BeforeStableLink(t *
 		t.Skipf("nix is unavailable: %v", err)
 	}
 
-	legacyDir := "../../../NixOS/home/shells/legacy-hypr-runtime"
+	legacyDir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 	for _, profile := range []string{"end4", "end4-pc"} {
 		for _, state := range []string{"absent", "legacy"} {
 			t.Run(profile+"_state_"+state, func(t *testing.T) {
@@ -583,7 +590,7 @@ func TestHomeManagerRuntimeActivationFinalizesTransitionEntrypoint(t *testing.T)
 	if err := os.Mkdir(runtimeDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	transition := "../../../NixOS/home/shells/legacy-hypr-runtime/user-namespace-transition.lua"
+	transition := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-namespace-transition.lua"
 	transitionContent := readContractFile(t, transition)
 	target := filepath.Join(runtimeDir, "hyprland.lua")
 	if err := os.WriteFile(target, []byte(transitionContent), 0o644); err != nil {
@@ -605,7 +612,7 @@ func TestHomeManagerRuntimeActivationFinalizesTransitionEntrypoint(t *testing.T)
 	idle := writeSource("hypridle.conf", "")
 	launcher := writeSource("shell-launcher.lua", "-- launcher\n")
 	keybinds := writeSource("shell-keybinds.lua", "-- keybinds\n")
-	end4Dir := "../../../NixOS/home/shells/legacy-hypr-runtime"
+	end4Dir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 
 	output, err := exec.Command(
 		"bash",
@@ -633,7 +640,7 @@ func TestHomeManagerRuntimeActivationFinalizesTransitionEntrypoint(t *testing.T)
 }
 
 func TestHomeManagerRuntimeActivationMigratesDirectEnd4AsCoherentBundle(t *testing.T) {
-	legacyDir := "../../../NixOS/home/shells/legacy-hypr-runtime"
+	legacyDir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 	tests := []struct {
 		name, directMain, variant, legacyProfile, wantProfile string
 	}{
@@ -816,7 +823,7 @@ func TestHomeManagerRuntimeActivationMigratesDirectEnd4AsCoherentBundle(t *testi
 }
 
 func TestHomeManagerRuntimeActivationRejectsUnknownEnd4AncillaryBeforeMutation(t *testing.T) {
-	legacyDir := "../../../NixOS/home/shells/legacy-hypr-runtime"
+	legacyDir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 	dir := t.TempDir()
 	runtimeDir := filepath.Join(dir, "runtime")
 	if err := os.Mkdir(runtimeDir, 0o700); err != nil {
@@ -864,7 +871,7 @@ func TestHomeManagerRuntimeActivationRejectsUnknownEnd4AncillaryBeforeMutation(t
 }
 
 func TestHomeManagerRuntimeActivationKeepsDirectMainAcrossBundleInterruption(t *testing.T) {
-	legacyDir := "../../../NixOS/home/shells/legacy-hypr-runtime"
+	legacyDir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 	dir := t.TempDir()
 	runtimeDir := filepath.Join(dir, "runtime")
 	if err := os.Mkdir(runtimeDir, 0o700); err != nil {
@@ -926,7 +933,7 @@ func TestHomeManagerRuntimeActivationKeepsDirectMainAcrossBundleInterruption(t *
 }
 
 func TestHomeManagerRuntimeActivationPersistsEnd4ProcessBeforeCanonicalCommit(t *testing.T) {
-	legacyDir := "../../../NixOS/home/shells/legacy-hypr-runtime"
+	legacyDir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 	dir := t.TempDir()
 	testBinary, err := os.Executable()
 	if err != nil {
@@ -1087,7 +1094,7 @@ func TestHomeManagerRuntimeActivationExecutesOnlyWithExactRuntimeIdentity(t *tes
 }
 
 func TestHomeManagerRuntimeActivationRejectsMixedProcessRuntimeDirectories(t *testing.T) {
-	legacyDir := "../../../NixOS/home/shells/legacy-hypr-runtime"
+	legacyDir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 	dir := t.TempDir()
 	testBinary, err := os.Executable()
 	if err != nil {
@@ -1164,7 +1171,7 @@ func TestRenderedHomeManagerSeedBuildsTopOnlyEnd4BundleBeforeCanonicalMain(t *te
 		t.Skipf("nix is unavailable: %v", err)
 	}
 
-	legacyDir := "../../../NixOS/home/shells/legacy-hypr-runtime"
+	legacyDir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
 	for _, test := range []struct {
 		name, variant, profile, quickshell string
 	}{
@@ -1248,7 +1255,7 @@ func TestRenderedHomeManagerLiveSyncUsesProcessRuntimeWithoutInheritedEnvironmen
 	if err := os.MkdirAll(runtimeDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	direct := readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/end4.lua")
+	direct := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/end4.lua")
 	if err := os.WriteFile(filepath.Join(runtimeDir, "hyprland.lua"), []byte(direct), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1530,18 +1537,19 @@ let
     xdg.stateHome = %q;
   };
   homeLibs.dotfiles.dotsRoot = builtins.toPath %q;
+  inputs = {};
   lib.hm.dag.entryAfter = _: text: text;
   pkgs = {
     bash = "/usr";
-    coreutils = "/usr";
+    coreutils = %q;
     python3 = "/usr";
     util-linux = "/usr";
     writeShellApplication = _: %q;
     writeText = name: text: builtins.toFile name text;
   };
-  module = import (builtins.toPath %q) { inherit config homeLibs lib pkgs; };
+  module = import (builtins.toPath %q) { inherit config homeLibs inputs lib pkgs; };
 in module.home.activation.seedHyprShellRuntime
-`, configHome, stateHome, dots, helperRoot, modulePath)
+`, configHome, stateHome, dots, commandPackageRoot(t, "cmp"), helperRoot, modulePath)
 	rendered, err := exec.Command("nix", "eval", "--impure", "--raw", "--expr", expression).CombinedOutput()
 	if err != nil {
 		t.Fatalf("render Home Manager shell seed: %v\n%s", err, rendered)
@@ -1569,18 +1577,19 @@ let
     xdg.stateHome = %q;
   };
   homeLibs.dotfiles.dotsRoot = builtins.toPath %q;
+  inputs = {};
   lib.hm.dag.entryAfter = _: text: text;
   pkgs = {
     bash = "/usr";
-    coreutils = "/usr";
+    coreutils = %q;
     python3 = "/usr";
     util-linux = "/usr";
     writeShellApplication = _: %q;
     writeText = name: text: builtins.toFile name text;
   };
-  module = import (builtins.toPath %q) { inherit config homeLibs lib pkgs; };
+  module = import (builtins.toPath %q) { inherit config homeLibs inputs lib pkgs; };
 in module.home.activation.seedHyprShellRuntime + "\n" + module.home.activation.liveSyncHyprShell
-`, configHome, stateHome, dots, helperRoot, modulePath)
+`, configHome, stateHome, dots, commandPackageRoot(t, "cmp"), helperRoot, modulePath)
 	rendered, err := exec.Command("nix", "eval", "--impure", "--raw", "--expr", expression).CombinedOutput()
 	if err != nil {
 		t.Fatalf("render Home Manager shell activation: %v\n%s", err, rendered)
@@ -1750,7 +1759,7 @@ func (fixture *homeManagerRuntimeFixture) assertRuntime(t *testing.T, want strin
 	var wantContent string
 	switch want {
 	case "transition":
-		wantContent = readContractFile(t, "../../../NixOS/home/shells/legacy-hypr-runtime/user-namespace-transition.lua")
+		wantContent = readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-namespace-transition.lua")
 	case "canonical":
 		wantContent = canonicalUserRuntimeFixture
 	default:
@@ -1882,7 +1891,7 @@ func absoluteTestPath(t *testing.T, path string) string {
 }
 
 func renderHomeManagerRuntimeTransitionForTest(home, configHome, stateHome, cacheHome, helperRoot string) string {
-	modulePath, err := filepath.Abs("../../../NixOS/home/programs/wahrwelt-migration.nix")
+	modulePath, err := filepath.Abs("../../../NixOS/home/migrations/v1_to_v2/user-paths.nix")
 	if err != nil {
 		panic(err)
 	}
@@ -1896,18 +1905,31 @@ let
   };
   lib.hm.dag.entryBefore = _: text: text;
   pkgs = {
-    coreutils = "/usr";
-    findutils = "/usr";
+    coreutils = %q;
+    findutils = %q;
+    gnugrep = %q;
     python3 = "/usr";
     writeShellApplication = _: %q;
     writeText = name: text: builtins.toFile name text;
   };
   module = import (builtins.toPath %q) { inherit config lib pkgs; };
 in module.home.activation.migrateWahrweltUserPaths
-`, home, configHome, stateHome, cacheHome, helperRoot, modulePath)
+`, home, configHome, stateHome, cacheHome,
+		commandRootForRuntimeTransition("cmp"),
+		commandRootForRuntimeTransition("find"),
+		commandRootForRuntimeTransition("grep"),
+		helperRoot, modulePath)
 	rendered, evalErr := exec.Command("nix", "eval", "--impure", "--raw", "--expr", expression).CombinedOutput()
 	if evalErr != nil {
 		panic(fmt.Sprintf("render Home Manager runtime transition: %v\n%s", evalErr, rendered))
 	}
 	return string(rendered)
+}
+
+func commandRootForRuntimeTransition(name string) string {
+	path, err := exec.LookPath(name)
+	if err != nil {
+		panic(fmt.Sprintf("locate %s for rendered runtime transition: %v", name, err))
+	}
+	return filepath.Dir(filepath.Dir(path))
 }

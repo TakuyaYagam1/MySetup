@@ -3,6 +3,7 @@
 set -euo pipefail
 
 scripts_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+installer_dir="$(CDPATH='' cd -- "$scripts_dir/../../../installer" && pwd)"
 runtime_script="$scripts_dir/shell-runtime.sh"
 selector_script="$scripts_dir/shell-selector.sh"
 noctalia_launcher="$scripts_dir/noctalia-launcher.sh"
@@ -59,6 +60,15 @@ create_state_namespace() {
   ' bash "$runtime_script" "$name" "$kind"
 }
 
+consumer_lock_name() {
+  case "${1##*/}" in
+    shell-selector.sh) printf '%s' wahrwelt-shell-selector-v2.lock ;;
+    noctalia-launcher.sh) printf '%s' wahrwelt-noctalia-launcher-v2.lock ;;
+    record-toggle.sh) printf '%s' wahrwelt-record-toggle-v2.lock ;;
+    *) return 1 ;;
+  esac
+}
+
 adopt_legacy_state_namespace() {
   local runtime="$1"
   local name="$2"
@@ -73,6 +83,8 @@ adopt_legacy_state_namespace() {
 
 home="$test_root/home"
 mkdir -m 0700 -- "$home"
+export WAHRWELT_FS_HELPER="$test_root/wahrwelt-fs-helper"
+(cd "$installer_dir" && go build -o "$WAHRWELT_FS_HELPER" ./cmd/wahrwelt-fs-helper)
 
 tmp_target="$test_root/tmp-target"
 mkdir -m 0755 -- "$tmp_target"
@@ -144,12 +156,14 @@ assert_file "$runtime/sentinel" 'unknown runtime bytes'
 
 for consumer in "$selector_script" "$noctalia_launcher" "$record_toggle"; do
   consumer_name="${consumer##*/}"
+  consumer_lock="$(consumer_lock_name "$consumer")"
   runtime="$test_root/runtime-consumer-${consumer_name%.sh}"
   runtime_saved="$test_root/runtime-consumer-${consumer_name%.sh}-original"
   videos="$test_root/videos-${consumer_name%.sh}"
   mkdir -m 0700 -- "$runtime"
   if HOME="$home" XDG_RUNTIME_DIR="$runtime" RUNTIME_SAVED="$runtime_saved" \
-    XDG_VIDEOS_DIR="$videos" \
+    XDG_VIDEOS_DIR="$videos" WAHRWELT_RUNTIME_LOCK_V2="$consumer_lock" \
+    WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
     bash -c '
       set -euo pipefail
       wahrwelt_after_runtime_directory_pin_hook() {
@@ -192,6 +206,7 @@ for consumer_spec in \
   consumer="${consumer_spec%%:*}"
   state_name="${consumer_spec#*:}"
   consumer_name="${consumer##*/}"
+  consumer_lock="$(consumer_lock_name "$consumer")"
   runtime="$test_root/runtime-state-link-${consumer_name%.sh}"
   state_target="$test_root/state-link-target-${consumer_name%.sh}"
   videos="$test_root/videos-state-link-${consumer_name%.sh}"
@@ -199,6 +214,7 @@ for consumer_spec in \
   printf '%s\n' 'state directory target bytes' >"$state_target/sentinel"
   ln -s -- "$state_target" "$runtime/$state_name"
   if HOME="$home" XDG_RUNTIME_DIR="$runtime" XDG_VIDEOS_DIR="$videos" \
+    WAHRWELT_RUNTIME_LOCK_V2="$consumer_lock" WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
     bash -c '
       set -euo pipefail
       command() {
@@ -233,12 +249,14 @@ for consumer_spec in \
   consumer="${consumer_spec%%:*}"
   state_name="${consumer_spec#*:}"
   consumer_name="${consumer##*/}"
+  consumer_lock="$(consumer_lock_name "$consumer")"
   runtime="$test_root/runtime-state-ordinary-${consumer_name%.sh}"
   state_dir="$runtime/$state_name"
   videos="$test_root/videos-state-ordinary-${consumer_name%.sh}"
   mkdir -m 0700 -- "$runtime" "$state_dir"
   printf '%s\n' 'ordinary unknown state bytes' >"$state_dir/sentinel"
   if HOME="$home" XDG_RUNTIME_DIR="$runtime" XDG_VIDEOS_DIR="$videos" \
+    WAHRWELT_RUNTIME_LOCK_V2="$consumer_lock" WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
     bash -c '
       command() {
         if [ "${1:-}" = -v ] && [ "${2:-}" = gpu-screen-recorder ]; then return 1; fi
@@ -333,6 +351,7 @@ mkdir -m 0755 -- "$state_dir"
 : >"$state_dir/interrupted"
 chmod 0644 -- "$state_dir/active" "$state_dir/interrupted"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" \
+  WAHRWELT_RUNTIME_LOCK_V2=wahrwelt-noctalia-launcher-v2.lock WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
   bash -c 'notify-send() { :; }; . "$1" press' bash "$noctalia_launcher" \
   >"$test_root/legacy-noctalia-stale-lock.out" 2>&1
 [ "$(stat -c %a -- "$state_dir")" = 700 ] || fail 'legacy noctalia state directory was not made private'
@@ -346,6 +365,7 @@ for marker in \
     fail "legacy noctalia ownership marker is missing or unsafe: $marker"
 done
 HOME="$home" XDG_RUNTIME_DIR="$runtime" \
+  WAHRWELT_RUNTIME_LOCK_V2=wahrwelt-noctalia-launcher-v2.lock WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
   bash -c 'notify-send() { :; }; . "$1" release' bash "$noctalia_launcher" \
   >"$test_root/legacy-noctalia-second-invocation.out" 2>&1 ||
   fail 'second noctalia invocation rejected recoveries from the first managed lock'
@@ -446,6 +466,7 @@ printf '%s\n' 999999 >"$state_dir/lock/pid"
 printf '%s\n' wahrwelt-noctalia-launcher >"$state_dir/lock/owner"
 chmod 0644 -- "$state_dir/lock/pid" "$state_dir/lock/owner"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" \
+  WAHRWELT_RUNTIME_LOCK_V2=wahrwelt-noctalia-launcher-v2.lock WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
   bash -c 'notify-send() { :; }; . "$1" press' bash "$noctalia_launcher"
 [ -f "$state_dir/.wahrwelt-state-owner" ] || fail 'exact stale-lock legacy noctalia state was not adopted'
 
@@ -454,6 +475,7 @@ state_dir="$runtime/wahrwelt-shell-selector"
 mkdir -m 0700 -- "$runtime"
 mkdir -m 0755 -- "$state_dir"
 if HOME="$home" XDG_RUNTIME_DIR="$runtime" \
+  WAHRWELT_RUNTIME_LOCK_V2=wahrwelt-shell-selector-v2.lock WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
   bash -c '. "$1" invalid-action' bash "$selector_script" \
   >"$test_root/legacy-selector-empty.out" 2>&1; then
   fail 'selector invalid-action unexpectedly succeeded'
@@ -598,8 +620,8 @@ release="$test_root/fresh-log-release"
 mkdir -m 0700 -- "$runtime"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" READY="$ready" RELEASE="$release" bash -c '
   set -euo pipefail
-  wahrwelt_after_legacy_managed_regular_preflight_hook() {
-    [ "${4:-}" = absent ] || return 0
+  wahrwelt_after_managed_regular_token_hook() {
+    [ "$1" = shell-log ] && [ "${4:-}" = 1 ] || return 0
     : >"$READY"
     while [ ! -e "$RELEASE" ]; do sleep 0.01; done
   }
@@ -768,6 +790,7 @@ mkdir -m 0755 -- "$state_dir"
 printf '%s\n' 'legacy consumer log payload' >"$state_dir/gpu-screen-recorder.log"
 chmod 0644 -- "$state_dir/gpu-screen-recorder.log"
 if HOME="$home" XDG_RUNTIME_DIR="$runtime" XDG_VIDEOS_DIR="$videos" \
+  WAHRWELT_RUNTIME_LOCK_V2=wahrwelt-record-toggle-v2.lock WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
   bash -c '
     command() {
       if [ "${1:-}" = -v ] && [ "${2:-}" = gpu-screen-recorder ]; then return 1; fi
@@ -790,6 +813,7 @@ mkdir -m 0700 -- "$runtime"
 printf '%s\n' 'selector log target bytes' >"$unknown_target"
 ln -s -- "$unknown_target" "$runtime/wahrwelt-shell.log"
 if HOME="$home" XDG_RUNTIME_DIR="$runtime" \
+  WAHRWELT_RUNTIME_LOCK_V2=wahrwelt-shell-selector-v2.lock WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
   bash -c '. "$1" invalid-action' bash "$selector_script" >"$test_root/selector-log-link.out" 2>&1; then
   fail 'shell selector adopted a symlink managed log'
 fi
@@ -804,6 +828,7 @@ create_state_namespace "$runtime" wahrwelt-noctalia-launcher noctalia-launcher-s
 printf '%s\n' 'noctalia active target bytes' >"$unknown_target"
 ln -s -- "$unknown_target" "$state_dir/active"
 if HOME="$home" XDG_RUNTIME_DIR="$runtime" \
+  WAHRWELT_RUNTIME_LOCK_V2=wahrwelt-noctalia-launcher-v2.lock WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
   bash -c '. "$1" press' bash "$noctalia_launcher" >"$test_root/noctalia-leaf-link.out" 2>&1; then
   fail 'noctalia launcher adopted a symlink marker leaf'
 fi
@@ -820,6 +845,7 @@ for recorder_leaf in gpu-screen-recorder.pid gpu-screen-recorder.path gpu-screen
   printf '%s\n' "recorder $recorder_leaf target bytes" >"$unknown_target"
   ln -s -- "$unknown_target" "$state_dir/$recorder_leaf"
   if HOME="$home" XDG_RUNTIME_DIR="$runtime" XDG_VIDEOS_DIR="$videos" \
+    WAHRWELT_RUNTIME_LOCK_V2=wahrwelt-record-toggle-v2.lock WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
     bash -c '
       command() {
         if [ "${1:-}" = -v ] && [ "${2:-}" = gpu-screen-recorder ]; then return 1; fi
@@ -842,6 +868,7 @@ create_state_namespace "$runtime" wahrwelt-noctalia-launcher noctalia-launcher-s
 printf '%s\n' 'ordinary active leaf bytes' >"$unknown_target"
 chmod 0600 -- "$unknown_target"
 if HOME="$home" XDG_RUNTIME_DIR="$runtime" \
+  WAHRWELT_RUNTIME_LOCK_V2=wahrwelt-noctalia-launcher-v2.lock WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
   bash -c '. "$1" press' bash "$noctalia_launcher" >"$test_root/noctalia-leaf-ordinary.out" 2>&1; then
   fail 'noctalia launcher adopted an unmarked ordinary marker leaf'
 fi
@@ -857,6 +884,7 @@ create_state_namespace "$runtime" wahrwelt-recording record-toggle-state
 printf '%s\n' 'ordinary recorder log bytes' >"$unknown_target"
 chmod 0600 -- "$unknown_target"
 if HOME="$home" XDG_RUNTIME_DIR="$runtime" XDG_VIDEOS_DIR="$videos" \
+  WAHRWELT_RUNTIME_LOCK_V2=wahrwelt-record-toggle-v2.lock WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
   bash -c '
     command() {
       if [ "${1:-}" = -v ] && [ "${2:-}" = gpu-screen-recorder ]; then return 1; fi
@@ -874,6 +902,7 @@ runtime="$test_root/runtime-state-token-race"
 state_saved="$test_root/state-token-original"
 mkdir -m 0700 -- "$runtime"
 if HOME="$home" XDG_RUNTIME_DIR="$runtime" STATE_SAVED="$state_saved" \
+  WAHRWELT_RUNTIME_LOCK_V2=wahrwelt-shell-selector-v2.lock WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
   bash -c '
     set -euo pipefail
     wahrwelt_after_private_state_directory_token_hook() {
@@ -895,6 +924,7 @@ unknown_target="$test_root/leaf-token-unknown"
 mkdir -m 0700 -- "$runtime"
 printf '%s\n' 'leaf winner target bytes' >"$unknown_target"
 if HOME="$home" XDG_RUNTIME_DIR="$runtime" LEAF_SAVED="$leaf_saved" UNKNOWN_TARGET="$unknown_target" \
+  WAHRWELT_RUNTIME_LOCK_V2=wahrwelt-noctalia-launcher-v2.lock WAHRWELT_RUNTIME_LOCK_V2_ROOT="$runtime" \
   bash -c '
     set -euo pipefail
     wahrwelt_after_managed_regular_token_hook() {
@@ -927,244 +957,56 @@ fi
 [ -d "$runtime_saved" ] || fail 'token-bound original runtime was not preserved'
 assert_file "$runtime/winner" 'runtime winner bytes'
 
-runtime="$test_root/runtime-lock-race"
+runtime="$test_root/runtime-lock-v2"
+lock_ready="$test_root/runtime-lock-v2-ready"
+lock_release="$test_root/runtime-lock-v2-release"
+lock_finished="$test_root/runtime-lock-v2-finished"
+lock_worker="$test_root/runtime-lock-v2-worker"
 mkdir -m 0700 -- "$runtime"
-lock_saved="$test_root/created-lock-original"
-HOME="$home" XDG_RUNTIME_DIR="$runtime" LOCK_SAVED="$lock_saved" \
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  '. "$RUNTIME_SCRIPT"' \
+  'wahrwelt_enter_runtime_lock_v2 wahrwelt-shell-v2.lock 0 97 false' \
+  '[ -z "${WAHRWELT_RUNTIME_LOCK_V2:-}" ]' \
+  '[ -z "${WAHRWELT_RUNTIME_LOCK_V2_ROOT:-}" ]' \
+  'if bash -c '\''set -euo pipefail; . "$1"; wahrwelt_enter_runtime_lock_v2 wahrwelt-shell-v2.lock 20 29 true'\'' bash "$RUNTIME_SCRIPT"; then exit 98; else status=$?; [ "$status" -eq 29 ]; fi' \
+  ': >"$LOCK_READY"' \
+  'while [ ! -e "$LOCK_RELEASE" ]; do sleep 0.005; done' \
+  ': >"$LOCK_FINISHED"' \
+  >"$lock_worker"
+chmod 0755 -- "$lock_worker"
+HOME="$home" XDG_RUNTIME_DIR="$runtime" RUNTIME_SCRIPT="$runtime_script" LOCK_READY="$lock_ready" \
+  LOCK_RELEASE="$lock_release" LOCK_FINISHED="$lock_finished" \
   bash -c '
     set -euo pipefail
     . "$1"
-    wahrwelt_after_private_directory_creator_hook() {
-      [ "$1" = lock-staging ] || return 0
-      mv -- "$2" "$LOCK_SAVED"
-      mkdir -m 0700 -- "$2"
-      printf "%s\n" "lock winner bytes" >"$2/winner"
-    }
-    if wahrwelt_begin_new_lock_directory "$wahrwelt_runtime_session_dir/test.lock"; then
-      exit 92
-    fi
-  ' bash "$runtime_script"
-[ -d "$lock_saved" ] || fail 'creator-owned lock recovery was not preserved'
-lock_staging_winner="$(find "$runtime" -maxdepth 2 -type f -path '*/.wahrwelt-lock-staging-test.lock-*/winner' -print -quit)"
-[ -n "$lock_staging_winner" ] || fail 'replacement lock staging winner disappeared'
-assert_file "$lock_staging_winner" 'lock winner bytes'
-
-runtime="$test_root/runtime-lock-staged-interruption"
-mkdir -m 0700 -- "$runtime"
+    wahrwelt_enter_runtime_lock_v2 wahrwelt-shell-v2.lock 0 1 "$2"
+  ' bash "$runtime_script" "$lock_worker" &
+lock_owner_pid=$!
+background_pids="$background_pids $lock_owner_pid"
+wait_for_file "$lock_ready"
+if HOME="$home" XDG_RUNTIME_DIR="$runtime" bash -c '
+  set -euo pipefail
+  . "$1"
+  wahrwelt_enter_runtime_lock_v2 wahrwelt-shell-v2.lock 30 23 true
+' bash "$runtime_script"; then
+  fail 'contending v2 abstract lock unexpectedly ran'
+else
+  lock_status=$?
+  [ "$lock_status" -eq 23 ] || fail "contending v2 lock status was $lock_status"
+fi
+: >"$lock_release"
+wait "$lock_owner_pid"
+wait_for_file "$lock_finished"
 HOME="$home" XDG_RUNTIME_DIR="$runtime" bash -c '
   set -euo pipefail
   . "$1"
-  lock="$wahrwelt_runtime_session_dir/interrupted.lock"
-  wahrwelt_begin_new_lock_directory "$lock"
-  wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" pid "999999
-"
-  [ ! -e "$XDG_RUNTIME_DIR/interrupted.lock" ]
-  wahrwelt_close_new_lock_directory
-  [ ! -e "$XDG_RUNTIME_DIR/interrupted.lock" ]
-  wahrwelt_begin_new_lock_directory "$lock"
-  wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" pid "999999
-"
-  wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" owner "wahrwelt-shell-selector
-"
-  wahrwelt_finish_new_lock_directory "$lock"
-  wahrwelt_known_lock_directory "$lock" "$lock/pid" "$lock/owner" wahrwelt-shell-selector
-' bash "$runtime_script" || fail 'interrupted unpublished lock could not be retried safely'
-[ -d "$runtime/interrupted.lock" ] || fail 'completed staged lock was not published'
-
-runtime="$test_root/runtime-lock-concurrent-publishers"
-ready_a="$test_root/concurrent-lock-ready-a"
-ready_b="$test_root/concurrent-lock-ready-b"
-publish_both="$test_root/concurrent-lock-publish"
-release_owner="$test_root/concurrent-lock-release-owner"
-acquired_a="$test_root/concurrent-lock-acquired-a"
-acquired_b="$test_root/concurrent-lock-acquired-b"
-mkdir -m 0700 -- "$runtime"
-for worker in a b; do
-  ready_var="$test_root/concurrent-lock-ready-$worker"
-  acquired_var="$test_root/concurrent-lock-acquired-$worker"
-  HOME="$home" XDG_RUNTIME_DIR="$runtime" READY="$ready_var" ACQUIRED="$acquired_var" \
-    PUBLISH="$publish_both" RELEASE_OWNER="$release_owner" bash -c '
-      set -euo pipefail
-      . "$1"
-      wahrwelt_before_lock_directory_publish_hook() {
-        unset -f wahrwelt_before_lock_directory_publish_hook
-        : >"$READY"
-        while [ ! -e "$PUBLISH" ]; do sleep 0.005; done
-      }
-      lock="$wahrwelt_runtime_session_dir/concurrent.lock"
-      wahrwelt_acquire_lock "$lock" "$lock/pid" "$lock/owner" \
-        wahrwelt-shell-selector "(^|[ /])bash([[:space:]]|$)" 200 0.005
-      : >"$ACQUIRED"
-      while [ ! -e "$RELEASE_OWNER" ]; do sleep 0.005; done
-      wahrwelt_release_owned_lock "$lock" "$wahrwelt_acquired_lock_identity" >/dev/null 2>&1
-    ' bash "$runtime_script" &
-  worker_pid=$!
-  background_pids="$background_pids $worker_pid"
-  if [ "$worker" = a ]; then
-    concurrent_pid_a="$worker_pid"
-  else
-    concurrent_pid_b="$worker_pid"
-  fi
-done
-wait_for_file "$ready_a"
-wait_for_file "$ready_b"
-: >"$publish_both"
-for _ in $(seq 1 200); do
-  if [ -e "$acquired_a" ] || [ -e "$acquired_b" ]; then
-    break
-  fi
-  sleep 0.01
-done
-if [ ! -e "$acquired_a" ] && [ ! -e "$acquired_b" ]; then
-  fail 'neither staged lock publisher acquired the canonical name'
+  wahrwelt_enter_runtime_lock_v2 wahrwelt-shell-v2.lock 100 1 true
+' bash "$runtime_script" || fail 'v2 abstract lock was not released after child exit'
+if find "$runtime" -mindepth 1 -name '*lock*' -print -quit | grep -q .; then
+  fail 'v2 abstract lock left a filesystem anchor'
 fi
-: >"$release_owner"
-concurrent_status=0
-wait "$concurrent_pid_a" || concurrent_status=$?
-wait "$concurrent_pid_b" || concurrent_status=$?
-[ "$concurrent_status" -eq 0 ] ||
-  fail 'staged lock publisher loser did not reclassify and acquire after the winner released'
-[ -e "$acquired_a" ] && [ -e "$acquired_b" ] ||
-  fail 'both staged lock publishers did not complete through one canonical lock'
-
-for boundary in begin owner-read quarantine; do
-  runtime="$test_root/runtime-lock-disappears-$boundary"
-  saved_lock="$test_root/disappeared-lock-$boundary"
-  mkdir -m 0700 -- "$runtime"
-  HOME="$home" XDG_RUNTIME_DIR="$runtime" BOUNDARY="$boundary" SAVED_LOCK="$saved_lock" \
-    bash -c '
-      set -euo pipefail
-      . "$1"
-      lock="$wahrwelt_runtime_session_dir/disappearing.lock"
-      wahrwelt_begin_new_lock_directory "$lock"
-      wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" pid "999999
-"
-      wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" owner "wahrwelt-shell-selector
-"
-      wahrwelt_finish_new_lock_directory "$lock"
-      move_classified_lock() {
-        mv -- "$lock" "$SAVED_LOCK"
-      }
-      case "$BOUNDARY" in
-        begin)
-          wahrwelt_after_new_lock_begin_failed_hook() {
-            unset -f wahrwelt_after_new_lock_begin_failed_hook
-            move_classified_lock
-          }
-          ;;
-        owner-read)
-          wahrwelt_after_lock_owner_read_hook() {
-            unset -f wahrwelt_after_lock_owner_read_hook
-            move_classified_lock
-          }
-          ;;
-        quarantine)
-          wahrwelt_after_lock_classification_hook() {
-            unset -f wahrwelt_after_lock_classification_hook
-            move_classified_lock
-          }
-          ;;
-      esac
-      wahrwelt_acquire_lock "$lock" "$lock/pid" "$lock/owner" \
-        wahrwelt-shell-selector never-matches 20 0.005
-      [ -d "$SAVED_LOCK" ]
-      wahrwelt_known_lock_directory "$lock" "$lock/pid" "$lock/owner" wahrwelt-shell-selector
-    ' bash "$runtime_script" ||
-    fail "lock disappearance at $boundary was treated as an unknown collision"
-done
-
-runtime="$test_root/runtime-quarantine-race"
-mkdir -m 0700 -- "$runtime"
-HOME="$home" XDG_RUNTIME_DIR="$runtime" \
-  bash -c '
-    set -euo pipefail
-    . "$1"
-    lock="$wahrwelt_runtime_session_dir/managed.lock"
-    wahrwelt_begin_new_lock_directory "$lock"
-    wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" pid "999999
-"
-    wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" owner "wahrwelt-shell-selector
-"
-    wahrwelt_finish_new_lock_directory "$lock"
-    identity="$wahrwelt_acquired_lock_identity"
-    injected=0
-    wahrwelt_before_lock_recovery_publish_hook() {
-      [ "$1" = "$lock" ] || return 0
-      if [ "$injected" -eq 0 ]; then
-        injected=1
-        mkdir -m 0700 -- "$2"
-        printf "%s\n" "quarantine winner bytes" >"$2/winner"
-      fi
-    }
-    wahrwelt_quarantine_owned_lock "$lock" "$identity"
-    [ ! -e "$lock" ]
-    [ "$wahrwelt_lock_recovery_identity" = "$identity" ]
-  ' bash "$runtime_script"
-quarantine_winner="$(find "$runtime" -type f -name winner -print -quit)"
-[ -n "$quarantine_winner" ] || fail 'quarantine replacement winner disappeared'
-assert_file "$quarantine_winner" 'quarantine winner bytes'
-
-runtime="$test_root/runtime-journal-race"
-mkdir -m 0700 -- "$runtime"
-saved_owner="$test_root/saved-lock-owner"
-unknown_target="$test_root/unknown-lock-target"
-HOME="$home" XDG_RUNTIME_DIR="$runtime" SAVED_OWNER="$saved_owner" UNKNOWN_TARGET="$unknown_target" \
-  bash -c '
-    set -euo pipefail
-    . "$1"
-    lock="$wahrwelt_runtime_session_dir/release.lock"
-    wahrwelt_begin_new_lock_directory "$lock"
-    wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" pid "999999
-"
-    wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" owner "wahrwelt-shell-selector
-"
-    wahrwelt_finish_new_lock_directory "$lock"
-    identity="$wahrwelt_acquired_lock_identity"
-    wahrwelt_before_lock_release_delete_hook() {
-      mv -- "$1/owner" "$SAVED_OWNER"
-      printf "%s\n" "unknown target bytes" >"$UNKNOWN_TARGET"
-      ln -s -- "$UNKNOWN_TARGET" "$1/owner"
-    }
-    if wahrwelt_release_owned_lock "$lock" "$identity"; then
-      exit 94
-    fi
-  ' bash "$runtime_script"
-assert_file "$saved_owner" 'wahrwelt-shell-selector'
-assert_file "$unknown_target" 'unknown target bytes'
-
-runtime="$test_root/runtime-recovery-report"
-durable_recovery="$test_root/durable-lock-recovery"
-recovery_report="$test_root/recovery-report"
-mkdir -m 0700 -- "$runtime"
-HOME="$home" XDG_RUNTIME_DIR="$runtime" DURABLE_RECOVERY="$durable_recovery" RECOVERY_REPORT="$recovery_report" \
-  bash -c '
-    set -euo pipefail
-    . "$1"
-    lock="$wahrwelt_runtime_session_dir/report.lock"
-    wahrwelt_begin_new_lock_directory "$lock"
-    wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" pid "999999
-"
-    wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" owner "wahrwelt-shell-selector
-"
-    wahrwelt_finish_new_lock_directory "$lock"
-    identity="$wahrwelt_acquired_lock_identity"
-    wahrwelt_before_lock_release_delete_hook() {
-      mv -- "$wahrwelt_lock_recovery_public_path" "$DURABLE_RECOVERY"
-      mkdir -m 0700 -- "$wahrwelt_lock_recovery_public_path"
-      printf "%s\n" "public recovery winner bytes" >"$wahrwelt_lock_recovery_public_path/winner"
-    }
-    wahrwelt_release_owned_lock "$lock" "$identity"
-    [ "$wahrwelt_lock_recovery_exact_path" = "$DURABLE_RECOVERY" ]
-    [ "$wahrwelt_lock_recovery_identity" = "$identity" ]
-    [ "$(wahrwelt_lock_identity "$wahrwelt_lock_recovery_exact_path")" = "$identity" ]
-    [ "$wahrwelt_lock_recovery_public_identity" != "$wahrwelt_lock_recovery_identity" ]
-    printf "%s\n%s\n" "$wahrwelt_lock_recovery_exact_path" "$wahrwelt_lock_recovery_identity" >"$RECOVERY_REPORT"
-  ' bash "$runtime_script"
-assert_file "$durable_recovery/owner" 'wahrwelt-shell-selector'
-public_winner="$(find "$runtime" -maxdepth 2 -type f -path '*/.wahrwelt-lock-quarantine-*/winner' -print -quit)"
-[ -n "$public_winner" ] || fail 'post-quarantine public recovery winner disappeared'
-assert_file "$public_winner" 'public recovery winner bytes'
-[ "$(sed -n '1p' "$recovery_report")" = "$durable_recovery" ] || fail 'durable recovery report path was not FD-derived'
 
 runtime="$test_root/runtime-end4-upgrade-state"
 mkdir -m 0700 -- "$runtime"

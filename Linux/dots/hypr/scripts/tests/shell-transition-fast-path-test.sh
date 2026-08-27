@@ -2,6 +2,7 @@
 set -euo pipefail
 
 source_scripts="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+installer_dir="$(CDPATH='' cd -- "$source_scripts/../../../installer" && pwd)"
 test_root="$(mktemp -d)"
 trap 'rm -rf -- "$test_root"' EXIT
 
@@ -28,9 +29,15 @@ mkdir -p \
   "$hypr_runtime_dir"
 chmod 0700 "$runtime_dir"
 
+(cd "$installer_dir" && go build -o "$fake_bin/wahrwelt-fs-helper" ./cmd/wahrwelt-fs-helper)
+export WAHRWELT_FS_HELPER="$fake_bin/wahrwelt-fs-helper"
+
 for helper in shell-runtime.sh shell-runtime-env.sh shell-profile-sync.sh shell-process.sh; do
   ln -s -- "$source_scripts/$helper" "$instrumented_scripts/$helper"
 done
+mkdir -p "$instrumented_scripts/migrations/v1_to_v2"
+ln -s -- "$source_scripts/migrations/v1_to_v2/runtime.sh" \
+  "$instrumented_scripts/migrations/v1_to_v2/runtime.sh"
 ln -s -- "$source_scripts/start-shell.sh" "$hypr_dir/scripts/start-shell.sh"
 
 printf '%s\n' '-- canonical user entrypoint fixture' >"$hypr_dir/user/hyprland.lua"
@@ -44,38 +51,31 @@ done
 cat >"$hooks" <<'EOF'
 WAHRWELT_TRANSITION_FAST_PATH_TEST_HOOKS=1
 
+if [ "${WAHRWELT_TEST_CAPTURE:-0}" -eq 1 ] && [ "${WAHRWELT_TEST_REPORT_TIMING:-0}" -eq 1 ]; then
+  printf 'hooks-ready-time:%s\n' "$EPOCHREALTIME" >>"$WAHRWELT_TEST_OPERATIONS"
+fi
+
 test_record_operation() {
   [ "${WAHRWELT_TEST_CAPTURE:-0}" -eq 1 ] || return 0
   printf '%s\n' "$1" >>"$WAHRWELT_TEST_OPERATIONS"
 }
 
-eval "$(declare -f wahrwelt_begin_exact_snapshot | sed '1s/^wahrwelt_begin_exact_snapshot /test_real_begin_exact_snapshot /')"
-wahrwelt_begin_exact_snapshot() {
-  test_record_operation "snapshot-begin:${2:-missing}"
-  test_real_begin_exact_snapshot "$@"
-}
+eval "$(declare -f wahrwelt_fs_begin | sed '1s/^wahrwelt_fs_begin /test_real_fs_begin /')"
+wahrwelt_fs_begin() {
+  local kind="$1"
+  local prefix
 
-eval "$(declare -f snapshot_exact_paths | sed '1s/^snapshot_exact_paths /test_real_snapshot_exact_paths /')"
-snapshot_exact_paths() {
-  local snapshot_name="${1##*/}"
-  case "$snapshot_name" in
-    .runtime-rollback-*) snapshot_name=.runtime-rollback- ;;
-    .state-switch-rollback-*) snapshot_name=.state-switch-rollback- ;;
-    .state-rollback-*) snapshot_name=.state-rollback- ;;
+  case "$kind" in
+    runtime) prefix=.runtime-rollback- ;;
+    state) prefix=.state-switch-rollback- ;;
+    *) prefix="unknown-$kind" ;;
   esac
-  test_record_operation "snapshot-paths:$snapshot_name:$(($# - 1))"
-  test_real_snapshot_exact_paths "$@"
-}
-
-eval "$(declare -f snapshot_read_field | sed '1s/^snapshot_read_field /test_real_snapshot_read_field /')"
-snapshot_read_field() {
-  if [ "${WAHRWELT_TEST_CAPTURE:-0}" -eq 1 ] &&
-    [ "${wahrwelt_test_before_shell_stop:-1}" -eq 1 ]; then
-    case "${2:-}" in
-      *.path) printf 'metadata-path-read:%s:%s\n' "${1##*/}" "$2" >>"$WAHRWELT_TEST_OPERATIONS" ;;
-    esac
+  test_record_operation "snapshot-begin:$prefix"
+  test_record_operation "snapshot-paths:$prefix:$(($# - 2))"
+  if [ "${WAHRWELT_TEST_REPORT_TIMING:-0}" -eq 1 ]; then
+    printf 'fs-begin-time:%s:%s\n' "$kind" "$EPOCHREALTIME" >>"$WAHRWELT_TEST_OPERATIONS"
   fi
-  test_real_snapshot_read_field "$@"
+  test_real_fs_begin "$@"
 }
 
 eval "$(declare -f write_regular_file | sed '1s/^write_regular_file /test_real_write_regular_file /')"
@@ -88,15 +88,31 @@ wait_for_session() {
   :
 }
 
+begin_spotify_focus_guard() {
+  :
+}
+
+finish_spotify_focus_guard() {
+  :
+}
+
+finish_spotify_focus_guard_async() {
+  :
+}
+
 sleep() {
   :
 }
 
-stop_quickshells() {
+stop_all_shells_for_switch() {
   wahrwelt_test_before_shell_stop=0
   if [ "${WAHRWELT_TEST_REPORT_TIMING:-0}" -eq 1 ]; then
     printf 'shell-stop-time:%s\n' "$EPOCHREALTIME" >>"$WAHRWELT_TEST_OPERATIONS"
   fi
+  test_record_operation shell-stop
+}
+
+stop_quickshells() {
   test_record_operation shell-stop
 }
 
@@ -191,10 +207,19 @@ operation_line() {
   grep -n -m1 -E -- "$pattern" "$operations" | cut -d: -f1 || true
 }
 
-# Bootstrap one canonical runtime. Its recovery residue is a baseline only;
-# the measured ordinary transition must not add more residue.
+# Bootstrap one canonical runtime. Successful work must own and remove every
+# temporary transaction artifact it created.
 : >"$operations"
 run_switch 0 caelestia
+bootstrap_residue="$({
+  find "$runtime_dir" "$hypr_runtime_dir" -maxdepth 1 \
+    \( -name '.runtime-rollback-*' -o -name '.state-switch-rollback-*' -o -name '.wahrwelt-runtime-stage-*' \) \
+    -print
+} 2>/dev/null || true)"
+if [ -n "$bootstrap_residue" ]; then
+  fail "successful bootstrap retained runtime transaction residue
+$bootstrap_residue"
+fi
 
 # Home Manager owns the public stable entrypoint as a current-generation
 # symlink on real installations. Exercise that topology on the measured leg.
@@ -207,10 +232,14 @@ ln -s -- "$hm_generation" "$hm_gcroot"
 ln -s -- "$hm_entrypoint" "$hypr_dir/hyprland.lua"
 
 : >"$operations"
-if [ "${WAHRWELT_TEST_REPORT_TIMING:-0}" -eq 1 ]; then
-  printf 'switch-start-time:%s\n' "$EPOCHREALTIME" >>"$operations"
-fi
+switch_started="$EPOCHREALTIME"
+printf 'switch-start-time:%s\n' "$switch_started" >>"$operations"
 run_switch 1 noctalia
+switch_finished="$EPOCHREALTIME"
+simulated_elapsed="$(awk -v start="$switch_started" -v finish="$switch_finished" 'BEGIN { printf "%.3f", finish - start }')"
+if ! awk -v elapsed="$simulated_elapsed" 'BEGIN { exit !(elapsed <= 2.000) }'; then
+  fail "deterministic ordinary shell swap took ${simulated_elapsed}s, budget is <=2.000s"
+fi
 
 if [ "$(tr -d '[:space:]' <"$state_dir/active-shell")" != noctalia ]; then
   fail 'ordinary transition did not persist the requested Noctalia profile'
@@ -281,6 +310,26 @@ if [ "${WAHRWELT_TEST_REPORT_TIMING:-0}" -eq 1 ]; then
       }
     }
   ' "$operations"
+  grep -E '^(hooks-ready|fs-begin)-time:' "$operations" || true
+fi
+
+ordinary_residue="$({
+  find "$runtime_dir" "$hypr_runtime_dir" -maxdepth 1 \
+    \( -name '.runtime-rollback-*' -o -name '.state-switch-rollback-*' -o -name '.wahrwelt-runtime-stage-*' \) \
+    -print
+} 2>/dev/null || true)"
+if [ -n "$ordinary_residue" ]; then
+  fail "successful ordinary transition retained runtime transaction residue
+$ordinary_residue"
+fi
+
+if [ "${WAHRWELT_TEST_FAST_ONLY:-0}" -eq 1 ]; then
+  if [ "$failures" -ne 0 ]; then
+    exit 1
+  fi
+  printf 'metric simulated-swap=%ss\n' "$simulated_elapsed"
+  printf 'OK shell transition fast path\n'
+  exit 0
 fi
 
 : >"$operations"

@@ -2,7 +2,6 @@ package shellruntime
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
 	"golang.org/x/sys/unix"
 )
 
@@ -35,6 +35,25 @@ func TestRuntimeContractMatchesNixSource(t *testing.T) {
 	} {
 		if !reflect.DeepEqual(pair.got, pair.want) {
 			t.Fatalf("%s drifted from manifest\nGo:  %#v\nManifest: %#v", name, pair.got, pair.want)
+		}
+	}
+}
+
+func TestFreshRuntimeDoesNotOwnV1MigrationRecognizers(t *testing.T) {
+	data, err := os.ReadFile("shellruntime.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, forbidden := range []string{
+		"internal/migrations/v1_to_v2",
+		`dofile(hypr_root .. "/wahrwelt/hyprland.lua")`,
+		"Wahrwelt Hypr user namespace transition entrypoint",
+		"legacyDirectEnd4Entrypoint",
+		"LegacyActiveShellStatePath",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("fresh shell runtime owns v1 migration recognizer %q", forbidden)
 		}
 	}
 }
@@ -299,8 +318,8 @@ func TestDetectShellFromEntrypointUsesEntrypointAndKeybinds(t *testing.T) {
 	if err := os.WriteFile(entrypoint, legacyEnd4Fixture(t, End4), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := DetectShellFromEntrypointWithEnd4VariantForConfigHome(entrypoint, keybinds, "", configHome); got != End4 {
-		t.Fatalf("expected end4 profile, got %q", got)
+	if got := DetectShellFromEntrypointWithEnd4VariantForConfigHome(entrypoint, keybinds, "", configHome); got != "" {
+		t.Fatalf("fresh runtime detected v1 direct End4 profile: %q", got)
 	}
 
 	if err := os.WriteFile(entrypoint, []byte(CanonicalEntrypoint()), 0o644); err != nil {
@@ -343,53 +362,20 @@ func TestDetectShellFromKeybindsRequiresExactFirstLineMarker(t *testing.T) {
 	}
 }
 
-func TestLegacyDirectEnd4EntrypointIsMigrationFallbackOnly(t *testing.T) {
+func TestFreshRuntimeRejectsV1DirectEnd4Entrypoints(t *testing.T) {
 	dir := t.TempDir()
-	configHome := filepath.Join(dir, ".config")
 	entrypoint := filepath.Join(dir, "hyprland.lua")
 	keybinds := filepath.Join(dir, "shell-keybinds.lua")
 	variant := filepath.Join(dir, "end4-variant")
-	if err := os.WriteFile(entrypoint, legacyEnd4Fixture(t, End4PC), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	if err := os.WriteFile(variant, []byte(End4PC+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if !IsLegacyDirectEnd4EntrypointForConfigHome(entrypoint, configHome) {
-		t.Fatal("known generated direct End4 entrypoint was not recognized")
-	}
-	if got := DetectShellFromEntrypointWithEnd4VariantForConfigHome(entrypoint, keybinds, variant, configHome); got != End4PC {
-		t.Fatalf("legacy migration profile = %q, want %q", got, End4PC)
-	}
-
-	fixture := legacyEnd4Fixture(t, End4PC)
-	computedPath := filepath.ToSlash(filepath.Join(configHome, "hypr", "end4", "hyprland.lua"))
-	for name, content := range map[string]string{
-		"prefix":                         "-- custom prefix\n" + string(fixture),
-		"suffix":                         string(fixture) + "-- custom suffix\n",
-		"truncated":                      string(fixture[:len(fixture)-24]),
-		"missing final newline":          strings.TrimSuffix(string(fixture), "\n"),
-		"altered content":                strings.Replace(string(fixture), "locate end4 Hyprland config", "locate custom Hyprland config", 1),
-		"variable form without payload":  `dofile(end4_root .. "/hyprland.lua")` + "\n",
-		"arbitrary string":               `local note = "dofile(end4_root .. \"/hyprland.lua\")"` + "\n",
-		"unsupported absolute shorthand": `dofile("` + computedPath + `")` + "\n",
-		"tmp custom suffix":              `dofile("/tmp/custom/end4/hyprland.lua")` + "\n",
-		"other suffix path":              `dofile("` + filepath.ToSlash(filepath.Join(dir, "other", "end4", "hyprland.lua")) + `")` + "\n",
-	} {
-		t.Run(name, func(t *testing.T) {
-			if err := os.WriteFile(entrypoint, []byte(content), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			if IsLegacyDirectEnd4EntrypointForConfigHome(entrypoint, configHome) ||
-				DetectShellFromEntrypointWithEnd4VariantForConfigHome(entrypoint, keybinds, variant, configHome) != "" {
-				t.Fatalf("non-generated entrypoint was detected as direct End4: %q", content)
-			}
-		})
-	}
-
 	for _, profile := range []string{End4, End4PC} {
-		if got := legacyEnd4Fixture(t, profile); string(got) != legacyDirectEnd4Entrypoint(profile) {
-			t.Fatalf("versioned %s fixture drifted from exact recognizer payload", profile)
+		if err := os.WriteFile(entrypoint, legacyEnd4Fixture(t, profile), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if got := DetectShellFromEntrypointWithEnd4Variant(entrypoint, keybinds, variant); got != "" {
+			t.Fatalf("fresh runtime detected v1 %s entrypoint as %q", profile, got)
 		}
 	}
 }
@@ -431,99 +417,36 @@ func TestCanonicalEntrypointRequiresCompleteExactPayload(t *testing.T) {
 	}
 }
 
-func TestUserNamespaceTransitionEntrypointMatchesSharedPayload(t *testing.T) {
-	payloadPath := filepath.Join("../../../NixOS/home/shells/legacy-hypr-runtime", "user-namespace-transition.lua")
-	payload, err := os.ReadFile(payloadPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := UserNamespaceTransitionEntrypoint(); got != string(payload) {
-		t.Fatalf("Go transition payload drifted from %s\nGo:\n%s\nShared:\n%s", payloadPath, got, payload)
-	}
-
+func TestFreshRuntimeRejectsAllV1MigrationEntrypoints(t *testing.T) {
 	entrypoint := filepath.Join(t.TempDir(), "hyprland.lua")
-	if err := os.WriteFile(entrypoint, payload, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if !IsUserNamespaceTransitionEntrypoint(entrypoint) {
-		t.Fatal("exact user namespace transition payload was not recognized")
-	}
 	keybinds := filepath.Join(filepath.Dir(entrypoint), "shell-keybinds.lua")
 	if err := os.WriteFile(keybinds, []byte(AdapterMarker(Noctalia)+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := DetectShellFromEntrypoint(entrypoint, keybinds); got != Noctalia {
-		t.Fatalf("transition profile = %q, want %q from exact keybind marker", got, Noctalia)
-	}
 	for name, content := range map[string]string{
-		"prefix":          "-- custom prefix\n" + string(payload),
-		"suffix":          string(payload) + "-- custom suffix\n",
-		"missing newline": strings.TrimSuffix(string(payload), "\n"),
-		"truncated":       string(payload[:len(payload)-20]),
+		"transition": migrationv1tov2.UserNamespaceTransitionEntrypoint(),
+		"old user":   migrationv1tov2.LegacyUserEntrypoint(),
+		"old HM user": migrationv1tov2.LegacyHomeManagerUserEntrypoint(
+			DefaultProfile,
+		),
+		"seeded wahrwelt": migrationv1tov2.HistoricalHomeManagerSeededUserEntrypoint(
+			DefaultProfile,
+			migrationv1tov2.LegacyWahrweltNamespace,
+		),
+		"seeded user": migrationv1tov2.HistoricalHomeManagerSeededUserEntrypoint(
+			DefaultProfile,
+			migrationv1tov2.CanonicalUserNamespace,
+		),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := os.WriteFile(entrypoint, []byte(content), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if IsUserNamespaceTransitionEntrypoint(entrypoint) {
-				t.Fatalf("non-exact transition payload %q was accepted", name)
+			if got := DetectShellFromEntrypoint(entrypoint, keybinds); got != "" {
+				t.Fatalf("fresh runtime detected v1 %s entrypoint as %q", name, got)
 			}
 		})
 	}
-}
-
-func TestHistoricalHomeManagerSeededUserEntrypointsAreExactMigrationInputs(t *testing.T) {
-	dir := t.TempDir()
-	entrypoint := filepath.Join(dir, "hyprland.lua")
-	keybinds := filepath.Join(dir, "shell-keybinds.lua")
-	if err := os.WriteFile(keybinds, []byte(AdapterMarker(End4PC)+"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	for _, namespace := range []string{"wahrwelt", "user"} {
-		t.Run(namespace, func(t *testing.T) {
-			payload := historicalHomeManagerSeededUserFixture(namespace)
-			if err := os.WriteFile(entrypoint, []byte(payload), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			if !IsHistoricalHomeManagerSeededUserEntrypoint(entrypoint) {
-				t.Fatalf("historical Home Manager %s runtime was not recognized", namespace)
-			}
-			if got := DetectShellFromEntrypoint(entrypoint, keybinds); got != End4PC {
-				t.Fatalf("historical Home Manager %s profile = %q, want %q", namespace, got, End4PC)
-			}
-			for name, content := range map[string]string{
-				"prefix":          "-- custom\n" + payload,
-				"suffix":          payload + "-- custom\n",
-				"missing newline": strings.TrimSuffix(payload, "\n"),
-			} {
-				t.Run(name, func(t *testing.T) {
-					if err := os.WriteFile(entrypoint, []byte(content), 0o644); err != nil {
-						t.Fatal(err)
-					}
-					if IsHistoricalHomeManagerSeededUserEntrypoint(entrypoint) {
-						t.Fatalf("historical runtime lookalike %q was accepted", name)
-					}
-				})
-			}
-		})
-	}
-}
-
-func historicalHomeManagerSeededUserFixture(namespace string) string {
-	return fmt.Sprintf(`-- Active Hyprland profile: wahrwelt (%s)
-local home = os.getenv("HOME")
-if home == nil then
-    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
-end
-
-local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-local state_home = os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")
-local hypr_root = config_home .. "/hypr"
-local runtime_root = state_home .. "/wahrwelt/hypr-runtime"
-package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-dofile(hypr_root .. "/%s/hyprland.lua")
-dofile(runtime_root .. "/shell-profile.lua")
-`, DefaultProfile, namespace)
 }
 
 func TestBootstrapActiveShellPriorityAndFallback(t *testing.T) {
@@ -564,7 +487,7 @@ func TestBootstrapActiveShellPriorityAndFallback(t *testing.T) {
 	}
 }
 
-func TestBootstrapActiveShellRemembersExactEnd4Variant(t *testing.T) {
+func TestFreshBootstrapIgnoresV1DirectEnd4Variant(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "")
 
 	home := t.TempDir()
@@ -580,15 +503,15 @@ func TestBootstrapActiveShellRemembersExactEnd4Variant(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := BootstrapActiveShell(home, hyprDir); got != "end4-pc" {
-		t.Fatalf("end4 entrypoint should restore remembered pC variant, got %q", got)
+	if got := BootstrapActiveShell(home, hyprDir); got != DefaultProfile {
+		t.Fatalf("fresh bootstrap detected v1 direct End4 entrypoint as %q", got)
 	}
 
 	if err := os.WriteFile(variantPath, []byte("../../untrusted\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := BootstrapActiveShell(home, hyprDir); got != End4 {
-		t.Fatalf("invalid remembered variant must fall back to official end4, got %q", got)
+	if got := BootstrapActiveShell(home, hyprDir); got != DefaultProfile {
+		t.Fatalf("fresh bootstrap used invalid v1 variant as %q", got)
 	}
 }
 
@@ -666,7 +589,7 @@ func TestImmutableHomeManagerEnd4SourceShape(t *testing.T) {
 func legacyEnd4Fixture(t *testing.T, profile string) []byte {
 	t.Helper()
 	name := profile + ".lua"
-	data, err := os.ReadFile(filepath.Join("../../../NixOS/home/shells/legacy-hypr-runtime", name))
+	data, err := os.ReadFile(filepath.Join("../../../NixOS/home/migrations/v1_to_v2/hypr-runtime", name))
 	if err != nil {
 		t.Fatal(err)
 	}

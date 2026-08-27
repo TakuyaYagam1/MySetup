@@ -14,9 +14,6 @@ let
     "input"
     "kvm"
   ];
-  developerGroups = [
-    "docker"
-  ];
   personalGroups = [
     "libvirtd"
     "adbusers"
@@ -32,7 +29,6 @@ in
     description = config.wahrwelt.user.fullName;
     extraGroups =
       baseGroups
-      ++ lib.optionals (wahrweltLib.presets.developerOrMore config.wahrwelt) developerGroups
       ++ lib.optionals (wahrweltLib.presets.personal config.wahrwelt) personalGroups
       ++ lib.optionals config.wahrwelt.features.ctfTools ctfGroups;
   };

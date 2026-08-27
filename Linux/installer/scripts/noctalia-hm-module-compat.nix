@@ -52,7 +52,9 @@ let
       inherit pkgs;
       modules = [ provider.lib.homeManagerModules.shells ];
       extraSpecialArgs = {
-        inputs = source.inputs;
+        inputs = source.inputs // {
+          self = source;
+        };
         inherit wahrwelt wahrweltLib;
         mysetup = wahrwelt;
         mysetupLib = wahrweltLib;

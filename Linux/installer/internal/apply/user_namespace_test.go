@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
+	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 )
@@ -2340,6 +2341,41 @@ func (r *selectivePrivilegedRunner) Output(ctx context.Context, name string, arg
 
 func (*selectivePrivilegedRunner) IsDryRun() bool { return false }
 
+func outputPinnedAndRecord(
+	ctx context.Context,
+	directory *os.File,
+	calls *[]fakeCall,
+	name string,
+	args ...string,
+) (string, error) {
+	*calls = append(*calls, fakeCall{name: name, args: append([]string(nil), args...)})
+	return runValidatedStagingPinnedOutput(ctx, directory, name, args...)
+}
+
+func (r *backupMigrationCollisionRunner) OutputInPinnedDirectory(ctx context.Context, directory *os.File, name string, args ...string) (string, error) {
+	return outputPinnedAndRecord(ctx, directory, &r.calls, name, args...)
+}
+
+func (r *backupPreflightCollisionRunner) OutputInPinnedDirectory(ctx context.Context, directory *os.File, name string, args ...string) (string, error) {
+	return outputPinnedAndRecord(ctx, directory, &r.calls, name, args...)
+}
+
+func (r *backupMigrationFailureRunner) OutputInPinnedDirectory(ctx context.Context, directory *os.File, name string, args ...string) (string, error) {
+	return outputPinnedAndRecord(ctx, directory, &r.calls, name, args...)
+}
+
+func (r *postMigrationSyncFailureRunner) OutputInPinnedDirectory(ctx context.Context, directory *os.File, name string, args ...string) (string, error) {
+	return outputPinnedAndRecord(ctx, directory, &r.calls, name, args...)
+}
+
+func (r *postMigrationDotsFailureRunner) OutputInPinnedDirectory(ctx context.Context, directory *os.File, name string, args ...string) (string, error) {
+	return outputPinnedAndRecord(ctx, directory, &r.calls, name, args...)
+}
+
+func (r *selectivePrivilegedRunner) OutputInPinnedDirectory(ctx context.Context, directory *os.File, name string, args ...string) (string, error) {
+	return outputPinnedAndRecord(ctx, directory, &r.calls, name, args...)
+}
+
 func TestFailedCanonicalStateWriteLeavesLegacyStateUntouched(t *testing.T) {
 	repo, dest := fakeRepo(t)
 	runner := &selectivePrivilegedRunner{failState: true}
@@ -2354,7 +2390,7 @@ func TestFailedCanonicalStateWriteLeavesLegacyStateUntouched(t *testing.T) {
 	if err := Run(context.Background(), opts); err == nil {
 		t.Fatal("expected state write error")
 	}
-	if commands := commandSummary(runner.calls); strings.Contains(commands, "sudo find -P "+filepath.Dir(paths.LegacyWahrweltStatePath)) {
+	if commands := commandSummary(runner.calls); strings.Contains(commands, "sudo find -P "+filepath.Dir(migrationv1tov2.LegacyWahrweltStatePath)) {
 		t.Fatalf("failed state write must not clean legacy state, got:\n%s", commands)
 	}
 }
@@ -2417,7 +2453,7 @@ func TestCustomStatePathDoesNotCleanLegacyState(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatal(err)
 	}
-	if commands := commandSummary(runner.calls); strings.Contains(commands, "sudo find -P "+filepath.Dir(paths.LegacyWahrweltStatePath)) {
+	if commands := commandSummary(runner.calls); strings.Contains(commands, "sudo find -P "+filepath.Dir(migrationv1tov2.LegacyWahrweltStatePath)) {
 		t.Fatalf("custom state path must not clean legacy state, got:\n%s", commands)
 	}
 }

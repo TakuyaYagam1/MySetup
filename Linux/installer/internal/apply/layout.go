@@ -51,10 +51,3 @@ func hardwareRel(layout Layout) string {
 	}
 	return "hardware-configuration.nix"
 }
-
-func hashedPasswordRel(layout Layout) string {
-	if layout == LayoutFull {
-		return "hosts/NixOS/hashed-password.nix"
-	}
-	return "hashed-password.nix"
-}

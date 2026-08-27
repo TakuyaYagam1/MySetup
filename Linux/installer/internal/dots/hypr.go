@@ -21,7 +21,7 @@ func syncHypr(ctx context.Context, runner run.CommandRunner, dotsSrc, configDir 
 	}
 	dst := filepath.Join(configDir, "hypr")
 	home := homeDirFromConfigDir(configDir)
-	activeProfile := shellruntime.BootstrapActiveShell(home, dst)
+	activeProfile := bootstrapActiveShellForUpgrade(home, dst)
 
 	if err := prepareHyprDestination(ctx, runner, dst, state.User.Username); err != nil {
 		return err

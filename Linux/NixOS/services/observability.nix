@@ -7,24 +7,11 @@
 }:
 
 let
-  grafanaSecretKeyPath = "/var/lib/grafana/secret_key";
-  ensureGrafanaSecretKey = pkgs.writeShellScript "wahrwelt-grafana-secret-key" ''
-    set -eu
-
-    data_dir=/var/lib/grafana
-    secret_key="$data_dir/secret_key"
-
-    ${pkgs.coreutils}/bin/mkdir -p "$data_dir"
-    ${pkgs.coreutils}/bin/chown grafana:grafana "$data_dir"
-    ${pkgs.coreutils}/bin/chmod 0750 "$data_dir"
-
-    if [ ! -s "$secret_key" ]; then
-      umask 077
-      ${pkgs.openssl}/bin/openssl rand -hex 32 > "$secret_key"
-      ${pkgs.coreutils}/bin/chown grafana:grafana "$secret_key"
-      ${pkgs.coreutils}/bin/chmod 0600 "$secret_key"
-    fi
-  '';
+  grafanaSecretDirectory = "/var/lib/wahrwelt/grafana";
+  grafanaSecretKeyPath = "${grafanaSecretDirectory}/secret_key";
+  grafanaSecretKeyTool = pkgs.writeText "wahrwelt-grafana-secret-key.py" (
+    builtins.readFile ./grafana-secret-key.py
+  );
 in
 {
   config = lib.mkIf config.wahrwelt.features.observability {
@@ -44,6 +31,7 @@ in
 
       prometheus = {
         enable = true;
+        listenAddress = "127.0.0.1";
         port = wahrweltLib.ports.prometheus;
         scrapeConfigs = [
           {
@@ -60,6 +48,7 @@ in
         exporters.node = {
           enable = true;
           enabledCollectors = [ "systemd" ];
+          listenAddress = "127.0.0.1";
           port = wahrweltLib.ports.prometheusNodeExporter;
         };
       };
@@ -67,7 +56,11 @@ in
       loki = {
         enable = true;
         configuration = {
-          server.http_listen_port = wahrweltLib.ports.loki;
+          server = {
+            http_listen_address = "127.0.0.1";
+            http_listen_port = wahrweltLib.ports.loki;
+            grpc_listen_address = "127.0.0.1";
+          };
           auth_enabled = false;
 
           common = {
@@ -103,7 +96,40 @@ in
       requiredBy = [ "grafana.service" ];
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = ensureGrafanaSecretKey;
+        Group = "grafana";
+        StateDirectory = "wahrwelt/grafana";
+        StateDirectoryMode = "0750";
+        UMask = "0027";
+        ExecStart = "${pkgs.python3}/bin/python3 ${grafanaSecretKeyTool} ${grafanaSecretDirectory} root grafana";
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectHome = true;
+        ProtectSystem = "strict";
+        ReadWritePaths = [ grafanaSecretDirectory ];
+      };
+    };
+
+    systemd.services.wahrwelt-v1-to-v2-grafana-secret-key = {
+      description = "Migrate the v1 Grafana secret into root-owned storage";
+      before = [ "wahrwelt-grafana-secret-key.service" ];
+      requiredBy = [ "wahrwelt-grafana-secret-key.service" ];
+      unitConfig.ConditionPathExists = [
+        "/var/lib/grafana/secret_key"
+        "!${grafanaSecretKeyPath}"
+      ];
+      serviceConfig = {
+        Type = "oneshot";
+        Group = "grafana";
+        StateDirectory = "wahrwelt/grafana";
+        StateDirectoryMode = "0750";
+        UMask = "0027";
+        ExecStart = "${pkgs.python3}/bin/python3 ${grafanaSecretKeyTool} ${grafanaSecretDirectory} root grafana /var/lib/grafana/secret_key";
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectHome = true;
+        ProtectSystem = "strict";
+        ReadOnlyPaths = [ "/var/lib/grafana" ];
+        ReadWritePaths = [ grafanaSecretDirectory ];
       };
     };
   };

@@ -37,46 +37,6 @@ local hypr_root = config_home .. "/hypr"
 package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
 dofile(hypr_root .. "/user/hyprland.lua")
 `
-	legacyUserEntrypoint = `-- Wahrwelt canonical Hyprland runtime entrypoint
-local home = os.getenv("HOME")
-if home == nil then
-    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
-end
-
-local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-local hypr_root = config_home .. "/hypr"
-package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-dofile(hypr_root .. "/wahrwelt/hyprland.lua")
-`
-	userNamespaceTransitionEntrypoint = `-- Wahrwelt Hypr user namespace transition entrypoint
-local home = os.getenv("HOME")
-if home == nil then
-    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
-end
-
-local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-local hypr_root = config_home .. "/hypr"
-package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-
-local readable_adapters = {}
-for _, namespace in ipairs({ "user", "wahrwelt" }) do
-    local path = hypr_root .. "/" .. namespace .. "/hyprland.lua"
-    local file = io.open(path, "r")
-    if file ~= nil then
-        file:close()
-        table.insert(readable_adapters, path)
-    end
-end
-
-if #readable_adapters ~= 1 then
-    error(
-        "Wahrwelt user namespace transition: expected exactly one readable Hypr user adapter, found "
-            .. #readable_adapters
-    )
-end
-
-dofile(readable_adapters[1])
-`
 )
 
 var (
@@ -242,10 +202,6 @@ dofile(hypr_root .. "/user/hyprland.lua")
 `, DefaultProfile)
 }
 
-func UserNamespaceTransitionEntrypoint() string {
-	return userNamespaceTransitionEntrypoint
-}
-
 func RuntimeDir(home string) string {
 	return filepath.Join(paths.XDGStateHome(home), "wahrwelt", "hypr-runtime")
 }
@@ -330,23 +286,16 @@ func DetectShellFromEntrypointWithEnd4Variant(entrypointPath, keybindsPath, end4
 	return DetectShellFromEntrypointWithEnd4VariantForConfigHome(entrypointPath, keybindsPath, end4VariantPath, "")
 }
 
-func DetectShellFromEntrypointWithEnd4VariantForConfigHome(entrypointPath, keybindsPath, end4VariantPath, _ string) string {
+func DetectShellFromEntrypointWithEnd4VariantForConfigHome(entrypointPath, keybindsPath, _ string, _ string) string {
 	data, err := os.ReadFile(entrypointPath)
 	if err != nil {
 		return ""
 	}
 	text := string(data)
-	switch {
-	case isKnownGeneratedDirectEnd4Entrypoint(text):
-		if end4VariantPath != "" {
-			return ReadEnd4Variant(end4VariantPath)
-		}
-		return End4
-	case isKnownCanonicalEntrypoint(text), isKnownLegacyUserEntrypoint(text), isKnownHistoricalHomeManagerSeededUserEntrypoint(text), text == userNamespaceTransitionEntrypoint:
+	if isKnownCanonicalEntrypoint(text) {
 		return DetectShellFromKeybinds(keybindsPath)
-	default:
-		return ""
 	}
+	return ""
 }
 
 func DetectShellFromKeybinds(path string) string {
@@ -363,106 +312,17 @@ func DetectShellFromKeybinds(path string) string {
 	return ""
 }
 
-func IsLegacyDirectEnd4Entrypoint(path string) bool {
-	return IsLegacyDirectEnd4EntrypointForConfigHome(path, "")
-}
-
-func IsLegacyDirectEnd4EntrypointForConfigHome(path, _ string) bool {
-	data, err := os.ReadFile(path)
-	return err == nil && isKnownGeneratedDirectEnd4Entrypoint(string(data))
-}
-
 func IsCanonicalEntrypoint(path string) bool {
 	data, err := os.ReadFile(path)
 	return err == nil && isKnownCanonicalEntrypoint(string(data))
-}
-
-func IsLegacyUserEntrypoint(path string) bool {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-	return isKnownLegacyUserEntrypoint(string(data))
-}
-
-func IsUserNamespaceTransitionEntrypoint(path string) bool {
-	data, err := os.ReadFile(path)
-	return err == nil && string(data) == userNamespaceTransitionEntrypoint
-}
-
-func IsHistoricalHomeManagerSeededUserEntrypoint(path string) bool {
-	data, err := os.ReadFile(path)
-	return err == nil && isKnownHistoricalHomeManagerSeededUserEntrypoint(string(data))
-}
-
-func legacyHomeManagerUserEntrypoint() string {
-	return fmt.Sprintf(`-- Active Hyprland profile: wahrwelt (%s)
-local home = os.getenv("HOME")
-if home == nil then
-    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
-end
-
-local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-local hypr_root = config_home .. "/hypr"
-package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-dofile(hypr_root .. "/wahrwelt/hyprland.lua")
-`, DefaultProfile)
-}
-
-func isKnownLegacyUserEntrypoint(text string) bool {
-	return text == legacyUserEntrypoint || text == legacyHomeManagerUserEntrypoint()
-}
-
-func isKnownHistoricalHomeManagerSeededUserEntrypoint(text string) bool {
-	return text == historicalHomeManagerSeededUserEntrypoint("wahrwelt") ||
-		text == historicalHomeManagerSeededUserEntrypoint("user")
-}
-
-func historicalHomeManagerSeededUserEntrypoint(namespace string) string {
-	return fmt.Sprintf(`-- Active Hyprland profile: wahrwelt (%s)
-local home = os.getenv("HOME")
-if home == nil then
-    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
-end
-
-local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-local state_home = os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")
-local hypr_root = config_home .. "/hypr"
-local runtime_root = state_home .. "/wahrwelt/hypr-runtime"
-package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-dofile(hypr_root .. "/%s/hyprland.lua")
-dofile(runtime_root .. "/shell-profile.lua")
-`, DefaultProfile, namespace)
 }
 
 func isKnownCanonicalEntrypoint(text string) bool {
 	return text == canonicalEntrypoint || text == HomeManagerInitialCanonicalEntrypoint()
 }
 
-func isKnownGeneratedDirectEnd4Entrypoint(text string) bool {
-	return text == legacyDirectEnd4Entrypoint(End4) || text == legacyDirectEnd4Entrypoint(End4PC)
-}
-
-func legacyDirectEnd4Entrypoint(profile string) string {
-	return fmt.Sprintf(`-- Active Hyprland profile: %s
-local home = os.getenv("HOME")
-if home == nil then
-    error("HOME is not set; cannot locate end4 Hyprland config")
-end
-
-local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-local hypr_root = config_home .. "/hypr"
-local end4_root = hypr_root .. "/end4"
-package.path = end4_root .. "/?.lua;" .. end4_root .. "/?/init.lua;" .. hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-dofile(end4_root .. "/hyprland.lua")
-`, profile)
-}
-
 func BootstrapActiveShell(home, hyprDir string) string {
 	if profile := ReadActiveShell(ActiveShellStatePath(home)); profile != "" {
-		return profile
-	}
-	if profile := ReadActiveShell(paths.LegacyActiveShellStatePath(home)); profile != "" {
 		return profile
 	}
 	variantPath := End4VariantStatePath(home)

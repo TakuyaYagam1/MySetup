@@ -9,7 +9,6 @@ let
     localSystem = system;
     config = {
       allowUnfree = true;
-      allowInsecurePredicate = _: true;
     };
   };
 
@@ -28,7 +27,10 @@ let
     pname = "wahrwelt";
     version = "0.1.0";
     src = installerSource;
-    subPackages = [ "cmd/wahrwelt" ];
+    subPackages = [
+      "cmd/wahrwelt"
+      "cmd/wahrwelt-fs-helper"
+    ];
     vendorHash = "sha256-owIDnnxJBzzo9Jdn+Avn0bRBXMQPnfYzxh8/5viBw+Y=";
     nativeBuildInputs = [ flakePkgs.makeWrapper ];
     ldflags = [
@@ -43,6 +45,8 @@ let
         --set WAHRWELT_XKB_RULES_DIR ${flakePkgs.xkeyboard_config}/share/X11/xkb/rules \
         --set MYSETUP_XKB_RULES_DIR ${flakePkgs.xkeyboard_config}/share/X11/xkb/rules \
         --set WAHRWELT_PRIVILEGED_PYTHON ${flakePkgs.python3}/bin/python3 \
+        --set WAHRWELT_PRIVILEGED_FS_HELPER $out/bin/wahrwelt-fs-helper \
+        --set WAHRWELT_FS_HELPER $out/bin/wahrwelt-fs-helper \
         --prefix PATH : ${
           flakePkgs.lib.makeBinPath (
             with flakePkgs;
@@ -72,6 +76,7 @@ let
     claude-desktop = flakePkgs.callPackage ../pkgs/claude-desktop.nix { };
     omnirouter = flakePkgs.callPackage ../pkgs/omnirouter.nix { };
     inherit wahrwelt;
+    wahrwelt-fs-helper = wahrwelt;
     mysetup = wahrwelt;
     default = wahrwelt;
   };
@@ -90,7 +95,7 @@ let
   mysetupApp = {
     type = "app";
     program = "${packages.mysetup}/bin/mysetup";
-    meta.description = "Run the legacy MySetup-compatible NixOS installer entrypoint";
+    meta.description = "Run the supported MySetup compatibility installer entrypoint";
   };
 in
 {

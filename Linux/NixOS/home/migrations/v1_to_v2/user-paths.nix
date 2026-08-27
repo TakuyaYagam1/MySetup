@@ -10,21 +10,21 @@ let
   configHome = config.xdg.configHome;
   stateHome = config.xdg.stateHome;
   cacheHome = config.xdg.cacheHome;
-  shellProfiles = import ../shells/profiles.nix;
+  shellProfiles = import ../../shells/profiles.nix;
   defaultProfile = shellProfiles.byId.${shellProfiles.defaultProfile};
   end4Profile = shellProfiles.byId.end4;
   end4PCProfile = shellProfiles.byId.end4-pc;
   hyprDir = "${configHome}/hypr";
   hyprRuntimeTarget = "${stateHome}/wahrwelt/hypr-runtime/hyprland.lua";
   hyprTopLevelTarget = "${configHome}/hypr/hyprland.lua";
-  managedHyprUserAdapter = ../../../dots/hypr/hyprland.lua;
+  managedHyprUserAdapter = ../../../../dots/hypr/hyprland.lua;
   hyprRuntimeActivation = pkgs.writeShellApplication {
     name = "wahrwelt-runtime-activation";
     runtimeInputs = [
       pkgs.coreutils
       pkgs.python3
     ];
-    text = builtins.readFile ../shells/runtime-activation.sh;
+    text = builtins.readFile ../../shells/runtime-activation.sh;
   };
   canonicalHyprRuntime = pkgs.writeText "wahrwelt-hypr-runtime-default" ''
     -- Wahrwelt canonical Hyprland runtime entrypoint
@@ -81,7 +81,7 @@ let
     '';
   legacySeededWahrweltRuntime = mkLegacySeededHyprRuntime "wahrwelt";
   legacySeededUserRuntime = mkLegacySeededHyprRuntime "user";
-  transitionHyprRuntime = ../shells/legacy-hypr-runtime/user-namespace-transition.lua;
+  transitionHyprRuntime = ./hypr-runtime/user-namespace-transition.lua;
   end4RuntimeContract = pkgs.writeText "end4-runtime-contract" "end4-adapter-v1\n";
   end4ShellProfileRuntime = pkgs.writeText "wahrwelt-shell-profile-default" ''
     -- Runtime shell launcher
@@ -136,13 +136,13 @@ let
       pkgs.coreutils
       pkgs.python3
     ];
-    text = builtins.readFile ../shells/hypr-user-adapter-guard.sh;
+    text = builtins.readFile ../../shells/hypr-user-adapter-guard.sh;
   };
   legacyLinkGuard = pkgs.writeShellApplication {
     name = "legacy-link-guard";
     runtimeInputs = [ pkgs.python3 ];
     text = ''
-      exec python3 ${./legacy-link-guard.py} "$@"
+      exec python3 ${./link-guard.py} "$@"
     '';
   };
   legacyCacheMerge = pkgs.writeShellApplication {
@@ -153,28 +153,98 @@ let
       pkgs.python3
     ];
     text = ''
-      export WAHRWELT_CACHE_TEMP_CREATOR=${./legacy-namespace-move.py}
+      export WAHRWELT_CACHE_TEMP_CREATOR=${./namespace-move.py}
       export WAHRWELT_CACHE_TEMP_PYTHON=${pkgs.python3}/bin/python3
     ''
-    + builtins.readFile ./legacy-cache-merge.sh;
+    + builtins.readFile ./cache-merge.sh;
   };
   legacyNamespaceMove = pkgs.writeShellApplication {
     name = "legacy-namespace-move";
     runtimeInputs = [ pkgs.python3 ];
     text = ''
-      exec python3 ${./legacy-namespace-move.py} "$@"
+      exec python3 ${./namespace-move.py} "$@"
     '';
   };
   legacyMarkerMigrate = pkgs.writeShellApplication {
     name = "legacy-marker-migrate";
     runtimeInputs = [ pkgs.python3 ];
     text = ''
-      exec python3 ${./legacy-marker-migrate.py} "$@"
+      exec python3 ${./marker-migrate.py} "$@"
     '';
   };
 in
 {
+  # This module is an upgrade-only compatibility boundary. The activation
+  # body below is not entered until an exact v1 path, marker, or runtime
+  # payload is visible. Fresh installations therefore never invoke the v1
+  # ownership recognizers or their filesystem transactions.
   home.activation.migrateWahrweltUserPaths = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
+    wahrwelt_v1_to_v2_evidence() {
+      local candidate source
+
+      for candidate in \
+        "${configHome}/hypr/wahrwelt" \
+        "${configHome}/hypr/mysetup" \
+        "${configHome}/mysetup" \
+        "${stateHome}/mysetup" \
+        "${cacheHome}/mysetup" \
+        "${configHome}/hypr/lib/mysetup.lua" \
+        "${configHome}/quickshell/mysetup-shell-selector" \
+        "${configHome}/hypr/monitors.conf" \
+        "${configHome}/hypr/workspaces.conf" \
+        "${configHome}/hypr/.mysetup-managed.json" \
+        "${configHome}/nvim/.mysetup-managed.json"
+      do
+        if [ -e "$candidate" ] || [ -L "$candidate" ]; then
+          return 0
+        fi
+      done
+
+      if [ -d "${home}/.zen" ] &&
+        ${pkgs.findutils}/bin/find "${home}/.zen" \
+          -mindepth 3 -maxdepth 3 \
+          -path '*/chrome/.mysetup-managed.json' \
+          -print -quit 2>/dev/null | ${pkgs.gnugrep}/bin/grep -q .; then
+        return 0
+      fi
+
+      # A broken top-level link is still evidence that the ownership
+      # classifier must run. It decides whether the link belongs to an old HM
+      # generation or is an unknown collision.
+      if [ -L "${hyprTopLevelTarget}" ] && [ ! -e "${hyprTopLevelTarget}" ]; then
+        return 0
+      fi
+
+      for candidate in "${hyprTopLevelTarget}" "${hyprRuntimeTarget}"; do
+        [ -e "$candidate" ] || continue
+        for source in \
+          "${transitionHyprRuntime}" \
+          "${legacyWahrweltRuntime}" \
+          "${legacyHomeManagerWahrweltRuntime}" \
+          "${legacySeededWahrweltRuntime}" \
+          "${legacySeededUserRuntime}" \
+          "${./hypr-runtime/end4.lua}" \
+          "${./hypr-runtime/end4-pc.lua}"
+        do
+          if ${pkgs.coreutils}/bin/cmp -s -- "$candidate" "$source"; then
+            return 0
+          fi
+        done
+      done
+
+      # An interrupted direct-End4 migration persists exact process proof in
+      # this private state directory. Its presence is sufficient to re-enter
+      # the versioned resume path; the full helper revalidates ownership.
+      if [ -n "''${XDG_RUNTIME_DIR:-}" ] &&
+        { [ -e "''${XDG_RUNTIME_DIR}/wahrwelt-end4-upgrade" ] ||
+          [ -L "''${XDG_RUNTIME_DIR}/wahrwelt-end4-upgrade" ]; }; then
+        return 0
+      fi
+
+      return 1
+    }
+
+    if wahrwelt_v1_to_v2_evidence; then
     preflight_hypr_user_tree() {
       user="${configHome}/hypr/user"
       old_wahrwelt="${configHome}/hypr/wahrwelt"
@@ -467,8 +537,8 @@ in
           "${legacyHomeManagerWahrweltRuntime}" \
           "${legacySeededWahrweltRuntime}" \
           "${legacySeededUserRuntime}" \
-          "${../shells/legacy-hypr-runtime/end4.lua}" \
-          "${../shells/legacy-hypr-runtime/end4-pc.lua}"
+          "${./hypr-runtime/end4.lua}" \
+          "${./hypr-runtime/end4-pc.lua}"
       )"
       hypr_top_runtime_kind="''${hypr_top_runtime_token%%|*}"
       case "$hypr_top_runtime_kind" in
@@ -507,8 +577,8 @@ in
           "${legacyHomeManagerWahrweltRuntime}" \
           "${legacySeededWahrweltRuntime}" \
           "${legacySeededUserRuntime}" \
-          "${../shells/legacy-hypr-runtime/end4.lua}" \
-          "${../shells/legacy-hypr-runtime/end4-pc.lua}"
+          "${./hypr-runtime/end4.lua}" \
+          "${./hypr-runtime/end4-pc.lua}"
       )"
       hypr_state_runtime_kind="''${hypr_state_runtime_token%%|*}"
       case "$hypr_state_runtime_kind" in
@@ -544,8 +614,8 @@ in
         "${hyprTopLevelTarget}" \
         "${stateHome}/wahrwelt/end4-variant" \
         "${canonicalHyprRuntime}" \
-        "${../shells/legacy-hypr-runtime/end4.lua}" \
-        "${../shells/legacy-hypr-runtime/end4-pc.lua}" \
+        "${./hypr-runtime/end4.lua}" \
+        "${./hypr-runtime/end4-pc.lua}" \
         "${end4Runtime.profile}" \
         "${end4Runtime.lock}" \
         "${end4Runtime.idle}" \
@@ -561,15 +631,15 @@ in
         "${end4PCRuntime.legacyLauncher}" \
         "${end4PCRuntime.legacyKeybinds}" \
         "${managedHyprUserAdapter}" \
-        "${../../../dots/hypr/end4-adapter.lua}" \
-        "${../../../dots/hypr/end4/launcher.lua}" \
+        "${../../../../dots/hypr/end4-adapter.lua}" \
+        "${../../../../dots/hypr/end4/launcher.lua}" \
         "${end4RuntimeContract}"
     }
 
     direct_end4_runtime_source() {
       case "$1" in
-        7) printf '%s\n' "${../shells/legacy-hypr-runtime/end4.lua}" ;;
-        8) printf '%s\n' "${../shells/legacy-hypr-runtime/end4-pc.lua}" ;;
+        7) printf '%s\n' "${./hypr-runtime/end4.lua}" ;;
+        8) printf '%s\n' "${./hypr-runtime/end4-pc.lua}" ;;
         *) return 1 ;;
       esac
     }
@@ -590,8 +660,8 @@ in
           "${legacyHomeManagerWahrweltRuntime}" \
           "${legacySeededWahrweltRuntime}" \
           "${legacySeededUserRuntime}" \
-          "${../shells/legacy-hypr-runtime/end4.lua}" \
-          "${../shells/legacy-hypr-runtime/end4-pc.lua}"
+          "${./hypr-runtime/end4.lua}" \
+          "${./hypr-runtime/end4-pc.lua}"
         return 0
       fi
       "${hyprRuntimeActivation}/bin/wahrwelt-runtime-activation" \
@@ -604,8 +674,8 @@ in
         "${legacyHomeManagerWahrweltRuntime}" \
         "${legacySeededWahrweltRuntime}" \
         "${legacySeededUserRuntime}" \
-        "${../shells/legacy-hypr-runtime/end4.lua}" \
-        "${../shells/legacy-hypr-runtime/end4-pc.lua}"
+        "${./hypr-runtime/end4.lua}" \
+        "${./hypr-runtime/end4-pc.lua}"
       classify_hypr_state_runtime
       [ "$hypr_state_runtime_source_index" = "$hypr_top_runtime_source_index" ] || {
         echo "Wahrwelt Hyprland runtime ownership collision: staged End4 provenance changed" >&2
@@ -723,8 +793,8 @@ in
           "${legacyHomeManagerWahrweltRuntime}" \
           "${legacySeededWahrweltRuntime}" \
           "${legacySeededUserRuntime}" \
-          "${../shells/legacy-hypr-runtime/end4.lua}" \
-          "${../shells/legacy-hypr-runtime/end4-pc.lua}"
+          "${./hypr-runtime/end4.lua}" \
+          "${./hypr-runtime/end4-pc.lua}"
         return 0
       fi
       if [ -z "''${hypr_user_source:-}" ] && [ -d "${configHome}/hypr/user" ]; then
@@ -743,8 +813,8 @@ in
         "${legacyHomeManagerWahrweltRuntime}" \
         "${legacySeededWahrweltRuntime}" \
         "${legacySeededUserRuntime}" \
-        "${../shells/legacy-hypr-runtime/end4.lua}" \
-        "${../shells/legacy-hypr-runtime/end4-pc.lua}"
+        "${./hypr-runtime/end4.lua}" \
+        "${./hypr-runtime/end4-pc.lua}"
     }
 
     move_tree() {
@@ -820,6 +890,8 @@ in
       verify_cache
       verify_no_legacy_markers
       verify_old_links
+    fi
+
     fi
 
   '';

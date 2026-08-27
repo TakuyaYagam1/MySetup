@@ -5,6 +5,9 @@ script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=Linux/dots/hypr/scripts/shell-runtime.sh
 . "$script_dir/shell-runtime.sh"
 
+wahrwelt_enter_runtime_lock_v2 \
+  wahrwelt-record-toggle-v2.lock 40 0 "$0" "$@"
+
 if ! wahrwelt_adopt_legacy_private_state_directory wahrwelt-recording record-toggle-state; then
   printf 'Wahrwelt recorder ownership collision: unsafe pre-marker state preserved\n' >&2
   exit 1
@@ -40,10 +43,6 @@ exec {recorder_log_fd}<&"$wahrwelt_managed_regular_fd"
 log_file="/proc/${BASHPID:-$$}/fd/$recorder_log_fd"
 exec {wahrwelt_managed_regular_fd}<&-
 wahrwelt_managed_regular_fd=""
-lock_dir="$state_dir/lock"
-lock_pid_file="$lock_dir/pid"
-lock_owner_file="$lock_dir/owner"
-lock_identity=""
 record_dir="${XDG_VIDEOS_DIR:-$HOME/Videos}/Recordings"
 
 notify() {
@@ -95,35 +94,6 @@ stop_recording() {
 }
 
 mkdir -p -- "$record_dir"
-
-acquire_lock() {
-  if ! wahrwelt_acquire_lock \
-    "$lock_dir" \
-    "$lock_pid_file" \
-    "$lock_owner_file" \
-    "wahrwelt-record-toggle" \
-    '(^|[ /])record-toggle\.sh([[:space:]]|$)' \
-    2 \
-    0.02; then
-    notify "Recording busy" "Another recorder toggle is already running"
-    exit 0
-  fi
-  lock_identity="$wahrwelt_acquired_lock_identity"
-  [ -n "$lock_identity" ] || exit 1
-}
-
-cleanup_lock() {
-  local recovery
-
-  [ -n "$lock_identity" ] || return 0
-  if ! wahrwelt_release_owned_lock "$lock_dir" "$lock_identity" 2>/dev/null; then
-    recovery="${wahrwelt_lock_recovery_exact_path:-$lock_dir}"
-    notify "Recording lock collision" "Preserved recovery/collision at $recovery"
-  fi
-}
-
-acquire_lock
-trap cleanup_lock EXIT
 
 if [ -f "$pid_file" ]; then
   pid="$(cat "$pid_file" 2>/dev/null || true)"

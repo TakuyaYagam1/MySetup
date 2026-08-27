@@ -61,6 +61,7 @@ func TestPasswordsSectionShowsExistingSecretStatus(t *testing.T) {
 
 func TestDetectExistingSecrets(t *testing.T) {
 	dir := t.TempDir()
+	// The old generated module remains a migration input for installed systems.
 	if err := os.WriteFile(filepath.Join(dir, "hashed-password.nix"), []byte("hash"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -68,6 +69,21 @@ func TestDetectExistingSecrets(t *testing.T) {
 	got := detectExistingSecrets(paths.Options{NixOSDest: dir})
 	if got.UserPassword != secretPresenceExists {
 		t.Fatalf("expected existing Linux password hash, got %q", got.UserPassword)
+	}
+}
+
+func TestDetectSecretPathRejectsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	link := filepath.Join(dir, "hash")
+	if err := os.WriteFile(target, []byte("hash"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if got := detectSecretPath(link); got != secretPresenceUnknown {
+		t.Fatalf("symlinked password hash should be an ownership collision, got %q", got)
 	}
 }
 

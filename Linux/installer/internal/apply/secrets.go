@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,9 @@ import (
 
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/defaults"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/fsowner"
+	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 	"golang.org/x/sys/unix"
 )
@@ -28,22 +32,83 @@ func prepareStagingHostLocal(ctx context.Context, runner run.CommandRunner, stag
 	if err := copyHostHardware(staging, dest, layout); err != nil {
 		return err
 	}
-	if secrets.UserPassword != "" {
-		hash := "!mysetup-dry-run-placeholder"
-		if !runner.IsDryRun() {
-			var err error
-			hash, err = hashPassword(ctx, secrets.UserPassword)
-			if err != nil {
-				return err
-			}
-		}
-		target := filepath.Join(staging, hashedPasswordRel(layout))
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	return preparePasswordHashMarker(ctx, runner, staging, dest, secrets, layout)
+}
+
+func preparePasswordHashMarker(ctx context.Context, runner run.CommandRunner, staging, dest string, secrets config.Secrets, _ Layout) error {
+	configured := secrets.UserPassword != ""
+	if !configured {
+		target := passwordHashTarget(dest)
+		var err error
+		configured, err = externalPasswordHashConfigured(
+			ctx,
+			runner,
+			target,
+			os.Lstat,
+			privilegedFSHelperPath,
+		)
+		if err != nil {
 			return err
 		}
-		return os.WriteFile(target, []byte(HashedPasswordNix(hash)), 0o600)
 	}
-	return copyExistingHashedPassword(ctx, runner, existingHashedPasswordPaths(dest), filepath.Join(staging, hashedPasswordRel(layout)))
+	if !configured {
+		for _, source := range existingHashedPasswordPaths(dest) {
+			info, err := os.Lstat(source)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return err
+			}
+			if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+				return fmt.Errorf("legacy password hash path is not a regular file: %s", source)
+			}
+			configured = true
+			break
+		}
+	}
+	if !configured {
+		return nil
+	}
+	marker := filepath.Join(staging, paths.PasswordHashMarkerName)
+	return os.WriteFile(marker, nil, 0o644)
+}
+
+func externalPasswordHashConfigured(
+	ctx context.Context,
+	runner run.CommandRunner,
+	target string,
+	lstat func(string) (os.FileInfo, error),
+	resolveHelper func() (string, error),
+) (bool, error) {
+	info, err := lstat(target)
+	if err == nil {
+		if !info.Mode().IsRegular() {
+			return false, fmt.Errorf("external password hash path is not a regular file: %s", target)
+		}
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if !os.IsPermission(err) || filepath.Clean(target) != paths.DefaultPasswordHashPath {
+		return false, err
+	}
+	helper, helperErr := resolveHelper()
+	if helperErr != nil {
+		return false, helperErr
+	}
+	if validateErr := validateExternalPasswordHashWithHelper(ctx, runner, target, helper); validateErr != nil {
+		return false, fmt.Errorf("validate inaccessible external password hash: %w", validateErr)
+	}
+	return true, nil
+}
+
+func passwordHashTarget(dest string) string {
+	if filepath.Clean(dest) == "/etc/nixos" {
+		return paths.DefaultPasswordHashPath
+	}
+	return filepath.Join(filepath.Dir(filepath.Clean(dest)), "wahrwelt", "hashed-password")
 }
 
 func copyExistingThinHostLocal(ctx context.Context, runner run.CommandRunner, staging, dest string, state config.State) error {
@@ -95,24 +160,184 @@ func copyExistingThinHostLocalFiles(dest, staging string, names []string) error 
 
 func copyExistingThinSecrets(ctx context.Context, runner run.CommandRunner, dest, staging string) error {
 	for _, secretsDir := range existingSecretsDirs(dest) {
-		if info, err := os.Stat(secretsDir); err == nil {
-			if !info.IsDir() {
-				return fmt.Errorf("secrets path is not a directory: %s", secretsDir)
+		if info, err := os.Lstat(secretsDir); err == nil {
+			if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+				return fmt.Errorf("secrets path must be an ordinary directory: %s", secretsDir)
 			}
-			if err := copyHostLocalTree(ctx, runner, secretsDir, filepath.Join(staging, "secrets")); err != nil {
+			source := filepath.Join(secretsDir, "secrets.yaml")
+			target := filepath.Join(staging, "secrets", "secrets.yaml")
+			copied, err := copyValidatedEncryptedSecretsFile(ctx, runner, source, target)
+			if err != nil {
 				return fmt.Errorf("stage secrets: %w", err)
 			}
-			return nil
-		} else if os.IsPermission(err) {
-			if err := sudoCopyHostLocalTree(ctx, runner, secretsDir, filepath.Join(staging, "secrets")); err != nil {
-				return fmt.Errorf("stage secrets: %w", err)
+			if copied {
+				return nil
 			}
-			return nil
 		} else if !os.IsNotExist(err) {
 			return err
 		}
 	}
 	return nil
+}
+
+const maxEncryptedSecretsBytes = 4 << 20
+
+var encryptedSOPSValuePattern = regexp.MustCompile(`ENC\[[A-Z0-9_]+,`)
+
+func copyValidatedEncryptedSecretsFile(ctx context.Context, runner run.CommandRunner, source, target string) (bool, error) {
+	file, err := openSecretsFileNoFollow(source)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		if os.IsPermission(err) {
+			if runner.IsDryRun() {
+				return true, runner.Command(ctx, "sudo", "install", "-D", "-m", "600", source, target)
+			}
+			return true, sudoCopyValidatedEncryptedSecretsFile(ctx, runner, source, target)
+		}
+		return false, err
+	}
+	defer closeFile(file)
+	data, err := io.ReadAll(io.LimitReader(file, maxEncryptedSecretsBytes+1))
+	if err != nil {
+		return false, err
+	}
+	if err := validateEncryptedSOPSPayload(data); err != nil {
+		return false, fmt.Errorf("%s is not a validated SOPS payload: %w", source, err)
+	}
+	if runner.IsDryRun() {
+		return true, runner.Command(ctx, "install", "-D", "-m", "600", source, target)
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+		return false, err
+	}
+	targetFile, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return false, fmt.Errorf("create staged secrets payload: %w", err)
+	}
+	writeErr := error(nil)
+	if _, err := targetFile.Write(data); err != nil {
+		writeErr = err
+	} else if err := targetFile.Sync(); err != nil {
+		writeErr = err
+	}
+	if err := targetFile.Close(); writeErr == nil {
+		writeErr = err
+	}
+	if writeErr != nil {
+		return false, fmt.Errorf("write staged secrets payload; failed candidate retained at %s: %w", target, writeErr)
+	}
+	return true, nil
+}
+
+func openSecretsFileNoFollow(path string) (*os.File, error) {
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	file, wrapErr := fileFromUnixDescriptor(fd, path)
+	if wrapErr != nil {
+		_ = unix.Close(fd)
+		return nil, fmt.Errorf("open secrets payload: %w", wrapErr)
+	}
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		_ = file.Close()
+		return nil, fmt.Errorf("secrets payload must be a regular file: %s", path)
+	}
+	return file, nil
+}
+
+func validateEncryptedSOPSPayload(data []byte) error {
+	if len(data) == 0 || len(data) > maxEncryptedSecretsBytes {
+		return fmt.Errorf("payload size is outside the allowed range")
+	}
+	hasSOPS := false
+	hasEncryptedValue := false
+	hasEncryptedMAC := false
+	for _, line := range bytes.Split(data, []byte{'\n'}) {
+		trimmed := bytes.TrimSpace(line)
+		isMAC := bytes.HasPrefix(trimmed, []byte("mac:"))
+		switch {
+		case bytes.Equal(line, []byte("sops:")):
+			hasSOPS = true
+		case !isMAC && encryptedSOPSValuePattern.Match(trimmed):
+			hasEncryptedValue = true
+		}
+		if isMAC && encryptedSOPSValuePattern.Match(trimmed) {
+			hasEncryptedMAC = true
+		}
+	}
+	if !hasSOPS || !hasEncryptedValue || !hasEncryptedMAC {
+		return fmt.Errorf("missing SOPS metadata or encrypted values")
+	}
+	return nil
+}
+
+//nolint:gosec // This embedded helper contains only SOPS field names and performs no credential storage.
+const privilegedCopyEncryptedSecretsPython = `
+import os
+import re
+import stat
+import sys
+
+source_dir, target_dir, owner, group = sys.argv[1:]
+owner = int(owner)
+group = int(group)
+limit = 4 * 1024 * 1024
+
+parent = os.open(source_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+try:
+    source = os.open("secrets.yaml", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent)
+    try:
+        info = os.fstat(source)
+        if not stat.S_ISREG(info.st_mode):
+            raise RuntimeError("secrets payload is not a regular file")
+        data = os.read(source, limit + 1)
+        if not data or len(data) > limit:
+            raise RuntimeError("secrets payload size is outside the allowed range")
+        lines = data.splitlines()
+        encrypted = re.compile(rb"ENC\[[A-Z0-9_]+,")
+        if b"sops:" not in lines or not any(not line.strip().startswith(b"mac:") and encrypted.search(line.strip()) for line in lines):
+            raise RuntimeError("secrets payload has no SOPS metadata or encrypted values")
+        if not any(line.strip().startswith(b"mac:") and encrypted.search(line.strip()) for line in lines):
+            raise RuntimeError("secrets payload has no encrypted SOPS MAC")
+        os.makedirs(target_dir, mode=0o700, exist_ok=True)
+        target_parent = os.open(target_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            target = os.open("secrets.yaml", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=target_parent)
+            try:
+                offset = 0
+                while offset < len(data):
+                    offset += os.write(target, data[offset:])
+                os.fsync(target)
+                os.fchmod(target, 0o600)
+                os.fchown(target, owner, group)
+            finally:
+                os.close(target)
+        finally:
+            os.close(target_parent)
+    finally:
+        os.close(source)
+finally:
+    os.close(parent)
+`
+
+func sudoCopyValidatedEncryptedSecretsFile(ctx context.Context, runner run.CommandRunner, source, target string) error {
+	pythonPath, err := privilegedPythonPath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+		return err
+	}
+	return runner.Command(ctx, "sudo", pythonPath, "-c", privilegedCopyEncryptedSecretsPython,
+		filepath.Dir(source), filepath.Dir(target), strconv.Itoa(os.Getuid()), strconv.Itoa(os.Getgid()))
 }
 
 func stageExistingUserDirectory(ctx context.Context, runner run.CommandRunner, dest, staging string) error {
@@ -196,10 +421,7 @@ var (
 	nixIdentifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_'-]*`)
 )
 
-const (
-	legacyUserPathPrefix    = "./private/"
-	canonicalUserPathPrefix = "./user/"
-)
+const maxPasswordModuleBytes = 16 * 1024
 
 func rewriteNixCode(text string, index int, stopAtClosingBrace bool) (string, int) {
 	var out strings.Builder
@@ -372,14 +594,7 @@ func rewriteNixToken(text string, index int) (string, int, bool) {
 }
 
 func rewriteLegacyNixPathToken(token string) string {
-	switch {
-	case token == "./private":
-		return "./user"
-	case strings.HasPrefix(token, legacyUserPathPrefix):
-		return canonicalUserPathPrefix + strings.TrimPrefix(token, legacyUserPathPrefix)
-	default:
-		return token
-	}
+	return migrationv1tov2.RewritePrivateUserPathToken(token)
 }
 
 func rewriteNixInterpolatedPath(text string, index int) (string, int, bool) {
@@ -556,44 +771,6 @@ func existingSecretsDirs(dest string) []string {
 	}
 }
 
-func copyExistingHashedPassword(ctx context.Context, runner run.CommandRunner, sources []string, target string) error {
-	for _, source := range sources {
-		copied, err := copyExistingHashedPasswordFile(ctx, runner, source, target)
-		if err != nil || copied {
-			return err
-		}
-	}
-	return nil
-}
-
-func copyExistingHashedPasswordFile(ctx context.Context, runner run.CommandRunner, source, target string) (bool, error) {
-	if _, err := os.Stat(source); err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		if os.IsPermission(err) {
-			return true, sudoCopyHostLocalFile(ctx, runner, source, target)
-		}
-		return false, err
-	}
-	if err := copyFile(source, target); err != nil {
-		if os.IsPermission(err) {
-			return true, sudoCopyHostLocalFile(ctx, runner, source, target)
-		}
-		return false, err
-	}
-	return true, nil
-}
-
-func sudoCopyHostLocalFile(ctx context.Context, runner run.CommandRunner, source, target string) error {
-	uid := strconv.Itoa(os.Getuid())
-	gid := strconv.Itoa(os.Getgid())
-	if err := runner.Command(ctx, "sudo", "install", "-D", "-m", "600", "-o", uid, "-g", gid, source, target); err != nil {
-		return fmt.Errorf("copy existing hashed-password.nix with sudo: %w; provide --user-password-file to generate a fresh hash", err)
-	}
-	return nil
-}
-
 func hashPassword(ctx context.Context, password string) (string, error) {
 	rounds := fmt.Sprintf("--rounds=%d", defaults.ShaCryptRounds)
 	cmd := exec.CommandContext(ctx, "mkpasswd", "-sm", "sha-512", rounds)
@@ -607,6 +784,137 @@ func hashPassword(ctx context.Context, password string) (string, error) {
 		return "", fmt.Errorf("mkpasswd produced empty hash")
 	}
 	return hash, nil
+}
+
+var (
+	generatedPasswordDetailsPattern = regexp.MustCompile(`(?s)^\{ config, \.\.\. \}:\n\n\{\n  users\.users\.\$\{config\.(wahrwelt|mysetup)\.user\.username\}\.initialHashedPassword = "([^"\r\n]+)";\n\}\n$`)
+	sha512CryptPattern              = regexp.MustCompile(`^\$6\$(?:rounds=[0-9]+\$)?[./A-Za-z0-9]{1,16}\$[./A-Za-z0-9]{86}$`)
+)
+
+func validateRawPasswordHash(data []byte) error {
+	if !sha512CryptPattern.Match(bytes.TrimSpace(data)) {
+		return fmt.Errorf("unrecognized raw password hash")
+	}
+	return nil
+}
+
+type legacyPasswordHashCandidate struct {
+	path      string
+	hash      string
+	namespace string
+	identity  fsowner.Identity
+	pinned    *pinnedRegularFile
+}
+
+//nolint:gocyclo // Candidate pinning and hash agreement checks stay linear to preserve fail-closed migration semantics.
+func inspectLegacyGeneratedPasswordHashes(dest string) ([]legacyPasswordHashCandidate, error) {
+	requiredUID := currentEffectiveUID()
+	if filepath.Clean(dest) == "/etc/nixos" {
+		requiredUID = 0
+	}
+	candidates := make([]legacyPasswordHashCandidate, 0, len(existingHashedPasswordPaths(dest)))
+	for _, source := range existingHashedPasswordPaths(dest) {
+		directory, err := fsowner.OpenDirectory(filepath.Dir(source))
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.ENOENT) {
+				continue
+			}
+			closeLegacyPasswordHashCandidates(candidates)
+			return nil, err
+		}
+		entry, err := directory.Inspect(filepath.Base(source))
+		_ = directory.Close()
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) || errors.Is(err, unix.ENOENT) {
+				continue
+			}
+			closeLegacyPasswordHashCandidates(candidates)
+			return nil, err
+		}
+		if entry.Identity.Kind != fsowner.KindRegular || entry.Identity.UID != requiredUID || entry.Identity.Links != 1 {
+			closeLegacyPasswordHashCandidates(candidates)
+			return nil, fmt.Errorf("legacy password hash ownership collision at %s: unsupported identity", source)
+		}
+		pinned, err := openPinnedRegularFile(source, "legacy generated password hash")
+		if err != nil {
+			closeLegacyPasswordHashCandidates(candidates)
+			return nil, err
+		}
+		actual, identityErr := fsownerIdentityFromPinned(pinned)
+		if identityErr != nil {
+			closeFile(pinned.file)
+			closeLegacyPasswordHashCandidates(candidates)
+			return nil, identityErr
+		}
+		if actual != entry.Identity {
+			closeFile(pinned.file)
+			closeLegacyPasswordHashCandidates(candidates)
+			return nil, fmt.Errorf("legacy password hash ownership collision at %s: identity changed while pinning", source)
+		}
+		data, readErr := readPinnedRegularFile(pinned)
+		if readErr != nil {
+			closeFile(pinned.file)
+			closeLegacyPasswordHashCandidates(candidates)
+			return nil, readErr
+		}
+		matches := generatedPasswordDetailsPattern.FindSubmatch(data)
+		if len(matches) != 3 || !sha512CryptPattern.Match(matches[2]) {
+			closeFile(pinned.file)
+			closeLegacyPasswordHashCandidates(candidates)
+			parseErr := fmt.Errorf("unrecognized generated password hash module")
+			return nil, fmt.Errorf("legacy password hash ownership collision at %s: %w", source, parseErr)
+		}
+		namespace, hash := string(matches[1]), string(matches[2])
+		if len(candidates) != 0 && candidates[0].hash != hash {
+			closeFile(pinned.file)
+			closeLegacyPasswordHashCandidates(candidates)
+			return nil, fmt.Errorf("legacy password hash ownership collision: generated modules disagree")
+		}
+		candidates = append(candidates, legacyPasswordHashCandidate{
+			path: source, hash: hash, namespace: namespace, identity: entry.Identity, pinned: pinned,
+		})
+	}
+	return candidates, nil
+}
+
+func closeLegacyPasswordHashCandidates(candidates []legacyPasswordHashCandidate) {
+	for index := range candidates {
+		if candidates[index].pinned != nil {
+			closeFile(candidates[index].pinned.file)
+			candidates[index].pinned = nil
+		}
+	}
+}
+
+func fsownerIdentityFromPinned(pinned *pinnedRegularFile) (fsowner.Identity, error) {
+	if pinned == nil || pinned.file == nil {
+		return fsowner.Identity{}, fmt.Errorf("missing pinned regular file")
+	}
+	var stat unix.Stat_t
+	descriptor, err := checkedFileDescriptor(pinned.file, "pinned regular file")
+	if err != nil {
+		return fsowner.Identity{}, err
+	}
+	if err := unix.Fstat(descriptor, &stat); err != nil {
+		return fsowner.Identity{}, err
+	}
+	kind := fsowner.KindOther
+	switch stat.Mode & unix.S_IFMT {
+	case unix.S_IFREG:
+		kind = fsowner.KindRegular
+	case unix.S_IFDIR:
+		kind = fsowner.KindDirectory
+	case unix.S_IFLNK:
+		kind = fsowner.KindSymlink
+	}
+	return fsowner.Identity{
+		Device: stat.Dev,
+		Inode:  stat.Ino,
+		Mode:   stat.Mode,
+		Links:  stat.Nlink,
+		UID:    stat.Uid,
+		Kind:   kind,
+	}, nil
 }
 
 //nolint:gocyclo // Publication preflight and descriptor handoff stay linear so every early return fails closed.
@@ -937,6 +1245,16 @@ func verifyPublishedRegularFileAt(parent *os.File, name, display, label string, 
 	if expectedTarget != nil && sameRegularFile(published.info, expectedTarget.info) {
 		return fmt.Errorf("published %s target was not replaced: %s", label, display)
 	}
+	if filepath.Clean(display) == paths.DefaultPasswordHashPath {
+		identity, identityErr := fsownerIdentityFromPinned(published)
+		if identityErr != nil {
+			return fmt.Errorf("identify published %s: %w", label, identityErr)
+		}
+		if identity.Kind != fsowner.KindRegular || identity.UID != 0 || identity.Links != 1 || published.info.Mode().Perm() != 0o600 || published.info.Size() != int64(len(expectedData)) {
+			return fmt.Errorf("published %s metadata is not root-private: %s", label, display)
+		}
+		return nil
+	}
 	actualData, err := readPinnedRegularFile(published)
 	if err != nil {
 		return fmt.Errorf("read published %s: %w", label, err)
@@ -950,60 +1268,446 @@ func verifyPublishedRegularFileAt(parent *os.File, name, display, label string, 
 	return nil
 }
 
-//nolint:gocyclo // Dry-run preservation and pinned publication checks are intentionally explicit and linear.
-func writeStagedHashedPassword(ctx context.Context, runner run.CommandRunner, staging, dest string, secrets config.Secrets, layout Layout) error {
-	source := filepath.Join(staging, hashedPasswordRel(layout))
-	sourcePinned, err := openPinnedRegularFile(source, "staged hashed-password.nix")
+//nolint:gocyclo // External secret publication and migration checks intentionally stay linear and fail closed.
+func writeStagedHashedPassword(ctx context.Context, runner run.CommandRunner, staging, dest string, secrets config.Secrets, _ Layout) error {
+	marker := filepath.Join(staging, paths.PasswordHashMarkerName)
+	markerInfo, err := os.Lstat(marker)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
 		return err
 	}
-	defer closeFile(sourcePinned.file)
-	expectedData, err := readPinnedRegularFile(sourcePinned)
-	if err != nil {
-		return fmt.Errorf("read staged hashed-password.nix: %w", err)
+	if !markerInfo.Mode().IsRegular() || markerInfo.Size() != 0 {
+		return fmt.Errorf("password hash marker is not an empty regular file: %s", marker)
 	}
-	publicationSource, cleanupPublicationSource, err := createSealedPinnedSource("wahrwelt-hashed-password", expectedData)
-	if err != nil {
-		return fmt.Errorf("snapshot staged hashed-password.nix: %w", err)
-	}
-	defer cleanupPublicationSource()
-	target := filepath.Join(dest, hashedPasswordRel(layout))
+	target := passwordHashTarget(dest)
 	if runner.IsDryRun() {
-		targetInfo, err := regularFileOrAbsent(target, "hashed-password.nix")
+		if filepath.Clean(target) == paths.DefaultPasswordHashPath {
+			fmt.Printf("validate external password hash %s via privileged helper\n", target)
+			if secrets.UserPassword != "" {
+				fmt.Printf("write external password hash %s via sealed descriptor\n", target)
+			}
+			return nil
+		}
+		targetInfo, err := regularFileOrAbsent(target, "external password hash")
 		if err != nil {
-			return fmt.Errorf("target %s is not a regular file", hashedPasswordRel(layout))
+			return fmt.Errorf("external password hash target is not a regular file: %s", target)
 		}
 		if secrets.UserPassword == "" && targetInfo != nil {
 			return nil
 		}
-		fmt.Printf("write %s\n", hashedPasswordRel(layout))
+		fmt.Printf("write external password hash %s\n", target)
 		return nil
 	}
-	parent, err := openPinnedParentDirectory(target, "hashed-password.nix")
+	if filepath.Clean(target) == paths.DefaultPasswordHashPath {
+		return writePrivilegedExternalPasswordHash(ctx, runner, target, secrets)
+	}
+	legacyCandidates, err := inspectLegacyGeneratedPasswordHashes(dest)
+	if err != nil {
+		return err
+	}
+	defer closeLegacyPasswordHashCandidates(legacyCandidates)
+	existingHash, externalExists, err := existingExternalPasswordHash(target)
+	if err != nil {
+		return err
+	}
+	if externalExists && filepath.Clean(target) == paths.DefaultPasswordHashPath {
+		helper, helperErr := privilegedFSHelperPath()
+		if helperErr != nil {
+			return helperErr
+		}
+		if err := validateExternalPasswordHashWithHelper(ctx, runner, target, helper); err != nil {
+			return fmt.Errorf("validate external password hash: %w", err)
+		}
+	}
+	if secrets.UserPassword == "" {
+		if externalExists {
+			if existingHash != "" {
+				if err := requireLegacyHashesMatchExternal(legacyCandidates, existingHash); err != nil {
+					return err
+				}
+			}
+			if err := sanitizeLegacyGeneratedPasswordModulesLocally(target, legacyCandidates); err != nil {
+				return err
+			}
+			return nil
+		}
+		if len(legacyCandidates) == 0 {
+			return fmt.Errorf("password hash marker exists but no owned password hash source is available")
+		}
+		if err := publishExternalPasswordHash(ctx, runner, target, legacyCandidates[0].hash); err != nil {
+			return err
+		}
+		if err := sanitizeLegacyGeneratedPasswordModulesLocally(target, legacyCandidates); err != nil {
+			return err
+		}
+		logMigratedPasswordModules(legacyCandidates, target)
+		return nil
+	}
+
+	replacementHash, err := hashPassword(ctx, secrets.UserPassword)
+	if err != nil {
+		return err
+	}
+	if len(legacyCandidates) != 0 {
+		if externalExists {
+			if existingHash != "" {
+				if err := requireLegacyHashesMatchExternal(legacyCandidates, existingHash); err != nil {
+					return err
+				}
+			}
+		} else if err := publishExternalPasswordHash(ctx, runner, target, legacyCandidates[0].hash); err != nil {
+			return err
+		}
+		if err := sanitizeLegacyGeneratedPasswordModulesLocally(target, legacyCandidates); err != nil {
+			return err
+		}
+		logMigratedPasswordModules(legacyCandidates, target)
+	}
+	return publishExternalPasswordHash(ctx, runner, target, replacementHash)
+}
+
+var passwordHashStatusPattern = regexp.MustCompile(`^[0-9]+:[1-9][0-9]*:[0-9]+:1:0:regular$`)
+
+func privilegedPasswordHashStatus(ctx context.Context, runner run.CommandRunner, helper, target string) (string, error) {
+	status, err := runner.Output(ctx, "sudo", helper, "password-hash-status", "--path", target)
+	if err != nil {
+		return "", fmt.Errorf("inspect external password hash: %w", err)
+	}
+	if status != "absent" && !passwordHashStatusPattern.MatchString(status) {
+		return "", fmt.Errorf("privileged helper returned an invalid password hash status")
+	}
+	return status, nil
+}
+
+func publishPrivilegedExternalPasswordHash(
+	ctx context.Context,
+	runner run.CommandRunner,
+	helper, target, rawHash, expected string,
+) error {
+	source, cleanup, err := createSealedPinnedSource("wahrwelt-password-hash", []byte(rawHash+"\n"))
+	if err != nil {
+		return fmt.Errorf("create sealed external password hash source: %w", err)
+	}
+	defer cleanup()
+	err = runner.Command(
+		ctx,
+		"sudo",
+		helper,
+		"publish-password-hash",
+		"--path", target,
+		"--source", fileDescriptorPath(source.file),
+		"--expected", expected,
+	)
+	runtime.KeepAlive(source.file)
+	if err != nil {
+		return fmt.Errorf("publish external password hash: %w", err)
+	}
+	return nil
+}
+
+func writePrivilegedExternalPasswordHash(
+	ctx context.Context,
+	runner run.CommandRunner,
+	target string,
+	secrets config.Secrets,
+) error {
+	helper, err := privilegedFSHelperPath()
+	if err != nil {
+		return err
+	}
+	migrationStatus, err := runner.Output(ctx, "sudo", helper, "migrate-generated-password-modules")
+	if err != nil {
+		return fmt.Errorf("migrate generated password modules: %w", err)
+	}
+	if migrationStatus != "absent" && migrationStatus != "migrated" {
+		return fmt.Errorf("privileged helper returned an invalid password module migration status")
+	}
+	status, err := privilegedPasswordHashStatus(ctx, runner, helper, target)
+	if err != nil {
+		return err
+	}
+	replacementHash := ""
+	if secrets.UserPassword != "" {
+		replacementHash, err = hashPassword(ctx, secrets.UserPassword)
+		if err != nil {
+			return err
+		}
+	}
+	if replacementHash == "" {
+		if status == "absent" {
+			return fmt.Errorf("password hash marker exists but no owned password hash source is available")
+		}
+		return nil
+	}
+	return publishPrivilegedExternalPasswordHash(ctx, runner, helper, target, replacementHash, status)
+}
+
+func existingExternalPasswordHash(target string) (string, bool, error) {
+	if filepath.Clean(target) == paths.DefaultPasswordHashPath {
+		return existingExternalPasswordHashForOwner(target, true, 0)
+	}
+	return existingExternalPasswordHashForOwner(target, false, currentEffectiveUID())
+}
+
+func existingExternalPasswordHashForOwner(target string, metadataOnly bool, requiredUID uint32) (string, bool, error) {
+	existing, exists, err := openPinnedRegularFileAtPath(target, "external password hash")
+	if err != nil || !exists {
+		return "", exists, err
+	}
+	defer closeFile(existing.file)
+	identity, err := fsownerIdentityFromPinned(existing)
+	if err != nil {
+		return "", false, err
+	}
+	if identity.Kind != fsowner.KindRegular || identity.UID != requiredUID || identity.Links != 1 || existing.info.Mode().Perm() != 0o600 {
+		return "", false, fmt.Errorf("external password hash metadata is not private at %s", target)
+	}
+	if metadataOnly {
+		if existing.info.Size() < 91 || existing.info.Size() > 256 {
+			return "", false, fmt.Errorf("external password hash size is outside the allowed range at %s", target)
+		}
+		return "", true, nil
+	}
+	data, err := readPinnedRegularFile(existing)
+	if err != nil {
+		return "", false, err
+	}
+	if err := validateRawPasswordHash(data); err != nil {
+		return "", false, fmt.Errorf("external password hash ownership collision at %s: %w", target, err)
+	}
+	return string(bytes.TrimSpace(data)), true, nil
+}
+
+func validateExternalPasswordHashWithHelper(ctx context.Context, runner run.CommandRunner, target, helper string) error {
+	if filepath.Clean(target) != paths.DefaultPasswordHashPath {
+		return nil
+	}
+	if helper == "" {
+		return fmt.Errorf("missing privileged filesystem helper")
+	}
+	return runner.Command(ctx, "sudo", helper, "validate-password-hash", "--path", paths.DefaultPasswordHashPath)
+}
+
+func requireLegacyHashesMatchExternal(candidates []legacyPasswordHashCandidate, externalHash string) error {
+	for _, candidate := range candidates {
+		if candidate.hash != externalHash {
+			return fmt.Errorf("legacy password hash ownership collision: external hash and generated module disagree")
+		}
+	}
+	return nil
+}
+
+func logMigratedPasswordModules(candidates []legacyPasswordHashCandidate, target string) {
+	for _, candidate := range candidates {
+		fmt.Printf("migrated generated password hash from %s to %s\n", candidate.path, target)
+	}
+}
+
+func publishExternalPasswordHash(ctx context.Context, runner run.CommandRunner, target, rawHash string) error {
+	expectedData := []byte(rawHash + "\n")
+	publicationSource, cleanupPublicationSource, err := createSealedPinnedSource("wahrwelt-password-hash", expectedData)
+	if err != nil {
+		return fmt.Errorf("snapshot external password hash: %w", err)
+	}
+	defer cleanupPublicationSource()
+	if err := ensureExternalPasswordHashParent(ctx, runner, filepath.Dir(target)); err != nil {
+		return err
+	}
+	parent, err := openPinnedParentDirectory(target, "external password hash")
 	if err != nil {
 		return err
 	}
 	defer closeFile(parent)
-	expectedTarget, exists, err := openPinnedRegularFileAt(parent, filepath.Base(target), target, "hashed-password.nix")
+	expectedTarget, _, err := openPinnedRegularFileAt(parent, filepath.Base(target), target, "external password hash")
 	if err != nil {
-		return fmt.Errorf("target %s is not a regular file: %w", hashedPasswordRel(layout), err)
+		return fmt.Errorf("external password hash target is not a regular file: %w", err)
 	}
 	if expectedTarget != nil {
 		defer closeFile(expectedTarget.file)
 	}
-	if secrets.UserPassword == "" && exists {
-		return verifyPinnedDirectoryVisible(parent, filepath.Dir(target), "hashed-password.nix")
-	}
-	if err := publishPinnedWithCleanupContext(ctx, runner, "hashed-password", parent, target, publicationSource, expectedTarget); err != nil {
+	if err := publishPinnedWithCleanupContext(ctx, runner, "password-hash", parent, target, publicationSource, expectedTarget); err != nil {
 		return err
 	}
-	if err := verifyPublishedRegularFileAt(parent, filepath.Base(target), target, "hashed-password.nix", expectedTarget, expectedData); err != nil {
+	if err := verifyPublishedRegularFileAt(parent, filepath.Base(target), target, "external password hash", expectedTarget, expectedData); err != nil {
 		return err
 	}
-	return verifyPinnedDirectoryVisible(parent, filepath.Dir(target), "hashed-password.nix")
+	if err := verifyPinnedDirectoryVisible(parent, filepath.Dir(target), "external password hash"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func sanitizeLegacyGeneratedPasswordModulesLocally(target string, candidates []legacyPasswordHashCandidate) error {
+	for _, candidate := range candidates {
+		if err := sanitizeLegacyGeneratedPasswordModuleLocally(target, candidate); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+//nolint:gocyclo // Scrub, stub publication, and post-verification are one crash-aware migration transaction.
+func sanitizeLegacyGeneratedPasswordModuleLocally(target string, candidate legacyPasswordHashCandidate) error {
+	pinned, err := openPinnedRegularFile(target, "external password hash")
+	if err != nil {
+		return err
+	}
+	defer closeFile(pinned.file)
+	raw, err := readPinnedRegularFile(pinned)
+	if err != nil {
+		return err
+	}
+	if pinned.info.Mode().Perm() != 0o600 || string(bytes.TrimSpace(raw)) != candidate.hash {
+		return fmt.Errorf("external password hash does not match generated module")
+	}
+	if candidate.pinned == nil || candidate.pinned.file == nil {
+		return fmt.Errorf("missing pinned legacy generated password module")
+	}
+	fd, err := unix.Open(fileDescriptorPath(candidate.pinned.file), unix.O_RDWR|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
+	if err != nil {
+		return err
+	}
+	file, wrapErr := fileFromUnixDescriptor(fd, candidate.path)
+	if wrapErr != nil {
+		_ = unix.Close(fd)
+		return wrapErr
+	}
+	defer closeFile(file)
+	actual, err := fsownerIdentityFromPinned(&pinnedRegularFile{file: file})
+	if err != nil {
+		return err
+	}
+	if actual != candidate.identity {
+		return fmt.Errorf("legacy password hash ownership collision at %s: pinned identity changed", candidate.path)
+	}
+	module, err := io.ReadAll(io.NewSectionReader(file, 0, maxPasswordModuleBytes+1))
+	if err != nil {
+		return err
+	}
+	if len(module) > maxPasswordModuleBytes {
+		return fmt.Errorf("legacy password hash module exceeds allowed size")
+	}
+	matches := generatedPasswordDetailsPattern.FindSubmatch(module)
+	if len(matches) != 3 || string(matches[1]) != candidate.namespace || string(matches[2]) != candidate.hash {
+		return fmt.Errorf("legacy password hash ownership collision at %s: pinned content changed", candidate.path)
+	}
+	hashOffset := bytes.Index(module, matches[2])
+	if hashOffset < 0 || bytes.Count(module, matches[2]) != 1 {
+		return fmt.Errorf("legacy password hash ownership collision at %s: hash span is ambiguous", candidate.path)
+	}
+	if err := writePinnedPasswordModuleAt(file, bytes.Repeat([]byte{'x'}, len(matches[2])), int64(hashOffset)); err != nil {
+		return fmt.Errorf("scrub legacy password hash: %w", err)
+	}
+	if err := file.Sync(); err != nil {
+		return err
+	}
+	stub := []byte(functionalLegacyPasswordModule(candidate.namespace))
+	if err := writePinnedPasswordModuleAt(file, stub, 0); err != nil {
+		return err
+	}
+	if err := file.Truncate(int64(len(stub))); err != nil {
+		return err
+	}
+	if err := file.Chmod(0o644); err != nil {
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		return err
+	}
+	visible, visibleErr := os.Lstat(candidate.path)
+	if visibleErr != nil || !sameRegularFile(visible, candidate.pinned.info) {
+		return fmt.Errorf("ownership collision: legacy password module public name changed after its pinned inode was sanitized: %s", candidate.path)
+	}
+	post, err := os.ReadFile(fileDescriptorPath(file))
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(post, stub) {
+		return fmt.Errorf("functional legacy password module failed exact verification")
+	}
+	revalidatedTarget, exists, err := openPinnedRegularFileAtPath(target, "external password hash")
+	if err != nil {
+		return err
+	}
+	if revalidatedTarget != nil {
+		defer closeFile(revalidatedTarget.file)
+	}
+	if !exists || !sameRegularFile(revalidatedTarget.info, pinned.info) {
+		return fmt.Errorf("ownership collision: external password hash changed during module migration")
+	}
+	return nil
+}
+
+func functionalLegacyPasswordModule(namespace string) string {
+	return fmt.Sprintf(`{ config, ... }:
+
+{
+  users.users.${config.%s.user.username}.hashedPasswordFile = "/etc/wahrwelt/hashed-password";
+}
+`, namespace)
+}
+
+func writePinnedPasswordModuleAt(file *os.File, payload []byte, offset int64) error {
+	for len(payload) != 0 {
+		written, err := file.WriteAt(payload, offset)
+		if err != nil {
+			return err
+		}
+		if written == 0 {
+			return io.ErrShortWrite
+		}
+		offset += int64(written)
+		payload = payload[written:]
+	}
+	return nil
+}
+
+func ensureExternalPasswordHashParent(ctx context.Context, runner run.CommandRunner, parent string) error {
+	info, err := os.Lstat(parent)
+	if err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return fmt.Errorf("external password hash parent is not an ordinary directory: %s", parent)
+		}
+		if filepath.Clean(parent) == filepath.Dir(paths.DefaultPasswordHashPath) {
+			return validateExternalPasswordHashParentMetadata(parent, 0)
+		}
+		return nil
+	}
+	if !os.IsNotExist(err) {
+		return err
+	}
+	if err := runner.Command(ctx, "sudo", "install", "-d", "-m", "700", "-o", "root", "-g", "root", parent); err != nil {
+		return fmt.Errorf("prepare external password hash directory: %w", err)
+	}
+	if filepath.Clean(parent) == filepath.Dir(paths.DefaultPasswordHashPath) && !runner.IsDryRun() {
+		return validateExternalPasswordHashParentMetadata(parent, 0)
+	}
+	return nil
+}
+
+func validateExternalPasswordHashParentMetadata(parent string, requiredUID uint32) error {
+	var stat unix.Stat_t
+	if err := unix.Lstat(parent, &stat); err != nil {
+		return err
+	}
+	if stat.Mode&unix.S_IFMT != unix.S_IFDIR || stat.Uid != requiredUID || stat.Mode&0o777 != 0o700 {
+		return fmt.Errorf("external password hash parent is not an owned private directory: %s", parent)
+	}
+	return nil
+}
+
+func openPinnedRegularFileAtPath(path, label string) (*pinnedRegularFile, bool, error) {
+	parent, err := openPinnedParentDirectory(path, label)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	defer closeFile(parent)
+	return openPinnedRegularFileAt(parent, filepath.Base(path), path, label)
 }
 
 const privilegedPublishSecretsScript = `

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
+	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/shellruntime"
@@ -46,20 +47,10 @@ func Run(ctx context.Context, opts Options) error {
 	if err := removePaths(ctx, runner, safeRemovablePaths(home)); err != nil {
 		return err
 	}
-	if err := removeHomeManagerBackups(ctx, runner, filepath.Join(home, ".config")); err != nil {
-		return err
-	}
 	if err := validateActiveEnd4ProfileLink(home); err != nil {
 		return err
 	}
-	wallpaperDir := filepath.Join(home, "Pictures/Wallpapers")
-	if _, err := os.Stat(wallpaperDir); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	return runner.Command(ctx, "find", wallpaperDir, "-maxdepth", "1", "-type", "f", "-name", "preview-*", "-delete")
+	return nil
 }
 
 func Home(opts Options) (string, error) {
@@ -88,11 +79,9 @@ func ReportForHome(home string) string {
 
 func candidates(home string) []string {
 	return []string{
-		filepath.Join(home, "Pictures/Wallpapers/preview-*"),
 		filepath.Join(home, ".cache/noctalia"),
 		filepath.Join(home, ".cache/nvim/treesitter"),
 		filepath.Join(home, ".local/share/nvim/treesitter"),
-		filepath.Join(home, ".config/**/*.backup"),
 	}
 }
 
@@ -119,20 +108,12 @@ func removePaths(ctx context.Context, runner run.CommandRunner, paths []string) 
 	return nil
 }
 
-func removeHomeManagerBackups(ctx context.Context, runner run.CommandRunner, configDir string) error {
-	if _, err := os.Stat(configDir); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	return runner.Command(ctx, "find", configDir, "-type", "f", "-name", "*.backup", "-delete")
-}
-
 func validateActiveEnd4ProfileLink(home string) error {
 	profile := shellruntime.ReadActiveShell(shellruntime.ActiveShellStatePath(home))
 	if profile == "" {
-		profile = shellruntime.ReadActiveShell(paths.LegacyActiveShellStatePath(home))
+		profile = shellruntime.ReadActiveShell(
+			migrationv1tov2.LegacyActiveShellStatePath(filepath.Join(home, ".local", "state")),
+		)
 	}
 	if !shellruntime.IsEnd4Profile(profile) {
 		return nil

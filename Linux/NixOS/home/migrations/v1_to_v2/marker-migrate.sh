@@ -2,4 +2,4 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-exec python3 "$script_dir/legacy-link-guard.py" "$@"
+exec python3 "$script_dir/marker-migrate.py" "$@"

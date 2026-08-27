@@ -1,6 +1,7 @@
 {
   config,
   homeLibs,
+  inputs,
   lib,
   pkgs,
   ...
@@ -110,6 +111,8 @@ let
     text = builtins.readFile ./runtime-activation.sh;
   };
 
+  wahrweltFsHelper = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.wahrwelt-fs-helper;
+
   canonicalHyprRuntime = pkgs.writeText "wahrwelt-hypr-runtime-default" ''
     -- Wahrwelt canonical Hyprland runtime entrypoint
     local home = os.getenv("HOME")
@@ -122,53 +125,6 @@ let
     package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
     dofile(hypr_root .. "/user/hyprland.lua")
   '';
-
-  legacyWahrweltRuntime = pkgs.writeText "wahrwelt-hypr-runtime-legacy-namespace" ''
-    -- Wahrwelt canonical Hyprland runtime entrypoint
-    local home = os.getenv("HOME")
-    if home == nil then
-        error("HOME is not set; cannot locate Wahrwelt Hyprland config")
-    end
-
-    local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-    local hypr_root = config_home .. "/hypr"
-    package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-    dofile(hypr_root .. "/wahrwelt/hyprland.lua")
-  '';
-
-  legacyHomeManagerWahrweltRuntime = pkgs.writeText "wahrwelt-hypr-runtime-legacy-home-manager-namespace" ''
-    -- Active Hyprland profile: wahrwelt (${defaultProfile.id})
-    local home = os.getenv("HOME")
-    if home == nil then
-        error("HOME is not set; cannot locate Wahrwelt Hyprland config")
-    end
-
-    local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-    local hypr_root = config_home .. "/hypr"
-    package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-    dofile(hypr_root .. "/wahrwelt/hyprland.lua")
-  '';
-
-  mkLegacySeededHyprRuntime =
-    namespace:
-    pkgs.writeText "wahrwelt-hypr-runtime-legacy-seeded-${namespace}" ''
-      -- Active Hyprland profile: wahrwelt (${defaultProfile.id})
-      local home = os.getenv("HOME")
-      if home == nil then
-          error("HOME is not set; cannot locate Wahrwelt Hyprland config")
-      end
-
-      local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-      local state_home = os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")
-      local hypr_root = config_home .. "/hypr"
-      local runtime_root = state_home .. "/wahrwelt/hypr-runtime"
-      package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-      dofile(hypr_root .. "/${namespace}/hyprland.lua")
-      dofile(runtime_root .. "/shell-profile.lua")
-    '';
-
-  legacySeededWahrweltRuntime = mkLegacySeededHyprRuntime "wahrwelt";
-  legacySeededUserRuntime = mkLegacySeededHyprRuntime "user";
 
   defaultHyprUserConfig = pkgs.writeText "wahrwelt-hypr-default" ''
     local wahrwelt = require("lib.wahrwelt")
@@ -240,8 +196,6 @@ let
 
 in
 {
-  home.packages = [ pkgs.python3 ];
-
   xdg.configFile =
     hyprScriptFiles
     // stableEntrypointFiles
@@ -254,233 +208,258 @@ in
       };
     };
 
-  home.activation = {
-    prepareWahrweltHyprDirectory =
-      lib.hm.dag.entryBetween [ "checkLinkTargets" ] [ "migrateWahrweltUserPaths" ]
-        ''
-          user_dir="${hyprDir}/user"
-          $DRY_RUN_CMD "${runtimeActivation}/bin/wahrwelt-runtime-activation" \
-            activate-user-dir \
-            "$user_dir" \
-            "${dotsRoot}/hypr/hyprland.lua" \
-            "''${oldGenPath:-}" \
-            "${defaultHyprUserConfig}"
-        '';
+  home = {
+    packages = [
+      pkgs.python3
+      wahrweltFsHelper
+    ];
 
-    seedHyprShellRuntime =
-      lib.hm.dag.entryAfter
-        [
-          "caelestiaSeedShellJson"
-          "noctaliaSeedConfig"
-          "end4SeedConfig"
-          "end4SeedAppConfig"
-          "linkGeneration"
-        ]
-        ''
-          runtime_dir="${hyprRuntimeDir}"
-          activation_helper="${runtimeActivation}/bin/wahrwelt-runtime-activation"
-          hypr_runtime_source="${canonicalHyprRuntime}"
-          wahrwelt_direct_end4_process_upgrade=""
-          wahrwelt_direct_end4_process_runtime_hex=""
-          wahrwelt_direct_end4_process_runtime_id=""
+    sessionVariables.WAHRWELT_FS_HELPER = "${wahrweltFsHelper}/bin/wahrwelt-fs-helper";
 
-          direct_end4_bundle_args=(
-            "$runtime_dir" \
-            "${hyprDir}/hyprland.lua" \
-            "${config.xdg.stateHome}/wahrwelt/end4-variant" \
-            "$hypr_runtime_source" \
-            "${./legacy-hypr-runtime/end4.lua}" \
-            "${./legacy-hypr-runtime/end4-pc.lua}" \
-            "${end4Runtime.profile}" \
-            "${end4Runtime.lock}" \
-            "${end4Runtime.idle}" \
-            "${end4Runtime.launcher}" \
-            "${end4Runtime.keybinds}" \
-            "${end4Runtime.legacyLauncher}" \
-            "${end4Runtime.legacyKeybinds}" \
-            "${end4PCRuntime.profile}" \
-            "${end4PCRuntime.lock}" \
-            "${end4PCRuntime.idle}" \
-            "${end4PCRuntime.launcher}" \
-            "${end4PCRuntime.keybinds}" \
-            "${end4PCRuntime.legacyLauncher}" \
-            "${end4PCRuntime.legacyKeybinds}" \
-            "${dotsRoot}/hypr/hyprland.lua" \
-            "${dotsRoot}/hypr/end4-adapter.lua" \
-            "${dotsRoot}/hypr/end4/launcher.lua" \
-            "${end4RuntimeContract}" \
-            "${hyprDir}/user/hyprland.lua" \
-            "${hyprDir}/end4-adapter.lua" \
-            "${hyprDir}/end4/launcher.lua" \
-            "${hyprDir}/end4/hyprland.lua" \
-            "${hyprDir}/end4/.wahrwelt-runtime-contract" \
-            "${config.xdg.configHome}/quickshell/${end4Profile.quickshellConfig}/shell.qml" \
-            "${config.xdg.configHome}/quickshell/${end4PCProfile.quickshellConfig}/shell.qml" \
-            "${dotsRoot}/hypr/scripts/start-shell.sh"
-          )
+    activation = {
+      prepareWahrweltHyprDirectory =
+        lib.hm.dag.entryBetween [ "checkLinkTargets" ] [ "migrateWahrweltUserPaths" ]
+          ''
+            user_dir="${hyprDir}/user"
+            $DRY_RUN_CMD "${runtimeActivation}/bin/wahrwelt-runtime-activation" \
+              activate-user-dir \
+              "$user_dir" \
+              "${dotsRoot}/hypr/hyprland.lua" \
+              "''${oldGenPath:-}" \
+              "${defaultHyprUserConfig}"
+          '';
 
-          if [ -n "''${DRY_RUN_CMD:-}" ]; then
-            $DRY_RUN_CMD "$activation_helper" migrate-direct-end4-bundle \
-              "''${direct_end4_bundle_args[@]}"
-          else
-            migration_result="$(
-              "$activation_helper" migrate-direct-end4-bundle \
+      seedHyprShellRuntime =
+        lib.hm.dag.entryAfter
+          [
+            "caelestiaSeedShellJson"
+            "noctaliaSeedConfig"
+            "end4SeedConfig"
+            "end4SeedAppConfig"
+            "linkGeneration"
+          ]
+          ''
+            runtime_dir="${hyprRuntimeDir}"
+            activation_helper="${runtimeActivation}/bin/wahrwelt-runtime-activation"
+            hypr_runtime_source="${canonicalHyprRuntime}"
+            wahrwelt_direct_end4_process_upgrade=""
+            wahrwelt_direct_end4_process_runtime_hex=""
+            wahrwelt_direct_end4_process_runtime_id=""
+
+            wahrwelt_v1_to_v2_direct_end4_evidence() {
+              local candidate source
+
+              for candidate in "$runtime_dir/hyprland.lua" "${hyprDir}/hyprland.lua"; do
+                [ -e "$candidate" ] || continue
+                for source in \
+                  "${../migrations/v1_to_v2/hypr-runtime/end4.lua}" \
+                  "${../migrations/v1_to_v2/hypr-runtime/end4-pc.lua}"
+                do
+                  if ${pkgs.coreutils}/bin/cmp -s -- "$candidate" "$source"; then
+                    return 0
+                  fi
+                done
+              done
+              if [ -n "''${XDG_RUNTIME_DIR:-}" ] &&
+                { [ -e "''${XDG_RUNTIME_DIR}/wahrwelt-end4-upgrade" ] ||
+                  [ -L "''${XDG_RUNTIME_DIR}/wahrwelt-end4-upgrade" ]; }; then
+                return 0
+              fi
+              return 1
+            }
+
+            direct_end4_bundle_args=(
+              "$runtime_dir" \
+              "${hyprDir}/hyprland.lua" \
+              "${config.xdg.stateHome}/wahrwelt/end4-variant" \
+              "$hypr_runtime_source" \
+              "${../migrations/v1_to_v2/hypr-runtime/end4.lua}" \
+              "${../migrations/v1_to_v2/hypr-runtime/end4-pc.lua}" \
+              "${end4Runtime.profile}" \
+              "${end4Runtime.lock}" \
+              "${end4Runtime.idle}" \
+              "${end4Runtime.launcher}" \
+              "${end4Runtime.keybinds}" \
+              "${end4Runtime.legacyLauncher}" \
+              "${end4Runtime.legacyKeybinds}" \
+              "${end4PCRuntime.profile}" \
+              "${end4PCRuntime.lock}" \
+              "${end4PCRuntime.idle}" \
+              "${end4PCRuntime.launcher}" \
+              "${end4PCRuntime.keybinds}" \
+              "${end4PCRuntime.legacyLauncher}" \
+              "${end4PCRuntime.legacyKeybinds}" \
+              "${dotsRoot}/hypr/hyprland.lua" \
+              "${dotsRoot}/hypr/end4-adapter.lua" \
+              "${dotsRoot}/hypr/end4/launcher.lua" \
+              "${end4RuntimeContract}" \
+              "${hyprDir}/user/hyprland.lua" \
+              "${hyprDir}/end4-adapter.lua" \
+              "${hyprDir}/end4/launcher.lua" \
+              "${hyprDir}/end4/hyprland.lua" \
+              "${hyprDir}/end4/.wahrwelt-runtime-contract" \
+              "${config.xdg.configHome}/quickshell/${end4Profile.quickshellConfig}/shell.qml" \
+              "${config.xdg.configHome}/quickshell/${end4PCProfile.quickshellConfig}/shell.qml" \
+              "${dotsRoot}/hypr/scripts/start-shell.sh"
+            )
+
+            if wahrwelt_v1_to_v2_direct_end4_evidence && [ -n "''${DRY_RUN_CMD:-}" ]; then
+              $DRY_RUN_CMD "$activation_helper" migrate-direct-end4-bundle \
                 "''${direct_end4_bundle_args[@]}"
-            )"
-            case "$migration_result" in
-              current | legacy-upgrade=)
-                ;;
-              legacy-upgrade=*)
-                migration_payload="''${migration_result#legacy-upgrade=}"
-                case "$migration_payload" in
-                  *';runtime-hex='*';runtime-id='*)
-                    wahrwelt_direct_end4_process_upgrade="''${migration_payload%%;runtime-hex=*}"
-                    migration_runtime="''${migration_payload#*;runtime-hex=}"
-                    wahrwelt_direct_end4_process_runtime_hex="''${migration_runtime%%;runtime-id=*}"
-                    wahrwelt_direct_end4_process_runtime_id="''${migration_runtime#*;runtime-id=}"
-                    ;;
-                  *)
-                    echo "Direct End4 upgrade result has no runtime proof" >&2
-                    exit 1
-                    ;;
-                esac
-                ;;
-              resume-upgrade-runtime-hex=*)
-                migration_runtime="''${migration_result#resume-upgrade-runtime-hex=}"
-                case "$migration_runtime" in
-                  *';runtime-id='*)
-                    wahrwelt_direct_end4_process_runtime_hex="''${migration_runtime%%;runtime-id=*}"
-                    wahrwelt_direct_end4_process_runtime_id="''${migration_runtime#*;runtime-id=}"
-                    ;;
-                  *)
-                    echo "Direct End4 resume result has no runtime identity" >&2
-                    exit 1
-                    ;;
-                esac
-                ;;
-              *)
-                echo "Invalid direct End4 runtime migration result" >&2
-                exit 1
-                ;;
-            esac
-            case "$wahrwelt_direct_end4_process_runtime_hex" in
-              "")
-                if [ -n "$wahrwelt_direct_end4_process_runtime_id" ] || \
-                  [ -n "$wahrwelt_direct_end4_process_upgrade" ]; then
-                  echo "Incomplete direct End4 runtime proof" >&2
-                  exit 1
-                fi
-                ;;
-              *[!0-9a-f]*)
-                echo "Invalid direct End4 runtime proof" >&2
-                exit 1
-                ;;
-              *)
-                if [ "$(( ''${#wahrwelt_direct_end4_process_runtime_hex} % 2 ))" -ne 0 ]; then
-                  echo "Invalid direct End4 runtime proof length" >&2
-                  exit 1
-                fi
-                ;;
-            esac
-            if [ -n "$wahrwelt_direct_end4_process_runtime_hex" ]; then
-              runtime_dev=""
-              runtime_ino=""
-              runtime_uid=""
-              runtime_mode=""
-              runtime_extra=""
-              IFS=: read -r runtime_dev runtime_ino runtime_uid runtime_mode runtime_extra \
-                <<<"$wahrwelt_direct_end4_process_runtime_id"
-              case "$runtime_dev:$runtime_ino:$runtime_uid:$runtime_mode" in
-                *[!0-9:]* | *::*)
-                  echo "Invalid direct End4 runtime identity" >&2
+            elif wahrwelt_v1_to_v2_direct_end4_evidence; then
+              migration_result="$(
+                "$activation_helper" migrate-direct-end4-bundle \
+                  "''${direct_end4_bundle_args[@]}"
+              )"
+              case "$migration_result" in
+                current | legacy-upgrade=)
+                  ;;
+                legacy-upgrade=*)
+                  migration_payload="''${migration_result#legacy-upgrade=}"
+                  case "$migration_payload" in
+                    *';runtime-hex='*';runtime-id='*)
+                      wahrwelt_direct_end4_process_upgrade="''${migration_payload%%;runtime-hex=*}"
+                      migration_runtime="''${migration_payload#*;runtime-hex=}"
+                      wahrwelt_direct_end4_process_runtime_hex="''${migration_runtime%%;runtime-id=*}"
+                      wahrwelt_direct_end4_process_runtime_id="''${migration_runtime#*;runtime-id=}"
+                      ;;
+                    *)
+                      echo "Direct End4 upgrade result has no runtime proof" >&2
+                      exit 1
+                      ;;
+                  esac
+                  ;;
+                resume-upgrade-runtime-hex=*)
+                  migration_runtime="''${migration_result#resume-upgrade-runtime-hex=}"
+                  case "$migration_runtime" in
+                    *';runtime-id='*)
+                      wahrwelt_direct_end4_process_runtime_hex="''${migration_runtime%%;runtime-id=*}"
+                      wahrwelt_direct_end4_process_runtime_id="''${migration_runtime#*;runtime-id=}"
+                      ;;
+                    *)
+                      echo "Direct End4 resume result has no runtime identity" >&2
+                      exit 1
+                      ;;
+                  esac
+                  ;;
+                *)
+                  echo "Invalid direct End4 runtime migration result" >&2
                   exit 1
                   ;;
               esac
-              if [ -z "$runtime_dev" ] || [ -z "$runtime_ino" ] || \
-                [ -z "$runtime_uid" ] || [ -z "$runtime_mode" ] || \
-                [ -n "$runtime_extra" ] || [ "$runtime_mode" != 700 ]; then
-                echo "Invalid direct End4 runtime identity shape" >&2
-                exit 1
+              case "$wahrwelt_direct_end4_process_runtime_hex" in
+                "")
+                  if [ -n "$wahrwelt_direct_end4_process_runtime_id" ] || \
+                    [ -n "$wahrwelt_direct_end4_process_upgrade" ]; then
+                    echo "Incomplete direct End4 runtime proof" >&2
+                    exit 1
+                  fi
+                  ;;
+                *[!0-9a-f]*)
+                  echo "Invalid direct End4 runtime proof" >&2
+                  exit 1
+                  ;;
+                *)
+                  if [ "$(( ''${#wahrwelt_direct_end4_process_runtime_hex} % 2 ))" -ne 0 ]; then
+                    echo "Invalid direct End4 runtime proof length" >&2
+                    exit 1
+                  fi
+                  ;;
+              esac
+              if [ -n "$wahrwelt_direct_end4_process_runtime_hex" ]; then
+                runtime_dev=""
+                runtime_ino=""
+                runtime_uid=""
+                runtime_mode=""
+                runtime_extra=""
+                IFS=: read -r runtime_dev runtime_ino runtime_uid runtime_mode runtime_extra \
+                  <<<"$wahrwelt_direct_end4_process_runtime_id"
+                case "$runtime_dev:$runtime_ino:$runtime_uid:$runtime_mode" in
+                  *[!0-9:]* | *::*)
+                    echo "Invalid direct End4 runtime identity" >&2
+                    exit 1
+                    ;;
+                esac
+                if [ -z "$runtime_dev" ] || [ -z "$runtime_ino" ] || \
+                  [ -z "$runtime_uid" ] || [ -z "$runtime_mode" ] || \
+                  [ -n "$runtime_extra" ] || [ "$runtime_mode" != 700 ]; then
+                  echo "Invalid direct End4 runtime identity shape" >&2
+                  exit 1
+                fi
               fi
             fi
-          fi
 
-          $DRY_RUN_CMD "$activation_helper" activate-runtime-dir \
-            "$runtime_dir" \
-            "$hypr_runtime_source" \
-            "${legacyWahrweltRuntime}" \
-            "${legacyHomeManagerWahrweltRuntime}" \
-            "${legacySeededWahrweltRuntime}" \
-            "${legacySeededUserRuntime}" \
-            "${./legacy-hypr-runtime/end4.lua}" \
-            "${./legacy-hypr-runtime/end4-pc.lua}" \
-            "${./legacy-hypr-runtime/user-namespace-transition.lua}" \
-            "${defaultShellProfileRuntime}" \
-            "${defaultHyprlockRuntime}" \
-            "${defaultHypridleRuntime}" \
-            "${defaultShellLauncherRuntime}" \
-            "${defaultShellKeybindRuntime}"
-        '';
+            $DRY_RUN_CMD "$activation_helper" activate-runtime-dir \
+              "$runtime_dir" \
+              "$hypr_runtime_source" \
+              "$hypr_runtime_source" \
+              "${defaultShellProfileRuntime}" \
+              "${defaultHyprlockRuntime}" \
+              "${defaultHypridleRuntime}" \
+              "${defaultShellLauncherRuntime}" \
+              "${defaultShellKeybindRuntime}"
+          '';
 
-    liveSyncHyprShell =
-      lib.hm.dag.entryAfter
-        [
-          "seedHyprShellRuntime"
-          "linkGeneration"
-        ]
-        ''
-          activation_helper="${runtimeActivation}/bin/wahrwelt-runtime-activation"
-          hyprctl_path="$(command -v hyprctl 2>/dev/null || true)"
-          run_live_shell_command() {
-            if [ -n "''${wahrwelt_direct_end4_process_runtime_hex:-}" ]; then
-              $DRY_RUN_CMD "$activation_helper" run-with-runtime-hex \
-                "$wahrwelt_direct_end4_process_runtime_hex" \
-                "$wahrwelt_direct_end4_process_runtime_id" \
-                "$@"
-            else
-              $DRY_RUN_CMD "$@"
-            fi
-          }
-          if [ -n "$hyprctl_path" ] && [ "''${hyprctl_path#/}" != "$hyprctl_path" ] && \
-            [ -x "$hyprctl_path" ] && run_live_shell_command "$hyprctl_path" instances >/dev/null 2>&1; then
-            hypr_version="$(run_live_shell_command "$hyprctl_path" version 2>/dev/null | awk 'NR == 1 { print $2 }')"
-            hypr_version="''${hypr_version#v}"
-            hypr_major="''${hypr_version%%.*}"
-            hypr_rest="''${hypr_version#*.}"
-            hypr_minor="''${hypr_rest%%.*}"
-
-            case "$hypr_major" in
-              "" | *[!0-9]*)
-                hypr_major=0
-                ;;
-            esac
-            case "$hypr_minor" in
-              "" | *[!0-9]*)
-                hypr_minor=0
-                ;;
-            esac
-
-            if [ "$hypr_major" -gt 0 ] || [ "$hypr_minor" -ge 55 ]; then
-              if ! run_live_shell_command "$hyprctl_path" reload; then
-                echo "Failed to reload the active Hyprland configuration" >&2
-                exit 1
-              fi
-              if run_live_shell_command "${config.xdg.configHome}/hypr/scripts/start-shell.sh"; then
-                start_shell_status=0
+      liveSyncHyprShell =
+        lib.hm.dag.entryAfter
+          [
+            "seedHyprShellRuntime"
+            "linkGeneration"
+          ]
+          ''
+            activation_helper="${runtimeActivation}/bin/wahrwelt-runtime-activation"
+            hyprctl_path="$(command -v hyprctl 2>/dev/null || true)"
+            run_live_shell_command() {
+              if [ -n "''${wahrwelt_direct_end4_process_runtime_hex:-}" ]; then
+                $DRY_RUN_CMD "$activation_helper" run-with-runtime-hex \
+                  "$wahrwelt_direct_end4_process_runtime_hex" \
+                  "$wahrwelt_direct_end4_process_runtime_id" \
+                  "$@"
               else
-                start_shell_status=$?
+                $DRY_RUN_CMD "$@"
               fi
-              if [ "$start_shell_status" -ne 0 ]; then
-                echo "Failed to start the configured Wahrwelt shell profile" >&2
-                exit 1
+            }
+            if [ -n "$hyprctl_path" ] && [ "''${hyprctl_path#/}" != "$hyprctl_path" ] && \
+              [ -x "$hyprctl_path" ] && run_live_shell_command "$hyprctl_path" instances >/dev/null 2>&1; then
+              hypr_version="$(run_live_shell_command "$hyprctl_path" version 2>/dev/null | awk 'NR == 1 { print $2 }')"
+              hypr_version="''${hypr_version#v}"
+              hypr_major="''${hypr_version%%.*}"
+              hypr_rest="''${hypr_version#*.}"
+              hypr_minor="''${hypr_rest%%.*}"
+
+              case "$hypr_major" in
+                "" | *[!0-9]*)
+                  hypr_major=0
+                  ;;
+              esac
+              case "$hypr_minor" in
+                "" | *[!0-9]*)
+                  hypr_minor=0
+                  ;;
+              esac
+
+              if [ "$hypr_major" -gt 0 ] || [ "$hypr_minor" -ge 55 ]; then
+                if ! run_live_shell_command "$hyprctl_path" reload; then
+                  echo "Failed to reload the active Hyprland configuration" >&2
+                  exit 1
+                fi
+                if run_live_shell_command "${config.xdg.configHome}/hypr/scripts/start-shell.sh"; then
+                  start_shell_status=0
+                else
+                  start_shell_status=$?
+                fi
+                if [ "$start_shell_status" -ne 0 ]; then
+                  echo "Failed to start the configured Wahrwelt shell profile" >&2
+                  exit 1
+                fi
+                wahrwelt_direct_end4_process_upgrade=""
+                wahrwelt_direct_end4_process_runtime_hex=""
+                wahrwelt_direct_end4_process_runtime_id=""
+              else
+                echo "Skipping live Hyprland reload; running Hyprland $hypr_version cannot load Lua runtime. Logout or reboot after switch." >&2
               fi
-              wahrwelt_direct_end4_process_upgrade=""
-              wahrwelt_direct_end4_process_runtime_hex=""
-              wahrwelt_direct_end4_process_runtime_id=""
-            else
-              echo "Skipping live Hyprland reload; running Hyprland $hypr_version cannot load Lua runtime. Logout or reboot after switch." >&2
             fi
-          fi
-        '';
+          '';
+    };
   };
 }

@@ -81,10 +81,8 @@ let
       targetExpr = "${noctaliaConfigDir}/colorschemes/${relPath}";
     in
     ''
-      $DRY_RUN_CMD ${pkgs.coreutils}/bin/mkdir -p "${targetDirExpr}"
-      if [ ! -e "${targetExpr}" ]; then
-        $DRY_RUN_CMD ${pkgs.coreutils}/bin/install -m 644 "${storeFile}" "${targetExpr}"
-      fi
+      ensure_real_directory "${targetDirExpr}" || exit $?
+      seed_if_missing "${targetExpr}" "${storeFile}" || exit $?
     ''
   ) colorSchemeFiles;
 in

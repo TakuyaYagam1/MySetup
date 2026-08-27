@@ -32,7 +32,7 @@ func runDotsForm(s *session, errors dotsFormErrors) error {
 			Value(&s.state.Dots.Hypr),
 		huh.NewConfirm().
 			Title("Copy wallpapers").
-			Description("Copies Linux/NixOS/Wallpapers into ~/Pictures/Wallpapers and removes preview-* files.").
+			Description("Seeds known regular wallpapers without changing existing or unknown files.").
 			Value(&s.state.Dots.Wallpapers),
 		huh.NewConfirm().
 			Title("Install Zen Catppuccin chrome").

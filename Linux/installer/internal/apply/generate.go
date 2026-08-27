@@ -179,8 +179,11 @@ var flakeTemplate = template.Must(template.New("flake.nix").Funcs(template.FuncM
 
         hostVars = ./host-vars.nix;
         hardware = ./hardware-configuration.nix;
-        hashedPassword =
-          if builtins.pathExists ./hashed-password.nix then ./hashed-password.nix else null;
+        hashedPasswordFile =
+          if builtins.pathExists ./.wahrwelt-password-hash-enabled then
+            "/etc/wahrwelt/hashed-password"
+          else
+            null;
         secretsDir =
           if builtins.pathExists ./secrets then ./secrets else null;
 
@@ -277,15 +280,6 @@ var hostVarsTemplate = template.Must(template.New("host-vars.nix").Funcs(templat
   };
 }
 `))
-
-func HashedPasswordNix(hash string) string {
-	return fmt.Sprintf(`{ config, ... }:
-
-{
-  users.users.${config.wahrwelt.user.username}.initialHashedPassword = %s;
-}
-`, nixString(hash))
-}
 
 func nixBool(v bool) string {
 	if v {

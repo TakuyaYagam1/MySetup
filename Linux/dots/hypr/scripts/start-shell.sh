@@ -5,6 +5,8 @@ script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=Linux/dots/hypr/scripts/shell-runtime.sh
 . "$script_dir/shell-runtime.sh"
 
+original_argv=("$@")
+
 requested_legacy_end4_upgrade_tokens=""
 legacy_end4_upgrade_tokens=""
 persist_end4_upgrade_only=0
@@ -33,13 +35,11 @@ esac
   printf 'usage: %s [--legacy-direct-end4-upgrade-processes TOKENS] [PROFILE]\n' "$0" >&2
   exit 2
 }
+wahrwelt_enter_runtime_lock_v2 \
+  wahrwelt-shell-v2.lock 1500 1 "$0" "${original_argv[@]}"
 requested_profile="${1:-}"
-runtime_dir="$wahrwelt_runtime_session_dir"
 persistent_state_file="$wahrwelt_active_shell_state"
 log_file="$wahrwelt_log_file"
-lock_dir="$runtime_dir/wahrwelt-shell.lock"
-lock_owner_file="$lock_dir/owner"
-lock_identity=""
 hypr_runtime_dir="$wahrwelt_hypr_runtime_dir"
 user_name="$wahrwelt_user_name"
 selector_pattern="$wahrwelt_selector_pattern"
@@ -119,110 +119,6 @@ hypr_dir() {
   wahrwelt_hypr_dir_path
 }
 
-acquire_lock() {
-  local attempt lock_owner lock_pid lock_profile stale_identity recovery publish_state
-
-  for attempt in $(seq 1 80); do
-    if wahrwelt_begin_new_lock_directory "$lock_dir"; then
-      if ! wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" pid "$$
-" ||
-        ! wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" profile "$profile
-" ||
-        ! wahrwelt_write_new_pinned_regular_file "$wahrwelt_new_lock_fd" owner "wahrwelt-start-shell
-"; then
-        wahrwelt_close_new_lock_directory
-        log "new start-shell lock changed before ownership record; retaining collision at $lock_dir"
-        return 1
-      fi
-      if wahrwelt_finish_new_lock_directory "$lock_dir"; then
-        if ! start_shell_known_lock_directory; then
-          log "published start-shell lock changed before ownership record; retaining collision at $lock_dir"
-          return 1
-        fi
-        lock_identity="$wahrwelt_acquired_lock_identity"
-        [ -n "$lock_identity" ] || return 1
-        return 0
-      fi
-      publish_state="$wahrwelt_new_lock_publish_state"
-      wahrwelt_close_new_lock_directory
-      if [ "$publish_state" != collision ]; then
-        log "new start-shell lock changed before atomic publication; retaining collision at $lock_dir"
-        return 1
-      fi
-    fi
-
-    if declare -F wahrwelt_after_new_lock_begin_failed_hook >/dev/null 2>&1; then
-      wahrwelt_after_new_lock_begin_failed_hook "$lock_dir" || return 1
-    fi
-
-    if ! start_shell_known_lock_directory; then
-      if wahrwelt_lock_path_absent "$lock_dir"; then
-        continue
-      fi
-      log "refusing unknown or nonempty stale start-shell lock; profile=$profile pid=unknown"
-      return 1
-    fi
-    lock_owner="$(wahrwelt_read_known_lock_field "$lock_dir" owner 2>/dev/null || true)"
-    lock_pid="$(wahrwelt_read_known_lock_field "$lock_dir" pid 2>/dev/null || true)"
-    lock_profile="$(wahrwelt_read_known_lock_field "$lock_dir" profile 2>/dev/null || true)"
-    if declare -F wahrwelt_after_lock_owner_read_hook >/dev/null 2>&1; then
-      wahrwelt_after_lock_owner_read_hook "$lock_dir" "$lock_pid" || return 1
-    fi
-    if [ "$lock_owner" = "wahrwelt-start-shell" ] && wahrwelt_pid_matches "$lock_pid" '(^|[ /])start-shell\.sh([[:space:]]|$)'; then
-      if [ "$lock_profile" = "$profile" ]; then
-        if [ -z "$legacy_end4_upgrade_tokens" ]; then
-          log "another start-shell instance is already running for profile=$profile pid=$lock_pid"
-          exit 0
-        fi
-        log "waiting for start-shell upgrade lock; requested=$profile active=$lock_profile pid=$lock_pid"
-        sleep 0.25
-        continue
-      fi
-
-      log "waiting for start-shell switch lock; requested=$profile active=${lock_profile:-unknown} pid=$lock_pid"
-      sleep 0.25
-      continue
-    fi
-
-    if ! start_shell_known_lock_directory; then
-      if wahrwelt_lock_path_absent "$lock_dir"; then
-        continue
-      fi
-      log "stale start-shell lock changed after classification; preserving collision at $lock_dir"
-      return 1
-    fi
-    stale_identity="$wahrwelt_known_lock_identity"
-    [ -n "$stale_identity" ] || return 1
-    if declare -F wahrwelt_after_lock_classification_hook >/dev/null 2>&1; then
-      wahrwelt_after_lock_classification_hook "$lock_dir" "$stale_identity" || return 1
-    fi
-    if ! wahrwelt_quarantine_owned_lock "$lock_dir" "$stale_identity" 2>/dev/null; then
-      if wahrwelt_lock_path_absent "$lock_dir"; then
-        continue
-      fi
-      log "stale start-shell lock changed during quarantine; preserving collision at $lock_dir"
-      return 1
-    fi
-    recovery="$wahrwelt_lock_recovery_exact_path"
-    if [ -z "$recovery" ]; then
-      log "stale start-shell lock quarantine lost its exact recovery; preserving collision at $lock_dir"
-      return 1
-    fi
-    log "stale start-shell lock retained at $recovery; profile=$profile pid=${lock_pid:-unknown}"
-  done
-
-  log "failed to acquire start-shell lock; profile=$profile"
-  exit 1
-}
-
-start_shell_known_lock_directory() {
-  wahrwelt_known_lock_directory "$lock_dir" "$lock_dir/pid" "$lock_owner_file" \
-    "wahrwelt-start-shell" "profile:f"
-}
-
-if ! acquire_lock; then
-  exit 1
-fi
 runtime_bundle_snapshot_dir=""
 state_snapshot_dir=""
 switch_transaction_active=0
@@ -233,6 +129,7 @@ previous=""
 runtime_bundle_path_list=()
 state_path_list=()
 state_guard_path_list=("$persistent_state_file" "$wahrwelt_end4_variant_state")
+runtime_transaction_fast_path=0
 spotify_focus_guard_active=0
 spotify_music_was_hidden=0
 spotify_guard_addresses=()
@@ -242,19 +139,23 @@ spotify_focus_window_pid_before=""
 
 discard_switch_snapshots() {
   if [ -n "$runtime_bundle_snapshot_dir" ]; then
-    remove_exact_path_snapshot "$runtime_bundle_snapshot_dir" "${runtime_bundle_path_list[@]}" ||
-      log "runtime rollback snapshot cleanup refused; exact recovery retained"
-    runtime_bundle_snapshot_dir=""
+    if wahrwelt_fs_commit "$runtime_bundle_snapshot_dir"; then
+      runtime_bundle_snapshot_dir=""
+    else
+      log "runtime transaction cleanup refused; exact recovery retained: $runtime_bundle_snapshot_dir"
+    fi
   fi
   if [ -n "$state_snapshot_dir" ]; then
-    remove_exact_path_snapshot "$state_snapshot_dir" "${state_path_list[@]}" ||
-      log "state rollback snapshot cleanup refused; exact recovery retained"
-    state_snapshot_dir=""
+    if wahrwelt_fs_commit "$state_snapshot_dir"; then
+      state_snapshot_dir=""
+    else
+      log "state transaction cleanup refused; exact recovery retained: $state_snapshot_dir"
+    fi
   fi
 }
 
 cleanup_start_shell() {
-  local recovery recovery_identity spotify_wait_for_watcher=0
+  local spotify_wait_for_watcher=0
 
   trap - EXIT
   [ "$shell_processes_touched" -eq 0 ] || spotify_wait_for_watcher=1
@@ -291,37 +192,39 @@ cleanup_start_shell() {
   if ! finish_spotify_focus_guard "$spotify_wait_for_watcher"; then
     log "failed to restore Spotify activation after shell transaction cleanup"
   fi
-  if [ -n "$lock_identity" ]; then
-    if wahrwelt_release_owned_lock "$lock_dir" "$lock_identity" 2>/dev/null; then
-      recovery="${wahrwelt_lock_recovery_exact_path:-}"
-      recovery_identity="${wahrwelt_lock_recovery_identity:-}"
-      if [ -n "$recovery" ] && [ -n "$recovery_identity" ]; then
-        log "start-shell lock retained at exact recovery path: $recovery identity=$recovery_identity"
-      else
-        log "start-shell lock release lost its durable recovery report; preserving collision at $lock_dir"
-      fi
-    else
-      log "start-shell lock changed during cleanup; preserving collision at $lock_dir"
-    fi
-  fi
 }
 
 trap cleanup_start_shell EXIT
 
 begin_switch_transaction() {
-  local planned_paths
+  local planned_paths scavenge_error
 
   wahrwelt_capture_exact_path_guards "${state_guard_path_list[@]}" || return 1
+  if ! scavenge_error="$(wahrwelt_fs_scavenge "$wahrwelt_runtime_session_public_dir" runtime 2>&1)"; then
+    log "runtime scavenger preserved unknown or collided recovery: $scavenge_error"
+  fi
+  if ! scavenge_error="$(wahrwelt_fs_scavenge "$wahrwelt_runtime_session_public_dir" state 2>&1)"; then
+    log "state scavenger preserved unknown or collided recovery: $scavenge_error"
+  fi
   runtime_bundle_path_list=()
-  planned_paths="$(runtime_switch_bundle_paths)" || return 1
+  runtime_transaction_fast_path=0
+  if runtime_bundle_fast_path_ready; then
+    runtime_transaction_fast_path=1
+    if wahrwelt_valid_shell_profile "${previous:-}" && [ "$previous" != "$profile" ]; then
+      planned_paths="$(runtime_profile_union_mutation_paths "$profile" "$previous")" || return 1
+    else
+      planned_paths="$(runtime_profile_mutation_paths)" || return 1
+    fi
+  else
+    planned_paths="$(runtime_full_bundle_paths)" || return 1
+  fi
   if [ -n "$planned_paths" ]; then
     mapfile -t runtime_bundle_path_list <<<"$planned_paths"
-    wahrwelt_begin_exact_snapshot "$runtime_dir" .runtime-rollback- runtime || return 1
-    runtime_bundle_snapshot_dir="$wahrwelt_new_snapshot_dir"
-    if ! snapshot_exact_paths "$runtime_bundle_snapshot_dir" "${runtime_bundle_path_list[@]}"; then
-      discard_switch_snapshots
-      return 1
-    fi
+  fi
+  if [ "${#runtime_bundle_path_list[@]}" -gt 0 ]; then
+    runtime_bundle_snapshot_dir="$(
+      wahrwelt_fs_begin runtime "$wahrwelt_runtime_session_public_dir" "${runtime_bundle_path_list[@]}"
+    )" || return 1
   fi
 
   switch_transaction_active=1
@@ -330,13 +233,13 @@ begin_switch_transaction() {
 restore_runtime_bundle() {
   [ "${#runtime_bundle_path_list[@]}" -gt 0 ] || return 0
   [ -n "$runtime_bundle_snapshot_dir" ] || return 1
-  restore_exact_paths "$runtime_bundle_snapshot_dir" "${runtime_bundle_path_list[@]}"
+  wahrwelt_fs_rollback "$runtime_bundle_snapshot_dir"
 }
 
 restore_original_state() {
   [ "${#state_path_list[@]}" -gt 0 ] || return 0
   [ -n "$state_snapshot_dir" ] || return 1
-  restore_exact_paths "$state_snapshot_dir" "${state_path_list[@]}"
+  wahrwelt_fs_rollback "$state_snapshot_dir"
 }
 
 rollback_switch_transaction() {
@@ -648,6 +551,38 @@ finish_spotify_focus_guard() {
   return "$status"
 }
 
+clear_spotify_focus_guard_state() {
+  spotify_guard_addresses=()
+  spotify_focus_guard_active=0
+  spotify_music_was_hidden=0
+  spotify_focus_monitor_before=""
+  spotify_focus_window_before=""
+  spotify_focus_window_pid_before=""
+}
+
+finish_spotify_focus_guard_async() {
+  local completion="${WAHRWELT_SPOTIFY_ASYNC_DONE:-}"
+
+  if [ "$spotify_focus_guard_active" -ne 1 ]; then
+    if [ -n "$completion" ]; then
+      printf '%s\n' 'done' >"$completion"
+    fi
+    return 0
+  fi
+  if [ -n "$completion" ]; then
+    printf '%s\n' started >"$completion.started"
+  fi
+  (
+    if ! finish_spotify_focus_guard 1; then
+      log "failed to restore Spotify activation after successful shell switch"
+    fi
+    if [ -n "$completion" ]; then
+      printf '%s\n' 'done' >"$completion"
+    fi
+  ) </dev/null &
+  clear_spotify_focus_guard_state
+}
+
 stop_caelestia() {
   log "stopping caelestia shell"
 
@@ -692,29 +627,50 @@ stop_end4_idle() {
 
 stop_quickshells() {
   log "stopping existing shell instances"
-
-  stop_shell_selector
-  stop_caelestia
-  stop_noctalia
-  stop_end4
+  if command -v caelestia >/dev/null 2>&1; then
+    timeout 0.25s caelestia shell -k >/dev/null 2>&1 || true
+  fi
+  stop_matching_group \
+    "$selector_handle" "$caelestia_handle" "$caelestia_resizer_handle" \
+    "$noctalia_handle" "$end4_handle" >/dev/null 2>&1 || true
 }
 
 stop_inactive_shells() {
-  stop_shell_selector
+  local requested="$1"
+  local -a handles=("$selector_handle")
+
   case "$1" in
     caelestia)
-      stop_noctalia
-      stop_end4
+      handles+=("$noctalia_handle" "$end4_handle")
       ;;
     noctalia)
-      stop_caelestia
-      stop_end4
+      handles+=("$caelestia_handle" "$caelestia_resizer_handle" "$end4_handle")
       ;;
     end4 | end4-pc)
-      stop_caelestia
-      stop_noctalia
+      handles+=("$caelestia_handle" "$caelestia_resizer_handle" "$noctalia_handle")
       ;;
   esac
+  if [ "$(wahrwelt_shell_family "$requested")" != end4 ]; then
+    handles+=("$end4_idle_handle")
+  fi
+  stop_matching_group "${handles[@]}" >/dev/null 2>&1 || true
+}
+
+stop_all_shells_for_switch() {
+  local requested="$1"
+  local -a handles=(
+    "$selector_handle" "$caelestia_handle" "$caelestia_resizer_handle"
+    "$noctalia_handle" "$end4_handle"
+  )
+
+  log "stopping existing shell instances"
+  if command -v caelestia >/dev/null 2>&1; then
+    timeout 0.25s caelestia shell -k >/dev/null 2>&1 || true
+  fi
+  if [ "$(wahrwelt_shell_family "$requested")" != end4 ]; then
+    handles+=("$end4_idle_handle")
+  fi
+  stop_matching_group "${handles[@]}" >/dev/null 2>&1 || true
 }
 
 ensure_end4_idle() {
@@ -870,9 +826,11 @@ attempt_previous_fallback() {
     return 1
   fi
   propagate_runtime_environment
+  # The outer transition intentionally reports the requested profile failure
+  # after a successful fallback. The v2 runtime lock kills all remaining
+  # descendants on a non-zero exit, so this cleanup must finish in-process.
   if ! finish_spotify_focus_guard 1; then
-    log "failed to restore Spotify activation after fallback profile=$profile"
-    return 1
+    log "failed to restore Spotify activation after fallback shell switch"
   fi
   hypr_reload_started=0
   profile_start_attempted=0
@@ -919,14 +877,9 @@ fi
 
 shell_processes_touched=1
 if [ "$previous" != "$profile" ] || [ -n "$requested_profile" ]; then
-  stop_quickshells
-  sleep 0.2
+  stop_all_shells_for_switch "$profile"
 else
   stop_inactive_shells "$profile"
-fi
-
-if [ "$(wahrwelt_shell_family "$profile")" != "end4" ]; then
-  stop_end4_idle
 fi
 
 profile_start_attempted=1
@@ -962,10 +915,7 @@ if ! reload_hypr; then
   exit 1
 fi
 propagate_runtime_environment
-if ! finish_spotify_focus_guard 1; then
-  log "failed to restore Spotify activation after shell switch"
-  exit 1
-fi
+finish_spotify_focus_guard_async
 switch_transaction_active=0
 profile_start_attempted=0
 shell_processes_touched=0

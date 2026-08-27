@@ -66,6 +66,13 @@ func (r *publicationRaceRunner) Output(ctx context.Context, name string, args ..
 	return strings.TrimSpace(stdout.String()), nil
 }
 
+func (r *publicationRaceRunner) OutputInPinnedDirectory(ctx context.Context, directory *os.File, name string, args ...string) (string, error) {
+	if err := r.race(); err != nil {
+		return "", err
+	}
+	return runValidatedStagingPinnedOutput(ctx, directory, name, args...)
+}
+
 func (*publicationRaceRunner) IsDryRun() bool { return false }
 
 type validatedStagingMutationRunner struct {
@@ -122,6 +129,10 @@ func (r *validatedStagingMutationRunner) Output(ctx context.Context, name string
 	return strings.TrimSpace(stdout.String()), nil
 }
 
+func (r *validatedStagingMutationRunner) OutputInPinnedDirectory(ctx context.Context, directory *os.File, name string, args ...string) (string, error) {
+	return run.Runner{Stdout: io.Discard, Stderr: io.Discard}.OutputInPinnedDirectory(ctx, directory, name, args...)
+}
+
 func (*validatedStagingMutationRunner) IsDryRun() bool { return false }
 
 type userNamespaceCleanupRunner struct{}
@@ -167,6 +178,35 @@ func (*userNamespaceCleanupRunner) Output(context.Context, string, ...string) (s
 
 func (*userNamespaceCleanupRunner) IsDryRun() bool { return false }
 
+type rootOnlySecretsRunner struct{ calls int }
+
+func (r *rootOnlySecretsRunner) Command(ctx context.Context, name string, args ...string) error {
+	if name != "sudo" || len(args) != 7 || args[1] != "-c" || args[2] != privilegedCopyEncryptedSecretsPython {
+		return fmt.Errorf("unexpected root-only secrets command %s %s", name, strings.Join(args, " "))
+	}
+	r.calls++
+	commandArgs := append([]string(nil), args...)
+	// The test process cannot gain host root. Temporarily expose the exact
+	// allowlisted source only inside this sudo stand-in after the caller has
+	// already selected the permission fallback.
+	if err := os.Chmod(commandArgs[3], 0o700); err != nil {
+		return err
+	}
+	defer os.Chmod(commandArgs[3], 0o000)
+	cmd := exec.CommandContext(ctx, commandArgs[0], commandArgs[1:]...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("root-only secrets helper failed: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func (*rootOnlySecretsRunner) Output(context.Context, string, ...string) (string, error) {
+	return "", fmt.Errorf("unexpected root-only secrets output command")
+}
+
+func (*rootOnlySecretsRunner) IsDryRun() bool { return false }
+
 type crashingUserNamespaceCleanupRunner struct{}
 
 func (*crashingUserNamespaceCleanupRunner) Command(ctx context.Context, name string, args ...string) error {
@@ -188,7 +228,7 @@ func TestPrepareStagedApplyDryBuildsImmutablePublicationCandidate(t *testing.T) 
 	seed := map[string]string{
 		"user/default.nix":     "expected user template\n",
 		"hashed-password.nix":  "expected password hash\n",
-		"secrets/secrets.yaml": "expected secret\n",
+		"secrets/secrets.yaml": testEncryptedSecretsYAML,
 	}
 	for rel, content := range seed {
 		writePublicationSource(t, dest, rel, content)
@@ -222,7 +262,6 @@ func TestPrepareStagedApplyDryBuildsImmutablePublicationCandidate(t *testing.T) 
 	for rel, raced := range map[string]string{
 		"configuration.nix":    "# raced after validation\n",
 		"user/default.nix":     "raced user template\n",
-		"hashed-password.nix":  "raced password hash\n",
 		"secrets/secrets.yaml": "raced secret\n",
 	} {
 		validatedBytes, readErr := os.ReadFile(filepath.Join(validated.path, rel))
@@ -232,6 +271,12 @@ func TestPrepareStagedApplyDryBuildsImmutablePublicationCandidate(t *testing.T) 
 		if string(validatedBytes) == raced {
 			t.Fatalf("immutable publication candidate accepted post-snapshot mutation for %s: %q", rel, validatedBytes)
 		}
+	}
+	if _, err := os.Stat(filepath.Join(validated.path, paths.PasswordHashMarkerName)); err != nil {
+		t.Fatalf("immutable publication candidate missing non-secret password marker: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(validated.path, "hashed-password.nix")); !os.IsNotExist(err) {
+		t.Fatalf("immutable publication candidate contains a password hash: %v", err)
 	}
 	originalBytes, err := os.ReadFile(filepath.Join(staging, "configuration.nix"))
 	if err != nil {
@@ -303,6 +348,60 @@ func TestPinnedStagingCreatorRejectsPreOpenReplacement(t *testing.T) {
 	}
 }
 
+func TestCreateStagingWorkspaceScavengesOnlyExactEmptyHistoricalContainers(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", cache)
+	base := filepath.Join(cache, "wahrwelt", "staging")
+	if err := os.MkdirAll(base, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	empty := []string{
+		".wahrwelt-workspace-123456789",
+		".wahrwelt-workspace-1234567890",
+		".wahrwelt-workspace-0123456789abcdef0123456789abcdef",
+	}
+	for _, name := range empty {
+		if !isKnownStagingContainerName(name) {
+			t.Fatalf("fixture is not recognized as a historical container: %s", name)
+		}
+		if err := os.Mkdir(filepath.Join(base, name), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	nonempty := filepath.Join(base, ".wahrwelt-workspace-fedcba9876543210fedcba9876543210")
+	if err := os.Mkdir(nonempty, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nonempty, "recovery"), []byte("preserve\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	unknown := filepath.Join(base, ".wahrwelt-workspace-user-owned")
+	if err := os.Mkdir(unknown, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	workspace, err := createStagingWorkspace()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer workspace.close()
+	if got := filepath.Dir(filepath.Dir(workspace.path)); got != base {
+		t.Fatalf("workspace base = %s, want %s", got, base)
+	}
+	for _, name := range empty {
+		if _, err := os.Lstat(filepath.Join(base, name)); !os.IsNotExist(err) {
+			t.Fatalf("empty historical container remains: %s: %v", name, err)
+		}
+	}
+	if got := readLegacyUserMigrationFile(t, filepath.Join(nonempty, "recovery")); got != "preserve\n" {
+		t.Fatalf("nonempty recovery changed: %q", got)
+	}
+	if _, err := os.Stat(unknown); err != nil {
+		t.Fatalf("unknown workspace-like directory changed: %v", err)
+	}
+}
+
 func TestStagingCleanupPreservesPublicReplacementAndDisplacedTree(t *testing.T) {
 	cache := t.TempDir()
 	t.Setenv("TMPDIR", t.TempDir())
@@ -342,6 +441,156 @@ func TestStagingCleanupPreservesPublicReplacementAndDisplacedTree(t *testing.T) 
 	}
 }
 
+func TestStagingRuntimePathPinsExactTreeAcrossPublicReplacementForRealChild(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	workspace, err := createStagingWorkspace()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer workspace.close()
+	if err := os.WriteFile(filepath.Join(workspace.runtimePath, "before.txt"), []byte("pinned before\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	displaced := filepath.Join(filepath.Dir(workspace.path), ".displaced-"+workspace.name)
+	if err := os.Rename(workspace.path, displaced); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(workspace.path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace.path, "winner.txt"), []byte("public winner\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	command := exec.Command("sh", "-c", `set -eu; test "$(cat -- "$1/before.txt")" = "pinned before"; printf '%s\n' 'child write' >"$1/child.txt"`, "sh", workspace.runtimePath)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("real child could not reopen pinned staging tree: %v: %s", err, output)
+	}
+	if got := readLegacyUserMigrationFile(t, filepath.Join(displaced, "child.txt")); got != "child write\n" {
+		t.Fatalf("real child did not write displaced pinned tree: %q", got)
+	}
+	if got := readLegacyUserMigrationFile(t, filepath.Join(workspace.path, "winner.txt")); got != "public winner\n" {
+		t.Fatalf("public replacement changed: %q", got)
+	}
+	if _, err := os.Lstat(filepath.Join(workspace.path, "child.txt")); !os.IsNotExist(err) {
+		t.Fatalf("real child wrote through public replacement: %v", err)
+	}
+}
+
+func TestValidatedStagingArchivesPinnedDirectoryInsteadOfProcDescriptorSymlink(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skip("nix is unavailable")
+	}
+	if _, err := exec.LookPath("nix-store"); err != nil {
+		t.Skip("nix-store is unavailable")
+	}
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	workspace, err := createStagingWorkspace()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer workspace.close()
+	if err := os.WriteFile(filepath.Join(workspace.runtimePath, "pinned.txt"), []byte("pinned tree\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	displaced := filepath.Join(filepath.Dir(workspace.path), ".displaced-"+workspace.name)
+	if err := os.Rename(workspace.path, displaced); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(workspace.path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace.path, "winner.txt"), []byte("public winner\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	validated, err := createValidatedStaging(
+		context.Background(),
+		run.Runner{Stdout: io.Discard, Stderr: io.Discard},
+		workspace.runtimePath,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer validated.close()
+	info, err := os.Lstat(validated.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		t.Fatalf("validated store object mode = %v, want immutable directory", info.Mode())
+	}
+	if got := readLegacyUserMigrationFile(t, filepath.Join(validated.path, "pinned.txt")); got != "pinned tree\n" {
+		t.Fatalf("validated pinned payload = %q", got)
+	}
+	entries, err := os.ReadDir(validated.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "pinned.txt" {
+		t.Fatalf("validated store tree entries = %v, want only pinned.txt", entries)
+	}
+	if _, err := os.Lstat(filepath.Join(validated.path, "winner.txt")); !os.IsNotExist(err) {
+		t.Fatalf("public replacement entered validated store tree: %v", err)
+	}
+}
+
+func TestRootOnlySecretsFallbackWritesPinnedDisplacedStagingTree(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permission fallback requires an unprivileged installer process")
+	}
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	workspace, err := createStagingWorkspace()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer workspace.close()
+
+	sourceRoot := t.TempDir()
+	secretsDir := filepath.Join(sourceRoot, "secrets")
+	if err := os.Mkdir(secretsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "secrets.yaml"), []byte(testEncryptedSecretsYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(secretsDir, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(secretsDir, 0o700) })
+
+	displaced := filepath.Join(filepath.Dir(workspace.path), ".displaced-"+workspace.name)
+	if err := os.Rename(workspace.path, displaced); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(workspace.path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspace.path, "winner.txt"), []byte("public winner\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := &rootOnlySecretsRunner{}
+	if err := copyExistingThinSecrets(context.Background(), runner, sourceRoot, workspace.runtimePath); err != nil {
+		t.Fatal(err)
+	}
+	if runner.calls != 1 {
+		t.Fatalf("privileged SOPS fallback calls = %d, want 1", runner.calls)
+	}
+	if got := readLegacyUserMigrationFile(t, filepath.Join(displaced, "secrets", "secrets.yaml")); got != testEncryptedSecretsYAML {
+		t.Fatalf("pinned staged SOPS payload = %q", got)
+	}
+	if _, err := os.Lstat(filepath.Join(workspace.path, "secrets")); !os.IsNotExist(err) {
+		t.Fatalf("privileged SOPS fallback wrote into public replacement: %v", err)
+	}
+	if err := workspace.verifyVisible(); err == nil || !strings.Contains(err.Error(), "staging tree changed") {
+		t.Fatalf("public replacement was not blocked before publication: %v", err)
+	}
+}
+
 func TestStagingCleanupFreezesAndRemovesExactTree(t *testing.T) {
 	t.Setenv("TMPDIR", t.TempDir())
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
@@ -366,6 +615,9 @@ func TestStagingCleanupFreezesAndRemovesExactTree(t *testing.T) {
 	}
 	if _, err := os.Lstat(workspace.path); !os.IsNotExist(err) {
 		t.Fatalf("exact staging tree remained after cleanup: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Dir(workspace.path)); !os.IsNotExist(err) {
+		t.Fatalf("empty outer staging container remained after cleanup: %v", err)
 	}
 	parentInfo, err := workspace.parent.Stat()
 	if err != nil {
@@ -483,6 +735,13 @@ func TestOuterWorkspaceReplacementRefusesValidationAndCleanup(t *testing.T) {
 	}
 	if got := readLegacyUserMigrationFile(t, victim); got != "unknown outer replacement\n" {
 		t.Fatalf("outer replacement bytes changed: %q", got)
+	}
+	entries, err := os.ReadDir(replacementTree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "victim.txt" {
+		t.Fatalf("generated staging entries escaped into public replacement: %v", entries)
 	}
 	if got := readLegacyUserMigrationFile(t, filepath.Join(displaced, workspace.name, "owned.txt")); got != "pinned workspace\n" {
 		t.Fatalf("displaced pinned workspace changed: %q", got)
@@ -680,8 +939,14 @@ func TestWriteStagedSecretsCopiesPinnedSourceDirectory(t *testing.T) {
 func TestWriteStagedHashedPasswordPreservesConcurrentRegularWinner(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
-	writePublicationSource(t, staging, "hashed-password.nix", HashedPasswordNix("expected"))
-	target := filepath.Join(dest, "hashed-password.nix")
+	writePasswordHashMarker(t, staging)
+	if err := os.WriteFile(filepath.Join(dest, "hashed-password.nix"), []byte(legacyGeneratedPasswordModule(testSHA512Hash)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	target := passwordHashTarget(dest)
+	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	var expected os.FileInfo
 	runner := &publicationRaceRunner{before: func() error {
 		if err := os.WriteFile(target, []byte("concurrent owner\n"), 0o600); err != nil {
@@ -715,12 +980,15 @@ func TestWriteStagedHashedPasswordPreservesConcurrentRegularWinner(t *testing.T)
 func TestWriteStagedHashedPasswordPreservesReplacementOfPinnedTarget(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
-	writePublicationSource(t, staging, "hashed-password.nix", HashedPasswordNix("new"))
-	target := filepath.Join(dest, "hashed-password.nix")
-	if err := os.WriteFile(target, []byte(HashedPasswordNix("old")), 0o600); err != nil {
+	writePasswordHashMarker(t, staging)
+	target := passwordHashTarget(dest)
+	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	retained := filepath.Join(dest, "hashed-password.expected")
+	if err := os.WriteFile(target, []byte(testSHA512Hash+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	retained := filepath.Join(filepath.Dir(target), "hashed-password.expected")
 	var replacement os.FileInfo
 	runner := &publicationRaceRunner{before: func() error {
 		if err := os.Rename(target, retained); err != nil {
@@ -733,6 +1001,9 @@ func TestWriteStagedHashedPasswordPreservesReplacementOfPinnedTarget(t *testing.
 		replacement, err = os.Lstat(target)
 		return err
 	}}
+	bin := t.TempDir()
+	writeExecutable(t, filepath.Join(bin, "mkpasswd"), "#!/bin/sh\nprintf '%s\\n' '"+strings.Replace(testSHA512Hash, "A", "B", 1)+"'\n")
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
 
 	err := writeStagedHashedPassword(context.Background(), runner, staging, dest, config.Secrets{UserPassword: "replace"}, LayoutThin)
 	if err == nil {
@@ -757,47 +1028,47 @@ func TestWriteStagedHashedPasswordPreservesReplacementOfPinnedTarget(t *testing.
 	}
 }
 
-func TestWriteStagedHashedPasswordCopiesPinnedSource(t *testing.T) {
+func TestWriteStagedHashedPasswordSnapshotsLegacySourceBeforePublication(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
-	source := writePublicationSource(t, staging, "hashed-password.nix", HashedPasswordNix("expected"))
-	retained := filepath.Join(staging, "hashed-password.expected")
+	writePasswordHashMarker(t, staging)
+	source := writePublicationSource(t, dest, "hashed-password.nix", legacyGeneratedPasswordModule(testSHA512Hash))
+	retained := filepath.Join(dest, "hashed-password.expected")
+	target := passwordHashTarget(dest)
+	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	runner := &publicationRaceRunner{before: func() error {
 		if err := os.Rename(source, retained); err != nil {
 			return err
 		}
-		return os.WriteFile(source, []byte(HashedPasswordNix("replacement")), 0o600)
+		return os.WriteFile(source, []byte("foreign replacement\n"), 0o600)
 	}}
 
-	if err := writeStagedHashedPassword(context.Background(), runner, staging, dest, config.Secrets{}, LayoutThin); err != nil {
-		t.Fatal(err)
+	err := writeStagedHashedPassword(context.Background(), runner, staging, dest, config.Secrets{}, LayoutThin)
+	if err == nil || !strings.Contains(err.Error(), "ownership collision") {
+		t.Fatalf("legacy source replacement must fail closed after publishing the external hash, got %v", err)
 	}
-	data, err := os.ReadFile(filepath.Join(dest, "hashed-password.nix"))
+	data, err := os.ReadFile(target)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := string(data), HashedPasswordNix("expected"); got != want {
-		t.Fatalf("published hash = %q, want pinned source %q", got, want)
+	if got, want := string(data), testSHA512Hash+"\n"; got != want {
+		t.Fatalf("published hash differs from pinned legacy source")
 	}
-}
-
-func TestWriteStagedHashedPasswordSnapshotsPinnedSourceBytes(t *testing.T) {
-	staging := t.TempDir()
-	dest := t.TempDir()
-	source := writePublicationSource(t, staging, "hashed-password.nix", HashedPasswordNix("expected"))
-	runner := &publicationRaceRunner{before: func() error {
-		return os.WriteFile(source, []byte(HashedPasswordNix("mutated")), 0o600)
-	}}
-
-	if err := writeStagedHashedPassword(context.Background(), runner, staging, dest, config.Secrets{}, LayoutThin); err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(filepath.Join(dest, "hashed-password.nix"))
+	replacement, err := os.ReadFile(source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := string(data), HashedPasswordNix("expected"); got != want {
-		t.Fatalf("published hash = %q, want immutable snapshot %q", got, want)
+	if got, want := string(replacement), "foreign replacement\n"; got != want {
+		t.Fatalf("legacy replacement changed: got %q want %q", got, want)
+	}
+	retainedData, err := os.ReadFile(retained)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(retainedData), functionalLegacyPasswordModule("wahrwelt"); got != want || strings.Contains(got, testSHA512Hash) {
+		t.Fatalf("pinned legacy source was not sanitized after replacement: got %q want %q", got, want)
 	}
 }
 
@@ -881,6 +1152,16 @@ func TestPrivilegedPythonPathRejectsUserWritableSymlinkToTrustedExecutable(t *te
 	_, err = privilegedPythonPath()
 	if err == nil || !strings.Contains(err.Error(), "outside trusted system executable locations") {
 		t.Fatalf("user-writable symlink to trusted Python error = %v", err)
+	}
+}
+
+func TestPrivilegedFSHelperPathRejectsUntrustedExecutable(t *testing.T) {
+	helper := filepath.Join(t.TempDir(), "wahrwelt-fs-helper")
+	writeExecutable(t, helper, "#!/bin/sh\nexit 0\n")
+	t.Setenv("WAHRWELT_PRIVILEGED_FS_HELPER", helper)
+	_, err := privilegedFSHelperPath()
+	if err == nil || !strings.Contains(err.Error(), "untrusted privileged filesystem helper") {
+		t.Fatalf("untrusted privileged filesystem helper error = %v", err)
 	}
 }
 

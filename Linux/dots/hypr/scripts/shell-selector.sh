@@ -5,6 +5,9 @@ script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=Linux/dots/hypr/scripts/shell-runtime.sh
 . "$script_dir/shell-runtime.sh"
 
+wahrwelt_enter_runtime_lock_v2 \
+  wahrwelt-shell-selector-v2.lock 400 0 "$0" "$@"
+
 action="${1:-toggle}"
 action_arg="${2:-}"
 requested_profile=""
@@ -30,12 +33,7 @@ if ! wahrwelt_open_private_state_directory wahrwelt-shell-selector shell-selecto
     "$wahrwelt_runtime_session_public_dir" >&2
   exit 1
 fi
-state_dir="$wahrwelt_private_state_directory_path"
 log_file="$wahrwelt_log_file"
-lock_dir="$state_dir/lock"
-lock_pid_file="$lock_dir/pid"
-lock_owner_file="$lock_dir/owner"
-lock_identity=""
 selector_name="wahrwelt-shell-selector"
 selector_pattern="$wahrwelt_selector_pattern"
 end4_official_env_pattern="$wahrwelt_end4_official_env_pattern"
@@ -52,32 +50,6 @@ log "invoked action=${action:-empty} requested_profile=${requested_profile:-empt
 
 noctalia_running() {
   wahrwelt_noctalia_running
-}
-
-acquire_lock() {
-  wahrwelt_acquire_lock \
-    "$lock_dir" \
-    "$lock_pid_file" \
-    "$lock_owner_file" \
-    "wahrwelt-shell-selector" \
-    '(^|[ /])shell-selector\.sh([[:space:]]|$)' \
-    20 \
-    0.02 || exit 0
-  lock_identity="$wahrwelt_acquired_lock_identity"
-  [ -n "$lock_identity" ] || exit 1
-}
-
-cleanup_lock() {
-  local recovery
-
-  [ -n "$lock_identity" ] || return 0
-  if wahrwelt_release_owned_lock "$lock_dir" "$lock_identity" 2>/dev/null; then
-    recovery="$wahrwelt_lock_recovery_exact_path"
-    log "selector lock public name released; recovery retained at $recovery"
-  else
-    recovery="${wahrwelt_lock_recovery_exact_path:-$lock_dir}"
-    log "selector lock changed during cleanup; recovery/collision preserved at $recovery"
-  fi
 }
 
 read_stored_active_shell() {
@@ -244,9 +216,6 @@ case "$action" in
     exit 0
     ;;
 esac
-
-acquire_lock
-trap cleanup_lock EXIT
 
 case "$action" in
   toggle)

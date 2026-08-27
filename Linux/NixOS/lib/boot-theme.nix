@@ -32,11 +32,9 @@ in
       default,
     }:
     let
-      canonicalDir = "${homeDirectory}/.config/wahrwelt/boot-theme";
-      legacyDir = "${homeDirectory}/.config/mysetup/boot-theme";
-      dir = if builtins.pathExists canonicalDir then canonicalDir else legacyDir;
+      dir = "${homeDirectory}/.config/wahrwelt/boot-theme";
     in
-    if !(builtins.pathExists canonicalDir) && !(builtins.pathExists legacyDir) then
+    if !(builtins.pathExists dir) then
       default
     else
       let

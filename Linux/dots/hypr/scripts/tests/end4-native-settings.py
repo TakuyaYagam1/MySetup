@@ -68,18 +68,25 @@ def fake_qs_end4(path: Path) -> None:
 
 
 def launcher_call(
-    launcher: Path, config_home: Path, qs_config: str
+    launcher: Path, config_home: Path, active_profile: str, qs_config: str
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     with tempfile.TemporaryDirectory(prefix="end4-native-settings-") as temporary:
         root = Path(temporary)
         bin_dir = root / "bin"
         bin_dir.mkdir()
         fake_qs_end4(bin_dir / "qs-end4")
+        state_home = root / "state"
+        state_dir = state_home / "wahrwelt"
+        state_dir.mkdir(parents=True)
+        active_shell = state_dir / "active-shell"
+        active_shell.write_text(f"{active_profile}\n")
+        active_shell.chmod(0o600)
         calls = root / "calls"
         environment = {
             **os.environ,
             "HOME": str(root / "home"),
             "XDG_CONFIG_HOME": str(config_home),
+            "XDG_STATE_HOME": str(state_home),
             "qsConfig": qs_config,
             "WAHRWELT_TEST_CALLS": str(calls),
             "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}",
@@ -110,7 +117,7 @@ def verify_hypr(artifact: Path) -> None:
 
     config_home = Path("/tmp/wahrwelt-settings-contract/config")
     official = str(config_home / "quickshell/ii")
-    result, arguments = launcher_call(launcher, config_home, official)
+    result, arguments = launcher_call(launcher, config_home, "end4", official)
     if result.returncode != 0:
         fail(f"End4 Official native settings launcher failed: {result.stderr.strip()}")
     expected = [
@@ -130,7 +137,7 @@ def verify_hypr(artifact: Path) -> None:
         )
 
     pc = str(config_home / "quickshell/end4-pC")
-    result, arguments = launcher_call(launcher, config_home, pc)
+    result, arguments = launcher_call(launcher, config_home, "end4-pc", pc)
     if result.returncode != 0:
         fail(f"End4 pC native settings launcher failed: {result.stderr.strip()}")
     expected = [
@@ -152,10 +159,13 @@ def verify_hypr(artifact: Path) -> None:
         )
 
     result, arguments = launcher_call(
-        launcher, config_home, str(config_home / "quickshell/attacker")
+        launcher,
+        config_home,
+        "attacker",
+        str(config_home / "quickshell/attacker"),
     )
     if result.returncode == 0 or arguments:
-        fail("End4 native settings launcher accepted an unmanaged QuickShell config")
+        fail("End4 native settings launcher accepted an unmanaged active shell state")
 
 
 def main() -> None:

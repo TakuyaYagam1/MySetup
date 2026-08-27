@@ -31,7 +31,6 @@
     happ
     google-chrome
     chromium
-    firefox-legacy
     wpsoffice
     onlyoffice-desktopeditors
     anytype

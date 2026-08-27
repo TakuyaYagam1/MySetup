@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
+	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/shellruntime"
 )
@@ -136,7 +137,11 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, script := range requiredHyprScripts() {
-		if err := os.WriteFile(filepath.Join(hyprDir, "scripts", script), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		target := filepath.Join(hyprDir, "scripts", script)
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(target, []byte("#!/bin/sh\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -145,7 +150,11 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, script := range requiredHyprScripts() {
-		if err := os.WriteFile(filepath.Join(installedScripts, script), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		target := filepath.Join(installedScripts, script)
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(target, []byte("#!/bin/sh\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -404,14 +413,13 @@ func TestDetectActiveShellUsesRememberedEnd4PCVariant(t *testing.T) {
 
 func TestCheckShellEntrypointWarnsForLegacyDirectEnd4Migration(t *testing.T) {
 	home := t.TempDir()
-	configHome := filepath.Join(home, ".config")
 	path := filepath.Join(home, "hyprland.lua")
 	if err := os.WriteFile(path, doctorLegacyEnd4Fixture(t, shellruntime.End4), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	out := &reportWriter{}
 
-	checkShellEntrypoint(out, path, shellruntime.End4, configHome)
+	checkShellEntrypoint(out, path, shellruntime.End4)
 
 	if report := out.String(); !strings.Contains(report, "WARN shell entrypoint uses legacy direct End4 runtime and requires migration") {
 		t.Fatalf("expected legacy migration warning, got:\n%s", report)
@@ -421,23 +429,13 @@ func TestCheckShellEntrypointWarnsForLegacyDirectEnd4Migration(t *testing.T) {
 func TestCheckShellEntrypointWarnsForLegacyUserNamespaceMigration(t *testing.T) {
 	home := t.TempDir()
 	path := filepath.Join(home, "hyprland.lua")
-	legacy := `-- Wahrwelt canonical Hyprland runtime entrypoint
-local home = os.getenv("HOME")
-if home == nil then
-    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
-end
-
-local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-local hypr_root = config_home .. "/hypr"
-package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-dofile(hypr_root .. "/wahrwelt/hyprland.lua")
-`
+	legacy := migrationv1tov2.LegacyUserEntrypoint()
 	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	out := &reportWriter{}
 
-	checkShellEntrypoint(out, path, shellruntime.End4PC, filepath.Join(home, ".config"))
+	checkShellEntrypoint(out, path, shellruntime.End4PC)
 
 	if report := out.String(); !strings.Contains(report, "WARN shell entrypoint uses legacy Wahrwelt user namespace and requires migration") {
 		t.Fatalf("expected legacy user namespace migration warning, got:\n%s", report)
@@ -446,12 +444,12 @@ dofile(hypr_root .. "/wahrwelt/hyprland.lua")
 
 func TestCheckShellEntrypointWarnsForUserNamespaceTransition(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hyprland.lua")
-	if err := os.WriteFile(path, []byte(shellruntime.UserNamespaceTransitionEntrypoint()), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(migrationv1tov2.UserNamespaceTransitionEntrypoint()), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	out := &reportWriter{}
 
-	checkShellEntrypoint(out, path, shellruntime.Noctalia, t.TempDir())
+	checkShellEntrypoint(out, path, shellruntime.Noctalia)
 
 	report := out.String()
 	if !strings.Contains(report, "WARN shell entrypoint uses temporary user namespace transition and requires migration") {
@@ -464,26 +462,16 @@ func TestCheckShellEntrypointWarnsForUserNamespaceTransition(t *testing.T) {
 
 func TestCheckShellEntrypointWarnsForHistoricalHomeManagerSeededRuntime(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hyprland.lua")
-	payload := `-- Active Hyprland profile: wahrwelt (caelestia)
-local home = os.getenv("HOME")
-if home == nil then
-    error("HOME is not set; cannot locate Wahrwelt Hyprland config")
-end
-
-local config_home = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
-local state_home = os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")
-local hypr_root = config_home .. "/hypr"
-local runtime_root = state_home .. "/wahrwelt/hypr-runtime"
-package.path = hypr_root .. "/?.lua;" .. hypr_root .. "/?/init.lua;" .. package.path
-dofile(hypr_root .. "/wahrwelt/hyprland.lua")
-dofile(runtime_root .. "/shell-profile.lua")
-`
+	payload := migrationv1tov2.HistoricalHomeManagerSeededUserEntrypoint(
+		shellruntime.DefaultProfile,
+		migrationv1tov2.LegacyWahrweltNamespace,
+	)
 	if err := os.WriteFile(path, []byte(payload), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	out := &reportWriter{}
 
-	checkShellEntrypoint(out, path, shellruntime.Caelestia, t.TempDir())
+	checkShellEntrypoint(out, path, shellruntime.Caelestia)
 
 	if report := out.String(); !strings.Contains(report, "WARN shell entrypoint uses legacy Home Manager seeded runtime and requires migration") {
 		t.Fatalf("expected historical seeded runtime warning, got:\n%s", report)
@@ -498,7 +486,7 @@ func TestCheckShellEntrypointDoesNotTreatCustomEnd4SuffixAsLegacy(t *testing.T) 
 	}
 	out := &reportWriter{}
 
-	checkShellEntrypoint(out, path, shellruntime.End4, filepath.Join(home, ".config"))
+	checkShellEntrypoint(out, path, shellruntime.End4)
 
 	report := out.String()
 	if strings.Contains(report, "legacy direct End4") {
@@ -520,7 +508,7 @@ func TestCheckShellEntrypointRejectsCanonicalLookalikes(t *testing.T) {
 				t.Fatal(err)
 			}
 			out := &reportWriter{}
-			checkShellEntrypoint(out, path, shellruntime.Caelestia, filepath.Join(t.TempDir(), ".config"))
+			checkShellEntrypoint(out, path, shellruntime.Caelestia)
 			if report := out.String(); !strings.Contains(report, "is not the canonical Wahrwelt runtime") {
 				t.Fatalf("canonical lookalike was accepted:\n%s", report)
 			}
@@ -530,7 +518,7 @@ func TestCheckShellEntrypointRejectsCanonicalLookalikes(t *testing.T) {
 
 func doctorLegacyEnd4Fixture(t *testing.T, profile string) []byte {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("../../../NixOS/home/shells/legacy-hypr-runtime", profile+".lua"))
+	data, err := os.ReadFile(filepath.Join("../../../NixOS/home/migrations/v1_to_v2/hypr-runtime", profile+".lua"))
 	if err != nil {
 		t.Fatal(err)
 	}

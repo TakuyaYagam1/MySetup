@@ -264,6 +264,30 @@ func TestFlakeNixUsesPresetEntrypointAndHostOwnedSecureBootInput(t *testing.T) {
 	}
 }
 
+func TestFlakeNixUsesExternalPasswordHashOnlyBehindNonSecretMarker(t *testing.T) {
+	out, err := FlakeNix(config.Default(), LockModeIndependent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"builtins.pathExists ./.wahrwelt-password-hash-enabled",
+		"hashedPasswordFile =",
+		`"/etc/wahrwelt/hashed-password"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("generated flake missing external password hash contract %q\n%s", want, out)
+		}
+	}
+	for _, forbidden := range []string{
+		"./hashed-password.nix",
+		"hashedPassword =",
+	} {
+		if strings.Contains(out, forbidden) {
+			t.Fatalf("generated flake still imports store-visible password hash %q\n%s", forbidden, out)
+		}
+	}
+}
+
 func TestFlakeNixDelegatesNoctaliaInputsForV4Selection(t *testing.T) {
 	state := config.Default()
 	state.Noctalia.Version = config.NoctaliaVersionV4
@@ -434,20 +458,18 @@ func TestHomeWallpaperActivationHonorsDryRun(t *testing.T) {
 	}
 	text := string(data)
 	for _, want := range []string{
-		`$DRY_RUN_CMD ${pkgs.findutils}/bin/find "$WALLS_DST" -maxdepth 1 -type f -name 'preview-*' -delete`,
-		`$DRY_RUN_CMD ${pkgs.coreutils}/bin/cp -n --no-preserve=mode "$wall" "$WALLS_DST/"`,
-		`[ -e "$wall" ] || continue`,
-		`$DRY_RUN_CMD ${pkgs.coreutils}/bin/chmod -R u+w "$WALLS_DST"`,
+		`wallpaperNames =`,
+		`seed_if_missing "$WALLS_DST/$wallpaper_name"`,
+		`ensure_real_directory "$WALLS_DST"`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("home wallpaper activation missing %q\n%s", want, text)
 		}
 	}
-	if strings.Contains(text, `cp -n "$WALLS_SRC"/* "$WALLS_DST" 2>/dev/null || true`) {
-		t.Fatalf("home wallpaper activation must not hide copy failures\n%s", text)
-	}
-	if strings.Contains(text, `${pkgs.coreutils}/bin/cp -n "$wall"`) {
-		t.Fatalf("home wallpaper cp must keep the --no-preserve=mode flag\n%s", text)
+	for _, forbidden := range []string{"preview-*", "chmod -R", "cp -n", `find "$WALLS_DST"`} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("home wallpaper activation retained broad target mutation %q\n%s", forbidden, text)
+		}
 	}
 }
 
@@ -465,33 +487,6 @@ func TestHomeFaceAvatarHasTrackedFallback(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("home face avatar fallback missing %q\n%s", want, text)
-		}
-	}
-}
-
-func TestHostDefaultUsesPathExistsForGeneratedPassword(t *testing.T) {
-	data, err := os.ReadFile("../../../NixOS/hosts/NixOS/default.nix")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "builtins.pathExists ./hashed-password.nix") {
-		t.Fatalf("host default should import hashed-password.nix conditionally")
-	}
-}
-
-func TestHostDefaultKeepsIDAPackagesOutOfDefaultImports(t *testing.T) {
-	data, err := os.ReadFile("../../../NixOS/hosts/NixOS/default.nix")
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	for _, forbidden := range []string{
-		"ida-mcp.nix",
-		"ida-plugins.nix",
-		"ida-pro.nix",
-	} {
-		if strings.Contains(text, forbidden) {
-			t.Fatalf("host default must not import quarantined IDA package %q\n%s", forbidden, text)
 		}
 	}
 }
@@ -868,7 +863,7 @@ func TestPrepareThinHostLocalPreservesOverridesLockAndSecrets(t *testing.T) {
 		filepath.Join(dest, "home.nix"):                   "{ pkgs, ... }: { }\n",
 		filepath.Join(dest, "private", "ida-pro.nix"):     "{ pkgs, ... }: { }\n",
 		filepath.Join(dest, "private", "ida.run"):         "binary payload\n",
-		filepath.Join(dest, "secrets", "secrets.yaml"):    "secret: ENC\n",
+		filepath.Join(dest, "secrets", "secrets.yaml"):    testEncryptedSecretsYAML,
 	} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
@@ -891,7 +886,7 @@ func TestPrepareThinHostLocalPreservesOverridesLockAndSecrets(t *testing.T) {
 		filepath.Join(staging, "user", "default.nix"):        UserDefaultNix(),
 		filepath.Join(staging, "user", "ida-pro.nix"):        "{ pkgs, ... }: { }\n",
 		filepath.Join(staging, "user", "ida.run"):            "binary payload\n",
-		filepath.Join(staging, "secrets", "secrets.yaml"):    "secret: ENC\n",
+		filepath.Join(staging, "secrets", "secrets.yaml"):    testEncryptedSecretsYAML,
 	} {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -1583,7 +1578,7 @@ func TestPrepareThinHostLocalStagesLegacySecretsWhenRootMissing(t *testing.T) {
 	dest := t.TempDir()
 	for path, content := range map[string]string{
 		filepath.Join(dest, "hardware-configuration.nix"):                "hardware\n",
-		filepath.Join(dest, "hosts", "NixOS", "secrets", "secrets.yaml"): "secret: legacy\n",
+		filepath.Join(dest, "hosts", "NixOS", "secrets", "secrets.yaml"): testEncryptedSecretsYAML,
 	} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
@@ -1601,37 +1596,144 @@ func TestPrepareThinHostLocalStagesLegacySecretsWhenRootMissing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) != "secret: legacy\n" {
-		t.Fatalf("expected legacy secrets to be staged for thin migration, got %q", data)
+	if string(data) != testEncryptedSecretsYAML {
+		t.Fatalf("expected encrypted legacy secrets to be staged for thin migration")
 	}
 }
 
-func TestCopyThinSecretsFallsBackToSudoRsync(t *testing.T) {
+func TestCopyExistingThinSecretsRejectsSymlinkDirectory(t *testing.T) {
+	dest := t.TempDir()
+	staging := t.TempDir()
+	external := t.TempDir()
+	if err := os.WriteFile(filepath.Join(external, "secrets.yaml"), []byte(testEncryptedSecretsYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(external, filepath.Join(dest, "secrets")); err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeRunner{}
+
+	err := copyExistingThinSecrets(context.Background(), fake, dest, staging)
+	if err == nil || !strings.Contains(err.Error(), "secrets path must be an ordinary directory") {
+		t.Fatalf("expected symlink secrets directory rejection, got %v", err)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("symlink secrets directory reached copy command:\n%s", commandSummary(fake.calls))
+	}
+}
+
+func TestCopyExistingThinSecretsRejectsPlaintextPayload(t *testing.T) {
+	dest := t.TempDir()
+	staging := t.TempDir()
+	secretsDir := filepath.Join(dest, "secrets")
+	if err := os.Mkdir(secretsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "secrets.yaml"), []byte("token: plaintext\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeRunner{}
+
+	err := copyExistingThinSecrets(context.Background(), fake, dest, staging)
+	if err == nil || !strings.Contains(err.Error(), "not a validated SOPS payload") {
+		t.Fatalf("expected plaintext secrets rejection, got %v", err)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("plaintext secrets reached copy command:\n%s", commandSummary(fake.calls))
+	}
+}
+
+func TestCopyExistingThinSecretsRejectsMetadataOnlySOPSPayload(t *testing.T) {
+	dest := t.TempDir()
+	staging := t.TempDir()
+	secretsDir := filepath.Join(dest, "secrets")
+	if err := os.Mkdir(secretsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	metadataOnly := `sops:
+  mac: ENC[AES256_GCM,data:bWFj,iv:aXY=,tag:dGFn,type:str]
+`
+	if err := os.WriteFile(filepath.Join(secretsDir, "secrets.yaml"), []byte(metadataOnly), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeRunner{}
+
+	err := copyExistingThinSecrets(context.Background(), fake, dest, staging)
+	if err == nil || !strings.Contains(err.Error(), "not a validated SOPS payload") {
+		t.Fatalf("expected metadata-only SOPS rejection, got %v", err)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("metadata-only SOPS payload reached copy command:\n%s", commandSummary(fake.calls))
+	}
+}
+
+func TestCopyExistingThinSecretsCopiesOnlyAllowlistedPayload(t *testing.T) {
+	dest := t.TempDir()
+	staging := t.TempDir()
+	secretsDir := filepath.Join(dest, "secrets")
+	if err := os.Mkdir(secretsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "secrets.yaml"), []byte(testEncryptedSecretsYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "root-only-key"), []byte("must not be copied\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeRunner{}
+
+	if err := copyExistingThinSecrets(context.Background(), fake, dest, staging); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("readable allowlisted secret should use the pinned local copy path:\n%s", commandSummary(fake.calls))
+	}
+	data, err := os.ReadFile(filepath.Join(staging, "secrets", "secrets.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != testEncryptedSecretsYAML {
+		t.Fatalf("staged allowlisted payload changed")
+	}
+	if _, err := os.Lstat(filepath.Join(staging, "secrets", "root-only-key")); !os.IsNotExist(err) {
+		t.Fatalf("foreign secrets directory entry was copied: %v", err)
+	}
+}
+
+const testEncryptedSecretsYAML = `token: ENC[AES256_GCM,data:dGVzdA==,iv:aXY=,tag:dGFn,type:str]
+sops:
+  mac: ENC[AES256_GCM,data:bWFj,iv:aXY=,tag:dGFn,type:str]
+`
+
+func TestCopyThinSecretsPermissionFallbackUsesAllowlistedPinnedHelper(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
 	secrets := filepath.Join(dest, "secrets")
 	if err := os.MkdirAll(secrets, 0o755); err != nil {
 		t.Fatal(err)
 	}
-
-	fake := &fakeRunner{
-		failOn: func(name string, _ []string) error {
-			if name == "rsync" {
-				return os.ErrPermission
-			}
-			return nil
-		},
+	if err := os.WriteFile(filepath.Join(secrets, "secrets.yaml"), []byte(testEncryptedSecretsYAML), 0o600); err != nil {
+		t.Fatal(err)
 	}
+	if err := os.Chmod(secrets, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(secrets, 0o700) })
+
+	fake := &fakeRunner{}
 	if err := copyExistingThinHostLocal(context.Background(), fake, staging, dest, config.Default()); err != nil {
 		t.Fatal(err)
 	}
 
 	commands := commandSummary(fake.calls)
-	if !strings.Contains(commands, "rsync -a --delete --checksum") {
-		t.Fatalf("expected normal rsync attempt, got:\n%s", commands)
+	if !strings.Contains(commands, "sudo ") || !strings.Contains(commands, " -c ") {
+		t.Fatalf("expected privileged pinned-file helper, got:\n%s", commands)
 	}
-	if !strings.Contains(commands, "sudo rsync -a --delete --checksum --chown") {
-		t.Fatalf("expected sudo rsync fallback, got:\n%s", commands)
+	if strings.Contains(commands, "rsync") || strings.Contains(commands, secrets+"/") {
+		t.Fatalf("permission fallback must not recursively copy the secrets directory:\n%s", commands)
+	}
+	if !strings.Contains(commands, filepath.Dir(filepath.Join(staging, "secrets", "secrets.yaml"))) {
+		t.Fatalf("permission fallback target is not the staged allowlisted directory:\n%s", commands)
 	}
 }
 
@@ -1844,16 +1946,20 @@ func TestPrepareStagingHostLocalDryRunDoesNotHashPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(staging, "hashed-password.nix"))
-	if err != nil {
-		t.Fatal(err)
+	if _, err := os.Lstat(filepath.Join(staging, "hashed-password.nix")); !os.IsNotExist(err) {
+		t.Fatalf("password hash entered flake staging during dry-run: %v", err)
 	}
-	if !strings.Contains(string(data), "!mysetup-dry-run-placeholder") {
-		t.Fatalf("expected dry-run placeholder hash, got:\n%s", data)
+	marker := filepath.Join(staging, ".wahrwelt-password-hash-enabled")
+	info, err := os.Stat(marker)
+	if err != nil {
+		t.Fatalf("password hash marker missing: %v", err)
+	}
+	if info.Size() != 0 || info.Mode().Perm() != 0o644 {
+		t.Fatalf("password hash marker metadata = size %d mode %04o, want empty 0644", info.Size(), info.Mode().Perm())
 	}
 }
 
-func TestPrepareStagingHostLocalCopiesPermissionDeniedHashWithSudo(t *testing.T) {
+func TestPrepareStagingHostLocalMarksPermissionDeniedLegacyHashWithoutCopyingIt(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dest, "hardware-configuration.nix"), []byte("hardware\n"), 0o644); err != nil {
@@ -1876,32 +1982,27 @@ func TestPrepareStagingHostLocalCopiesPermissionDeniedHashWithSudo(t *testing.T)
 		t.Fatal(err)
 	}
 
-	got := out.String()
-	for _, want := range []string{
-		"sudo install -D -m 600",
-		"-o",
-		"-g",
-		hash,
-		filepath.Join(staging, "hashed-password.nix"),
-	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("permission denied hash should be staged with sudo install, missing %q\n%s", want, got)
-		}
+	if out.Len() != 0 {
+		t.Fatalf("legacy password hash bytes must not be copied into flake staging:\n%s", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(staging, paths.PasswordHashMarkerName)); err != nil {
+		t.Fatalf("legacy password hash marker missing: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(staging, "hashed-password.nix")); !os.IsNotExist(err) {
+		t.Fatalf("legacy password hash entered flake staging: %v", err)
 	}
 }
 
-func TestWriteStagedHashedPasswordInstallsStagingArtifact(t *testing.T) {
+func TestWriteStagedHashedPasswordPublishesRawHashOutsideFlake(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
-	source := filepath.Join(staging, "hashed-password.nix")
-	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(source, []byte(HashedPasswordNix("hash-from-dry-build")), 0o600); err != nil {
+	writePasswordHashMarker(t, staging)
+	if err := os.MkdirAll(filepath.Dir(passwordHashTarget(dest)), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	bin := t.TempDir()
 	writeExecutable(t, filepath.Join(bin, "sudo"), "#!/bin/sh\nexec \"$@\"\n")
+	writeExecutable(t, filepath.Join(bin, "mkpasswd"), "#!/bin/sh\nprintf '%s\\n' '"+testSHA512Hash+"'\n")
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
 
 	runner := run.Runner{Stdout: io.Discard, Stderr: io.Discard}
@@ -1909,20 +2010,26 @@ func TestWriteStagedHashedPasswordInstallsStagingArtifact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(filepath.Join(dest, "hashed-password.nix"))
+	data, err := os.ReadFile(passwordHashTarget(dest))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := string(data), HashedPasswordNix("hash-from-dry-build"); got != want {
-		t.Fatalf("published hashed-password.nix = %q, want %q", got, want)
+	if got, want := string(data), testSHA512Hash+"\n"; got != want {
+		t.Fatalf("published external password hash differs from generated hash")
+	}
+	if _, err := os.Lstat(filepath.Join(staging, "hashed-password.nix")); !os.IsNotExist(err) {
+		t.Fatalf("password hash entered flake staging: %v", err)
 	}
 }
 
-func TestWriteStagedHashedPasswordMigratesMissingThinHash(t *testing.T) {
+func TestWriteStagedHashedPasswordMigratesGeneratedThinHash(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
-	source := filepath.Join(staging, "hashed-password.nix")
-	if err := os.WriteFile(source, []byte(HashedPasswordNix("existing-hash")), 0o600); err != nil {
+	writePasswordHashMarker(t, staging)
+	if err := os.MkdirAll(filepath.Dir(passwordHashTarget(dest)), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dest, "hashed-password.nix"), []byte(legacyGeneratedPasswordModule(testSHA512Hash)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	bin := t.TempDir()
@@ -1934,22 +2041,101 @@ func TestWriteStagedHashedPasswordMigratesMissingThinHash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(filepath.Join(dest, "hashed-password.nix"))
+	data, err := os.ReadFile(passwordHashTarget(dest))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := string(data), HashedPasswordNix("existing-hash"); got != want {
-		t.Fatalf("published hashed-password.nix = %q, want %q", got, want)
+	if got, want := string(data), testSHA512Hash+"\n"; got != want {
+		t.Fatalf("migrated external password hash differs from legacy generated hash")
+	}
+	assertFunctionalPasswordModule(t, filepath.Join(dest, "hashed-password.nix"), "wahrwelt")
+}
+
+func TestWriteStagedHashedPasswordMigratesAndRemovesBothGeneratedLayouts(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	writePasswordHashMarker(t, staging)
+	if err := os.MkdirAll(filepath.Dir(passwordHashTarget(dest)), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	legacyPaths := existingHashedPasswordPaths(dest)
+	for _, source := range legacyPaths {
+		if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(source, []byte(legacyGeneratedPasswordModule(testSHA512Hash)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bin := t.TempDir()
+	writeExecutable(t, filepath.Join(bin, "sudo"), "#!/bin/sh\nexec \"$@\"\n")
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+
+	if err := writeStagedHashedPassword(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{}, LayoutThin); err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range legacyPaths {
+		assertFunctionalPasswordModule(t, source, "wahrwelt")
 	}
 }
 
-func TestWriteStagedHashedPasswordPreservesExistingThinHash(t *testing.T) {
+func TestWriteStagedHashedPasswordReplacesPasswordAndRemovesGeneratedModule(t *testing.T) {
 	staging := t.TempDir()
 	dest := t.TempDir()
-	if err := os.WriteFile(filepath.Join(staging, "hashed-password.nix"), []byte(HashedPasswordNix("staged")), 0o600); err != nil {
+	writePasswordHashMarker(t, staging)
+	legacy := filepath.Join(dest, "hashed-password.nix")
+	if err := os.MkdirAll(filepath.Dir(passwordHashTarget(dest)), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dest, "hashed-password.nix"), []byte(HashedPasswordNix("existing")), 0o600); err != nil {
+	if err := os.WriteFile(legacy, []byte(legacyGeneratedPasswordModule(testSHA512Hash)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	newHash := strings.Replace(testSHA512Hash, strings.Repeat("A", 86), strings.Repeat("B", 86), 1)
+	bin := t.TempDir()
+	writeExecutable(t, filepath.Join(bin, "sudo"), "#!/bin/sh\nexec \"$@\"\n")
+	writeExecutable(t, filepath.Join(bin, "mkpasswd"), "#!/bin/sh\nprintf '%s\\n' '"+newHash+"'\n")
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+
+	if err := writeStagedHashedPassword(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard}, staging, dest, config.Secrets{UserPassword: "replacement"}, LayoutThin); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(passwordHashTarget(dest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(data), newHash+"\n"; got != want {
+		t.Fatalf("external password hash = %q, want replacement", got)
+	}
+	assertFunctionalPasswordModule(t, legacy, "wahrwelt")
+}
+
+func assertFunctionalPasswordModule(t *testing.T, path, namespace string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(data), functionalLegacyPasswordModule(namespace); got != want || strings.Contains(got, testSHA512Hash) {
+		t.Fatalf("functional password module at %s = %q, want %q without hash", path, got, want)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o644 {
+		t.Fatalf("functional password module mode at %s = %04o, want 0644", path, info.Mode().Perm())
+	}
+}
+
+func TestWriteStagedHashedPasswordPreservesExistingExternalHash(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	writePasswordHashMarker(t, staging)
+	target := passwordHashTarget(dest)
+	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte(testSHA512Hash+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1960,29 +2146,90 @@ func TestWriteStagedHashedPasswordPreservesExistingThinHash(t *testing.T) {
 		t.Fatal(err)
 	}
 	if out.String() != "" {
-		t.Fatalf("existing hash should be preserved when no new password is provided, got:\n%s", out.String())
+		t.Fatalf("existing external hash should be preserved when no new password is provided, got:\n%s", out.String())
 	}
 }
 
-func TestWriteStagedHashedPasswordRejectsDirectoryTarget(t *testing.T) {
-	staging := t.TempDir()
-	dest := t.TempDir()
-	if err := os.WriteFile(filepath.Join(staging, "hashed-password.nix"), []byte(HashedPasswordNix("staged")), 0o600); err != nil {
+func TestExistingExternalPasswordHashCanValidatePrivilegedUnreadableMetadataWithoutReadingSecret(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "hashed-password")
+	if err := os.WriteFile(target, []byte(strings.Repeat("x", 100)), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(dest, "hashed-password.nix"), 0o755); err != nil {
+	hash, exists, err := existingExternalPasswordHashForOwner(target, true, uint32(os.Geteuid()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !exists || hash != "" {
+		t.Fatalf("metadata-only external hash inspection = (%q, %v), want empty hash and exists", hash, exists)
+	}
+}
+
+func TestExistingExternalPasswordHashMetadataInspectionRejectsSymlink(t *testing.T) {
+	root := t.TempDir()
+	realPath := filepath.Join(root, "real")
+	target := filepath.Join(root, "hashed-password")
+	if err := os.WriteFile(realPath, []byte(strings.Repeat("x", 100)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(realPath, target); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := existingExternalPasswordHashForOwner(target, true, uint32(os.Geteuid())); err == nil {
+		t.Fatal("metadata-only external hash inspection accepted a symlink")
+	}
+}
+
+func TestValidateExternalPasswordHashParentMetadataRequiresPrivateOwnerDirectory(t *testing.T) {
+	parent := t.TempDir()
+	if err := os.Chmod(parent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateExternalPasswordHashParentMetadata(parent, uint32(os.Geteuid())); err == nil {
+		t.Fatal("external password hash parent accepted non-private mode")
+	}
+	if err := os.Chmod(parent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateExternalPasswordHashParentMetadata(parent, uint32(os.Geteuid())); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWriteStagedHashedPasswordRejectsExternalDirectoryTarget(t *testing.T) {
+	staging := t.TempDir()
+	dest := t.TempDir()
+	writePasswordHashMarker(t, staging)
+	if err := os.MkdirAll(passwordHashTarget(dest), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	var out bytes.Buffer
 	runner := run.Runner{Stdout: &out, Stderr: &out}
 	err := writeStagedHashedPassword(context.Background(), runner, staging, dest, config.Secrets{}, LayoutThin)
-	if err == nil || !strings.Contains(err.Error(), "target hashed-password.nix is not a regular file") {
+	if err == nil || !strings.Contains(err.Error(), "external password hash") {
 		t.Fatalf("expected non-regular hash target error, got %v", err)
 	}
 	if out.String() != "" {
 		t.Fatalf("non-regular hash target should fail before sudo writes, got:\n%s", out.String())
 	}
+}
+
+func writePasswordHashMarker(t *testing.T, staging string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(staging, paths.PasswordHashMarkerName), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+var testSHA512Hash = "$6$rounds=5000$testsalt$" + strings.Repeat("A", 86)
+
+func legacyGeneratedPasswordModule(hash string) string {
+	return `{ config, ... }:
+
+{
+  users.users.${config.wahrwelt.user.username}.initialHashedPassword = "` + hash + `";
+}
+`
 }
 
 func TestHandlePreSwitchErrorRestoresBackup(t *testing.T) {

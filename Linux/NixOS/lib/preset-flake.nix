@@ -26,6 +26,10 @@ let
     inherit (nixpkgs) lib;
   };
 
+  adaptV1ToV2HostArgs = import ./migrations/v1_to_v2/legacy-hashed-password.nix {
+    inherit (nixpkgs) lib;
+  };
+
   mkSystemContext =
     targetSystem:
     let
@@ -33,7 +37,7 @@ let
         localSystem = targetSystem;
         config = {
           allowUnfree = true;
-          allowInsecurePredicate = _: true;
+          permittedInsecurePackages = import ./permitted-insecure-packages.nix;
         };
       };
 
@@ -82,7 +86,9 @@ let
     if preset != "full" && selectedPreset != preset then
       throw "Wahrwelt preset flake '${preset}' cannot build host preset '${selectedPreset}'"
     else
-      baseMkWahrweltHost args;
+      baseMkWahrweltHost (adaptV1ToV2HostArgs args);
+
+  mkMySetupHost = mkWahrweltHost;
 
   flakeOutputs = import ./flake-packages.nix {
     inherit layout nixpkgs system;
@@ -134,8 +140,7 @@ assert
   || throw "Wahrwelt ${preset} flake inputs drifted from lib/preset-inputs.nix";
 {
   lib = {
-    inherit mkWahrweltHost;
-    mkMySetupHost = mkWahrweltHost;
+    inherit mkMySetupHost mkWahrweltHost;
     inherit wahrweltLib;
     mysetupLib = wahrweltLib;
     wahrwelt = wahrweltLib;

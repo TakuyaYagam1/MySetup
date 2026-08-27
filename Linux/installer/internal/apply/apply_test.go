@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +20,7 @@ type fakeRunner struct {
 	dryRun bool
 	calls  []fakeCall
 	failOn func(name string, args []string) error
+	output string
 }
 
 type fakeCall struct {
@@ -36,7 +38,20 @@ func (f *fakeRunner) Command(_ context.Context, name string, args ...string) err
 
 func (f *fakeRunner) Output(_ context.Context, name string, args ...string) (string, error) {
 	f.calls = append(f.calls, fakeCall{name: name, args: append([]string(nil), args...)})
-	return "", nil
+	return f.output, nil
+}
+
+func (f *fakeRunner) OutputInPinnedDirectory(ctx context.Context, directory *os.File, name string, args ...string) (string, error) {
+	f.calls = append(f.calls, fakeCall{name: name, args: append([]string(nil), args...)})
+	if f.failOn != nil {
+		if err := f.failOn(name, args); err != nil {
+			return "", err
+		}
+	}
+	if f.output != "" {
+		return f.output, nil
+	}
+	return runValidatedStagingPinnedOutput(ctx, directory, name, args...)
 }
 
 func (f *fakeRunner) IsDryRun() bool { return f.dryRun }
@@ -76,6 +91,10 @@ func runValidatedStagingTestOutput(ctx context.Context, name string, args ...str
 		return "", true, fmt.Errorf("%s failed: %w: %s", name, err, strings.TrimSpace(string(out)))
 	}
 	return strings.TrimSpace(string(out)), true, nil
+}
+
+func runValidatedStagingPinnedOutput(ctx context.Context, directory *os.File, name string, args ...string) (string, error) {
+	return run.Runner{Stdout: io.Discard, Stderr: io.Discard}.OutputInPinnedDirectory(ctx, directory, name, args...)
 }
 
 func validState() config.State {

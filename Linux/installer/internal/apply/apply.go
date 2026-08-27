@@ -17,6 +17,7 @@ import (
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/defaults"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/dots"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/fsowner"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/paths"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
 	"golang.org/x/sys/unix"
@@ -160,9 +161,11 @@ func runStagedApply(ctx context.Context, runner run.CommandRunner, src paths.Sou
 		return err
 	}
 	if canonicalStatePath {
-		return cleanupLegacyStatePathsWithExpectation(ctx, runner, legacyStatePaths, legacyStateExpectation)
+		if err := cleanupLegacyStatePathsWithExpectation(ctx, runner, legacyStatePaths, legacyStateExpectation); err != nil {
+			return err
+		}
 	}
-	return nil
+	return pruneOwnedNixOSBackups(ctx, runner, opts.Paths.NixOSDest)
 }
 
 func legacyStatePathsForApply(opts Options) ([]string, bool) {
@@ -275,15 +278,24 @@ func createValidatedStaging(ctx context.Context, runner run.CommandRunner, stagi
 	if err != nil {
 		return nil, err
 	}
+	pinnedRunner, ok := runner.(run.PinnedDirectoryOutputRunner)
+	if !ok {
+		return nil, fmt.Errorf("validation runner cannot ingest a pinned staging directory")
+	}
+	stagingDirectory, err := openValidationDirectory(staging)
+	if err != nil {
+		return nil, err
+	}
+	defer closeFile(stagingDirectory)
 	// A path flake is copied into the Nix store during the existing dry-build.
 	// Materialising it first does not add a new secret class to the store; it
 	// makes the exact already-store-visible tree explicit so validation and
 	// publication cannot observe different same-UID-writable staging bytes.
-	output, err := runner.Output(ctx, nixPath,
+	output, err := pinnedRunner.OutputInPinnedDirectory(ctx, stagingDirectory, nixPath,
 		"--extra-experimental-features", "nix-command",
 		"store", "add-path",
 		"--name", "wahrwelt-validated-system",
-		staging,
+		".",
 	)
 	if err != nil {
 		return nil, err
@@ -311,6 +323,28 @@ func createValidatedStaging(ctx context.Context, runner run.CommandRunner, stagi
 		return nil, err
 	}
 	return candidate, nil
+}
+
+func openValidationDirectory(path string) (*os.File, error) {
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY, 0)
+	if err != nil {
+		return nil, fmt.Errorf("open pinned staging directory: %w", err)
+	}
+	file, err := fileFromUnixDescriptor(fd, path)
+	if err != nil {
+		_ = unix.Close(fd)
+		return nil, err
+	}
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	if !info.IsDir() {
+		_ = file.Close()
+		return nil, fmt.Errorf("pinned staging path is not a directory: %s", path)
+	}
+	return file, nil
 }
 
 func trustedValidationCommand(environment, name string) (string, error) {
@@ -603,6 +637,33 @@ func (w *stagingWorkspace) verifyContainerVisible() error {
 	return nil
 }
 
+func (w *stagingWorkspace) removeEmptyContainer() error {
+	if err := w.verifyContainerVisible(); err != nil {
+		return err
+	}
+	base, err := fsowner.OpenDirectory(w.base.Name())
+	if err != nil {
+		return err
+	}
+	defer closeFileDirectory(base)
+	entry, err := base.Inspect(w.containerName)
+	if err != nil {
+		return err
+	}
+	if entry.Identity.Device != w.parentStat.Dev ||
+		entry.Identity.Inode != w.parentStat.Ino ||
+		entry.Identity.Kind != fsowner.KindDirectory ||
+		entry.Identity.UID != w.parentStat.Uid ||
+		entry.Identity.Mode&0o7777 != w.parentStat.Mode&0o7777 {
+		return fmt.Errorf("staging outer container metadata changed; replacement retained")
+	}
+	return base.RemoveDirectory(w.containerName, entry.Identity, fsowner.RemoveOptions{
+		UID:          w.parentStat.Uid,
+		RequireEmpty: true,
+		SameDevice:   true,
+	})
+}
+
 func (w *stagingWorkspace) verifyVisible() error {
 	if err := w.verifyContainerVisible(); err != nil {
 		return err
@@ -664,12 +725,15 @@ func (w *stagingWorkspace) cleanup(ctx context.Context, runner run.CommandRunner
 	} else if !errors.Is(err, unix.ENOENT) {
 		return err
 	}
-	return w.verifyContainerVisible()
+	return w.removeEmptyContainer()
 }
 
 func createStagingWorkspace() (*stagingWorkspace, error) {
 	base := stagingBaseDir()
 	if err := os.MkdirAll(base, 0o700); err != nil {
+		return nil, err
+	}
+	if err := scavengeEmptyStagingContainers(base); err != nil {
 		return nil, err
 	}
 	baseFD, err := unix.Open(base, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY|unix.O_NOFOLLOW, 0)
@@ -700,7 +764,7 @@ func createStagingWorkspace() (*stagingWorkspace, error) {
 	}
 	return &stagingWorkspace{
 		path:          filepath.Join(containerPath, name),
-		runtimePath:   filepath.Join(fileDescriptorPath(container), name),
+		runtimePath:   fileDescriptorPath(directory),
 		name:          name,
 		containerName: containerName,
 		base:          baseDirectory,
@@ -710,6 +774,61 @@ func createStagingWorkspace() (*stagingWorkspace, error) {
 		parentStat:    containerStat,
 		dirStat:       dirStat,
 	}, nil
+}
+
+func scavengeEmptyStagingContainers(base string) error {
+	directory, err := fsowner.OpenDirectory(base)
+	if err != nil {
+		return err
+	}
+	defer closeFileDirectory(directory)
+	entries, err := directory.List(isKnownStagingContainerName)
+	if err != nil {
+		return err
+	}
+	uid := currentEffectiveUID()
+	for _, entry := range entries {
+		if entry.Identity.Kind != fsowner.KindDirectory ||
+			entry.Identity.UID != uid || entry.Identity.Mode&0o7777 != 0o700 {
+			continue
+		}
+		// Crash recoveries or concurrent workspaces are nonempty and therefore
+		// fail closed. Only historical success residue is removed.
+		removeErr := directory.RemoveDirectory(entry.Name, entry.Identity, fsowner.RemoveOptions{
+			UID:          uid,
+			RequireEmpty: true,
+			SameDevice:   true,
+		})
+		if removeErr != nil && !strings.Contains(removeErr.Error(), " is not empty") {
+			return fmt.Errorf("scavenge empty staging container %s: %w", entry.Name, removeErr)
+		}
+	}
+	return nil
+}
+
+func isKnownStagingContainerName(name string) bool {
+	const prefix = ".wahrwelt-workspace-"
+	if !strings.HasPrefix(name, prefix) {
+		return false
+	}
+	suffix := strings.TrimPrefix(name, prefix)
+	if len(suffix) == 9 || len(suffix) == 10 {
+		for _, char := range suffix {
+			if char < '0' || char > '9' {
+				return false
+			}
+		}
+		return true
+	}
+	if len(suffix) != 32 {
+		return false
+	}
+	for _, char := range suffix {
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func createPinnedStagingChild(parent *os.File, displayParent, pattern string) (string, *os.File, unix.Stat_t, error) {
