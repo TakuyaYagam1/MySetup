@@ -115,6 +115,11 @@ jobs:
         run: |
           PATH="$CI_PROFILE_BIN:$PATH" make -C Linux lint test-go
 
+      - name: Verify least-privilege container runtime contract
+        env:
+          CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}
+        run: PATH="$CI_PROFILE_BIN:$PATH" make -C Linux/installer nix-hardening-contract
+
       - name: Evaluate mixed-version Noctalia Home Manager module
         env:
           CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}

@@ -17,6 +17,54 @@ fail() {
     status=1
 }
 
+# The Nix expression must receive shell variables literally.
+# shellcheck disable=SC2016
+lazydocker_probe="$(
+    WAHRWELT_NIXOS_DIR="$nixos_dir" nix build \
+        --no-link \
+        --no-write-lock-file \
+        --impure \
+        --print-out-paths \
+        --expr '
+          let
+            nixosDir = builtins.getEnv "WAHRWELT_NIXOS_DIR";
+            flake = builtins.getFlake ("path:" + nixosDir);
+            pkgs = import flake.inputs.nixpkgs {
+              system = "x86_64-linux";
+              config.allowUnfree = true;
+            };
+            fakeLazydocker = pkgs.writeShellScriptBin "lazydocker"
+              "printf \"%s\\n\" \"$DOCKER_HOST\"";
+            dev = import (nixosDir + "/lib/package-sets/dev.nix") {
+              pkgs = pkgs // { lazydocker = fakeLazydocker; };
+            };
+            candidates = builtins.filter
+              (package: (package.pname or (package.name or "")) == "lazydocker")
+              dev.devTools;
+          in
+          if builtins.length candidates != 1 then
+            builtins.throw "developer package set must have exactly one lazydocker"
+          else
+            builtins.head candidates
+        '
+)"
+
+lazydocker_default_host="$(
+    env -u DOCKER_HOST XDG_RUNTIME_DIR=/run/user/4242 \
+        "$lazydocker_probe/bin/lazydocker"
+)"
+if [[ "$lazydocker_default_host" != "unix:///run/user/4242/podman/podman.sock" ]]; then
+    fail "Lazydocker does not default to the rootless Podman socket"
+fi
+
+lazydocker_override_host="$(
+    DOCKER_HOST=tcp://127.0.0.1:2375 XDG_RUNTIME_DIR=/run/user/4242 \
+        "$lazydocker_probe/bin/lazydocker"
+)"
+if [[ "$lazydocker_override_host" != "tcp://127.0.0.1:2375" ]]; then
+    fail "Lazydocker does not preserve an explicit Docker endpoint"
+fi
+
 require_text() {
     local file="$1"
     local pattern="$2"
@@ -398,6 +446,18 @@ nix eval --no-write-lock-file --impure --json --expr '
       extraModules = [ rootModule ];
     };
     enabled = enabledHost.config;
+    explicitDockerHost = "tcp://127.0.0.1:2375";
+    explicitDockerHostConfig = (flake.lib.mkWahrweltHost {
+      inherit system;
+      hostname = "wahrwelt-docker-host-override-check";
+      hostVars = defaults;
+      extraModules = [ rootModule ];
+      homeExtraModules = [
+        {
+          home.sessionVariables.DOCKER_HOST = explicitDockerHost;
+        }
+      ];
+    }).config;
     packageName = package: package.pname or (package.name or "");
     defaultHomePackages = base.home-manager.users.${username}.home.packages;
     enabledHomePackages = enabled.home-manager.users.${username}.home.packages;
@@ -426,6 +486,7 @@ nix eval --no-write-lock-file --impure --json --expr '
     portainerPodmanCompat = enabled.virtualisation.podman.dockerCompat;
     portainerPodmanSocket = enabled.virtualisation.podman.dockerSocket.enable;
     portainerDockerHost = enabled.home-manager.users.${username}.home.sessionVariables.DOCKER_HOST or null;
+    explicitDockerHost = explicitDockerHostConfig.home-manager.users.${username}.home.sessionVariables.DOCKER_HOST;
     trustedUsers = base.nix.settings.trusted-users;
     primaryUserExtraGroups = base.users.users.${username}.extraGroups;
     sudoRules = base.security.sudo.extraRules;
@@ -459,7 +520,8 @@ if ! jq -e --arg expected_portainer_image "$portainer_image" '
   .portainerDocker == true and
   .portainerPodmanCompat == false and
   .portainerPodmanSocket == false and
-  .portainerDockerHost == null and
+  .portainerDockerHost == "unix://$XDG_RUNTIME_DIR/podman/podman.sock" and
+  .explicitDockerHost == "tcp://127.0.0.1:2375" and
   (.trustedUsers | length > 0 and all(. == "root")) and
   (.primaryUserExtraGroups | index("docker")) == null and
   ([.sudoRules[].commands[].options[]?] | index("NOPASSWD")) == null and

@@ -38,9 +38,8 @@ in
         };
       };
 
-      home-manager.users.${cfg.user.username}.home.sessionVariables.DOCKER_HOST = lib.mkIf (
-        !config.services.portainer.enable
-      ) "unix://$XDG_RUNTIME_DIR/podman/podman.sock";
+      home-manager.users.${cfg.user.username}.home.sessionVariables.DOCKER_HOST =
+        lib.mkDefault "unix://$XDG_RUNTIME_DIR/podman/podman.sock";
     })
 
     (lib.mkIf personal {

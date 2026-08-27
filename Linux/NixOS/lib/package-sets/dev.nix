@@ -1,5 +1,13 @@
 { pkgs }:
 let
+  lazydockerRootless = pkgs.writeShellApplication {
+    name = "lazydocker";
+    text = ''
+      runtime_dir="''${XDG_RUNTIME_DIR:-/run/user/$UID}"
+      export DOCKER_HOST="''${DOCKER_HOST:-unix://$runtime_dir/podman/podman.sock}"
+      exec ${pkgs.lazydocker}/bin/lazydocker "$@"
+    '';
+  };
   buildTools = with pkgs; [
     cmake
     ninja
@@ -127,10 +135,7 @@ let
     terraform-docs
     ansible
   ];
-  containerTools = with pkgs; [
-    lazydocker
-    kubectl
-  ];
+  containerTools = [ lazydockerRootless ] ++ (with pkgs; [ kubectl ]);
   containerExtraTools = with pkgs; [
     k9s
     kind
