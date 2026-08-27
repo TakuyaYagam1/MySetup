@@ -32,7 +32,9 @@ chmod 0700 "$runtime_dir"
 (cd "$installer_dir" && go build -o "$fake_bin/wahrwelt-fs-helper" ./cmd/wahrwelt-fs-helper)
 export WAHRWELT_FS_HELPER="$fake_bin/wahrwelt-fs-helper"
 
-for helper in shell-runtime.sh shell-runtime-env.sh shell-profile-sync.sh shell-process.sh; do
+for helper in \
+  shell-runtime.sh shell-runtime-env.sh shell-profile-sync.sh shell-process.sh \
+  shell-transition-overlay.sh; do
   ln -s -- "$source_scripts/$helper" "$instrumented_scripts/$helper"
 done
 mkdir -p "$instrumented_scripts/migrations/v1_to_v2"
@@ -102,6 +104,30 @@ finish_spotify_focus_guard_async() {
 
 sleep() {
   :
+}
+
+stop_shell_selector() {
+  test_record_operation selector-stop
+}
+
+wahrwelt_shell_transition_begin() {
+  [ "${WAHRWELT_TEST_CAPTURE:-0}" -eq 1 ] || return 1
+  wahrwelt_shell_transition_active=1
+  test_record_operation transition-capture-ready
+}
+
+wahrwelt_shell_transition_wait_target_ready() {
+  test_record_operation "transition-readiness:$1"
+}
+
+wahrwelt_shell_transition_reveal_and_wait() {
+  test_record_operation transition-reveal
+  wahrwelt_shell_transition_active=0
+}
+
+wahrwelt_shell_transition_abort() {
+  test_record_operation transition-abort
+  wahrwelt_shell_transition_active=0
 }
 
 stop_all_shells_for_switch() {
@@ -291,13 +317,25 @@ runtime_snapshot_line="$(operation_line '^snapshot-begin:\.runtime-rollback-$')"
 shell_stop_line="$(operation_line '^shell-stop$')"
 target_start_line="$(operation_line '^shell-start:noctalia$')"
 state_snapshot_line="$(operation_line '^snapshot-begin:\.state-switch-rollback-$')"
+selector_stop_line="$(operation_line '^selector-stop$')"
+capture_ready_line="$(operation_line '^transition-capture-ready$')"
+reload_line="$(operation_line '^hypr-reload$')"
+readiness_line="$(operation_line '^transition-readiness:noctalia$')"
+reveal_line="$(operation_line '^transition-reveal$')"
 if [ -z "$runtime_snapshot_line" ] || [ -z "$shell_stop_line" ] ||
   [ -z "$target_start_line" ] || [ -z "$state_snapshot_line" ] ||
+  [ -z "$selector_stop_line" ] || [ -z "$capture_ready_line" ] ||
+  [ -z "$reload_line" ] || [ -z "$readiness_line" ] || [ -z "$reveal_line" ] ||
   [ "$runtime_snapshot_line" -ge "$shell_stop_line" ] ||
+  [ "$selector_stop_line" -ge "$capture_ready_line" ] ||
+  [ "$capture_ready_line" -ge "$shell_stop_line" ] ||
   [ "$shell_stop_line" -ge "$target_start_line" ] ||
-  [ "$target_start_line" -ge "$state_snapshot_line" ]; then
-  fail "ordinary transition order is not runtime snapshot < stop < target start < deferred state snapshot
-$(grep -E '^(snapshot-begin|shell-stop|shell-start):?' "$operations" || true)"
+  [ "$target_start_line" -ge "$state_snapshot_line" ] ||
+  [ "$state_snapshot_line" -ge "$reload_line" ] ||
+  [ "$reload_line" -ge "$readiness_line" ] ||
+  [ "$readiness_line" -ge "$reveal_line" ]; then
+  fail "ordinary transition order does not preserve capture, single-shell start, reload, readiness, and reveal
+$(grep -E '^(snapshot-begin|selector-stop|transition-|shell-stop|shell-start|hypr-reload):?' "$operations" || true)"
 fi
 
 if [ "${WAHRWELT_TEST_REPORT_TIMING:-0}" -eq 1 ]; then

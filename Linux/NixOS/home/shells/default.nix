@@ -12,6 +12,8 @@ let
   shellProfiles = import ./profiles.nix;
   inherit (dotfilesLib) dotsRoot;
   shellSelectorRoot = ./quickshell/wahrwelt-shell-selector;
+  shellTransitionRoot = ./quickshell/wahrwelt-shell-transition;
+  quickshellPackage = inputs.quickshell.packages.${pkgs.stdenv.hostPlatform.system}.default;
   defaultProfile = shellProfiles.byId.${shellProfiles.defaultProfile};
   end4Profile = shellProfiles.byId.end4;
   end4PCProfile = shellProfiles.byId.end4-pc;
@@ -88,6 +90,46 @@ let
     selectorRoot = shellSelectorRoot;
     optionsFile = selectorShellOptions;
   };
+
+  shellTransitionSource =
+    pkgs.runCommand "wahrwelt-shell-transition"
+      {
+        nativeBuildInputs = [
+          pkgs.kdePackages.qtdeclarative
+          pkgs.kdePackages.qtshadertools
+          pkgs.nodejs
+        ];
+      }
+      ''
+        node ${shellTransitionRoot}/tests/transition-model.test.mjs
+        QML_IMPORT_PATH=${pkgs.kdePackages.qtdeclarative}/lib/qt-6/qml \
+          QMLTESTRUNNER=${pkgs.kdePackages.qtdeclarative}/bin/qmltestrunner \
+          node ${shellTransitionRoot}/tests/qml-controller.test.mjs
+        qmlformat --ignore-settings ${shellTransitionRoot}/shell.qml >/dev/null
+        qmlformat --ignore-settings ${shellTransitionRoot}/TransitionController.qml >/dev/null
+        qmllint -W 0 --bare \
+          -I ${pkgs.kdePackages.qtdeclarative}/lib/qt-6/qml \
+          -I ${quickshellPackage}/lib/qt-6/qml \
+          -I ${shellTransitionRoot} \
+          ${shellTransitionRoot}/shell.qml \
+          ${shellTransitionRoot}/TransitionController.qml
+
+        mkdir -p "$out/shaders"
+        install -m 0444 ${shellTransitionRoot}/shell.qml "$out/shell.qml"
+        install -m 0444 \
+          ${shellTransitionRoot}/TransitionController.qml \
+          "$out/TransitionController.qml"
+        install -m 0444 ${shellTransitionRoot}/transition-model.js "$out/transition-model.js"
+        install -m 0444 \
+          ${shellTransitionRoot}/shaders/honeycomb.frag \
+          "$out/shaders/honeycomb.frag"
+        install -m 0444 \
+          ${shellTransitionRoot}/shaders/LICENSE-Noctalia-MIT.txt \
+          "$out/shaders/LICENSE-Noctalia-MIT.txt"
+        qsb --qt6 \
+          -o "$out/shaders/honeycomb.frag.qsb" \
+          ${shellTransitionRoot}/shaders/honeycomb.frag
+      '';
 
   stableEntrypointFiles = lib.genAttrs (map (name: "hypr/${name}") stableEntrypoints) (
     target:
@@ -205,6 +247,10 @@ in
       "quickshell/wahrwelt-shell-selector" = {
         force = true;
         source = shellSelectorSource;
+      };
+      "quickshell/wahrwelt-shell-transition" = {
+        force = true;
+        source = shellTransitionSource;
       };
     };
 

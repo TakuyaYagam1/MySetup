@@ -22,6 +22,7 @@ HYPR_SHELL_INTEGRATION_TESTS := \
 	Linux/dots/hypr/scripts/tests/shell-runtime-dir-test.sh \
 	Linux/dots/hypr/scripts/tests/shell-runtime-env-test.sh \
 	Linux/dots/hypr/scripts/tests/close-active-test.sh \
+	Linux/dots/hypr/scripts/tests/shell-transition-overlay-test.sh \
 	Linux/dots/hypr/scripts/tests/shell-transition-fast-path-test.sh \
 	Linux/dots/hypr/scripts/tests/shell-transition-test.sh
 
@@ -52,6 +53,7 @@ END4_HYPR_EXPR := let \
 in hm.config.xdg.configFile."hypr/end4".source
 
 END4_PC_QUICKSHELL_EXPR := $(subst hm.config.xdg.configFile."hypr/end4".source,hm.config.xdg.configFile."quickshell/end4-pC".source,$(END4_HYPR_EXPR))
+SHELL_TRANSITION_EXPR := $(subst hm.config.xdg.configFile."hypr/end4".source,hm.config.xdg.configFile."quickshell/wahrwelt-shell-transition".source,$(END4_HYPR_EXPR))
 
 ##@ Build & run
 
@@ -137,12 +139,17 @@ hypr-lua-contract-check: ## Check canonical Lua load order and End4 adapter rest
 shell-selector-model-check: ## Check shell selector family and End4 variant behavior
 	cd $(REPO_ROOT) && $(NODE) Linux/NixOS/home/shells/quickshell/wahrwelt-shell-selector/tests/selector-model.test.mjs
 
+.PHONY: shell-transition-model-check
+shell-transition-model-check: ## Check shell transition state and exact reveal duration
+	cd $(REPO_ROOT) && $(NODE) Linux/NixOS/home/shells/quickshell/wahrwelt-shell-transition/tests/transition-model.test.mjs
+
 .PHONY: hypr-integration-check
-hypr-integration-check: ## Run shell, Lua, and selector integration gates
+hypr-integration-check: ## Run shell, Lua, selector, and transition integration gates
 	@status=0; \
 	$(MAKE) hypr-shell-integration-check || status=$$?; \
 	$(MAKE) hypr-lua-contract-check || status=$$?; \
 	$(MAKE) shell-selector-model-check || status=$$?; \
+	$(MAKE) shell-transition-model-check || status=$$?; \
 	exit $$status
 
 .PHONY: test
@@ -195,6 +202,12 @@ nix-end4-pc-quickshell-build: ## Realize and inspect the managed End4 pC QuickSh
 	@artifact="$$(WAHRWELT_NIXOS_DIR='$(NIXOS_DIR)' nix build $(NIX_CACHE_ARGS) --no-link --no-write-lock-file --impure --print-out-paths --expr '$(END4_PC_QUICKSHELL_EXPR)')"; \
 	printf 'End4 pC QuickShell artifact: %s\n' "$$artifact"; \
 	cd $(REPO_ROOT) && bash Linux/dots/hypr/scripts/tests/end4-artifact-test.sh --quickshell "$$artifact"
+
+.PHONY: nix-shell-transition-build
+nix-shell-transition-build: ## Realize and inspect the managed QuickShell transition artifact
+	@artifact="$$(WAHRWELT_NIXOS_DIR='$(NIXOS_DIR)' nix build $(NIX_CACHE_ARGS) --no-link --no-write-lock-file --impure --print-out-paths --expr '$(SHELL_TRANSITION_EXPR)')"; \
+	printf 'QuickShell transition artifact: %s\n' "$$artifact"; \
+	cd $(REPO_ROOT) && $(NODE) Linux/dots/hypr/scripts/tests/shell-transition-artifact-test.mjs "$$artifact"
 
 .PHONY: nix-profile-eval
 nix-profile-eval: ## Eval Home Manager imports for every package preset

@@ -643,13 +643,31 @@ printf '%s\n' \
   'prepare_profile_or_fallback() { :; }' \
   >"$start_lock_fixture/shell-profile-sync.sh"
 printf '%s\n' \
+  'kill_matching_pids() {' \
+  '  printf "kill:%s:%s\n" "$1" "$2" >>"$WAHRWELT_START_LOCK_FIXTURE/lifecycle-events"' \
+  '}' \
+  'wait_until_stopped() {' \
+  '  printf "wait:%s\n" "$1" >>"$WAHRWELT_START_LOCK_FIXTURE/lifecycle-events"' \
+  '}' \
   'cleanup_legacy_end4_processes() {' \
+  '  printf "%s\n" legacy-cleanup >>"$WAHRWELT_START_LOCK_FIXTURE/lifecycle-events"' \
   '  printf "%s" "$legacy_end4_upgrade_tokens" >"$WAHRWELT_START_LOCK_FIXTURE/cleanup-tokens"' \
   '  legacy_end4_upgrade_tokens="$(wahrwelt_remove_end4_upgrade_tokens "$legacy_end4_upgrade_tokens")"' \
   '  switch_transaction_active=0' \
   '  exit 0' \
   '}' \
   >"$start_lock_fixture/shell-process.sh"
+printf '%s\n' \
+  'wahrwelt_shell_transition_started=0' \
+  'wahrwelt_shell_transition_active=0' \
+  'wahrwelt_shell_transition_begin() {' \
+  '  printf "%s\n" transition-begin >>"$WAHRWELT_START_LOCK_FIXTURE/lifecycle-events"' \
+  '  return 1' \
+  '}' \
+  'wahrwelt_shell_transition_wait_target_ready() { return 0; }' \
+  'wahrwelt_shell_transition_reveal_and_wait() { return 0; }' \
+  'wahrwelt_shell_transition_abort() { :; }' \
+  >"$start_lock_fixture/shell-transition-overlay.sh"
 
 : >"$start_lock_fixture/start-shell.log"
 if ! WAHRWELT_START_LOCK_FIXTURE="$start_lock_fixture" \
@@ -665,12 +683,20 @@ fi
 : >"$start_lock_fixture/durable-tokens"
 
 printf '%s' '5101:101:ii' >"$start_lock_fixture/durable-tokens"
+: >"$start_lock_fixture/lifecycle-events"
 
 : >"$start_lock_fixture/start-shell.log"
-if ! WAHRWELT_START_LOCK_FIXTURE="$start_lock_fixture" \
+start_lock_stderr="$start_lock_fixture/start-shell.stderr"
+if ! PATH="$fake_bin:$PATH" WAHRWELT_LOCK_TEST_LOG="$lock_log" \
+  WAHRWELT_START_LOCK_FIXTURE="$start_lock_fixture" \
   WAYLAND_DISPLAY=wayland-1 HYPRLAND_INSTANCE_SIGNATURE=test \
-  "$start_lock_fixture/start-shell.sh" end4; then
+  "$start_lock_fixture/start-shell.sh" end4 2>"$start_lock_stderr"; then
   printf 'FAIL: argumentless retry did not resume durable End4 upgrade cleanup\n' >&2
+  exit 1
+fi
+if grep -Eiq 'No such file|command not found|unbound variable' "$start_lock_stderr"; then
+  printf 'FAIL: start-shell lock fixture passed through an unintended runtime error:\n' >&2
+  sed 's/^/  /' "$start_lock_stderr" >&2
   exit 1
 fi
 if [ "$(cat "$start_lock_fixture/cleanup-tokens" 2>/dev/null || true)" != '5101:101:ii' ]; then
@@ -681,5 +707,8 @@ if [ -s "$start_lock_fixture/durable-tokens" ]; then
   printf 'FAIL: successful argumentless retry did not consume durable provenance\n' >&2
   exit 1
 fi
+assert_eq $'kill:__selector__:TERM\nwait:__selector__\ntransition-begin\nlegacy-cleanup' \
+  "$(cat "$start_lock_fixture/lifecycle-events")" \
+  'start-shell lock fixture reached selector stop, transition hook, and provenance cleanup'
 
 printf 'OK end4 runtime variants\n'

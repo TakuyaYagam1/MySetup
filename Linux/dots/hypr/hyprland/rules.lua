@@ -92,5 +92,6 @@ hl.layer_rule({ match = { namespace = "wayfreeze" }, animation = "fade" })
 hl.layer_rule({ match = { namespace = "launcher" }, animation = "popin 80%" })
 hl.layer_rule({ match = { namespace = "launcher" }, blur = true })
 
+hl.layer_rule({ match = { namespace = "wahrwelt-shell-transition-.*" }, no_anim = true })
 hl.layer_rule({ match = { namespace = "caelestia-(border-exclusion|area-picker)" }, no_anim = true })
 hl.layer_rule({ match = { namespace = "caelestia-(drawers|background)" }, animation = "fade" })

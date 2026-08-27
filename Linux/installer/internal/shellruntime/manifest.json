@@ -71,6 +71,7 @@
     "shell-runtime-env.sh",
     "shell-runtime.sh",
     "shell-selector.sh",
+    "shell-transition-overlay.sh",
     "screenshot.sh",
     "spotify-toggle.sh",
     "start-shell.sh",

@@ -391,6 +391,15 @@ families, with a segmented Official/pC choice inside End4:
 - End4 Official -> profile ID `end4`, QuickShell config `ii`
 - End4 pC -> profile ID `end4-pc`, QuickShell config `end4-pC`
 
+An explicit selector choice uses a fullscreen captured freeze-frame and reveals
+the selected shell with a honeycomb wipe. The visible reveal lasts exactly five
+seconds after the target starts and reports ready; it is not a five-second
+pre-switch cooldown. Login and Home Manager auto-start do not animate.
+
+Capture, IPC, or readiness failures fail open and do not change the shell
+result. If the selected shell fails, rollback restores the previous shell under
+the overlay before it is revealed.
+
 The full per-shell keybind reference (common + Caelestia + Noctalia + End4)
 lives in the [GitHub Wiki](https://github.com/TakuyaYagam1/wahrwelt/wiki) or
 [`Linux/keybinds.md`](keybinds.md).
@@ -442,7 +451,7 @@ Ownership contract:
 - Installer owns first-apply user dotfile sync, unmanaged backups, executable
   bits for Hypr scripts, and immediate runtime bootstrap.
 - Home Manager owns stable Hypr entrypoints, managed Hypr scripts, shell
-  selector assets, and shell profile metadata after rebuild.
+  selector and transition assets, and shell profile metadata after rebuild.
 - Runtime shell scripts own mutable files under `$XDG_STATE_HOME/wahrwelt` and
   may rewrite active-shell fragments during profile switches.
 - User/vendor state remains mutable under shell-specific config/cache paths,
@@ -453,6 +462,7 @@ validated End4 Hypr artifact with:
 
 ```bash
 make -C Linux test-hypr-integration
+make -C Linux nix-shell-transition-build
 make -C Linux nix-end4-hypr-build
 make -C Linux nix-end4-pc-quickshell-build
 ```
@@ -632,7 +642,8 @@ Useful checks after changing installer or shell integration:
 | --- | --- |
 | `make -C Linux/installer check` | Before pushing or applying - full local CI: lint, fmt-check, hypr-bind-check, shell-check, tests, nix evals. |
 | `make -C Linux/installer shell-check` | After editing Hypr scripts, JSON, or Python patch sources under `Linux/dots/hypr/`. |
-| `make -C Linux test-hypr-integration` | After changing shell lifecycle, Lua adapters, shared rules, app-aware close behavior, or the selector model. |
+| `make -C Linux test-hypr-integration` | After changing shell lifecycle, overlay behavior, Lua adapters, shared rules, app-aware close behavior, or selector/transition models. |
+| `make -C Linux nix-shell-transition-build` | Realize the Home Manager-owned transition artifact and verify QML, the compiled shader, duration, license, and lock-free contract. |
 | `make -C Linux/installer nix-hm-eval` | After touching `home/`, End4 runtime-env, or shell-profile imports - evaluates the runtime shell module and all-on Home Manager imports including End4 Official and pC. |
 | `make -C Linux nix-end4-hypr-build` | Realize the exact Home Manager-owned validated End4 Hypr artifact and inspect lifecycle/rules contracts. |
 | `make -C Linux nix-end4-pc-quickshell-build` | Realize the managed End4 pC QuickShell tree and reject any direct QuickShell lifecycle launch. |
@@ -642,8 +653,8 @@ Useful checks after changing installer or shell integration:
 The scheduled flake updater also enforces the pC dependency boundary: the
 `end4-pc` input must exist in the root/full, `desktop`, `developer`, and
 `personal` locks, must be absent from `minimal`, and the generated
-`xdg.configFile."quickshell/end4-pC".source` must build before an update PR can
-merge.
+`xdg.configFile."quickshell/end4-pC".source` and the managed QuickShell
+transition artifact must build before an update PR can merge.
 
 ## Configuration Structure
 
@@ -678,7 +689,9 @@ Linux/NixOS/
 │   │                              # packages (preset-gated home pkgs),
 │   │                              # starship, thunar, vesktop, uwsm, …
 │   └── shells/
-│       └── quickshell/wahrwelt-shell-selector/  # Super+Shift+W picker
+│       └── quickshell/
+│           ├── wahrwelt-shell-selector/    # Super+Shift+W picker
+│           └── wahrwelt-shell-transition/  # Managed honeycomb overlay
 ├── pkgs/                          # pure derivations
 │                                  # (omnirouter, sddm-meowrch-theme)
 ├── programs/                      # system-wide program modules

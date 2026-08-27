@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -156,6 +157,21 @@ func TestHomeManagerExposesEveryManifestHyprScript(t *testing.T) {
 		if info, err := os.Stat(path); err != nil || !info.Mode().IsRegular() {
 			t.Fatalf("Home Manager manifest script %q is not a regular source: info=%v err=%v", script, info, err)
 		}
+	}
+}
+
+func TestManifestOwnsExecutableShellTransitionController(t *testing.T) {
+	const script = "shell-transition-overlay.sh"
+	if !slices.Contains(HyprScripts, script) {
+		t.Fatalf("shell transition controller %q is not managed by the canonical manifest", script)
+	}
+	path := filepath.Join("../../../dots/hypr/scripts", script)
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Mode().IsRegular() || info.Mode()&0o111 == 0 {
+		t.Fatalf("managed shell transition controller is not executable: mode=%v", info.Mode())
 	}
 }
 

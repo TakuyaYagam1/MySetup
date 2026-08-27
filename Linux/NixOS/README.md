@@ -7,8 +7,8 @@ The main installation, shell switching, and validation guide is
 
 Home Manager owns the stable `~/.config/hypr` entrypoints, canonical Lua
 modules, executable shell scripts, top-level shared rules, selector assets,
-`end4-adapter.lua`, and one shared validated `hypr/end4` tree. Managed paths are
-store links and should be changed in this repository.
+transition assets, `end4-adapter.lua`, and one shared validated `hypr/end4`
+tree. Managed paths are store links and should be changed in this repository.
 
 The runtime owns writable profile files under
 `$XDG_STATE_HOME/wahrwelt/hypr-runtime` and the active profile state under
@@ -71,6 +71,7 @@ Useful checks from the repository root:
 ```bash
 make -C Linux test-hypr-integration
 make -C Linux/installer nix-hm-eval
+make -C Linux nix-shell-transition-build
 make -C Linux nix-end4-hypr-build
 make -C Linux nix-end4-pc-quickshell-build
 ```

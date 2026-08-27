@@ -61,6 +61,8 @@ end4_env_pattern="$wahrwelt_end4_env_pattern"
 . "$script_dir/shell-profile-sync.sh"
 # shellcheck source=Linux/dots/hypr/scripts/shell-process.sh
 . "$script_dir/shell-process.sh"
+# shellcheck source=Linux/dots/hypr/scripts/shell-transition-overlay.sh
+. "$script_dir/shell-transition-overlay.sh"
 
 if ! wahrwelt_open_end4_upgrade_state; then
   printf 'End4 upgrade process state ownership collision\n' >&2
@@ -136,6 +138,8 @@ spotify_guard_addresses=()
 spotify_focus_monitor_before=""
 spotify_focus_window_before=""
 spotify_focus_window_pid_before=""
+shell_transition_restore_ready=0
+shell_exit_signal_status=0
 
 discard_switch_snapshots() {
   if [ -n "$runtime_bundle_snapshot_dir" ]; then
@@ -155,9 +159,23 @@ discard_switch_snapshots() {
 }
 
 cleanup_start_shell() {
+  local exit_status=$?
   local spotify_wait_for_watcher=0
+  local transition_restored=0
+  local exit_signaled=0
 
-  trap - EXIT
+  if [ "$shell_exit_signal_status" -ne 0 ]; then
+    exit_status="$shell_exit_signal_status"
+  fi
+  trap - EXIT HUP INT QUIT TERM
+  if [ "$exit_status" -gt 128 ] && [ "$exit_status" -le 192 ]; then
+    exit_signaled=1
+  fi
+  if [ "$exit_signaled" -eq 1 ] &&
+    { [ "$wahrwelt_shell_transition_active" -eq 1 ] ||
+      [ "$wahrwelt_shell_transition_started" -eq 1 ]; }; then
+    wahrwelt_shell_transition_abort_signal_safe
+  fi
   [ "$shell_processes_touched" -eq 0 ] || spotify_wait_for_watcher=1
   if [ "$switch_transaction_active" -eq 1 ]; then
     if [ "$shell_processes_touched" -eq 1 ] && [ "$profile_start_attempted" -eq 1 ]; then
@@ -172,7 +190,11 @@ cleanup_start_shell() {
         fi
         if start_profile_shell; then
           if [ "$hypr_reload_started" -eq 1 ]; then
-            reload_hypr
+            if reload_hypr; then
+              transition_restored=1
+            fi
+          else
+            transition_restored=1
           fi
         else
           log "failed to restart previous shell during transaction rollback; profile=$profile"
@@ -192,9 +214,30 @@ cleanup_start_shell() {
   if ! finish_spotify_focus_guard "$spotify_wait_for_watcher"; then
     log "failed to restore Spotify activation after shell transaction cleanup"
   fi
+  if [ "$wahrwelt_shell_transition_active" -eq 1 ]; then
+    if [ "$transition_restored" -eq 1 ] || [ "$shell_transition_restore_ready" -eq 1 ]; then
+      wahrwelt_shell_transition_wait_target_ready "$profile" ||
+        log "restored shell transition readiness timeout; revealing anyway"
+      wahrwelt_shell_transition_reveal_and_wait ||
+        log "failed to reveal restored shell transition; exact overlay was cleaned"
+    else
+      wahrwelt_shell_transition_abort
+    fi
+  elif [ "$wahrwelt_shell_transition_started" -eq 1 ]; then
+    wahrwelt_shell_transition_abort
+  fi
+}
+
+handle_start_shell_signal() {
+  shell_exit_signal_status="$1"
+  exit "$shell_exit_signal_status"
 }
 
 trap cleanup_start_shell EXIT
+trap 'handle_start_shell_signal 129' HUP
+trap 'handle_start_shell_signal 130' INT
+trap 'handle_start_shell_signal 131' QUIT
+trap 'handle_start_shell_signal 143' TERM
 
 begin_switch_transaction() {
   local planned_paths scavenge_error
@@ -832,6 +875,7 @@ attempt_previous_fallback() {
   if ! finish_spotify_focus_guard 1; then
     log "failed to restore Spotify activation after fallback shell switch"
   fi
+  shell_transition_restore_ready=1
   hypr_reload_started=0
   profile_start_attempted=0
   shell_processes_touched=0
@@ -865,6 +909,13 @@ fi
 if ! begin_spotify_focus_guard; then
   log "aborting shell switch before stopping current shell; Spotify activation guard failed"
   exit 1
+fi
+
+if [ -n "$requested_profile" ]; then
+  stop_shell_selector
+  if ! wahrwelt_shell_transition_begin; then
+    log "shell transition capture unavailable; continuing without animation"
+  fi
 fi
 
 if [ -n "$legacy_end4_upgrade_tokens" ]; then
@@ -916,6 +967,12 @@ if ! reload_hypr; then
 fi
 propagate_runtime_environment
 finish_spotify_focus_guard_async
+if [ "$wahrwelt_shell_transition_active" -eq 1 ]; then
+  wahrwelt_shell_transition_wait_target_ready "$profile" ||
+    log "shell transition target readiness timeout; revealing anyway"
+  wahrwelt_shell_transition_reveal_and_wait ||
+    log "shell transition reveal failed; exact overlay was cleaned"
+fi
 switch_transaction_active=0
 profile_start_attempted=0
 shell_processes_touched=0

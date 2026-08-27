@@ -109,6 +109,11 @@ jobs:
           CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}
         run: PATH="$CI_PROFILE_BIN:$PATH" make -C Linux test-hypr-integration
 
+      - name: Realize managed QuickShell transition artifact
+        env:
+          CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}
+        run: PATH="$CI_PROFILE_BIN:$PATH" make -C Linux nix-shell-transition-build
+
       - name: Run linting + Go tests
         env:
           CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}

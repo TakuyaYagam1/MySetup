@@ -240,6 +240,43 @@ end
 
 test_optional_require()
 
+local function test_shell_transition_layer_rule()
+	local layer_rules = {}
+	local environment = {
+		hl = {
+			window_rule = function() end,
+			workspace_rule = function() end,
+			layer_rule = function(rule)
+				table.insert(layer_rules, rule)
+			end,
+		},
+		require = function(name)
+			if name == "variables" then
+				return {
+					windowOpacity = 1,
+					singleWindowGapsOut = 0,
+				}
+			end
+			if name == "shell-common-rules" then
+				return {}
+			end
+			error("unexpected rules dependency: " .. name)
+		end,
+	}
+	load_module(source_root .. "/hyprland/rules.lua", environment)
+
+	local matches = 0
+	for _, rule in ipairs(layer_rules) do
+		if rule.match.namespace == "wahrwelt-shell-transition-.*" then
+			matches = matches + 1
+			assert_equal(rule.no_anim, true, "shell transition compositor animation suppression")
+		end
+	end
+	assert_equal(matches, 1, "shell transition exact layer rule count")
+end
+
+test_shell_transition_layer_rule()
+
 local function test_user_namespace_transition()
 	local transition_path = source_root
 		.. "/../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-namespace-transition.lua"

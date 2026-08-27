@@ -176,6 +176,10 @@ nix-end4-hypr-build: ## Realize and inspect the validated End4 Hypr artifact
 nix-end4-pc-quickshell-build: ## Realize and inspect the managed End4 pC QuickShell artifact
 	$(MAKE) -C $(INSTALLER_DIR) nix-end4-pc-quickshell-build
 
+.PHONY: nix-shell-transition-build
+nix-shell-transition-build: ## Realize and inspect the managed QuickShell transition artifact
+	$(MAKE) -C $(INSTALLER_DIR) nix-shell-transition-build
+
 .PHONY: full-check
 full-check: ## Mirror installer/Makefile check target (full local CI)
 	$(MAKE) -C $(INSTALLER_DIR) check

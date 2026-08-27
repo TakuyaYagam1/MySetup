@@ -73,6 +73,11 @@ hyprctl reload
 | --- | --- |
 | `Super+Shift+W` | Toggle the shell selector: Caelestia, Noctalia, or End4 with an Official/pC segmented choice |
 
+An explicit choice freezes the fullscreen image and reveals the selected shell
+with a five-second honeycomb wipe after it starts and reports ready. Login and
+Home Manager auto-start do not animate. Capture, IPC, or readiness failures
+fail open; a failed target rolls back to the previous shell under the overlay.
+
 ### Application launchers
 
 | Keys | Action |

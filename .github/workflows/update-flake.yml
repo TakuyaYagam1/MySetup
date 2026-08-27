@@ -112,6 +112,9 @@ jobs:
         working-directory: Linux/NixOS
         run: nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.xdg.configFile."quickshell/end4-pC".source'
 
+      - name: Realize managed QuickShell transition artifact
+        run: make -C Linux nix-shell-transition-build
+
       - name: Build patched Caelestia shell
         working-directory: Linux/NixOS
         run: nix build --no-link --print-build-logs '.#nixosConfigurations.NixOS.config.home-manager.users.user.programs.caelestia.package'

@@ -7,6 +7,17 @@ test_root="$(mktemp -d)"
 trap 'rm -rf -- "$test_root"' EXIT
 fs_helper="$test_root/wahrwelt-fs-helper"
 (cd "$installer_dir" && go build -o "$fs_helper" ./cmd/wahrwelt-fs-helper)
+signal_fs_helper="$test_root/wahrwelt-fs-helper-signal-probe"
+cat >"$signal_fs_helper" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "${1:-}" = runtime-lock-run ]; then
+  printf '%s\n' "$$" >"${WAHRWELT_TEST_LOCK_HELPER_PID_FILE:?}"
+fi
+exec "${WAHRWELT_REAL_FS_HELPER:?}" "$@"
+EOF
+chmod 0755 "$signal_fs_helper"
 
 environment_command_log="$test_root/environment-commands.log"
 : >"$environment_command_log"
@@ -34,7 +45,9 @@ instrumented_scripts="$test_root/scripts"
 early_hooks="$test_root/early-hooks.sh"
 hooks="$test_root/hooks.sh"
 mkdir -p "$instrumented_scripts"
-for helper in shell-runtime.sh shell-runtime-env.sh shell-profile-sync.sh shell-process.sh; do
+for helper in \
+  shell-runtime.sh shell-runtime-env.sh shell-profile-sync.sh shell-process.sh \
+  shell-transition-overlay.sh; do
   ln -s -- "$source_scripts/$helper" "$instrumented_scripts/$helper"
 done
 mkdir -p "$instrumented_scripts/migrations/v1_to_v2"
@@ -337,6 +350,63 @@ busctl() {
 sleep() {
   test_event "sleep:$1"
   :
+}
+
+wahrwelt_shell_transition_begin() {
+  local mode="${WAHRWELT_TEST_TRANSITION_CAPTURE_MODE:-captured}"
+
+  test_event transition:begin
+  test_add_process transition
+  wahrwelt_shell_transition_started=1
+  case "$mode" in
+    captured)
+      wahrwelt_shell_transition_active=1
+      test_event transition:capture-ready
+      return 0
+      ;;
+    timeout | malformed | absent)
+      test_event "transition:capture-$mode"
+      test_remove_process transition
+      wahrwelt_shell_transition_started=0
+      wahrwelt_shell_transition_active=0
+      return 1
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+wahrwelt_shell_transition_wait_target_ready() {
+  local mode="${WAHRWELT_TEST_TRANSITION_READINESS_MODE:-ready}"
+
+  test_event "transition:readiness-$mode:$1"
+  [ "$mode" = ready ]
+}
+
+wahrwelt_shell_transition_reveal_and_wait() {
+  test_event transition:reveal
+  if [ -n "${WAHRWELT_TEST_TRANSITION_BLOCK_FILE:-}" ]; then
+    : >"$WAHRWELT_TEST_TRANSITION_BLOCK_FILE"
+    while [ ! -e "$WAHRWELT_TEST_TRANSITION_BLOCK_FILE.release" ]; do
+      command sleep 0.01
+    done
+  fi
+  test_remove_process transition
+  wahrwelt_shell_transition_started=0
+  wahrwelt_shell_transition_active=0
+}
+
+wahrwelt_shell_transition_abort() {
+  test_event transition:abort
+  test_remove_process transition
+  wahrwelt_shell_transition_started=0
+  wahrwelt_shell_transition_active=0
+}
+
+wahrwelt_shell_transition_abort_signal_safe() {
+  test_event transition:abort-signal
+  test_remove_process transition
+  wahrwelt_shell_transition_started=0
+  wahrwelt_shell_transition_active=0
 }
 
 log() {
@@ -813,7 +883,9 @@ run_switch() {
     WAHRWELT_TEST_SPOTIFY_HIDE_STEALS_FOCUS="${WAHRWELT_TEST_SPOTIFY_HIDE_STEALS_FOCUS:-}" \
     WAHRWELT_TEST_FAIL_SPOTIFY_SNAPSHOT="${WAHRWELT_TEST_FAIL_SPOTIFY_SNAPSHOT:-}" \
     WAHRWELT_TEST_WATCHER_UNREADY="${WAHRWELT_TEST_WATCHER_UNREADY:-}" \
-    WAHRWELT_FS_HELPER="$fs_helper" \
+    WAHRWELT_FS_HELPER="${WAHRWELT_TEST_FS_HELPER:-$fs_helper}" \
+    WAHRWELT_REAL_FS_HELPER="$fs_helper" \
+    WAHRWELT_TEST_LOCK_HELPER_PID_FILE="${WAHRWELT_TEST_LOCK_HELPER_PID_FILE:-}" \
     WAHRWELT_SPOTIFY_ASYNC_DONE="$root/spotify-async-done" \
     WAHRWELT_TEST_FAIL_PREPARE="$fail_prepare" \
     WAHRWELT_TEST_FAIL_START="$fail_start" \
@@ -825,6 +897,9 @@ run_switch() {
     WAHRWELT_TEST_ABORT_AFTER_PROPAGATE="$abort_after_propagate" \
     WAHRWELT_TEST_REPLACE_AFTER_PUBLISH_INDEX="$replace_after_publish_index" \
     WAHRWELT_TEST_FAIL_RELOAD="$fail_reload" \
+    WAHRWELT_TEST_TRANSITION_CAPTURE_MODE="${WAHRWELT_TEST_TRANSITION_CAPTURE_MODE:-captured}" \
+    WAHRWELT_TEST_TRANSITION_READINESS_MODE="${WAHRWELT_TEST_TRANSITION_READINESS_MODE:-ready}" \
+    WAHRWELT_TEST_TRANSITION_BLOCK_FILE="${WAHRWELT_TEST_TRANSITION_BLOCK_FILE:-}" \
     "$instrumented_scripts/start-shell.sh" "${args[@]}"
   switch_status=$?
   if [ -e "$root/spotify-async-done.started" ]; then
@@ -841,6 +916,156 @@ run_switch() {
   fi
   return "$switch_status"
 }
+
+root="$(new_case_root visual-success-order)"
+seed_case "$root" noctalia
+run_switch "$root" end4
+assert_process_set "$root/processes" end4
+assert_event_before "$root/events" 'stop:selector' 'transition:capture-ready' \
+  'visual transition selector close'
+assert_event_before "$root/events" 'transition:capture-ready' 'stop:noctalia' \
+  'visual transition frozen old shell'
+assert_event_before "$root/events" 'stop:noctalia' 'start:end4' \
+  'visual transition single-shell ownership'
+assert_event_before "$root/events" 'start:end4' 'reload' \
+  'visual transition target start'
+assert_event_before "$root/events" 'reload' 'transition:readiness-ready:end4' \
+  'visual transition readiness hint'
+assert_event_before "$root/events" 'transition:readiness-ready:end4' 'transition:reveal' \
+  'visual transition reveal'
+if grep -Fqx transition "$root/processes"; then
+  fail 'successful visual transition retained its helper process'
+fi
+
+root="$(new_case_root visual-auto-login-disabled)"
+seed_case "$root" noctalia
+run_switch "$root"
+if grep -Eq '^transition:' "$root/events"; then
+  fail "empty/login request started a visual transition
+$(grep '^transition:' "$root/events")"
+fi
+
+for capture_mode in timeout malformed absent; do
+  root="$(new_case_root "visual-capture-$capture_mode")"
+  seed_case "$root" noctalia
+  if ! WAHRWELT_TEST_TRANSITION_CAPTURE_MODE="$capture_mode" run_switch "$root" end4; then
+    fail "$capture_mode capture failure changed shell success"
+  fi
+  assert_process_set "$root/processes" end4
+  if grep -Fqx transition "$root/processes"; then
+    fail "$capture_mode capture failure retained its helper process"
+  fi
+  if grep -Fqx transition:reveal "$root/events"; then
+    fail "$capture_mode capture failure attempted reveal"
+  fi
+done
+
+root="$(new_case_root visual-readiness-timeout)"
+seed_case "$root" noctalia
+WAHRWELT_TEST_TRANSITION_READINESS_MODE=timeout run_switch "$root" end4
+assert_process_set "$root/processes" end4
+assert_event_before "$root/events" 'transition:readiness-timeout:end4' 'transition:reveal' \
+  'readiness timeout fail-open reveal'
+
+root="$(new_case_root visual-fallback-reveal)"
+seed_case "$root" noctalia
+if run_switch "$root" end4 "" end4; then
+  fail 'visual fallback hid the requested target failure'
+fi
+assert_process_set "$root/processes" noctalia
+assert_event_before "$root/events" 'start:noctalia' 'transition:reveal' \
+  'visual fallback restored profile before reveal'
+assert_event_before "$root/events" 'reload' 'transition:reveal' \
+  'visual fallback reloaded before reveal'
+assert_event_before "$root/events" 'reload' 'transition:readiness-ready:noctalia' \
+  'visual fallback restored readiness hint'
+assert_event_before "$root/events" 'transition:readiness-ready:noctalia' 'transition:reveal' \
+  'visual fallback readiness before reveal'
+
+root="$(new_case_root visual-fallback-readiness-timeout)"
+seed_case "$root" noctalia
+if WAHRWELT_TEST_TRANSITION_READINESS_MODE=timeout \
+  run_switch "$root" end4 "" end4; then
+  fail 'visual fallback readiness timeout hid the requested target failure'
+fi
+assert_process_set "$root/processes" noctalia
+assert_event_before "$root/events" 'start:noctalia' 'transition:readiness-timeout:noctalia' \
+  'visual fallback timeout restored profile before readiness'
+assert_event_before "$root/events" 'transition:readiness-timeout:noctalia' 'transition:reveal' \
+  'visual fallback readiness timeout still reveals'
+
+root="$(new_case_root visual-exit-abort)"
+seed_case "$root" noctalia
+printf '%s\n' invalid >"$root/home/.local/state/wahrwelt/active-shell"
+if run_switch "$root" end4 "" end4; then
+  fail 'visual unrecoverable target failure returned success'
+fi
+grep -Fqx transition:abort "$root/events" ||
+  fail 'unrecoverable EXIT cleanup did not abort the visual transition'
+if grep -Fqx transition "$root/processes"; then
+  fail 'unrecoverable EXIT cleanup retained its helper process'
+fi
+
+root="$(new_case_root visual-runtime-lock)"
+seed_case "$root" noctalia
+transition_block="$root/transition-block"
+WAHRWELT_TEST_TRANSITION_BLOCK_FILE="$transition_block" \
+  run_switch "$root" end4 >"$root/first-switch.out" 2>&1 &
+first_switch_pid=$!
+for _ in $(seq 1 200); do
+  [ -e "$transition_block" ] && break
+  command sleep 0.01
+done
+[ -e "$transition_block" ] || fail 'first visual transition did not reach reveal under the runtime lock'
+set +e
+run_switch "$root" caelestia >"$root/second-switch.out" 2>&1
+second_switch_status=$?
+set -e
+assert_eq 1 "$second_switch_status" 'nested visual transition reports the existing lock busy status'
+assert_eq 1 "$(grep -c '^transition:begin$' "$root/events" || true)" \
+  'nested visual transition never reaches a second capture'
+: >"$transition_block.release"
+wait "$first_switch_pid" || fail 'first visual transition failed after lock release'
+assert_process_set "$root/processes" end4
+
+root="$(new_case_root visual-external-signal-cleanup)"
+seed_case "$root" noctalia
+transition_block="$root/transition-block"
+lock_helper_pid_file="$root/lock-helper.pid"
+WAHRWELT_TEST_FS_HELPER="$signal_fs_helper" \
+  WAHRWELT_TEST_LOCK_HELPER_PID_FILE="$lock_helper_pid_file" \
+  WAHRWELT_TEST_TRANSITION_BLOCK_FILE="$transition_block" \
+  run_switch "$root" end4 >"$root/switch.out" 2>&1 &
+signaled_switch_pid=$!
+for _ in $(seq 1 300); do
+  [ -s "$lock_helper_pid_file" ] && [ -e "$transition_block" ] && break
+  command sleep 0.01
+done
+if [ ! -s "$lock_helper_pid_file" ] || [ ! -e "$transition_block" ]; then
+  kill -KILL "$signaled_switch_pid" 2>/dev/null || true
+  wait "$signaled_switch_pid" 2>/dev/null || true
+  fail 'external signal fixture did not reach reveal through the runtime lock helper'
+fi
+lock_helper_pid="$(cat "$lock_helper_pid_file")"
+[[ "$lock_helper_pid" =~ ^[1-9][0-9]*$ ]] || fail 'runtime lock helper recorded an invalid PID'
+kill -TERM "$lock_helper_pid"
+if ! timeout 4s tail --pid="$signaled_switch_pid" -f /dev/null; then
+  kill -KILL "$signaled_switch_pid" 2>/dev/null || true
+  wait "$signaled_switch_pid" 2>/dev/null || true
+  fail 'external TERM did not complete within the runtime lock shutdown budget'
+fi
+set +e
+wait "$signaled_switch_pid"
+signaled_switch_status=$?
+set -e
+grep -Fqx transition:abort-signal "$root/events" ||
+  fail 'external runtime lock TERM did not run signal-safe transition cleanup'
+assert_eq 143 "$signaled_switch_status" 'external runtime lock TERM preserves signal status'
+assert_eq 1 "$(grep -Fc transition:reveal "$root/events")" \
+  'external runtime lock TERM did not avoid a second blocking reveal'
+if grep -Fqx transition "$root/processes"; then
+  fail 'external runtime lock TERM retained the detached visual transition'
+fi
 
 root="$(new_case_root spotify-same-profile-surviving-watcher)"
 seed_case "$root" noctalia
@@ -1326,6 +1551,14 @@ assert_eq "$before_state" "$after_state" "TERM after target start restores exact
 assert_process_set "$root/processes" noctalia
 grep -Fqx 'abort-after-start:end4' "$root/events" || fail "post-start TERM hook did not run"
 grep -Fqx 'start:noctalia' "$root/events" || fail "post-start TERM did not restart previous shell"
+grep -Fqx transition:abort-signal "$root/events" ||
+  fail 'post-start TERM did not use signal-safe transition cleanup'
+if grep -Fqx transition:reveal "$root/events"; then
+  fail 'post-start TERM attempted a blocking visual reveal'
+fi
+if grep -Fqx transition "$root/processes"; then
+  fail 'post-start TERM retained the visual transition process'
+fi
 assert_eq '' "$(cat "$root/focus-props")" "TERM rollback restores Spotify focus-on-activate"
 assert_eq 1 "$(grep -Fc 'spotify-focus-restore:0xabc123' "$root/events")" \
   "TERM rollback restores exact hidden Spotify once"
@@ -1348,6 +1581,8 @@ assert_eq "$before_state" "$after_state" "TERM after state persistence restores 
 assert_process_set "$root/processes" noctalia
 grep -Fqx 'abort-after-persist:end4' "$root/events" || fail "post-persist TERM hook did not run"
 grep -Fqx 'start:noctalia' "$root/events" || fail "post-persist TERM did not restart previous shell"
+grep -Fqx transition:abort-signal "$root/events" ||
+  fail 'post-persist TERM did not use signal-safe transition cleanup'
 if grep -Eq '^(reload|propagate)$' "$root/events"; then
   fail "post-persist TERM reloaded an uncommitted runtime"
 fi
@@ -1365,6 +1600,8 @@ assert_eq "$before_state" "$after_state" "TERM before transaction commit restore
 assert_process_set "$root/processes" noctalia
 grep -Fqx 'abort-after-propagate:end4' "$root/events" || fail "pre-commit TERM hook did not run"
 grep -Fqx 'start:noctalia' "$root/events" || fail "pre-commit TERM did not restart previous shell"
+grep -Fqx transition:abort-signal "$root/events" ||
+  fail 'pre-commit TERM did not use signal-safe transition cleanup'
 assert_eq 2 "$(grep -c '^reload$' "$root/events")" "pre-commit TERM reloads target then restored runtime"
 
 printf 'OK shell transition matrix\n'
