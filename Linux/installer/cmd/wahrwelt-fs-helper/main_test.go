@@ -956,8 +956,343 @@ func TestMigrateGeneratedPasswordModulesPublishesHashAndWritesFunctionalStubs(t 
 			t.Fatalf("functional stub metadata = %v, err=%v", info, statErr)
 		}
 	}
-	if info, err := os.Stat(journal); err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("migration journal metadata = %v, err=%v", info, err)
+	if _, err := os.Lstat(journal); !os.IsNotExist(err) {
+		t.Fatalf("successful migration retained journal: %v", err)
+	}
+}
+
+func TestMigrateGeneratedPasswordModulesRecoversAfterRollbackRestoresGeneratedModuleAtNewInode(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "nixos", "hashed-password.nix")
+	destination := filepath.Join(root, "wahrwelt", "hashed-password")
+	journal := filepath.Join(filepath.Dir(destination), passwordMigrationRecord)
+	for _, parent := range []string{filepath.Dir(source), filepath.Dir(destination)} {
+		if err := os.MkdirAll(parent, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hash := "$6$rounds=5000$testsalt$" + strings.Repeat("A", 86)
+	generated := []byte(generatedPasswordModuleForNamespace("wahrwelt", hash))
+	if err := os.WriteFile(source, generated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Lstat(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	injected := errors.New("injected crash before sanitize")
+	_, err = migrateGeneratedPasswordModules(
+		[]string{source}, destination, journal, uint32(os.Geteuid()),
+		passwordMigrationHooks{BeforeSanitize: func() error { return injected }},
+	)
+	if !errors.Is(err, injected) {
+		t.Fatalf("pre-sanitize crash error = %v", err)
+	}
+	if _, err := os.Stat(journal); err != nil {
+		t.Fatalf("crash recovery journal missing: %v", err)
+	}
+
+	retained := source + ".pre-rollback"
+	if err := os.Rename(source, retained); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, generated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Lstat(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if os.SameFile(before, after) {
+		t.Fatal("rollback fixture did not replace the generated module inode")
+	}
+
+	status, err := migrateGeneratedPasswordModules(
+		[]string{source}, destination, journal, uint32(os.Geteuid()), passwordMigrationHooks{},
+	)
+	if err != nil || status != "migrated" {
+		t.Fatalf("rollback recovery status = %q, err=%v", status, err)
+	}
+	if got := string(mustReadFile(t, source)); got != functionalPasswordModule("wahrwelt") {
+		t.Fatalf("recovered functional stub = %q", got)
+	}
+	if data, err := os.ReadFile(destination); err != nil || string(data) != hash+"\n" {
+		t.Fatalf("external password hash changed: bytes=%d err=%v", len(data), err)
+	}
+	if _, err := os.Lstat(journal); !os.IsNotExist(err) {
+		t.Fatalf("successful migration retained journal: %v", err)
+	}
+}
+
+func TestMigrateGeneratedPasswordModulesRejectsScrubbedModuleRestoredAtNewInode(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "nixos", "hashed-password.nix")
+	destination := filepath.Join(root, "wahrwelt", "hashed-password")
+	journal := filepath.Join(filepath.Dir(destination), passwordMigrationRecord)
+	for _, parent := range []string{filepath.Dir(source), filepath.Dir(destination)} {
+		if err := os.MkdirAll(parent, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hash := "$6$rounds=5000$testsalt$" + strings.Repeat("A", 86)
+	if err := os.WriteFile(source, []byte(generatedPasswordModuleForNamespace("wahrwelt", hash)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	injected := errors.New("injected crash after scrub")
+	_, err := migrateGeneratedPasswordModules(
+		[]string{source}, destination, journal, uint32(os.Geteuid()),
+		passwordMigrationHooks{AfterScrub: func(string) error { return injected }},
+	)
+	if !errors.Is(err, injected) {
+		t.Fatalf("scrub crash error = %v", err)
+	}
+	scrubbed := mustReadFile(t, source)
+	journalBefore, err := os.Lstat(journal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	journalPayload := mustReadFile(t, journal)
+	retained := source + ".pre-rollback"
+	if err := os.Rename(source, retained); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, scrubbed, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = migrateGeneratedPasswordModules(
+		[]string{source}, destination, journal, uint32(os.Geteuid()), passwordMigrationHooks{},
+	)
+	if err == nil || !strings.Contains(err.Error(), "ownership collision") {
+		t.Fatalf("replacement scrubbed module was accepted: %v", err)
+	}
+	if got := mustReadFile(t, source); !bytes.Equal(got, scrubbed) {
+		t.Fatal("replacement scrubbed module changed after rejection")
+	}
+	journalAfter, statErr := os.Lstat(journal)
+	if statErr != nil || !os.SameFile(journalBefore, journalAfter) || !bytes.Equal(journalPayload, mustReadFile(t, journal)) {
+		t.Fatalf("scrub recovery journal changed after rejection: %v", statErr)
+	}
+}
+
+func TestMigrateGeneratedPasswordModulesPreservesJournalWhenRecordedSourceIsAbsent(t *testing.T) {
+	root := t.TempDir()
+	sources := []string{
+		filepath.Join(root, "nixos", "hashed-password.nix"),
+		filepath.Join(root, "nixos", "hosts", "NixOS", "hashed-password.nix"),
+	}
+	destination := filepath.Join(root, "wahrwelt", "hashed-password")
+	journalPath := filepath.Join(filepath.Dir(destination), passwordMigrationRecord)
+	for _, parent := range []string{filepath.Dir(sources[0]), filepath.Dir(sources[1]), filepath.Dir(destination)} {
+		if err := os.MkdirAll(parent, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hash := "$6$rounds=5000$testsalt$" + strings.Repeat("A", 86)
+	generated := []byte(generatedPasswordModuleForNamespace("wahrwelt", hash))
+	for _, source := range sources {
+		if err := os.WriteFile(source, generated, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	injected := errors.New("injected crash before sanitize")
+	_, err := migrateGeneratedPasswordModules(
+		sources, destination, journalPath, uint32(os.Geteuid()),
+		passwordMigrationHooks{BeforeSanitize: func() error { return injected }},
+	)
+	if !errors.Is(err, injected) {
+		t.Fatalf("pre-sanitize crash error = %v", err)
+	}
+	journalBefore, err := os.Lstat(journalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payloadBefore := mustReadFile(t, journalPath)
+
+	if err := os.Rename(sources[0], sources[0]+".pre-rollback"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sources[0], generated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(sources[1], sources[1]+".temporarily-absent"); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = migrateGeneratedPasswordModules(
+		sources, destination, journalPath, uint32(os.Geteuid()), passwordMigrationHooks{},
+	)
+	if err == nil || !strings.Contains(err.Error(), "ownership collision") {
+		t.Fatalf("partial stale journal was accepted: %v", err)
+	}
+	journalAfter, statErr := os.Lstat(journalPath)
+	if statErr != nil {
+		t.Fatalf("protected journal missing: %v", statErr)
+	}
+	if !os.SameFile(journalBefore, journalAfter) || !bytes.Equal(payloadBefore, mustReadFile(t, journalPath)) {
+		t.Fatal("protected journal changed after partial recovery rejection")
+	}
+}
+
+func TestMigrateGeneratedPasswordModulesPreservesJournalWhenAllRecordedSourcesAreAbsent(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "nixos", "hashed-password.nix")
+	destination := filepath.Join(root, "wahrwelt", "hashed-password")
+	journalPath := filepath.Join(filepath.Dir(destination), passwordMigrationRecord)
+	for _, parent := range []string{filepath.Dir(source), filepath.Dir(destination)} {
+		if err := os.MkdirAll(parent, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hash := "$6$rounds=5000$testsalt$" + strings.Repeat("A", 86)
+	if err := os.WriteFile(source, []byte(generatedPasswordModuleForNamespace("wahrwelt", hash)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	injected := errors.New("injected crash before sanitize")
+	_, err := migrateGeneratedPasswordModules(
+		[]string{source}, destination, journalPath, uint32(os.Geteuid()),
+		passwordMigrationHooks{BeforeSanitize: func() error { return injected }},
+	)
+	if !errors.Is(err, injected) {
+		t.Fatalf("pre-sanitize crash error = %v", err)
+	}
+	journalBefore, err := os.Lstat(journalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payloadBefore := mustReadFile(t, journalPath)
+	if err := os.Rename(source, source+".temporarily-absent"); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = migrateGeneratedPasswordModules(
+		[]string{source}, destination, journalPath, uint32(os.Geteuid()), passwordMigrationHooks{},
+	)
+	if err == nil || !strings.Contains(err.Error(), "ownership collision") {
+		t.Fatalf("missing journal sources were accepted: %v", err)
+	}
+	journalAfter, statErr := os.Lstat(journalPath)
+	if statErr != nil || !os.SameFile(journalBefore, journalAfter) || !bytes.Equal(payloadBefore, mustReadFile(t, journalPath)) {
+		t.Fatalf("journal changed after missing-source rejection: %v", statErr)
+	}
+}
+
+func TestMigrateGeneratedPasswordModulesRejectsNoncanonicalStaleJournal(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "nixos", "hashed-password.nix")
+	destination := filepath.Join(root, "wahrwelt", "hashed-password")
+	journalPath := filepath.Join(filepath.Dir(destination), passwordMigrationRecord)
+	for _, parent := range []string{filepath.Dir(source), filepath.Dir(destination)} {
+		if err := os.MkdirAll(parent, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hash := "$6$rounds=5000$testsalt$" + strings.Repeat("A", 86)
+	generated := []byte(generatedPasswordModuleForNamespace("wahrwelt", hash))
+	if err := os.WriteFile(source, generated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	injected := errors.New("injected crash before sanitize")
+	_, err := migrateGeneratedPasswordModules(
+		[]string{source}, destination, journalPath, uint32(os.Geteuid()),
+		passwordMigrationHooks{BeforeSanitize: func() error { return injected }},
+	)
+	if !errors.Is(err, injected) {
+		t.Fatalf("pre-sanitize crash error = %v", err)
+	}
+	canonical := mustReadFile(t, journalPath)
+	foreign := append([]byte(`{"owner":"foreign",`), canonical[1:]...)
+	if err := os.WriteFile(journalPath, foreign, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	journalBefore, err := os.Lstat(journalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(source, source+".pre-rollback"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, generated, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = migrateGeneratedPasswordModules(
+		[]string{source}, destination, journalPath, uint32(os.Geteuid()), passwordMigrationHooks{},
+	)
+	if err == nil || !strings.Contains(err.Error(), "ownership collision") {
+		t.Fatalf("noncanonical stale journal was accepted: %v", err)
+	}
+	journalAfter, statErr := os.Lstat(journalPath)
+	if statErr != nil {
+		t.Fatalf("foreign journal missing: %v", statErr)
+	}
+	if !os.SameFile(journalBefore, journalAfter) || !bytes.Equal(foreign, mustReadFile(t, journalPath)) {
+		t.Fatal("foreign journal changed after rejection")
+	}
+}
+
+func TestRemovePasswordMigrationJournalPreservesChangedOrReplacedFile(t *testing.T) {
+	root := t.TempDir()
+	journalPath := filepath.Join(root, passwordMigrationRecord)
+	requiredUID := uint32(os.Geteuid())
+	journal := passwordMigrationJournal{
+		Version: passwordMigrationV1,
+		Entries: []passwordMigrationEntry{{
+			Path:      "/etc/nixos/hashed-password.nix",
+			Device:    1,
+			Inode:     1,
+			UID:       requiredUID,
+			Namespace: "wahrwelt",
+		}},
+	}
+	payload, err := passwordMigrationJournalPayload(journal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		name   string
+		change func(t *testing.T)
+	}{
+		{
+			name: "content",
+			change: func(t *testing.T) {
+				t.Helper()
+				if err := os.WriteFile(journalPath, []byte("{}\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "inode",
+			change: func(t *testing.T) {
+				t.Helper()
+				if err := os.Rename(journalPath, journalPath+".retained"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(journalPath, payload, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := os.WriteFile(journalPath, payload, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			loaded, err := loadPasswordMigrationJournal(journalPath, requiredUID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			test.change(t)
+			if err := removePasswordMigrationJournal(journalPath, loaded, requiredUID); err == nil ||
+				!strings.Contains(err.Error(), "ownership collision") {
+				t.Fatalf("changed journal removal error = %v", err)
+			}
+			if _, err := os.Lstat(journalPath); err != nil {
+				t.Fatalf("changed journal was removed: %v", err)
+			}
+		})
 	}
 }
 
@@ -1041,6 +1376,9 @@ func TestMigrateGeneratedPasswordModulesRetriesAfterScrubbedHashCrash(t *testing
 	if got := string(mustReadFile(t, source)); got != functionalPasswordModule("mysetup") {
 		t.Fatalf("recovered functional stub = %q", got)
 	}
+	if _, err := os.Lstat(journal); !os.IsNotExist(err) {
+		t.Fatalf("successful scrub recovery retained journal: %v", err)
+	}
 }
 
 func TestMigrateGeneratedPasswordModulesRetriesAfterFunctionalStubCrash(t *testing.T) {
@@ -1072,6 +1410,9 @@ func TestMigrateGeneratedPasswordModulesRetriesAfterFunctionalStubCrash(t *testi
 	)
 	if err != nil || status != "migrated" {
 		t.Fatalf("retry status = %q, err=%v", status, err)
+	}
+	if _, err := os.Lstat(journal); !os.IsNotExist(err) {
+		t.Fatalf("successful stub recovery retained journal: %v", err)
 	}
 }
 

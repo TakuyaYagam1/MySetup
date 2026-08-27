@@ -88,8 +88,10 @@ type passwordMigrationEntry struct {
 }
 
 type passwordMigrationJournal struct {
-	Version int                      `json:"version"`
-	Entries []passwordMigrationEntry `json:"entries"`
+	Version  int                      `json:"version"`
+	Entries  []passwordMigrationEntry `json:"entries"`
+	identity fsowner.Identity
+	payload  []byte
 }
 
 func main() {
@@ -815,6 +817,9 @@ func migrateGeneratedPasswordModules(
 	}
 	defer closePasswordModuleCandidates(candidates)
 	if len(candidates) == 0 {
+		if existingJournal != nil {
+			return "", errors.New("ownership collision: password migration journal records missing sources")
+		}
 		return "absent", nil
 	}
 	hash := ""
@@ -842,7 +847,22 @@ func migrateGeneratedPasswordModules(
 			Namespace: candidate.namespace,
 		})
 	}
-	if err := ensurePasswordMigrationJournal(journalPath, journal, requiredUID); err != nil {
+	if existingJournal != nil {
+		matches, matchErr := passwordMigrationJournalMatches(existingJournal, journal)
+		if matchErr != nil {
+			return "", matchErr
+		}
+		if !matches {
+			if !passwordModuleCandidatesCanRebaseJournal(candidates, existingJournal) {
+				return "", errors.New("ownership collision: password migration journal does not match pinned sources")
+			}
+			if err := removePasswordMigrationJournal(journalPath, existingJournal, requiredUID); err != nil {
+				return "", err
+			}
+		}
+	}
+	activeJournal, err := ensurePasswordMigrationJournal(journalPath, journal, requiredUID)
+	if err != nil {
 		return "", err
 	}
 	if hooks.BeforeSanitize != nil {
@@ -906,7 +926,36 @@ func migrateGeneratedPasswordModules(
 	if len(visibilityErrors) != 0 {
 		return "", errors.Join(visibilityErrors...)
 	}
+	if err := removePasswordMigrationJournal(journalPath, activeJournal, requiredUID); err != nil {
+		return "", err
+	}
 	return "migrated", nil
+}
+
+func passwordModuleCandidatesCanRebaseJournal(
+	candidates []*passwordModuleCandidate,
+	journal *passwordMigrationJournal,
+) bool {
+	if journal == nil {
+		return false
+	}
+	canonical, err := passwordMigrationJournalPayload(*journal)
+	if err != nil || !bytes.Equal(journal.payload, canonical) {
+		return false
+	}
+	completePaths := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		if candidate == nil || candidate.scrubbed || candidate.hash == "" && !candidate.stub {
+			return false
+		}
+		completePaths[candidate.path] = struct{}{}
+	}
+	for _, entry := range journal.Entries {
+		if _, present := completePaths[entry.Path]; !present {
+			return false
+		}
+	}
+	return true
 }
 
 //nolint:gocyclo // Candidate pinning rejects every unowned or ambiguous recovery state before mutation.
@@ -1057,53 +1106,134 @@ func createExternalPasswordHash(path, hash string, requiredUID uint32) error {
 	return fsyncDirectory(filepath.Dir(path))
 }
 
-//nolint:gocyclo // Journal publication handles exact-match reuse and no-clobber creation in one transaction.
-func ensurePasswordMigrationJournal(path string, expected passwordMigrationJournal, requiredUID uint32) error {
-	data, err := json.Marshal(expected)
+func passwordMigrationJournalPayload(journal passwordMigrationJournal) ([]byte, error) {
+	data, err := json.Marshal(journal)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	data = append(data, '\n')
+	return append(data, '\n'), nil
+}
+
+func passwordMigrationJournalMatches(existing *passwordMigrationJournal, expected passwordMigrationJournal) (bool, error) {
+	if existing == nil {
+		return false, nil
+	}
+	payload, err := passwordMigrationJournalPayload(expected)
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(existing.payload, payload), nil
+}
+
+//nolint:gocyclo // Journal publication handles exact-match reuse and no-clobber creation in one transaction.
+func ensurePasswordMigrationJournal(path string, expected passwordMigrationJournal, requiredUID uint32) (*passwordMigrationJournal, error) {
+	data, err := passwordMigrationJournalPayload(expected)
+	if err != nil {
+		return nil, err
+	}
 	existing, identity, openErr := openRegularNoFollow(path, unix.O_RDONLY)
 	if openErr == nil {
 		defer closeIgnoringError(existing)
 		actual, readErr := readOpenRegular(existing)
 		if readErr != nil {
-			return readErr
+			return nil, readErr
 		}
 		if identity.UID != requiredUID || identity.Links != 1 || identity.Mode&0o777 != 0o600 || !bytes.Equal(actual, data) {
-			return errors.New("ownership collision: password migration journal does not match pinned sources")
+			return nil, errors.New("ownership collision: password migration journal does not match pinned sources")
 		}
-		return verifyVisibleRegularIdentity(path, identity)
+		if err := verifyVisibleRegularIdentity(path, identity); err != nil {
+			return nil, err
+		}
+		current := expected
+		current.identity = identity
+		current.payload = append([]byte(nil), actual...)
+		return &current, nil
 	}
 	if !errors.Is(openErr, os.ErrNotExist) && !errors.Is(openErr, unix.ENOENT) {
-		return openErr
+		return nil, openErr
 	}
 	fd, err := unix.Open(path, unix.O_WRONLY|unix.O_CLOEXEC|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW, 0o600)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	file := newFileFromDescriptor(fd, path)
 	if file == nil {
 		_ = unix.Close(fd)
-		return errors.New("invalid password migration journal descriptor")
+		return nil, errors.New("invalid password migration journal descriptor")
 	}
 	if err := writeAllAt(file, data, 0); err != nil {
 		_ = file.Close()
-		return err
+		return nil, err
 	}
 	if err := file.Chmod(0o600); err != nil {
 		_ = file.Close()
-		return err
+		return nil, err
 	}
 	if err := file.Sync(); err != nil {
 		_ = file.Close()
-		return err
+		return nil, err
 	}
 	if err := file.Close(); err != nil {
+		return nil, err
+	}
+	if err := fsyncDirectory(filepath.Dir(path)); err != nil {
+		return nil, err
+	}
+	created, err := loadPasswordMigrationJournal(path, requiredUID)
+	if err != nil {
+		return nil, err
+	}
+	matches, err := passwordMigrationJournalMatches(created, expected)
+	if err != nil {
+		return nil, err
+	}
+	if !matches {
+		return nil, errors.New("ownership collision: created password migration journal does not match pinned sources")
+	}
+	return created, nil
+}
+
+//nolint:gocyclo // Journal retirement verifies payload, inode, parent ownership, unlink, and durability in one sequence.
+func removePasswordMigrationJournal(path string, journal *passwordMigrationJournal, requiredUID uint32) error {
+	if journal == nil || journal.identity.Kind != fsowner.KindRegular || journal.identity.UID != requiredUID ||
+		journal.identity.Links != 1 || journal.identity.Mode&0o777 != 0o600 || len(journal.payload) == 0 {
+		return errors.New("ownership collision: password migration journal identity is invalid")
+	}
+	file, identity, err := openRegularNoFollow(path, unix.O_RDONLY)
+	if err != nil {
 		return err
 	}
-	return fsyncDirectory(filepath.Dir(path))
+	actual, readErr := readOpenRegular(file)
+	closeErr := file.Close()
+	if readErr != nil {
+		return readErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if identity != journal.identity || !bytes.Equal(actual, journal.payload) {
+		return errors.New("ownership collision: password migration journal changed before removal")
+	}
+	directory, err := fsowner.OpenDirectory(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer closeIgnoringError(directory)
+	parentIdentity := directory.Identity()
+	if parentIdentity.UID != requiredUID || parentIdentity.Mode&0o777 != 0o700 {
+		return errors.New("ownership collision: password migration journal parent is not owned mode 0700")
+	}
+	entry, err := directory.Inspect(filepath.Base(path))
+	if err != nil {
+		return err
+	}
+	if entry.Identity != identity {
+		return errors.New("ownership collision: password migration journal changed before unlink")
+	}
+	if err := directory.RemoveRegular(filepath.Base(path), identity, fsowner.RemoveOptions{UID: requiredUID}); err != nil {
+		return err
+	}
+	return directory.Sync()
 }
 
 //nolint:gocyclo // Journal recovery validation is intentionally exhaustive and fail-closed.
@@ -1141,6 +1271,8 @@ func loadPasswordMigrationJournal(path string, requiredUID uint32) (*passwordMig
 	if err := verifyVisibleRegularIdentity(path, identity); err != nil {
 		return nil, err
 	}
+	journal.identity = identity
+	journal.payload = append([]byte(nil), data...)
 	return &journal, nil
 }
 

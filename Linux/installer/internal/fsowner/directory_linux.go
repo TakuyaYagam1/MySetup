@@ -132,6 +132,17 @@ func (d *Directory) Identity() Identity {
 	return d.identity
 }
 
+// Sync durably records prior mutations made through the pinned directory.
+func (d *Directory) Sync() error {
+	if err := d.verifyCanonical(); err != nil {
+		return err
+	}
+	if err := unix.Fsync(d.fd); err != nil {
+		return fmt.Errorf("sync pinned directory %s: %w", d.path, err)
+	}
+	return nil
+}
+
 // List returns sorted no-follow children accepted by match.
 func (d *Directory) List(match func(string) bool) ([]Entry, error) {
 	if err := d.verifyCanonical(); err != nil {
