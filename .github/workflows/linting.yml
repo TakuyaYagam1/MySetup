@@ -130,13 +130,13 @@ jobs:
           CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}
         run: PATH="$CI_PROFILE_BIN:$PATH" make -C Linux nix-end4-pc-quickshell-build
 
-      - name: Build brand migration unit
+      - name: Build v1 to v2 migration unit
         env:
           CI_PROFILE_BIN: ${{ steps.tools.outputs.profile_bin }}
         run: |
           export PATH="$CI_PROFILE_BIN:$PATH"
           nix build --no-link --no-write-lock-file \
-            "path:${GITHUB_WORKSPACE}?dir=Linux/NixOS#nixosConfigurations.NixOS.config.systemd.units.\"wahrwelt-brand-migration.service\".unit"
+            "path:${GITHUB_WORKSPACE}?dir=Linux/NixOS#nixosConfigurations.NixOS.config.systemd.units.\"wahrwelt-v1-to-v2-migration.service\".unit"
 
       - name: Evaluate preset NixOS hosts
         env:

@@ -226,7 +226,7 @@ in
           "${./hypr-runtime/end4.lua}" \
           "${./hypr-runtime/end4-pc.lua}"
         do
-          if ${pkgs.coreutils}/bin/cmp -s -- "$candidate" "$source"; then
+          if ${pkgs.diffutils}/bin/cmp -s -- "$candidate" "$source"; then
             return 0
           fi
         done

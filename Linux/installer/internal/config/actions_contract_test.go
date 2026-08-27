@@ -62,6 +62,21 @@ func TestLintingUsesNixToolchainWithoutApt(t *testing.T) {
 	}
 }
 
+func TestLintingBuildsVersionedV1ToV2MigrationUnit(t *testing.T) {
+	workflow, err := os.ReadFile("../../../../.github/workflows/linting.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(workflow)
+	currentUnit := `nixosConfigurations.NixOS.config.systemd.units.\"wahrwelt-v1-to-v2-migration.service\".unit`
+	if !strings.Contains(source, currentUnit) {
+		t.Fatalf("linting workflow does not build the current migration unit %q\n%s", currentUnit, source)
+	}
+	if strings.Contains(source, `wahrwelt-brand-migration.service`) {
+		t.Fatalf("linting workflow still builds the removed brand migration unit\n%s", source)
+	}
+}
+
 func TestPresetFlakeUpdaterUsesDirectoryFlakeReferences(t *testing.T) {
 	workflow, err := os.ReadFile("../../../../.github/workflows/update-flake.yml")
 	if err != nil {

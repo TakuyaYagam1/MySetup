@@ -584,6 +584,43 @@ func TestRenderedHomeManagerFreshMigrationLeavesRuntimeAbsentForSeed(t *testing.
 	}
 }
 
+func TestRenderedHomeManagerMigrationDetectsTopOnlyDirectEnd4Runtime(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skipf("nix is unavailable: %v", err)
+	}
+
+	home := t.TempDir()
+	configHome := filepath.Join(home, ".config")
+	stateHome := filepath.Join(home, ".local", "state")
+	cacheHome := filepath.Join(home, ".cache")
+	topLevel := filepath.Join(configHome, "hypr", "hyprland.lua")
+	for _, path := range []string{filepath.Dir(topLevel), stateHome, cacheHome} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	direct := readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/end4.lua")
+	if err := os.WriteFile(topLevel, []byte(direct), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	helpers := buildHomeManagerMigrationHelpers(
+		t,
+		noRuntimeFault,
+		filepath.Join(configHome, "hypr", "wahrwelt"),
+		filepath.Join(stateHome, "wahrwelt", "hypr-runtime", "hyprland.lua"),
+	)
+	rendered := renderHomeManagerRuntimeTransitionForTest(home, configHome, stateHome, cacheHome, helpers)
+	cmd := exec.Command("bash", "-euo", "pipefail", "-c", rendered)
+	cmd.Env = append(os.Environ(), "DRY_RUN_CMD=", "oldGenPath=", "XDG_RUNTIME_DIR=")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("migrate top-only direct End4 runtime: %v\n%s", err, output)
+	}
+	runtime := filepath.Join(stateHome, "wahrwelt", "hypr-runtime", "hyprland.lua")
+	if got := readContractFile(t, runtime); got != direct {
+		t.Fatalf("top-only direct End4 runtime was not staged: %q", got)
+	}
+}
+
 func TestHomeManagerRuntimeActivationFinalizesTransitionEntrypoint(t *testing.T) {
 	dir := t.TempDir()
 	runtimeDir := filepath.Join(dir, "runtime")
@@ -1209,8 +1246,12 @@ func TestRenderedHomeManagerSeedBuildsTopOnlyEnd4BundleBeforeCanonicalMain(t *te
 			rendered := renderHomeManagerShellSeedForTest(t, configHome, stateHome, dots)
 			cmd := exec.Command("bash", "-euo", "pipefail", "-c", rendered)
 			cmd.Env = append(os.Environ(), "DRY_RUN_CMD=")
-			if output, err := cmd.CombinedOutput(); err != nil {
+			output, err := cmd.CombinedOutput()
+			if err != nil {
 				t.Fatalf("run rendered %s seed: %v\n%s", test.profile, err, output)
+			}
+			if strings.Contains(string(output), "/bin/cmp: No such file or directory") {
+				t.Fatalf("rendered %s seed invoked cmp from the wrong package:\n%s", test.profile, output)
 			}
 			runtimeDir := filepath.Join(stateHome, "wahrwelt", "hypr-runtime")
 			if got := readContractFile(t, filepath.Join(runtimeDir, "hyprland.lua")); got != canonicalUserRuntimeFixture {
@@ -1542,6 +1583,7 @@ let
   pkgs = {
     bash = "/usr";
     coreutils = %q;
+    diffutils = %q;
     python3 = "/usr";
     util-linux = "/usr";
     writeShellApplication = _: %q;
@@ -1549,7 +1591,10 @@ let
   };
   module = import (builtins.toPath %q) { inherit config homeLibs inputs lib pkgs; };
 in module.home.activation.seedHyprShellRuntime
-`, configHome, stateHome, dots, commandPackageRoot(t, "cmp"), helperRoot, modulePath)
+`, configHome, stateHome, dots,
+		resolvedCommandPackageRoot(t, "mkdir"),
+		resolvedCommandPackageRoot(t, "cmp"),
+		helperRoot, modulePath)
 	rendered, err := exec.Command("nix", "eval", "--impure", "--raw", "--expr", expression).CombinedOutput()
 	if err != nil {
 		t.Fatalf("render Home Manager shell seed: %v\n%s", err, rendered)
@@ -1582,6 +1627,7 @@ let
   pkgs = {
     bash = "/usr";
     coreutils = %q;
+    diffutils = %q;
     python3 = "/usr";
     util-linux = "/usr";
     writeShellApplication = _: %q;
@@ -1589,7 +1635,10 @@ let
   };
   module = import (builtins.toPath %q) { inherit config homeLibs inputs lib pkgs; };
 in module.home.activation.seedHyprShellRuntime + "\n" + module.home.activation.liveSyncHyprShell
-`, configHome, stateHome, dots, commandPackageRoot(t, "cmp"), helperRoot, modulePath)
+`, configHome, stateHome, dots,
+		resolvedCommandPackageRoot(t, "mkdir"),
+		resolvedCommandPackageRoot(t, "cmp"),
+		helperRoot, modulePath)
 	rendered, err := exec.Command("nix", "eval", "--impure", "--raw", "--expr", expression).CombinedOutput()
 	if err != nil {
 		t.Fatalf("render Home Manager shell activation: %v\n%s", err, rendered)
@@ -1890,6 +1939,19 @@ func absoluteTestPath(t *testing.T, path string) string {
 	return absolute
 }
 
+func resolvedCommandPackageRoot(t *testing.T, name string) string {
+	t.Helper()
+	path, err := exec.LookPath(name)
+	if err != nil {
+		t.Fatalf("locate %s: %v", name, err)
+	}
+	path, err = filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatalf("resolve %s package: %v", name, err)
+	}
+	return filepath.Dir(filepath.Dir(path))
+}
+
 func renderHomeManagerRuntimeTransitionForTest(home, configHome, stateHome, cacheHome, helperRoot string) string {
 	modulePath, err := filepath.Abs("../../../NixOS/home/migrations/v1_to_v2/user-paths.nix")
 	if err != nil {
@@ -1906,6 +1968,7 @@ let
   lib.hm.dag.entryBefore = _: text: text;
   pkgs = {
     coreutils = %q;
+    diffutils = %q;
     findutils = %q;
     gnugrep = %q;
     python3 = "/usr";
@@ -1915,6 +1978,7 @@ let
   module = import (builtins.toPath %q) { inherit config lib pkgs; };
 in module.home.activation.migrateWahrweltUserPaths
 `, home, configHome, stateHome, cacheHome,
+		commandRootForRuntimeTransition("mkdir"),
 		commandRootForRuntimeTransition("cmp"),
 		commandRootForRuntimeTransition("find"),
 		commandRootForRuntimeTransition("grep"),
@@ -1930,6 +1994,10 @@ func commandRootForRuntimeTransition(name string) string {
 	path, err := exec.LookPath(name)
 	if err != nil {
 		panic(fmt.Sprintf("locate %s for rendered runtime transition: %v", name, err))
+	}
+	path, err = filepath.EvalSymlinks(path)
+	if err != nil {
+		panic(fmt.Sprintf("resolve %s package for rendered runtime transition: %v", name, err))
 	}
 	return filepath.Dir(filepath.Dir(path))
 }

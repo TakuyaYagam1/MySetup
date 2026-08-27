@@ -149,6 +149,15 @@ def is_managed_target(
     return any(clean in generation_candidates(generation, expected_relative) for generation in generations)
 
 
+def is_expected_mutable_target(info: os.stat_result, expected_relative: str) -> bool:
+    expected_type = END4_APP_LINK_TYPES.get(expected_relative)
+    if expected_type == "directory":
+        return stat.S_ISDIR(info.st_mode)
+    if expected_type == "regular":
+        return stat.S_ISREG(info.st_mode)
+    return False
+
+
 def classify_public_target(
     target: str,
     expected_relative: str,
@@ -383,6 +392,18 @@ def check_with_token(
                     fail(f"Wahrwelt legacy link recovery parent changed: {root_path}")
                 print(f"absent|{format_id(root_info)}|{format_id(parent_info)}")
                 return
+            if is_expected_mutable_target(link_info, expected_relative):
+                if not visible_directory_matches(root_path, root_id):
+                    fail(f"Wahrwelt legacy link recovery parent changed: {root_path}")
+                print(
+                    "preserved|"
+                    + format_id(root_info)
+                    + "|"
+                    + format_id(parent_info)
+                    + "|"
+                    + format_id(link_info)
+                )
+                return
             link_info, raw_target = pinned_target(
                 parent_fd,
                 target_name,
@@ -417,16 +438,32 @@ def quarantine(
     if fields and fields[0] == "absent-root":
         verify_absent_root(target, root_path, fields)
         return
-    if not fields or fields[0] not in ("absent-parent", "absent", "present"):
+    if not fields or fields[0] not in (
+        "absent-parent",
+        "absent",
+        "preserved",
+        "present",
+    ):
         fail("Wahrwelt legacy link guard received an invalid preflight token", 2)
     try:
         expected_root = parse_id(fields[1])
-        expected_parent = parse_id(fields[2]) if fields[0] in ("absent", "present") else None
-        expected_link = parse_id(fields[3]) if fields[0] == "present" else None
+        expected_parent = (
+            parse_id(fields[2])
+            if fields[0] in ("absent", "preserved", "present")
+            else None
+        )
+        expected_link = (
+            parse_id(fields[3]) if fields[0] in ("preserved", "present") else None
+        )
         expected_target_digest = fields[4] if fields[0] == "present" else ""
     except (IndexError, ValueError, OverflowError):
         fail("Wahrwelt legacy link guard received an invalid preflight token", 2)
-    expected_length = {"absent-parent": 2, "absent": 3, "present": 5}[fields[0]]
+    expected_length = {
+        "absent-parent": 2,
+        "absent": 3,
+        "preserved": 4,
+        "present": 5,
+    }[fields[0]]
     if len(fields) != expected_length:
         fail("Wahrwelt legacy link guard received an invalid preflight token", 2)
 
@@ -463,6 +500,25 @@ def quarantine(
                 except FileNotFoundError:
                     return
                 ownership_collision(target)
+            if fields[0] == "preserved":
+                try:
+                    preserved_info = os.stat(
+                        target_name,
+                        dir_fd=parent_fd,
+                        follow_symlinks=False,
+                    )
+                except FileNotFoundError:
+                    ownership_collision(target)
+                if (
+                    inode_id(preserved_info) != expected_link
+                    or not is_expected_mutable_target(
+                        preserved_info,
+                        expected_relative,
+                    )
+                    or not visible_directory_matches(root_path, root_id)
+                ):
+                    ownership_collision(target)
+                return
             before_info, before_target = pinned_target(
                 parent_fd,
                 target_name,

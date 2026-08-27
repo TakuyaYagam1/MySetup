@@ -14,10 +14,10 @@ let
   };
 in
 {
-  # v1 managed these mutable app paths as Home Manager store links. Remove
-  # only links from the exact old generation layout, and only when that same
-  # generation contains both Wahrwelt End4 markers. Fresh installations never
-  # enter this recognizer.
+  # v1 managed these mutable app paths as Home Manager store links, then later
+  # releases converted them to ordinary writable paths. Preserve an ordinary
+  # path of the expected type as already migrated. Remove only links from the
+  # exact old generation layout when that generation contains both End4 markers.
   home.activation.wahrweltV1ToV2End4AppSeed = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     migrate_v1_end4_hm_link() {
       local target="$1"

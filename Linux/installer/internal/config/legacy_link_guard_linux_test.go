@@ -190,6 +190,211 @@ func TestHomeManagerLegacyLinkGuardAcceptsAndQuarantinesExactHistoricalTarget(t 
 	}
 }
 
+func TestHomeManagerLegacyLinkGuardRejectsWrongMutableEnd4AppTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		relative string
+		setup    func(string) error
+	}{
+		{
+			name:     "file-at-directory-target",
+			relative: ".config/kitty",
+			setup: func(path string) error {
+				return os.WriteFile(path, []byte("user-owned\n"), 0o640)
+			},
+		},
+		{
+			name:     "directory-at-file-target",
+			relative: ".config/kdeglobals",
+			setup: func(path string) error {
+				return os.Mkdir(path, 0o750)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			home := t.TempDir()
+			target := filepath.Join(home, filepath.FromSlash(test.relative))
+			if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := test.setup(target); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.Lstat(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			output, err := exec.Command(
+				"bash", homeManagerLegacyLinkGuard, "check", target,
+				test.relative, "", "", home,
+			).CombinedOutput()
+			if err == nil || !strings.Contains(string(output), "ownership collision") {
+				t.Fatalf("wrong mutable End4 path type accepted: err=%v\n%s", err, output)
+			}
+			after, err := os.Lstat(target)
+			if err != nil {
+				t.Fatalf("wrong-type End4 path disappeared: %v", err)
+			}
+			if !os.SameFile(before, after) || before.Mode() != after.Mode() {
+				t.Fatalf("wrong-type End4 path changed: before=%v after=%v", before, after)
+			}
+		})
+	}
+}
+
+func TestRenderedEnd4V1AppSeedPreservesAlreadyMutableAppPaths(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skipf("nix is unavailable: %v", err)
+	}
+	home := t.TempDir()
+	type snapshot struct {
+		target, contentPath, content string
+		targetInfo, contentInfo      os.FileInfo
+	}
+	fixtures := []struct {
+		relative  string
+		directory bool
+		content   string
+	}{
+		{relative: ".config/kitty", directory: true, content: "kitty-user-config\n"},
+		{relative: ".config/fuzzel", directory: true, content: "fuzzel-user-config\n"},
+		{relative: ".config/kdeglobals", content: "kde-user-config\n"},
+		{relative: ".local/share/konsole/Profile 1.profile", content: "konsole-user-config\n"},
+	}
+	snapshots := make([]snapshot, 0, len(fixtures))
+	for _, fixture := range fixtures {
+		target := filepath.Join(home, filepath.FromSlash(fixture.relative))
+		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		contentPath := target
+		if fixture.directory {
+			if err := os.Mkdir(target, 0o750); err != nil {
+				t.Fatal(err)
+			}
+			contentPath = filepath.Join(target, "user-owned")
+		}
+		if err := os.WriteFile(contentPath, []byte(fixture.content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		targetInfo, err := os.Lstat(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		contentInfo, err := os.Lstat(contentPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshots = append(snapshots, snapshot{
+			target: target, contentPath: contentPath, content: fixture.content,
+			targetInfo: targetInfo, contentInfo: contentInfo,
+		})
+	}
+
+	helperRoot := filepath.Join(t.TempDir(), "end4-link-guard-package")
+	if err := os.MkdirAll(filepath.Join(helperRoot, "bin"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeMigrationTestWrapper(
+		t,
+		filepath.Join(helperRoot, "bin", "wahrwelt-v1-to-v2-end4-link-guard"),
+		absoluteTestPath(t, homeManagerLegacyLinkGuard),
+	)
+	modulePath := absoluteTestPath(t, "../../../NixOS/home/migrations/v1_to_v2/end4-app-seed.nix")
+	expression := fmt.Sprintf(`
+let
+  lib.hm.dag.entryAfter = _: text: text;
+  pkgs = {
+    python3 = %q;
+    writeShellApplication = _: %q;
+  };
+  module = import (builtins.toPath %q) { inherit lib pkgs; };
+in module.home.activation.wahrweltV1ToV2End4AppSeed
+`, commandPackageRoot(t, "python3"), helperRoot, modulePath)
+	rendered, err := exec.Command("nix", "eval", "--impure", "--raw", "--expr", expression).CombinedOutput()
+	if err != nil {
+		t.Fatalf("render End4 v1 app migration: %v\n%s", err, rendered)
+	}
+	cmd := exec.Command("bash", "-euo", "pipefail", "-c", string(rendered))
+	cmd.Env = append(os.Environ(), "HOME="+home, "DRY_RUN_CMD=")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("rendered End4 v1 app migration rejected already mutable paths: %v\n%s", err, output)
+	}
+	for _, before := range snapshots {
+		afterTarget, err := os.Lstat(before.target)
+		if err != nil {
+			t.Fatalf("already mutable target disappeared at %s: %v", before.target, err)
+		}
+		afterContent, err := os.Lstat(before.contentPath)
+		if err != nil {
+			t.Fatalf("already mutable content disappeared at %s: %v", before.contentPath, err)
+		}
+		if !os.SameFile(before.targetInfo, afterTarget) || before.targetInfo.Mode() != afterTarget.Mode() {
+			t.Fatalf("already mutable target changed at %s", before.target)
+		}
+		if !os.SameFile(before.contentInfo, afterContent) || before.contentInfo.Mode() != afterContent.Mode() {
+			t.Fatalf("already mutable content changed at %s", before.contentPath)
+		}
+		if got := readContractFile(t, before.contentPath); got != before.content {
+			t.Fatalf("already mutable content changed at %s: %q", before.contentPath, got)
+		}
+	}
+	recoveries, err := filepath.Glob(filepath.Join(home, ".wahrwelt-migration-recovery-links-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recoveries) != 0 {
+		t.Fatalf("already mutable End4 paths created migration recovery: %v", recoveries)
+	}
+}
+
+func TestHomeManagerLegacyLinkGuardRejectsMutableEnd4PathReplacementAfterPreflight(t *testing.T) {
+	home := t.TempDir()
+	kitty := filepath.Join(home, ".config", "kitty")
+	originalKitty := filepath.Join(home, ".config", "kitty-before-race")
+	if err := os.MkdirAll(kitty, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kitty, "owner"), []byte("original\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	checkOutput, err := exec.Command(
+		"bash", homeManagerLegacyLinkGuard, "check", kitty,
+		".config/kitty", "", "", home,
+	).CombinedOutput()
+	if err != nil {
+		t.Fatalf("already mutable End4 path preflight: %v\n%s", err, checkOutput)
+	}
+	if err := os.Rename(kitty, originalKitty); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(kitty, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kitty, "owner"), []byte("replacement\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+
+	output, err := exec.Command(
+		"bash", homeManagerLegacyLinkGuard, "quarantine", kitty,
+		".config/kitty", "", "", home,
+		strings.TrimSpace(string(checkOutput)),
+	).CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "ownership collision") {
+		t.Fatalf("mutable End4 path replacement accepted: err=%v\n%s", err, output)
+	}
+	if got := readContractFile(t, filepath.Join(originalKitty, "owner")); got != "original\n" {
+		t.Fatalf("original mutable End4 path changed: %q", got)
+	}
+	if got := readContractFile(t, filepath.Join(kitty, "owner")); got != "replacement\n" {
+		t.Fatalf("replacement mutable End4 path changed: %q", got)
+	}
+}
+
 func TestHomeManagerLegacyLinkGuardPinsConfigRootBeforeTargetTraversal(t *testing.T) {
 	root := t.TempDir()
 	configHome := filepath.Join(root, ".config")
@@ -531,6 +736,7 @@ let
   lib.hm.dag.entryBefore = _: text: text;
   pkgs = {
     coreutils = %q;
+    diffutils = %q;
     findutils = %q;
     gnugrep = %q;
     gnused = %q;
@@ -543,7 +749,8 @@ let
   module = import (builtins.toPath %q) { inherit config lib pkgs; };
 in module.home.activation.migrateWahrweltUserPaths
 `, home, configHome, stateHome, cacheHome,
-		commandPackageRoot(t, "dirname"),
+		resolvedCommandPackageRoot(t, "dirname"),
+		resolvedCommandPackageRoot(t, "cmp"),
 		commandPackageRoot(t, "find"),
 		commandPackageRoot(t, "grep"),
 		commandPackageRoot(t, "sed"),
