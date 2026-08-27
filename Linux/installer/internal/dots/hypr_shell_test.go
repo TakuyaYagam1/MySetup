@@ -557,6 +557,150 @@ func TestWriteHyprRuntimeShellStateRejectsUnknownTopLevelEntrypoint(t *testing.T
 	}
 }
 
+func TestWriteHyprRuntimeShellStatePreservesActiveHomeManagerTopLevelEntrypoint(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	profile, _ := shellruntime.ProfileByID(shellruntime.Caelestia)
+	writeRuntimeProfileAssets(t, home, hyprDir, profile)
+	writeTestFile(t, shellruntime.ActiveShellStatePath(home), profile.ID+"\n")
+	topLevel, target, storePayload, want := prepareActiveHomeManagerTopLevelEntrypoint(t, home, hyprDir)
+	before, err := os.Lstat(topLevel)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
+		t.Fatalf("active Home Manager top-level entrypoint was rejected: %v", err)
+	}
+	if got, err := os.Readlink(topLevel); err != nil || got != target {
+		t.Fatalf("active Home Manager top-level entrypoint changed: target=%q err=%v", got, err)
+	}
+	after, err := os.Lstat(topLevel)
+	if err != nil || !os.SameFile(before, after) {
+		t.Fatalf("active Home Manager top-level entrypoint identity changed: before=%v after=%v err=%v", before, after, err)
+	}
+	if got, err := os.Readlink(target); err != nil || got != storePayload || readTestFile(t, target) != want {
+		t.Fatalf("active Home Manager store entrypoint changed: target=%q err=%v", got, err)
+	}
+}
+
+func TestWriteHyprRuntimeShellStateRejectsConcurrentReplacementOfPreservedHomeManagerEntrypoint(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	profile, _ := shellruntime.ProfileByID(shellruntime.Caelestia)
+	writeRuntimeProfileAssets(t, home, hyprDir, profile)
+	writeTestFile(t, shellruntime.ActiveShellStatePath(home), profile.ID+"\n")
+	topLevel, _, _, _ := prepareActiveHomeManagerTopLevelEntrypoint(t, home, hyprDir)
+	const winner = "concurrent private entrypoint\n"
+	currentHome := filepath.Join(home, ".local", "state", "home-manager", "gcroots", "current-home")
+	newGeneration := filepath.Join(home, ".concurrent-home-manager-generation")
+	if err := os.MkdirAll(filepath.Join(newGeneration, "home-files"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	replaced := false
+
+	err := writeHyprRuntimeShellStateWithHook(home, hyprDir, func(_, _ string) error {
+		if replaced {
+			return nil
+		}
+		replaced = true
+		if err := os.Remove(topLevel); err != nil {
+			return err
+		}
+		if err := os.WriteFile(topLevel, []byte(winner), 0o600); err != nil {
+			return err
+		}
+		if err := os.Remove(currentHome); err != nil {
+			return err
+		}
+		return os.Symlink(newGeneration, currentHome)
+	})
+	if err == nil || !strings.Contains(err.Error(), "preserved Home Manager shell runtime changed before commit") {
+		t.Fatalf("concurrent Home Manager replacement error = %v", err)
+	}
+	assertTestFileState(t, topLevel, winner, 0o600)
+	if got, err := os.Readlink(currentHome); err != nil || got != newGeneration {
+		t.Fatalf("concurrent Home Manager generation changed: target=%q err=%v", got, err)
+	}
+}
+
+func TestWriteHyprRuntimeShellStateRejectsConcurrentHomeManagerGenerationSwitch(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	profile, _ := shellruntime.ProfileByID(shellruntime.Caelestia)
+	writeRuntimeProfileAssets(t, home, hyprDir, profile)
+	writeTestFile(t, shellruntime.ActiveShellStatePath(home), profile.ID+"\n")
+	topLevel, target, _, _ := prepareActiveHomeManagerTopLevelEntrypoint(t, home, hyprDir)
+	before, err := os.Lstat(topLevel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentHome := filepath.Join(home, ".local", "state", "home-manager", "gcroots", "current-home")
+	newGeneration := filepath.Join(home, ".concurrent-home-manager-generation")
+	if err := os.MkdirAll(filepath.Join(newGeneration, "home-files"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	switched := false
+
+	err = writeHyprRuntimeShellStateWithHook(home, hyprDir, func(_, _ string) error {
+		if switched {
+			return nil
+		}
+		switched = true
+		if err := os.Remove(currentHome); err != nil {
+			return err
+		}
+		return os.Symlink(newGeneration, currentHome)
+	})
+	if err == nil || !strings.Contains(err.Error(), "preserved Home Manager shell runtime changed before commit") {
+		t.Fatalf("concurrent Home Manager generation error = %v", err)
+	}
+	after, statErr := os.Lstat(topLevel)
+	if statErr != nil || !os.SameFile(before, after) {
+		t.Fatalf("preserved top-level identity changed: before=%v after=%v err=%v", before, after, statErr)
+	}
+	if got, err := os.Readlink(topLevel); err != nil || got != target {
+		t.Fatalf("preserved top-level target changed: target=%q err=%v", got, err)
+	}
+	if got, err := os.Readlink(currentHome); err != nil || got != newGeneration {
+		t.Fatalf("concurrent Home Manager generation changed: target=%q err=%v", got, err)
+	}
+}
+
+func prepareActiveHomeManagerTopLevelEntrypoint(t *testing.T, home, hyprDir string) (topLevel, target, storePayload, payload string) {
+	t.Helper()
+	generation := filepath.Join(home, ".home-manager-generation")
+	homeFiles := filepath.Join(generation, "home-files")
+	target = filepath.Join(homeFiles, ".config", "hypr", "hyprland.lua")
+	payload = stableRuntimeSourceConfig(
+		shellruntime.RuntimeFile(home, "hyprland.lua"),
+		"Wahrwelt stable Hyprland entrypoint.",
+	)
+	storePayload = filepath.Join(home, ".nix-store", "hm-hyprland.lua")
+	writeModeTestFile(t, storePayload, payload, 0o444)
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(storePayload, target); err != nil {
+		t.Fatal(err)
+	}
+	currentHome := filepath.Join(home, ".local", "state", "home-manager", "gcroots", "current-home")
+	if err := os.MkdirAll(filepath.Dir(currentHome), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(generation, currentHome); err != nil {
+		t.Fatal(err)
+	}
+	topLevel = filepath.Join(hyprDir, "hyprland.lua")
+	if err := os.Symlink(target, topLevel); err != nil {
+		t.Fatal(err)
+	}
+	return topLevel, target, storePayload, payload
+}
+
 func TestRuntimeTransactionRollbackPreservesConcurrentWinner(t *testing.T) {
 	for _, kind := range []string{"regular", "symlink"} {
 		t.Run(kind, func(t *testing.T) {

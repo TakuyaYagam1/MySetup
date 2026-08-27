@@ -769,7 +769,8 @@ func writeHyprRuntimeShellStateForProfileWithHook(
 	if err := tx.pinPublicationParents(plan); err != nil {
 		return err
 	}
-	if err := validateRuntimeTransactionPlan(plan, home, hyprDir, tx, map[bool]string{true: profile}[strictDirectMigration]); err != nil {
+	preserved, err := validateRuntimeTransactionPlan(plan, home, hyprDir, tx, map[bool]string{true: profile}[strictDirectMigration])
+	if err != nil {
 		return err
 	}
 	for _, path := range plan.removals {
@@ -781,7 +782,7 @@ func writeHyprRuntimeShellStateForProfileWithHook(
 	}
 	for _, publication := range plan.publications {
 		publication := publication
-		if runtimePublicationIsPreservedHomeManagerSymlink(home, publication, tx.states[publication.path]) {
+		if _, ok := preserved[publication.path]; ok {
 			continue
 		}
 		if err := tx.mutate(runtimeMutationWrite, publication.path, func() (runtimePathState, error) {
@@ -792,6 +793,31 @@ func writeHyprRuntimeShellStateForProfileWithHook(
 	}
 	if err := tx.verifyOwnedResults(); err != nil {
 		return err
+	}
+	if err := verifyPreservedHomeManagerRuntimePublications(home, plan, preserved, tx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func verifyPreservedHomeManagerRuntimePublications(
+	home string,
+	plan runtimeTransactionPlan,
+	preserved map[string]runtimePathState,
+	tx *runtimeFileTransaction,
+) error {
+	for _, publication := range plan.publications {
+		expected, ok := preserved[publication.path]
+		if !ok {
+			continue
+		}
+		if !runtimePublicationIsPreservedHomeManagerSymlink(home, publication, expected) {
+			return fmt.Errorf("preserved Home Manager shell runtime changed before commit: %s", publication.path)
+		}
+		current, err := tx.currentRuntimeState(publication.path)
+		if err != nil || !sameRuntimePathState(expected, current) {
+			return fmt.Errorf("preserved Home Manager shell runtime changed before commit: %s", publication.path)
+		}
 	}
 	return nil
 }
@@ -910,28 +936,38 @@ func removeLegacyRuntimeFile(path string) error {
 	return fmt.Errorf("unowned legacy Hyprland runtime collision: %s", path)
 }
 
-func validateRuntimeTransactionPlan(plan runtimeTransactionPlan, home, hyprDir string, tx *runtimeFileTransaction, directProfile string) error {
+func validateRuntimeTransactionPlan(
+	plan runtimeTransactionPlan,
+	home, hyprDir string,
+	tx *runtimeFileTransaction,
+	directProfile string,
+) (map[string]runtimePathState, error) {
+	preserved := make(map[string]runtimePathState)
 	for _, path := range plan.removals {
 		if err := validateLegacyRuntimeFileState(path, tx.states[path], home, hyprDir); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	for _, publication := range plan.publications {
 		state := tx.states[publication.path]
+		if runtimePublicationIsPreservedHomeManagerSymlink(home, publication, state) {
+			preserved[publication.path] = state
+			continue
+		}
 		if directProfile != "" {
 			if err := validateDirectEnd4RuntimePublicationState(home, hyprDir, publication, state); err != nil {
-				return err
+				return nil, err
 			}
 			continue
 		}
 		if publication.path == filepath.Join(hyprDir, "hyprland.lua") && !isKnownTopLevelRuntimeEntrypoint(state.snapshot, home) {
-			return fmt.Errorf("unowned top-level Hyprland runtime collision: %s", publication.path)
+			return nil, fmt.Errorf("unowned top-level Hyprland runtime collision: %s", publication.path)
 		}
-		if state.snapshot.kind == runtimeSnapshotSymlink && !runtimePublicationIsPreservedHomeManagerSymlink(home, publication, state) {
-			return fmt.Errorf("refusing symlink shell runtime publication collision: %s", publication.path)
+		if state.snapshot.kind == runtimeSnapshotSymlink {
+			return nil, fmt.Errorf("refusing symlink shell runtime publication collision: %s", publication.path)
 		}
 	}
-	return nil
+	return preserved, nil
 }
 
 func validateDirectEnd4RuntimePublicationState(
