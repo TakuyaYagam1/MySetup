@@ -658,6 +658,63 @@ func TestPruneBackupsKeepsNewestThreeExactOwnedDirectories(t *testing.T) {
 	}
 }
 
+func TestPruneBackupsRemovesMetadataPreservingMixedOwnerTree(t *testing.T) {
+	const childEnvironment = "WAHRWELT_TEST_MIXED_OWNER_BACKUP"
+	if os.Getenv(childEnvironment) != "1" {
+		if _, err := exec.LookPath("unshare"); err != nil {
+			t.Skip("unshare is unavailable")
+		}
+		cmd := exec.Command(
+			"unshare", "--map-auto", "--map-root-user", "--",
+			os.Args[0], "-test.run=^TestPruneBackupsRemovesMetadataPreservingMixedOwnerTree$",
+		)
+		cmd.Env = append(os.Environ(), childEnvironment+"=1")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			if strings.Contains(string(output), "no line matching user") ||
+				strings.Contains(string(output), "Operation not permitted") {
+				t.Skipf("multi-uid user namespace is unavailable: %s", strings.TrimSpace(string(output)))
+			}
+			t.Fatalf("mixed-owner namespace test failed: %v\n%s", err, output)
+		}
+		return
+	}
+
+	if os.Geteuid() != 0 {
+		t.Fatalf("mixed-owner child must run as namespace root, euid=%d", os.Geteuid())
+	}
+	parent := t.TempDir()
+	for timestamp := 1; timestamp <= 4; timestamp++ {
+		path := filepath.Join(parent, backupName(timestamp))
+		if err := os.Mkdir(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		userTree := filepath.Join(path, "user")
+		if err := os.Mkdir(userTree, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		payload := filepath.Join(userTree, "default.nix")
+		if err := os.WriteFile(payload, []byte("{ }\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		for _, ownedPath := range []string{payload, userTree} {
+			if err := os.Chown(ownedPath, 1, 1); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := markBackup(path, 0, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := pruneBackups(parent, 3, 0); err != nil {
+		t.Fatalf("metadata-preserving mixed-owner backup was not pruned: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(parent, backupName(1))); !os.IsNotExist(err) {
+		t.Fatalf("oldest mixed-owner backup retained: %v", err)
+	}
+}
+
 func TestPruneBackupsPreservesMatchingRootOwnedDirectoryWithoutOwnershipMarker(t *testing.T) {
 	parent := t.TempDir()
 	unknown := filepath.Join(parent, backupName(1))
@@ -711,14 +768,26 @@ func TestPruneBackupsPreservesUnmarkedDirectoryOwnedBySomeoneOtherThanMarker(t *
 }
 
 func TestBackupRemovalOptionsSeparateMarkerAndDirectoryOwners(t *testing.T) {
-	options := backupRemovalOptions(0, 1000)
+	path := t.TempDir()
+	directory, err := fsowner.OpenDirectory(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := directory.Identity()
+	if err := directory.Close(); err != nil {
+		t.Fatal(err)
+	}
+	options, err := backupRemovalOptions(path, expected, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !options.AllowsUID(0) {
 		t.Fatal("root marker owner was rejected")
 	}
-	if !options.AllowsUID(1000) {
+	if !options.AllowsUID(expected.UID) {
 		t.Fatal("metadata-preserved directory owner was rejected")
 	}
-	if options.AllowsUID(1001) {
+	if options.AllowsUID(expected.UID + 1) {
 		t.Fatal("unrelated owner was accepted")
 	}
 }

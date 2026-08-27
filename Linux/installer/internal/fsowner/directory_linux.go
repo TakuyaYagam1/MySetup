@@ -229,7 +229,17 @@ func (d *Directory) RemoveDirectory(name string, expected Identity, options Remo
 	if err != nil {
 		return fmt.Errorf("ownership collision: open directory removal candidate %s/%s: %w", d.path, name, err)
 	}
-	plan, err := buildRemovalPlan(fd, name, expected.Device, options)
+	authorizedDevice := expected.Device
+	var authorizedMountID uint64
+	if options.SameDevice {
+		authorizedDevice = d.identity.Device
+		authorizedMountID, err = mountIDFromFD(d.fd)
+		if err != nil {
+			_ = unix.Close(fd)
+			return fmt.Errorf("identify removal parent mount boundary %s: %w", d.path, err)
+		}
+	}
+	plan, err := buildRemovalPlan(fd, name, authorizedDevice, authorizedMountID, options)
 	if err != nil {
 		_ = unix.Close(fd)
 		return err
@@ -297,7 +307,7 @@ type removalPlan struct {
 	children []*removalPlan
 }
 
-func buildRemovalPlan(fd int, name string, rootDevice uint64, options RemoveOptions) (*removalPlan, error) {
+func buildRemovalPlan(fd int, name string, rootDevice, rootMountID uint64, options RemoveOptions) (*removalPlan, error) {
 	identity, err := identityFromFD(fd)
 	if err != nil {
 		return nil, fmt.Errorf("identify removal candidate %s: %w", name, err)
@@ -305,8 +315,8 @@ func buildRemovalPlan(fd int, name string, rootDevice uint64, options RemoveOpti
 	if identity.Kind != KindDirectory || !options.AllowsUID(identity.UID) {
 		return nil, fmt.Errorf("ownership collision: %s is not an owned ordinary directory", name)
 	}
-	if options.SameDevice && identity.Device != rootDevice {
-		return nil, fmt.Errorf("ownership collision: %s crosses a filesystem boundary", name)
+	if err := verifyRemovalBoundary(fd, identity, rootDevice, rootMountID, options); err != nil {
+		return nil, fmt.Errorf("ownership collision: removal candidate %s: %w", name, err)
 	}
 	plan := &removalPlan{name: name, fd: fd, identity: identity}
 	names, err := directoryNames(fd)
@@ -319,10 +329,15 @@ func buildRemovalPlan(fd int, name string, rootDevice uint64, options RemoveOpti
 			closeRemovalPlan(plan)
 			return nil, fmt.Errorf("inspect removal child %s/%s: %w", name, childName, openErr)
 		}
-		if !options.AllowsUID(childIdentity.UID) || (options.SameDevice && childIdentity.Device != rootDevice) {
+		if !options.AllowsUID(childIdentity.UID) {
 			_ = unix.Close(childFD)
 			closeRemovalPlan(plan)
 			return nil, fmt.Errorf("ownership collision: removal child %s/%s is not owned", name, childName)
+		}
+		if boundaryErr := verifyRemovalBoundary(childFD, childIdentity, rootDevice, rootMountID, options); boundaryErr != nil {
+			_ = unix.Close(childFD)
+			closeRemovalPlan(plan)
+			return nil, fmt.Errorf("ownership collision: removal child %s/%s: %w", name, childName, boundaryErr)
 		}
 		if childIdentity.Kind == KindDirectory {
 			_ = unix.Close(childFD)
@@ -331,7 +346,7 @@ func buildRemovalPlan(fd int, name string, rootDevice uint64, options RemoveOpti
 				closeRemovalPlan(plan)
 				return nil, fmt.Errorf("open removal child directory %s/%s: %w", name, childName, directoryErr)
 			}
-			child, childErr := buildRemovalPlan(directoryFD, childName, rootDevice, options)
+			child, childErr := buildRemovalPlan(directoryFD, childName, rootDevice, rootMountID, options)
 			if childErr != nil {
 				_ = unix.Close(directoryFD)
 				closeRemovalPlan(plan)
@@ -347,6 +362,23 @@ func buildRemovalPlan(fd int, name string, rootDevice uint64, options RemoveOpti
 		})
 	}
 	return plan, nil
+}
+
+func verifyRemovalBoundary(fd int, identity Identity, rootDevice, rootMountID uint64, options RemoveOptions) error {
+	if !options.SameDevice {
+		return nil
+	}
+	if identity.Device != rootDevice {
+		return errors.New("crosses a filesystem boundary")
+	}
+	mountID, err := mountIDFromFD(fd)
+	if err != nil {
+		return fmt.Errorf("identify mount boundary: %w", err)
+	}
+	if mountID != rootMountID {
+		return errors.New("crosses a mount boundary")
+	}
+	return nil
 }
 
 func deleteRemovalChildren(plan *removalPlan, options RemoveOptions) error {
@@ -431,6 +463,23 @@ func identityFromFD(fd int) (Identity, error) {
 		return Identity{}, err
 	}
 	return identityFromStat(&stat), nil
+}
+
+func mountIDFromFD(fd int) (uint64, error) {
+	var stat unix.Statx_t
+	if err := unix.Statx(
+		fd,
+		"",
+		unix.AT_EMPTY_PATH|unix.AT_SYMLINK_NOFOLLOW,
+		unix.STATX_MNT_ID,
+		&stat,
+	); err != nil {
+		return 0, err
+	}
+	if stat.Mask&unix.STATX_MNT_ID == 0 || stat.Mnt_id == 0 {
+		return 0, errors.New("statx did not return a mount id")
+	}
+	return stat.Mnt_id, nil
 }
 
 func identityFromStat(stat *unix.Stat_t) Identity {

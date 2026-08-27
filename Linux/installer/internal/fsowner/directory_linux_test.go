@@ -4,8 +4,12 @@ package fsowner
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestRemoveOptionsAllowsOnlyPrimaryAndExplicitAdditionalUIDs(t *testing.T) {
@@ -132,5 +136,130 @@ func TestDirectoryRemoveKnownTreeAndEmptyDirectory(t *testing.T) {
 		if _, err := os.Lstat(path); !os.IsNotExist(err) {
 			t.Fatalf("%s still exists: %v", path, err)
 		}
+	}
+}
+
+func TestDirectoryRemoveDirectoryRejectsSameDeviceBindMount(t *testing.T) {
+	const childEnvironment = "WAHRWELT_TEST_FSOWNER_BIND_MOUNT"
+	if os.Getenv(childEnvironment) != "1" {
+		if _, err := exec.LookPath("unshare"); err != nil {
+			t.Skip("unshare is unavailable")
+		}
+		cmd := exec.Command(
+			"unshare", "--user", "--map-root-user", "--mount", "--propagation", "private", "--",
+			os.Args[0], "-test.run=^TestDirectoryRemoveDirectoryRejectsSameDeviceBindMount$",
+		)
+		cmd.Env = append(os.Environ(), childEnvironment+"=1")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			if strings.Contains(string(output), "Operation not permitted") {
+				t.Skipf("mount namespace is unavailable: %s", strings.TrimSpace(string(output)))
+			}
+			t.Fatalf("bind-mount namespace test failed: %v\n%s", err, output)
+		}
+		return
+	}
+
+	if os.Geteuid() != 0 {
+		t.Fatalf("bind-mount child must run as namespace root, euid=%d", os.Geteuid())
+	}
+	root := t.TempDir()
+	parent := filepath.Join(root, "parent")
+	tree := filepath.Join(parent, "generated")
+	mountpoint := filepath.Join(tree, "mounted")
+	outside := filepath.Join(root, "outside")
+	for _, path := range []string{mountpoint, outside} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	payload := filepath.Join(outside, "payload")
+	mustWritePrivate(t, payload, "outside\n", 0o600)
+	if err := unix.Mount(outside, mountpoint, "", unix.MS_BIND, ""); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = unix.Unmount(mountpoint, unix.MNT_DETACH) })
+
+	directory, err := OpenDirectory(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = directory.Close() })
+	entry, err := directory.Inspect(filepath.Base(tree))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = directory.RemoveDirectory(entry.Name, entry.Identity, RemoveOptions{
+		UID:        uint32(os.Geteuid()),
+		Recursive:  true,
+		SameDevice: true,
+	})
+	if err == nil {
+		t.Fatal("RemoveDirectory() accepted a same-device bind mount")
+	}
+	if got := mustRead(t, payload); got != "outside\n" {
+		t.Fatalf("bind-mounted external payload changed: %q", got)
+	}
+}
+
+func TestDirectoryRemoveDirectoryRejectsSameDeviceRootBindMount(t *testing.T) {
+	const childEnvironment = "WAHRWELT_TEST_FSOWNER_ROOT_BIND_MOUNT"
+	if os.Getenv(childEnvironment) != "1" {
+		if _, err := exec.LookPath("unshare"); err != nil {
+			t.Skip("unshare is unavailable")
+		}
+		cmd := exec.Command(
+			"unshare", "--user", "--map-root-user", "--mount", "--propagation", "private", "--",
+			os.Args[0], "-test.run=^TestDirectoryRemoveDirectoryRejectsSameDeviceRootBindMount$",
+		)
+		cmd.Env = append(os.Environ(), childEnvironment+"=1")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			if strings.Contains(string(output), "Operation not permitted") {
+				t.Skipf("mount namespace is unavailable: %s", strings.TrimSpace(string(output)))
+			}
+			t.Fatalf("root bind-mount namespace test failed: %v\n%s", err, output)
+		}
+		return
+	}
+
+	if os.Geteuid() != 0 {
+		t.Fatalf("root bind-mount child must run as namespace root, euid=%d", os.Geteuid())
+	}
+	root := t.TempDir()
+	parent := filepath.Join(root, "parent")
+	tree := filepath.Join(parent, "generated")
+	outside := filepath.Join(root, "outside")
+	for _, path := range []string{tree, outside} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	payload := filepath.Join(outside, "payload")
+	mustWritePrivate(t, payload, "outside\n", 0o600)
+	if err := unix.Mount(outside, tree, "", unix.MS_BIND, ""); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = unix.Unmount(tree, unix.MNT_DETACH) })
+
+	directory, err := OpenDirectory(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = directory.Close() })
+	entry, err := directory.Inspect(filepath.Base(tree))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = directory.RemoveDirectory(entry.Name, entry.Identity, RemoveOptions{
+		UID:        uint32(os.Geteuid()),
+		Recursive:  true,
+		SameDevice: true,
+	})
+	if err == nil {
+		t.Fatal("RemoveDirectory() accepted a same-device root bind mount")
+	}
+	if got := mustRead(t, payload); got != "outside\n" {
+		t.Fatalf("root bind-mounted external payload changed: %q", got)
 	}
 }

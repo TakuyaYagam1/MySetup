@@ -1382,10 +1382,15 @@ func pruneBackups(parent string, keep int, markerUID uint32) error {
 		return candidates[i].attempt > candidates[j].attempt
 	})
 	for _, candidate := range candidates[min(keep, len(candidates)):] {
+		candidatePath := filepath.Join(parent, candidate.entry.Name)
+		options, optionsErr := backupRemovalOptions(candidatePath, candidate.entry.Identity, markerUID)
+		if optionsErr != nil {
+			return optionsErr
+		}
 		if err := directory.RemoveDirectory(
 			candidate.entry.Name,
 			candidate.entry.Identity,
-			backupRemovalOptions(markerUID, candidate.entry.Identity.UID),
+			options,
 		); err != nil {
 			return err
 		}
@@ -1393,13 +1398,45 @@ func pruneBackups(parent string, keep int, markerUID uint32) error {
 	return nil
 }
 
-func backupRemovalOptions(markerUID, directoryUID uint32) fsowner.RemoveOptions {
+func backupRemovalOptions(path string, expected fsowner.Identity, markerUID uint32) (fsowner.RemoveOptions, error) {
+	directory, err := fsowner.OpenDirectory(path)
+	if err != nil {
+		return fsowner.RemoveOptions{}, err
+	}
+	defer closeIgnoringError(directory)
+	if directory.Identity() != expected {
+		return fsowner.RemoveOptions{}, fmt.Errorf("ownership collision: backup changed before removal planning: %s", path)
+	}
+	entries, err := directory.List(nil)
+	if err != nil {
+		return fsowner.RemoveOptions{}, err
+	}
+
+	// cp -a intentionally preserves ownership domains such as the top-level
+	// user configuration tree. The root-owned marker authenticates the backup
+	// boundary; only owners present at that pinned boundary are authorized for
+	// recursive removal. A different owner introduced only below that boundary
+	// still fails closed in fsowner.RemoveDirectory.
+	allowed := map[uint32]struct{}{
+		markerUID:    {},
+		expected.UID: {},
+	}
+	for _, entry := range entries {
+		allowed[entry.Identity.UID] = struct{}{}
+	}
+	additionalUIDs := make([]uint32, 0, len(allowed)-1)
+	for uid := range allowed {
+		if uid != markerUID {
+			additionalUIDs = append(additionalUIDs, uid)
+		}
+	}
+	sort.Slice(additionalUIDs, func(i, j int) bool { return additionalUIDs[i] < additionalUIDs[j] })
 	return fsowner.RemoveOptions{
 		UID:            markerUID,
-		AdditionalUIDs: []uint32{directoryUID},
+		AdditionalUIDs: additionalUIDs,
 		Recursive:      true,
 		SameDevice:     true,
-	}
+	}, nil
 }
 
 func markBackupFromSource(source, path string, markerUID uint32) error {
