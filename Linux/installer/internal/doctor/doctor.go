@@ -58,7 +58,7 @@ func Report(ctx context.Context, opts Options) (string, error) {
 	} else {
 		out.println("OK   Zen profile found")
 	}
-	out.println("Last-resort system rollback: sudo rsync -a --delete /etc/nixos.bak.<timestamp>.<pid>.<n>/ /etc/nixos/")
+	out.println("Last-resort system rollback: sudo rsync -a --delete --delete-excluded --exclude=/.wahrwelt-backup-v1 /etc/nixos.bak.<timestamp>.<pid>.<n>/ /etc/nixos/")
 	out.println("User dotfiles are not fully transactional; rerun apply or cleanup after checking ~/.config.")
 	return out.String(), out.err
 }

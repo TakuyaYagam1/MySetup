@@ -2245,7 +2245,7 @@ func TestHandlePreSwitchErrorRestoresBackup(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"sudo mkdir -p /etc/nixos",
-		"sudo rsync -a --delete /etc/nixos.bak.123/ /etc/nixos/",
+		"sudo rsync -a --delete --delete-excluded --exclude=/.wahrwelt-backup-v1 /etc/nixos.bak.123/ /etc/nixos/",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("restore command missing %q\n%s", want, got)

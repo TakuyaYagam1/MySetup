@@ -179,7 +179,7 @@ func TestReportReturnsDoctorOutputWithoutPrinting(t *testing.T) {
 		"OK   shell keybinds:",
 		"OK   shell selector config:",
 		"OK   hypr script executable:",
-		"Last-resort system rollback:",
+		"Last-resort system rollback: sudo rsync -a --delete --delete-excluded --exclude=/.wahrwelt-backup-v1",
 		"User dotfiles are not fully transactional",
 	} {
 		if !strings.Contains(report, want) {

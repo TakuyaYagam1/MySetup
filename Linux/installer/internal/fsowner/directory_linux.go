@@ -48,12 +48,28 @@ type Entry struct {
 	Identity Identity
 }
 
-// RemoveOptions narrows which exact inode may be removed.
+// RemoveOptions narrows which exact inode may be removed. AdditionalUIDs is
+// only for an independently authenticated recursive tree whose copied payload
+// intentionally preserves more than one owner; it does not relax RemoveRegular.
 type RemoveOptions struct {
-	UID          uint32
-	Recursive    bool
-	RequireEmpty bool
-	SameDevice   bool
+	UID            uint32
+	AdditionalUIDs []uint32
+	Recursive      bool
+	RequireEmpty   bool
+	SameDevice     bool
+}
+
+// AllowsUID reports whether uid belongs to the authenticated recursive tree.
+func (o RemoveOptions) AllowsUID(uid uint32) bool {
+	if uid == o.UID {
+		return true
+	}
+	for _, allowed := range o.AdditionalUIDs {
+		if uid == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 // Directory pins a canonical directory for a sequence of inspections and
@@ -275,7 +291,7 @@ func buildRemovalPlan(fd int, name string, rootDevice uint64, options RemoveOpti
 	if err != nil {
 		return nil, fmt.Errorf("identify removal candidate %s: %w", name, err)
 	}
-	if identity.Kind != KindDirectory || identity.UID != options.UID {
+	if identity.Kind != KindDirectory || !options.AllowsUID(identity.UID) {
 		return nil, fmt.Errorf("ownership collision: %s is not an owned ordinary directory", name)
 	}
 	if options.SameDevice && identity.Device != rootDevice {
@@ -292,7 +308,7 @@ func buildRemovalPlan(fd int, name string, rootDevice uint64, options RemoveOpti
 			closeRemovalPlan(plan)
 			return nil, fmt.Errorf("inspect removal child %s/%s: %w", name, childName, openErr)
 		}
-		if childIdentity.UID != options.UID || (options.SameDevice && childIdentity.Device != rootDevice) {
+		if !options.AllowsUID(childIdentity.UID) || (options.SameDevice && childIdentity.Device != rootDevice) {
 			_ = unix.Close(childFD)
 			closeRemovalPlan(plan)
 			return nil, fmt.Errorf("ownership collision: removal child %s/%s is not owned", name, childName)

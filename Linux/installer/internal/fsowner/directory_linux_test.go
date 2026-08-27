@@ -8,6 +8,21 @@ import (
 	"testing"
 )
 
+func TestRemoveOptionsAllowsOnlyPrimaryAndExplicitAdditionalUIDs(t *testing.T) {
+	t.Parallel()
+
+	options := RemoveOptions{UID: 0, AdditionalUIDs: []uint32{1000}}
+	if !options.AllowsUID(0) {
+		t.Fatal("primary uid was rejected")
+	}
+	if !options.AllowsUID(1000) {
+		t.Fatal("explicit additional uid was rejected")
+	}
+	if options.AllowsUID(1001) {
+		t.Fatal("unknown uid was accepted")
+	}
+}
+
 func TestDirectoryRemoveRegularRequiresExactIdentity(t *testing.T) {
 	t.Parallel()
 

@@ -764,12 +764,13 @@ Compositional note: there is no separate `profiles/personal.nix` file. The
 
 ## Recovery
 
-The installer keeps unique `/etc/nixos.bak.<timestamp>.<pid>.<n>` backups
-before replacing `/etc/nixos`. The one-time automatic namespace or brand migration
-also retains the displaced pre-migration tree as
-`/etc/.nixos.migration.<suffix>`. Wahrwelt does not delete either recovery form
-automatically. Review and remove an old copy manually only after the updated system
-and the next `nixos-update` both succeed.
+The installer creates a unique `/etc/nixos.bak.<timestamp>.<pid>.<n>` backup
+before replacing `/etc/nixos`. A root-owned marker authenticates backups made
+by current releases, and a successful activated apply keeps the newest three
+authenticated backups. Historical unmarked backups and the displaced
+`/etc/.nixos.migration.<suffix>` tree are never adopted or deleted
+automatically. Review and remove those old copies manually only after the
+updated system and the next `nixos-update` both succeed.
 
 To recover manually, first retain the current tree under a new, verified path.
 Then pick the most recent backup and roll it forward. Replace the timestamp in
@@ -781,7 +782,7 @@ CURRENT_RECOVERY=/etc/nixos.before-manual-recovery.YYYYMMDD-HHMMSS
 sudo test ! -e "$CURRENT_RECOVERY"
 sudo cp -a --reflink=auto -- /etc/nixos "$CURRENT_RECOVERY"
 sudo test -f "$CURRENT_RECOVERY/flake.nix"
-sudo rsync -a --delete /etc/nixos.bak.<timestamp>.<pid>.<n>/ /etc/nixos/
+sudo rsync -a --delete --delete-excluded --exclude=/.wahrwelt-backup-v1 /etc/nixos.bak.<timestamp>.<pid>.<n>/ /etc/nixos/
 sudo nixos-rebuild switch --flake /etc/nixos#NixOS
 ```
 

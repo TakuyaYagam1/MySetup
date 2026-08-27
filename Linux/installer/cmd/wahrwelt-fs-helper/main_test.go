@@ -639,7 +639,7 @@ func TestPruneBackupsKeepsNewestThreeExactOwnedDirectories(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(path, "configuration.nix"), []byte("owned\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := markBackup(path, uint32(os.Geteuid())); err != nil {
+		if err := markBackup(path, uint32(os.Geteuid()), uint32(os.Geteuid())); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -672,7 +672,7 @@ func TestPruneBackupsPreservesMatchingRootOwnedDirectoryWithoutOwnershipMarker(t
 		if err := os.Mkdir(path, 0o700); err != nil {
 			t.Fatal(err)
 		}
-		if err := markBackup(path, uint32(os.Geteuid())); err != nil {
+		if err := markBackup(path, uint32(os.Geteuid()), uint32(os.Geteuid())); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -688,6 +688,41 @@ func TestPruneBackupsPreservesMatchingRootOwnedDirectoryWithoutOwnershipMarker(t
 	}
 }
 
+func TestPruneBackupsPreservesUnmarkedDirectoryOwnedBySomeoneOtherThanMarker(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("requires an unprivileged test uid")
+	}
+	parent := t.TempDir()
+	unknown := filepath.Join(parent, backupName(1))
+	if err := os.Mkdir(unknown, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sentinel := filepath.Join(unknown, "foreign")
+	if err := os.WriteFile(sentinel, []byte("unknown payload\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := pruneBackups(parent, 3, 0); err != nil {
+		t.Fatalf("unmarked backup must be preserved regardless of owner: %v", err)
+	}
+	if got, err := os.ReadFile(sentinel); err != nil || string(got) != "unknown payload\n" {
+		t.Fatalf("unknown matching backup was changed: data=%q err=%v", got, err)
+	}
+}
+
+func TestBackupRemovalOptionsSeparateMarkerAndDirectoryOwners(t *testing.T) {
+	options := backupRemovalOptions(0, 1000)
+	if !options.AllowsUID(0) {
+		t.Fatal("root marker owner was rejected")
+	}
+	if !options.AllowsUID(1000) {
+		t.Fatal("metadata-preserved directory owner was rejected")
+	}
+	if options.AllowsUID(1001) {
+		t.Fatal("unrelated owner was accepted")
+	}
+}
+
 func TestPruneBackupsPreflightsMatchingSymlinkBeforeRemovingAnything(t *testing.T) {
 	parent := t.TempDir()
 	for timestamp := 1; timestamp <= 4; timestamp++ {
@@ -695,7 +730,7 @@ func TestPruneBackupsPreflightsMatchingSymlinkBeforeRemovingAnything(t *testing.
 		if err := os.Mkdir(path, 0o700); err != nil {
 			t.Fatal(err)
 		}
-		if err := markBackup(path, uint32(os.Geteuid())); err != nil {
+		if err := markBackup(path, uint32(os.Geteuid()), uint32(os.Geteuid())); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -728,13 +763,146 @@ func TestMarkBackupRefusesExistingMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := markBackup(backup, uint32(os.Geteuid()))
+	err := markBackup(backup, uint32(os.Geteuid()), uint32(os.Geteuid()))
 	if err == nil {
 		t.Fatal("markBackup() accepted an existing unknown marker")
 	}
 	data, readErr := os.ReadFile(marker)
 	if readErr != nil || string(data) != "foreign\n" {
 		t.Fatalf("existing marker changed: data=%q err=%v", data, readErr)
+	}
+}
+
+func TestRemoveManagedBackupMarkerRejectsFIFONonBlocking(t *testing.T) {
+	backup := filepath.Join(t.TempDir(), backupName(1))
+	if err := os.Mkdir(backup, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(backup, backupMarkerName)
+	if err := unix.Mkfifo(marker, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	directory, err := fsowner.OpenDirectory(backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = directory.Close() })
+	done := make(chan error, 1)
+	go func() {
+		done <- removeManagedBackupMarker(directory, backup, uint32(os.Geteuid()))
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("FIFO marker was accepted")
+		}
+	case <-time.After(250 * time.Millisecond):
+		writer, openErr := unix.Open(marker, unix.O_WRONLY|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+		if openErr == nil {
+			_ = unix.Close(writer)
+		}
+		<-done
+		t.Fatal("FIFO marker blocked the ownership check")
+	}
+}
+
+func TestMarkBackupRejectsDirectoryOwnedDifferentlyFromSource(t *testing.T) {
+	backup := filepath.Join(t.TempDir(), backupName(1))
+	if err := os.Mkdir(backup, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	actualUID := uint32(os.Geteuid())
+
+	err := markBackup(backup, actualUID+1, actualUID)
+	if err == nil {
+		t.Fatal("backup with a source-owner mismatch was accepted")
+	}
+	if _, statErr := os.Lstat(filepath.Join(backup, backupMarkerName)); !os.IsNotExist(statErr) {
+		t.Fatalf("owner-mismatched backup was mutated: %v", statErr)
+	}
+}
+
+func TestMarkBackupFromSourceAcceptsMetadataPreservingDirectoryOwnership(t *testing.T) {
+	parent := t.TempDir()
+	source := filepath.Join(parent, "nixos")
+	backup := filepath.Join(parent, backupName(1))
+	if err := os.Mkdir(source, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(backup, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := markBackupFromSource(source, backup, uint32(os.Geteuid())); err != nil {
+		t.Fatalf("metadata-preserving backup was rejected: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(backup, backupMarkerName)); err != nil {
+		t.Fatalf("ownership marker missing: %v", err)
+	}
+}
+
+func TestMarkBackupFromSourceDoesNotConflateDirectoryAndMarkerOwners(t *testing.T) {
+	parent := t.TempDir()
+	source := filepath.Join(parent, "nixos")
+	backup := filepath.Join(parent, backupName(1))
+	for _, path := range []string{source, backup} {
+		if err := os.Mkdir(path, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	markerUID := uint32(os.Geteuid()) + 1
+
+	err := markBackupFromSource(source, backup, markerUID)
+	if err == nil {
+		t.Fatal("marker with the wrong actual owner was accepted")
+	}
+	if _, statErr := os.Lstat(filepath.Join(backup, backupMarkerName)); statErr != nil {
+		t.Fatalf("backup was rejected before marker ownership was checked: %v", statErr)
+	}
+}
+
+func TestMarkBackupFromSourceReplacesCopiedManagedMarker(t *testing.T) {
+	parent := t.TempDir()
+	source := filepath.Join(parent, "nixos")
+	backup := filepath.Join(parent, backupName(1))
+	for _, path := range []string{source, backup} {
+		if err := os.Mkdir(path, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sourceDirectory, err := fsowner.OpenDirectory(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stalePayload := []byte(backupMarkerVersion + "\n" + sourceDirectory.Identity().String() + "\n")
+	if err := sourceDirectory.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{source, backup} {
+		if err := os.WriteFile(filepath.Join(path, backupMarkerName), stalePayload, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	markerUID := uint32(os.Geteuid())
+	if err := markBackupFromSource(source, backup, markerUID); err != nil {
+		t.Fatalf("copied managed marker was not replaced: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(source, backupMarkerName)); !os.IsNotExist(err) {
+		t.Fatalf("stale marker remained in live source: %v", err)
+	}
+	backupDirectory, err := fsowner.OpenDirectory(backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backupIdentity := backupDirectory.Identity()
+	if err := backupDirectory.Close(); err != nil {
+		t.Fatal(err)
+	}
+	owned, err := hasOwnedBackupMarker(backup, backupIdentity, markerUID)
+	if err != nil || !owned {
+		t.Fatalf("replacement marker is not bound to backup: owned=%v err=%v", owned, err)
 	}
 }
 

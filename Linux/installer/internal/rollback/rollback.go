@@ -96,6 +96,8 @@ func Run(ctx context.Context, opts Options) error {
 		"rsync",
 		"-a",
 		"--delete",
+		"--delete-excluded",
+		"--exclude=/.wahrwelt-backup-v1",
 		"--",
 		backupPin.procPath(),
 		destinationPin.procPath(),

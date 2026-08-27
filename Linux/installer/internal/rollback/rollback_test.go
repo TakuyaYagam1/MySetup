@@ -3,6 +3,7 @@ package rollback
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -29,6 +30,21 @@ func (*recordingRunner) Output(context.Context, string, ...string) (string, erro
 }
 
 func (*recordingRunner) IsDryRun() bool { return false }
+
+type localSudoRunner struct{}
+
+func (*localSudoRunner) Command(ctx context.Context, command string, args ...string) error {
+	if command != "sudo" || len(args) == 0 {
+		return os.ErrInvalid
+	}
+	return exec.CommandContext(ctx, args[0], args[1:]...).Run()
+}
+
+func (*localSudoRunner) Output(context.Context, string, ...string) (string, error) {
+	return "", nil
+}
+
+func (*localSudoRunner) IsDryRun() bool { return false }
 
 func TestFindLatestPicksMostRecentBackup(t *testing.T) {
 	parent := t.TempDir()
@@ -171,16 +187,56 @@ func TestRunPassesPinnedDirectoryDescriptorsToPrivilegedRsync(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if runner.command != "sudo" || len(runner.args) != 6 {
+	if runner.command != "sudo" || len(runner.args) != 8 {
 		t.Fatalf("privileged call = %q %q", runner.command, runner.args)
 	}
-	if got := strings.Join(runner.args[:4], " "); got != "rsync -a --delete --" {
+	if got := strings.Join(runner.args[:6], " "); got != "rsync -a --delete --delete-excluded --exclude=/.wahrwelt-backup-v1 --" {
 		t.Fatalf("rsync prefix = %q", got)
 	}
-	for _, argument := range runner.args[4:] {
+	for _, argument := range runner.args[6:] {
 		if !strings.HasPrefix(argument, "/proc/") || !strings.Contains(argument, "/fd/") || !strings.HasSuffix(argument, "/") {
 			t.Fatalf("rsync received an unpinned filesystem path: %q", argument)
 		}
+	}
+}
+
+func TestRunRestoresPayloadAndDeletesExcludedBackupMarker(t *testing.T) {
+	if _, err := exec.LookPath("rsync"); err != nil {
+		t.Skip("rsync is unavailable")
+	}
+	parent := t.TempDir()
+	dest := filepath.Join(parent, "nixos")
+	backup := filepath.Join(parent, "nixos.bak.42.0.0")
+	for _, directory := range []string{dest, backup} {
+		if err := os.Mkdir(directory, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const marker = ".wahrwelt-backup-v1"
+	if err := os.WriteFile(filepath.Join(dest, marker), []byte("stale\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(backup, marker), []byte("managed metadata\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(backup, "configuration.nix"), []byte("restored\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Run(context.Background(), Options{
+		Paths:  paths.Options{NixOSDest: dest},
+		Backup: backup,
+		Yes:    true,
+		Runner: &localSudoRunner{},
+	}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(dest, marker)); !os.IsNotExist(err) {
+		t.Fatalf("excluded backup marker survived restore: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dest, "configuration.nix"))
+	if err != nil || string(data) != "restored\n" {
+		t.Fatalf("backup payload was not restored: data=%q err=%v", data, err)
 	}
 }
 
@@ -191,7 +247,7 @@ type swappingPinnedRunner struct {
 }
 
 func (r *swappingPinnedRunner) Command(_ context.Context, command string, args ...string) error {
-	if command != "sudo" || len(args) != 6 {
+	if command != "sudo" || len(args) != 8 {
 		return os.ErrInvalid
 	}
 	if err := os.Rename(r.dest, r.displaced); err != nil {
@@ -200,7 +256,7 @@ func (r *swappingPinnedRunner) Command(_ context.Context, command string, args .
 	if err := os.Symlink(r.outside, r.dest); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(args[5], "restored"), []byte("pinned\n"), 0o600)
+	return os.WriteFile(filepath.Join(args[7], "restored"), []byte("pinned\n"), 0o600)
 }
 
 func (*swappingPinnedRunner) Output(context.Context, string, ...string) (string, error) {

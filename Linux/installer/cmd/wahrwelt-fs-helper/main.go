@@ -40,6 +40,7 @@ const (
 var (
 	generatedPasswordModuleDetailsPattern           = regexp.MustCompile(`(?s)^\{ config, \.\.\. \}:\n\n\{\n  users\.users\.\$\{config\.(wahrwelt|mysetup)\.user\.username\}\.initialHashedPassword = "([^"\r\n]+)";\n\}\n$`)
 	sha512CryptPattern                              = regexp.MustCompile(`^\$6\$(?:rounds=[0-9]+\$)?[./A-Za-z0-9]{1,16}\$[./A-Za-z0-9]{86}$`)
+	backupMarkerPayloadPattern                      = regexp.MustCompile(`^wahrwelt-backup-v1\n[0-9]+:[0-9]+:[0-9]+:[0-9]+:[0-9]+:directory\n$`)
 	commandInput                          io.Reader = os.Stdin
 	commandOutput                         io.Writer = os.Stdout
 )
@@ -165,7 +166,7 @@ func run(args []string) error {
 		if set.NArg() != 0 || !canonicalNixOSBackupPath(*backup) {
 			return errors.New("mark-nixos-backup accepts only an exact /etc/nixos.bak.<timestamp>.<pid>.<attempt> path")
 		}
-		return markBackup(filepath.Clean(*backup), 0)
+		return markBackupFromSource("/etc/nixos", filepath.Clean(*backup), 0)
 	case "prune-nixos-backups":
 		if err := requireRoot(); err != nil {
 			return err
@@ -1201,7 +1202,7 @@ func verifyVisibleFunctionalPasswordModule(candidate *passwordModuleCandidate) e
 	return nil
 }
 
-func pruneBackups(parent string, keep int, requiredUID uint32) error {
+func pruneBackups(parent string, keep int, markerUID uint32) error {
 	if keep < 0 {
 		return errors.New("invalid backup retention request")
 	}
@@ -1219,10 +1220,10 @@ func pruneBackups(parent string, keep int, requiredUID uint32) error {
 	candidates := make([]backupCandidate, 0, len(entries))
 	for _, entry := range entries {
 		matches := pattern.FindStringSubmatch(entry.Name)
-		if entry.Identity.Kind != fsowner.KindDirectory || entry.Identity.UID != requiredUID {
-			return fmt.Errorf("ownership collision: backup candidate %s/%s is not an owned ordinary directory", parent, entry.Name)
+		if entry.Identity.Kind != fsowner.KindDirectory {
+			return fmt.Errorf("ownership collision: backup candidate %s/%s is not an ordinary directory", parent, entry.Name)
 		}
-		owned, ownershipErr := hasOwnedBackupMarker(filepath.Join(parent, entry.Name), entry.Identity, requiredUID)
+		owned, ownershipErr := hasOwnedBackupMarker(filepath.Join(parent, entry.Name), entry.Identity, markerUID)
 		if ownershipErr != nil {
 			return ownershipErr
 		}
@@ -1249,30 +1250,63 @@ func pruneBackups(parent string, keep int, requiredUID uint32) error {
 		return candidates[i].attempt > candidates[j].attempt
 	})
 	for _, candidate := range candidates[min(keep, len(candidates)):] {
-		if err := directory.RemoveDirectory(candidate.entry.Name, candidate.entry.Identity, fsowner.RemoveOptions{
-			UID:        requiredUID,
-			Recursive:  true,
-			SameDevice: true,
-		}); err != nil {
+		if err := directory.RemoveDirectory(
+			candidate.entry.Name,
+			candidate.entry.Identity,
+			backupRemovalOptions(markerUID, candidate.entry.Identity.UID),
+		); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func markBackup(path string, requiredUID uint32) error {
+func backupRemovalOptions(markerUID, directoryUID uint32) fsowner.RemoveOptions {
+	return fsowner.RemoveOptions{
+		UID:            markerUID,
+		AdditionalUIDs: []uint32{directoryUID},
+		Recursive:      true,
+		SameDevice:     true,
+	}
+}
+
+func markBackupFromSource(source, path string, markerUID uint32) error {
+	sourceDirectory, err := fsowner.OpenDirectory(source)
+	if err != nil {
+		return fmt.Errorf("inspect backup source: %w", err)
+	}
+	sourceIdentity := sourceDirectory.Identity()
+	if err := removeManagedBackupMarker(sourceDirectory, source, markerUID); err != nil {
+		_ = sourceDirectory.Close()
+		return fmt.Errorf("clear copied backup marker from source: %w", err)
+	}
+	if err := sourceDirectory.Close(); err != nil {
+		return err
+	}
+	return markBackup(path, sourceIdentity.UID, markerUID)
+}
+
+func markBackup(path string, directoryUID, markerUID uint32) error {
 	directory, err := fsowner.OpenDirectory(path)
 	if err != nil {
 		return err
 	}
 	expected := directory.Identity()
-	if expected.Kind != fsowner.KindDirectory || expected.UID != requiredUID {
+	if expected.Kind != fsowner.KindDirectory || expected.UID != directoryUID {
 		_ = directory.Close()
-		return fmt.Errorf("ownership collision: backup is not an owned ordinary directory: %s", path)
+		return fmt.Errorf("ownership collision: backup does not preserve the source directory owner: %s", path)
+	}
+	if err := removeManagedBackupMarker(directory, path, markerUID); err != nil {
+		_ = directory.Close()
+		return fmt.Errorf("clear copied backup marker: %w", err)
 	}
 	if err := directory.Close(); err != nil {
 		return err
 	}
+	return writeBackupMarker(path, expected, markerUID)
+}
+
+func writeBackupMarker(path string, expected fsowner.Identity, markerUID uint32) error {
 	marker := filepath.Join(path, backupMarkerName)
 	fd, err := unix.Open(marker, unix.O_WRONLY|unix.O_CLOEXEC|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW, 0o600)
 	if err != nil {
@@ -1305,7 +1339,7 @@ func markBackup(path string, requiredUID uint32) error {
 	if actual != expected {
 		return fmt.Errorf("ownership collision: backup changed while marking: %s", path)
 	}
-	owned, err := hasOwnedBackupMarker(path, expected, requiredUID)
+	owned, err := hasOwnedBackupMarker(path, expected, markerUID)
 	if err != nil {
 		return err
 	}
@@ -1315,7 +1349,32 @@ func markBackup(path string, requiredUID uint32) error {
 	return nil
 }
 
-func hasOwnedBackupMarker(path string, expected fsowner.Identity, requiredUID uint32) (bool, error) {
+func removeManagedBackupMarker(directory *fsowner.Directory, path string, markerUID uint32) error {
+	marker := filepath.Join(path, backupMarkerName)
+	data, identity, err := readRegularNoFollowWithIdentity(marker)
+	if err != nil {
+		if errors.Is(err, unix.ENOENT) || os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("inspect backup ownership marker: %w", err)
+	}
+	if identity.UID != markerUID || identity.Links != 1 || identity.Kind != fsowner.KindRegular || identity.Mode&0o777 != 0o600 {
+		return fmt.Errorf("ownership collision: backup marker metadata is not private at %s", marker)
+	}
+	if !backupMarkerPayloadPattern.Match(data) {
+		return fmt.Errorf("ownership collision: backup marker payload is not managed at %s", marker)
+	}
+	entry, err := directory.Inspect(backupMarkerName)
+	if err != nil {
+		return err
+	}
+	if entry.Identity != identity {
+		return fmt.Errorf("ownership collision: backup marker changed before cleanup at %s", marker)
+	}
+	return directory.RemoveRegular(backupMarkerName, identity, fsowner.RemoveOptions{UID: markerUID})
+}
+
+func hasOwnedBackupMarker(path string, expected fsowner.Identity, markerUID uint32) (bool, error) {
 	marker := filepath.Join(path, backupMarkerName)
 	data, identity, err := readRegularNoFollowWithIdentity(marker)
 	if err != nil {
@@ -1324,7 +1383,7 @@ func hasOwnedBackupMarker(path string, expected fsowner.Identity, requiredUID ui
 		}
 		return false, fmt.Errorf("inspect backup ownership marker: %w", err)
 	}
-	if identity.UID != requiredUID || identity.Links != 1 || identity.Kind != fsowner.KindRegular || identity.Mode&0o777 != 0o600 {
+	if identity.UID != markerUID || identity.Links != 1 || identity.Kind != fsowner.KindRegular || identity.Mode&0o777 != 0o600 {
 		return false, fmt.Errorf("ownership collision: backup marker metadata is not private at %s", marker)
 	}
 	want := backupMarkerVersion + "\n" + expected.String() + "\n"
@@ -1793,7 +1852,7 @@ func publishPasswordHash(path, source, expectedText string, requiredUID uint32, 
 }
 
 func readRegularNoFollowWithIdentity(path string) ([]byte, fsowner.Identity, error) {
-	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, fsowner.Identity{}, err
 	}

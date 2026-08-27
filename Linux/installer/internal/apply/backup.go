@@ -91,7 +91,7 @@ func handlePreSwitchError(ctx context.Context, runner run.CommandRunner, dest, b
 		return cause
 	}
 	if err := restoreBackup(ctx, runner, dest, backupPath); err != nil {
-		return fmt.Errorf("%w; additionally failed to restore /etc/nixos from %s: %w; restore manually with: sudo rsync -a --delete %s/ %s/", cause, backupPath, err, backupPath, dest)
+		return fmt.Errorf("%w; additionally failed to restore /etc/nixos from %s: %w; restore manually with: sudo rsync -a --delete --delete-excluded --exclude=/.wahrwelt-backup-v1 %s/ %s/", cause, backupPath, err, backupPath, dest)
 	}
 	return fmt.Errorf("%w; restored /etc/nixos from %s", cause, backupPath)
 }
@@ -101,12 +101,12 @@ func restoreBackup(ctx context.Context, runner run.CommandRunner, dest, backupPa
 	if err := runner.Command(ctx, "sudo", "mkdir", "-p", dest); err != nil {
 		return err
 	}
-	return runner.Command(ctx, "sudo", "rsync", "-a", "--delete", backupPath+"/", dest+"/")
+	return runner.Command(ctx, "sudo", "rsync", "-a", "--delete", "--delete-excluded", "--exclude=/.wahrwelt-backup-v1", backupPath+"/", dest+"/")
 }
 
 func printRollbackHint(backupPath, dest string) {
 	if backupPath == "" {
 		return
 	}
-	fmt.Printf("WARN switch failed; state was not written. Restore manually with: sudo rsync -a --delete %s/ %s/\n", backupPath, dest)
+	fmt.Printf("WARN switch failed; state was not written. Restore manually with: sudo rsync -a --delete --delete-excluded --exclude=/.wahrwelt-backup-v1 %s/ %s/\n", backupPath, dest)
 }
