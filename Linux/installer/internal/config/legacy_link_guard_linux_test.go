@@ -1063,6 +1063,7 @@ func TestRenderedHomeManagerMigrationFinalVerifyRejectsLateLegacyNamespace(t *te
 			t.Fatal(err)
 		}
 	}
+	seedRenderedMigrationEvidence(t, stateHome)
 	legacyConfig := filepath.Join(configHome, "mysetup")
 	canonicalConfig := filepath.Join(configHome, "wahrwelt")
 	helperRoot := filepath.Join(t.TempDir(), "migration-helpers")
@@ -1115,6 +1116,7 @@ exec bash %q "$@"
 		os.Environ(),
 		"DRY_RUN_CMD=",
 		"oldGenPath=",
+		"XDG_RUNTIME_DIR=",
 		"WAHRWELT_LATE_NAMESPACE="+legacyConfig,
 		"WAHRWELT_LATE_MARKER="+lateMarker,
 	)
@@ -1143,6 +1145,7 @@ func TestRenderedHomeManagerMigrationFinalVerifyRejectsLateLegacyLink(t *testing
 			t.Fatal(err)
 		}
 	}
+	seedRenderedMigrationEvidence(t, stateHome)
 	legacyLink := filepath.Join(configHome, "hypr", "lib", "mysetup.lua")
 	helperRoot := filepath.Join(t.TempDir(), "migration-helpers")
 	if err := os.MkdirAll(filepath.Join(helperRoot, "bin"), 0o700); err != nil {
@@ -1191,6 +1194,7 @@ exec bash %q "$@"
 		os.Environ(),
 		"DRY_RUN_CMD=",
 		"oldGenPath=",
+		"XDG_RUNTIME_DIR=",
 		"WAHRWELT_LATE_LINK="+legacyLink,
 		"WAHRWELT_LATE_LINK_SEEN="+seenMarker,
 	)
@@ -1216,6 +1220,7 @@ func TestRenderedHomeManagerMigrationFinalVerifyRejectsLateLegacyMarker(t *testi
 			t.Fatal(err)
 		}
 	}
+	seedRenderedMigrationEvidence(t, stateHome)
 	lateMarker := filepath.Join(configHome, "late-app", ".mysetup-managed.json")
 	helperRoot := filepath.Join(t.TempDir(), "migration-helpers")
 	if err := os.MkdirAll(filepath.Join(helperRoot, "bin"), 0o700); err != nil {
@@ -1257,6 +1262,7 @@ exec bash %q "$@"
 		os.Environ(),
 		"DRY_RUN_CMD=",
 		"oldGenPath=",
+		"XDG_RUNTIME_DIR=",
 		"WAHRWELT_LATE_MARKER="+lateMarker,
 	)
 	output, err := cmd.CombinedOutput()
@@ -1276,6 +1282,13 @@ func writeMigrationTestWrapper(t *testing.T, path, source string) {
 	t.Helper()
 	wrapper := fmt.Sprintf("#!/usr/bin/env bash\nexec bash %q \"$@\"\n", source)
 	if err := os.WriteFile(path, []byte(wrapper), 0o700); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func seedRenderedMigrationEvidence(t *testing.T, stateHome string) {
+	t.Helper()
+	if err := os.Mkdir(filepath.Join(stateHome, "mysetup"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 }

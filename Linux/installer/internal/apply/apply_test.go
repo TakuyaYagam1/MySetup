@@ -48,6 +48,9 @@ func (f *fakeRunner) OutputInPinnedDirectory(ctx context.Context, directory *os.
 			return "", err
 		}
 	}
+	if isNixFlakeUpdate(name, args) {
+		return "", nil
+	}
 	if f.output != "" {
 		return f.output, nil
 	}
@@ -95,6 +98,18 @@ func runValidatedStagingTestOutput(ctx context.Context, name string, args ...str
 
 func runValidatedStagingPinnedOutput(ctx context.Context, directory *os.File, name string, args ...string) (string, error) {
 	return run.Runner{Stdout: io.Discard, Stderr: io.Discard}.OutputInPinnedDirectory(ctx, directory, name, args...)
+}
+
+func isNixFlakeUpdate(name string, args []string) bool {
+	if filepath.Base(name) != "nix" {
+		return false
+	}
+	for index := 0; index+1 < len(args); index++ {
+		if args[index] == "flake" && args[index+1] == "update" {
+			return true
+		}
+	}
+	return false
 }
 
 func validState() config.State {

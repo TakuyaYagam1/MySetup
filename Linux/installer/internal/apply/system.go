@@ -147,8 +147,21 @@ func lockStagingFlake(ctx context.Context, runner run.CommandRunner, staging str
 	if lockMode == LockModeManaged {
 		args = append(args, "wahrwelt")
 	}
-	args = append(args, "--flake", "path:"+staging)
-	return runner.Command(ctx, "nix", args...)
+	args = append(args, "--flake", "path:.")
+	if runner.IsDryRun() {
+		return runner.Command(ctx, "nix", args...)
+	}
+	pinnedRunner, ok := runner.(run.PinnedDirectoryOutputRunner)
+	if !ok {
+		return fmt.Errorf("flake lock runner cannot use a pinned staging directory")
+	}
+	stagingDirectory, err := openValidationDirectory(staging)
+	if err != nil {
+		return err
+	}
+	defer closeFile(stagingDirectory)
+	_, err = pinnedRunner.OutputInPinnedDirectory(ctx, stagingDirectory, "nix", args...)
+	return err
 }
 
 func preserveHardware(ctx context.Context, runner run.CommandRunner, dest string) error {

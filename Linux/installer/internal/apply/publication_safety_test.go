@@ -67,6 +67,9 @@ func (r *publicationRaceRunner) Output(ctx context.Context, name string, args ..
 }
 
 func (r *publicationRaceRunner) OutputInPinnedDirectory(ctx context.Context, directory *os.File, name string, args ...string) (string, error) {
+	if isNixFlakeUpdate(name, args) {
+		return "", nil
+	}
 	if err := r.race(); err != nil {
 		return "", err
 	}
@@ -130,6 +133,9 @@ func (r *validatedStagingMutationRunner) Output(ctx context.Context, name string
 }
 
 func (r *validatedStagingMutationRunner) OutputInPinnedDirectory(ctx context.Context, directory *os.File, name string, args ...string) (string, error) {
+	if isNixFlakeUpdate(name, args) {
+		return "", nil
+	}
 	return run.Runner{Stdout: io.Discard, Stderr: io.Discard}.OutputInPinnedDirectory(ctx, directory, name, args...)
 }
 
@@ -534,6 +540,47 @@ func TestValidatedStagingArchivesPinnedDirectoryInsteadOfProcDescriptorSymlink(t
 	}
 	if _, err := os.Lstat(filepath.Join(validated.path, "winner.txt")); !os.IsNotExist(err) {
 		t.Fatalf("public replacement entered validated store tree: %v", err)
+	}
+}
+
+func TestLockStagingFlakeUpdatesThroughPinnedWorkingDirectory(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skip("nix is unavailable")
+	}
+	staging := t.TempDir()
+	fixture := filepath.Join(staging, "fixture")
+	if err := os.Mkdir(fixture, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fixture, "flake.nix"), []byte("{ outputs = { self }: { }; }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	flake := `{
+  inputs.fixture.url = "path:./fixture";
+  outputs = { self, fixture }: { };
+}
+`
+	if err := os.WriteFile(filepath.Join(staging, "flake.nix"), []byte(flake), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	directory, err := os.Open(staging)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer directory.Close()
+
+	err = lockStagingFlake(
+		context.Background(),
+		run.Runner{Stdout: io.Discard, Stderr: io.Discard},
+		fileDescriptorPath(directory),
+		LayoutThin,
+		LockModeIndependent,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(staging, "flake.lock")); err != nil {
+		t.Fatalf("flake.lock was not written to pinned staging: %v", err)
 	}
 }
 

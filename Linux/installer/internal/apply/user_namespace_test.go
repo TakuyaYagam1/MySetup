@@ -2349,6 +2349,9 @@ func outputPinnedAndRecord(
 	args ...string,
 ) (string, error) {
 	*calls = append(*calls, fakeCall{name: name, args: append([]string(nil), args...)})
+	if isNixFlakeUpdate(name, args) {
+		return "", nil
+	}
 	return runValidatedStagingPinnedOutput(ctx, directory, name, args...)
 }
 
