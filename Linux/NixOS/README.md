@@ -9,6 +9,9 @@ Home Manager owns the stable `~/.config/hypr` entrypoints, canonical Lua
 modules, executable shell scripts, top-level shared rules, selector assets,
 transition assets, `end4-adapter.lua`, and one shared validated `hypr/end4`
 tree. Managed paths are store links and should be changed in this repository.
+During an update of an established graphical preset, the installer does not
+mirror over those live links before `nixos-rebuild switch`; Home Manager
+replaces the generation as one activation boundary.
 
 The runtime owns writable profile files under
 `$XDG_STATE_HOME/wahrwelt/hypr-runtime` and the active profile state under

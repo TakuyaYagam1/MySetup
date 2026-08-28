@@ -21,8 +21,18 @@ func syncHypr(ctx context.Context, runner run.CommandRunner, dotsSrc, configDir 
 	}
 	dst := filepath.Join(configDir, "hypr")
 	home := homeDirFromConfigDir(configDir)
-	activeProfile := bootstrapActiveShellForUpgrade(home, dst)
+	homeManagerOwnsStaticTree, err := activeHomeManagerOwnsHyprStaticTree(home, dst, state.Packages.Preset)
+	if err != nil {
+		return err
+	}
 
+	// Keep the active Home Manager generation coherent until linkGeneration
+	// replaces its immutable links. Hyprland reloads Lua as watched files change.
+	if homeManagerOwnsStaticTree {
+		return nil
+	}
+
+	activeProfile := bootstrapActiveShellForUpgrade(home, dst)
 	if err := prepareHyprDestination(ctx, runner, dst, state.User.Username); err != nil {
 		return err
 	}
@@ -42,6 +52,97 @@ func syncHypr(ctx context.Context, runner run.CommandRunner, dotsSrc, configDir 
 		return err
 	}
 	return nil
+}
+
+func activeHomeManagerOwnsHyprStaticTree(home, hyprDir, preset string) (bool, error) {
+	if !homeManagerOwnsHyprStaticTreeForPreset(preset) {
+		return false, nil
+	}
+
+	rootInfo, err := os.Lstat(hyprDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("inspect active Hypr directory %s: %w", hyprDir, err)
+	}
+	if rootInfo.Mode()&os.ModeSymlink != 0 || !rootInfo.IsDir() {
+		return false, nil
+	}
+
+	entrypoint := filepath.Join(hyprDir, "hyprland.lua")
+	entrypointInfo, err := os.Lstat(entrypoint)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("inspect active Home Manager Hypr entrypoint %s: %w", entrypoint, err)
+	}
+	if entrypointInfo.Mode()&os.ModeSymlink == 0 {
+		return false, nil
+	}
+	linkTarget, err := os.Readlink(entrypoint)
+	if err != nil {
+		return false, fmt.Errorf("read active Home Manager Hypr entrypoint %s: %w", entrypoint, err)
+	}
+	managedTarget, ok := managedHomeManagerTopLevelRuntimeTarget(home, entrypoint, linkTarget)
+	if !ok {
+		return false, nil
+	}
+
+	expectedTarget, ok, err := activeHomeManagerHyprEntrypointTarget(home)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return false, fmt.Errorf("active Hypr entrypoint is Home Manager-owned but the current Home Manager generation is unavailable: %s", entrypoint)
+	}
+	if managedTarget != expectedTarget {
+		return false, fmt.Errorf("active Hypr entrypoint does not belong to the current Home Manager generation: %s", entrypoint)
+	}
+	content, _, err := readRegularFileNoFollowResolved(managedTarget)
+	if err != nil {
+		return false, fmt.Errorf("read active Home Manager Hypr entrypoint %s: %w", managedTarget, err)
+	}
+	return isKnownTopLevelRuntimeEntrypoint(runtimePathSnapshot{
+		kind:    runtimeSnapshotRegular,
+		content: content,
+	}, home), nil
+}
+
+func homeManagerOwnsHyprStaticTreeForPreset(preset string) bool {
+	switch preset {
+	case "desktop", "developer", "personal":
+		return true
+	default:
+		return false
+	}
+}
+
+func activeHomeManagerHyprEntrypointTarget(home string) (string, bool, error) {
+	currentHome := filepath.Join(home, ".local", "state", "home-manager", "gcroots", "current-home")
+	currentHomeInfo, err := os.Lstat(currentHome)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("inspect active Home Manager generation %s: %w", currentHome, err)
+	}
+	if currentHomeInfo.Mode()&os.ModeSymlink == 0 {
+		return "", false, nil
+	}
+	homeFiles, err := filepath.EvalSymlinks(filepath.Join(currentHome, "home-files"))
+	if err != nil {
+		return "", false, fmt.Errorf("resolve active Home Manager files from %s: %w", currentHome, err)
+	}
+	if !filepath.IsAbs(homeFiles) {
+		return "", false, nil
+	}
+	expectedTarget := filepath.Join(homeFiles, ".config", "hypr", "hyprland.lua")
+	if !isImmutableNixStoreHomeManagerHyprTarget(expectedTarget, "hyprland.lua") {
+		return "", false, nil
+	}
+	return expectedTarget, true, nil
 }
 
 func validateHyprSource(src string) error {
@@ -66,6 +167,7 @@ func requiredHyprSourceFiles() []string {
 	files = append(files,
 		"hyprland.lua",
 		"end4-adapter.lua",
+		"vm-keybinds.lua",
 		filepath.Join("hyprland", "input.lua"),
 		filepath.Join("hyprland", "keybinds.lua"),
 		"shell-common-keybinds.lua",

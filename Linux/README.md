@@ -452,8 +452,11 @@ The shell stack is intentionally split:
 
 Ownership contract:
 
-- Installer owns first-apply user dotfile sync, unmanaged backups, executable
-  bits for Hypr scripts, and immediate runtime bootstrap.
+- Installer owns first-apply, legacy, and `minimal` user dotfile sync,
+  unmanaged backups, executable bits for Hypr scripts, and immediate runtime
+  bootstrap. On an established `desktop`, `developer`, or `personal` Home
+  Manager tree, it leaves the active generation untouched until the rebuild;
+  Home Manager publishes the new coherent tree during activation.
 - Home Manager owns stable Hypr entrypoints, managed Hypr scripts, shell
   selector and transition assets, and shell profile metadata after rebuild.
 - Runtime shell scripts own mutable files under `$XDG_STATE_HOME/wahrwelt` and
