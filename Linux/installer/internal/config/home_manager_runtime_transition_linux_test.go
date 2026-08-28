@@ -1484,6 +1484,29 @@ func TestRenderedHomeManagerLiveSyncBuildsExactSessionEnvironmentWithoutMigratio
 	commandLog := filepath.Join(dir, "live-commands")
 	signature := "abcdef0123456789_1234567890_987654321"
 	runtimeDir := fmt.Sprintf("/run/user/%d", os.Getuid())
+	pythonPackage := filepath.Join(dir, "python-package")
+	fsHelperPackage := filepath.Join(dir, "fs-helper-package")
+	for _, path := range []string{
+		filepath.Join(pythonPackage, "bin"),
+		filepath.Join(fsHelperPackage, "bin"),
+	} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pythonPath := filepath.Join(pythonPackage, "bin", "python3")
+	hostPython, err := exec.LookPath("python3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pythonWrapper := fmt.Sprintf("#!/usr/bin/env bash\nexec %q \"$@\"\n", hostPython)
+	if err := os.WriteFile(pythonPath, []byte(pythonWrapper), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	fsHelperPath := filepath.Join(fsHelperPackage, "bin", "wahrwelt-fs-helper")
+	if err := os.WriteFile(fsHelperPath, []byte("#!/usr/bin/env bash\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	hyprlandPackage := filepath.Join(dir, "hyprland-package")
 	if err := os.MkdirAll(filepath.Join(hyprlandPackage, "bin"), 0o700); err != nil {
 		t.Fatal(err)
@@ -1548,37 +1571,204 @@ set -euo pipefail
 [ "${XDG_RUNTIME_DIR:-}" = "$EXPECTED_RUNTIME_DIR" ]
 [ "${DBUS_SESSION_BUS_ADDRESS:-}" = "unix:path=$EXPECTED_RUNTIME_DIR/bus" ]
 [ "${HYPRLAND_INSTANCE_SIGNATURE:-}" = "$EXPECTED_SIGNATURE" ]
+actual_python="$(command -v python3 || true)"
+[ "$actual_python" = "$EXPECTED_BOOTSTRAP_PYTHON" ] || {
+  printf 'bootstrap python mismatch: got=%s want=%s\n' "$actual_python" "$EXPECTED_BOOTSTRAP_PYTHON" >&2
+  exit 70
+}
+[ "${WAHRWELT_FS_HELPER:-}" = "$EXPECTED_FS_HELPER" ] || {
+  printf 'bootstrap fs helper mismatch: got=%s want=%s\n' "${WAHRWELT_FS_HELPER:-}" "$EXPECTED_FS_HELPER" >&2
+  exit 71
+}
+[ -x "$WAHRWELT_FS_HELPER" ] || {
+  printf 'bootstrap fs helper is not executable: %s\n' "$WAHRWELT_FS_HELPER" >&2
+  exit 72
+}
 printf '%s\n' session-ready >>"$LIVE_COMMAND_LOG"
 `
 	if err := os.WriteFile(startShell, []byte(startShellScript), 0o700); err != nil {
 		t.Fatal(err)
 	}
 
-	rendered := renderHomeManagerShellActivationForTest(
+	rendered := renderHomeManagerShellActivationWithBootstrapForTest(
 		t,
 		configHome,
 		stateHome,
 		absoluteTestPath(t, "../../../dots"),
 		hyprlandPackage,
 		systemdPackage,
+		pythonPackage,
+		fsHelperPackage,
 	)
 	cmd := exec.Command("bash", "-euo", "pipefail", "-c", rendered)
 	cmd.Env = []string{
 		"HOME=" + home,
 		"USER=tester",
 		"LOGNAME=tester",
-		"PATH=" + pathWithoutCommandsForTest(t, "hyprctl", "awk", "jq"),
+		"PATH=" + pathWithoutCommandsForTest(t, "hyprctl", "awk", "jq", "python3", "wahrwelt-fs-helper"),
 		"DRY_RUN_CMD=",
 		"LIVE_COMMAND_LOG=" + commandLog,
 		"WAYLAND_DISPLAY=wayland-test",
 		"EXPECTED_RUNTIME_DIR=" + runtimeDir,
 		"EXPECTED_SIGNATURE=" + signature,
+		"EXPECTED_BOOTSTRAP_PYTHON=" + pythonPath,
+		"EXPECTED_FS_HELPER=" + fsHelperPath,
 	}
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("normal Home Manager live sync did not build its exact session environment: %v\n%s", err, output)
 	}
 	if got := strings.TrimSpace(readContractFile(t, commandLog)); got != "session-ready" {
 		t.Fatalf("normal Home Manager live sync did not launch the shell in the selected session: %q", got)
+	}
+}
+
+func TestRenderedHomeManagerLiveSyncFailuresAreWarningsAfterSeed(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skipf("nix is unavailable: %v", err)
+	}
+	tests := []struct {
+		name        string
+		failure     string
+		wantWarning string
+	}{
+		{
+			name:        "version query",
+			failure:     "version",
+			wantWarning: "Failed to query the selected Hyprland instance",
+		},
+		{
+			name:        "reload",
+			failure:     "reload",
+			wantWarning: "Failed to reload the active Hyprland configuration",
+		},
+		{
+			name:        "shell start",
+			failure:     "start-shell",
+			wantWarning: "Failed to start the configured Wahrwelt shell profile",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			home := filepath.Join(dir, "home")
+			configHome := filepath.Join(home, ".config")
+			stateHome := filepath.Join(home, ".local", "state")
+			for _, path := range []string{home, configHome, stateHome} {
+				if err := os.MkdirAll(path, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			hyprlandPackage := filepath.Join(dir, "hyprland-package")
+			if err := os.MkdirAll(filepath.Join(hyprlandPackage, "bin"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			hyprctl := filepath.Join(hyprlandPackage, "bin", "hyprctl")
+			hyprctlScript := `#!/usr/bin/env bash
+set -euo pipefail
+if [ "${1:-}" = -i ]; then
+  shift 2
+fi
+case "$*" in
+  '-j instances')
+    printf '%s\n' '[{"instance":"abcdef0123456789_1234567890_987654321","time":1234567890,"pid":4242,"wl_socket":"wayland-test"}]'
+    ;;
+  version)
+    if [ "$FAIL_POINT" = version ]; then
+      exit 72
+    fi
+    printf '%s\n' 'Hyprland 0.55.0'
+    ;;
+  reload)
+    if [ "$FAIL_POINT" = reload ]; then
+      printf '%s\n' 'simulated live Hyprland reload failure' >&2
+      exit 73
+    fi
+    ;;
+  *) exit 64 ;;
+esac
+`
+			if err := os.WriteFile(hyprctl, []byte(hyprctlScript), 0o700); err != nil {
+				t.Fatal(err)
+			}
+
+			systemdPackage := filepath.Join(dir, "systemd-package")
+			if err := os.MkdirAll(filepath.Join(systemdPackage, "bin"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			systemdRun := filepath.Join(systemdPackage, "bin", "systemd-run")
+			systemdRunScript := `#!/usr/bin/env bash
+set -euo pipefail
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = -- ]; then
+    shift
+    break
+  fi
+  shift
+done
+exec "$@"
+`
+			if err := os.WriteFile(systemdRun, []byte(systemdRunScript), 0o700); err != nil {
+				t.Fatal(err)
+			}
+
+			scriptsDir := filepath.Join(configHome, "hypr", "scripts")
+			if err := os.MkdirAll(scriptsDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			startShell := filepath.Join(scriptsDir, "start-shell.sh")
+			startShellScript := `#!/usr/bin/env bash
+if [ "$FAIL_POINT" = start-shell ]; then
+  printf '%s\n' 'simulated live shell bootstrap failure' >&2
+  exit 74
+fi
+`
+			if err := os.WriteFile(startShell, []byte(startShellScript), 0o700); err != nil {
+				t.Fatal(err)
+			}
+
+			rendered := renderHomeManagerShellActivationForTest(
+				t,
+				configHome,
+				stateHome,
+				absoluteTestPath(t, "../../../dots"),
+				hyprlandPackage,
+				systemdPackage,
+			)
+			cmd := exec.Command("bash", "-euo", "pipefail", "-c", rendered)
+			cmd.Env = []string{
+				"HOME=" + home,
+				"USER=tester",
+				"LOGNAME=tester",
+				"PATH=" + pathWithoutCommandsForTest(t, "hyprctl", "awk", "jq"),
+				"DRY_RUN_CMD=",
+				"WAYLAND_DISPLAY=wayland-test",
+				"FAIL_POINT=" + test.failure,
+			}
+			output, runErr := cmd.CombinedOutput()
+			seededRuntime := readContractFile(
+				t,
+				filepath.Join(stateHome, "wahrwelt", "hypr-runtime", "hyprland.lua"),
+			)
+			if !strings.Contains(seededRuntime, "Wahrwelt canonical Hyprland runtime entrypoint") {
+				t.Fatalf("persistent runtime seed did not complete before live sync:\n%s", seededRuntime)
+			}
+			seededProfile := readContractFile(
+				t,
+				filepath.Join(stateHome, "wahrwelt", "hypr-runtime", "shell-profile.lua"),
+			)
+			if !strings.Contains(seededProfile, "Runtime shell launcher") {
+				t.Fatalf("persistent runtime bundle did not complete before live sync:\n%s", seededProfile)
+			}
+			if runErr != nil {
+				t.Fatalf("best-effort %s failure aborted Home Manager activation: %v\n%s", test.failure, runErr, output)
+			}
+			if !strings.Contains(string(output), "WARN") ||
+				!strings.Contains(string(output), test.wantWarning) {
+				t.Fatalf("best-effort %s failure was not reported as WARN:\n%s", test.failure, output)
+			}
+		})
 	}
 }
 
@@ -1956,6 +2146,24 @@ func renderHomeManagerShellActivationForTest(
 	configHome, stateHome, dots, hyprlandPackage, systemdPackage string,
 ) string {
 	t.Helper()
+	return renderHomeManagerShellActivationWithBootstrapForTest(
+		t,
+		configHome,
+		stateHome,
+		dots,
+		hyprlandPackage,
+		systemdPackage,
+		"/usr",
+		"/usr",
+	)
+}
+
+func renderHomeManagerShellActivationWithBootstrapForTest(
+	t *testing.T,
+	configHome, stateHome, dots, hyprlandPackage, systemdPackage string,
+	pythonPackage, fsHelperPackage string,
+) string {
+	t.Helper()
 	modulePath := absoluteTestPath(t, "../../../NixOS/home/shells/default.nix")
 	helperRoot := t.TempDir()
 	bin := filepath.Join(helperRoot, "bin")
@@ -1967,6 +2175,18 @@ func renderHomeManagerShellActivationForTest(
 		filepath.Join(bin, "wahrwelt-runtime-activation"),
 		absoluteTestPath(t, runtimeActivationHelper),
 	)
+	runtimeActivationWrapper := fmt.Sprintf(
+		"#!/usr/bin/env bash\nexport PATH=%q:\"$PATH\"\nexec bash %q \"$@\"\n",
+		filepath.Join(pythonPackage, "bin"),
+		absoluteTestPath(t, runtimeActivationHelper),
+	)
+	if err := os.WriteFile(
+		filepath.Join(bin, "wahrwelt-runtime-activation"),
+		[]byte(runtimeActivationWrapper),
+		0o700,
+	); err != nil {
+		t.Fatal(err)
+	}
 	expression := fmt.Sprintf(`
 let
   config = {
@@ -1974,16 +2194,18 @@ let
     xdg.stateHome = %q;
   };
   homeLibs.dotfiles.dotsRoot = builtins.toPath %q;
-  inputs = {};
+  inputs.self.packages."test-system"."wahrwelt-fs-helper" = %q;
   lib.hm.dag.entryAfter = _: text: text;
   pkgs = {
-    bash = "/usr";
+    bash = %q;
     coreutils = %q;
+    dbus = %q;
     diffutils = %q;
     gawk = %q;
     jq = %q;
     hyprland = builtins.path { path = builtins.toPath %q; name = "hyprland-live-sync-test"; };
-    python3 = "/usr";
+    python3 = %q;
+    stdenv.hostPlatform.system = "test-system";
     systemd = builtins.path { path = builtins.toPath %q; name = "systemd-live-sync-test"; };
     util-linux = %q;
     writeShellApplication = _: %q;
@@ -1992,11 +2214,15 @@ let
   module = import (builtins.toPath %q) { inherit config homeLibs inputs lib pkgs; };
 in module.home.activation.seedHyprShellRuntime + "\n" + module.home.activation.liveSyncHyprShell
 	`, configHome, stateHome, dots,
+		fsHelperPackage,
+		resolvedCommandPackageRoot(t, "bash"),
 		resolvedCommandPackageRoot(t, "mkdir"),
+		resolvedCommandPackageRoot(t, "dbus-update-activation-environment"),
 		resolvedCommandPackageRoot(t, "cmp"),
 		resolvedCommandPackageRoot(t, "awk"),
 		resolvedCommandPackageRoot(t, "jq"),
 		hyprlandPackage,
+		pythonPackage,
 		systemdPackage,
 		resolvedCommandPackageRoot(t, "setsid"),
 		helperRoot, modulePath)

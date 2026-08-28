@@ -155,6 +155,17 @@ let
 
   wahrweltFsHelper = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.wahrwelt-fs-helper;
 
+  liveShellBootstrapPath = builtins.concatStringsSep ":" [
+    "${pkgs.bash}/bin"
+    "${pkgs.coreutils}/bin"
+    "${pkgs.dbus}/bin"
+    "${pkgs.diffutils}/bin"
+    "${pkgs.python3}/bin"
+    "${pkgs.systemd}/bin"
+    "${pkgs.util-linux}/bin"
+    "${wahrweltFsHelper}/bin"
+  ];
+
   canonicalHyprRuntime = pkgs.writeText "wahrwelt-hypr-runtime-default" ''
     -- Wahrwelt canonical Hyprland runtime entrypoint
     local home = os.getenv("HOME")
@@ -512,6 +523,8 @@ in
             live_session_env=(
               "${pkgs.coreutils}/bin/env"
               "HYPRLAND_INSTANCE_SIGNATURE=$hypr_instance_signature"
+              "PATH=${liveShellBootstrapPath}:$PATH"
+              "WAHRWELT_FS_HELPER=${wahrweltFsHelper}/bin/wahrwelt-fs-helper"
             )
             if [ -n "$hypr_instance_signature" ] && \
               [ -z "''${wahrwelt_direct_end4_process_runtime_hex:-}" ]; then
@@ -532,53 +545,53 @@ in
                 run_live_hypr_command version 2>/dev/null \
                   | ${pkgs.gawk}/bin/awk 'NR == 1 { print $2 }'
               )"; then
-                echo "Failed to query the selected Hyprland instance" >&2
-                exit 1
-              fi
-              hypr_version="''${hypr_version#v}"
-              hypr_major="''${hypr_version%%.*}"
-              hypr_rest="''${hypr_version#*.}"
-              hypr_minor="''${hypr_rest%%.*}"
-
-              case "$hypr_major" in
-                "" | *[!0-9]*)
-                  hypr_major=0
-                  ;;
-              esac
-              case "$hypr_minor" in
-                "" | *[!0-9]*)
-                  hypr_minor=0
-                  ;;
-              esac
-
-              if [ "$hypr_major" -gt 0 ] || [ "$hypr_minor" -ge 55 ]; then
-                if ! run_live_hypr_command reload; then
-                  echo "Failed to reload the active Hyprland configuration" >&2
-                  exit 1
-                fi
-                if run_live_shell_command \
-                  "''${live_session_env[@]}" \
-                  "${pkgs.util-linux}/bin/setsid" \
-                  "${pkgs.systemd}/bin/systemd-run" \
-                  --user \
-                  --scope \
-                  --collect \
-                  --quiet \
-                  -- \
-                  "${config.xdg.configHome}/hypr/scripts/start-shell.sh"; then
-                  start_shell_status=0
-                else
-                  start_shell_status=$?
-                fi
-                if [ "$start_shell_status" -ne 0 ]; then
-                  echo "Failed to start the configured Wahrwelt shell profile" >&2
-                  exit 1
-                fi
-                wahrwelt_direct_end4_process_upgrade=""
-                wahrwelt_direct_end4_process_runtime_hex=""
-                wahrwelt_direct_end4_process_runtime_id=""
+                echo "WARN Failed to query the selected Hyprland instance; persistent configuration is installed. Logout or reboot to activate it." >&2
               else
-                echo "Skipping live Hyprland reload; running Hyprland $hypr_version cannot load Lua runtime. Logout or reboot after switch." >&2
+                hypr_version="''${hypr_version#v}"
+                hypr_major="''${hypr_version%%.*}"
+                hypr_rest="''${hypr_version#*.}"
+                hypr_minor="''${hypr_rest%%.*}"
+
+                case "$hypr_major" in
+                  "" | *[!0-9]*)
+                    hypr_major=0
+                    ;;
+                esac
+                case "$hypr_minor" in
+                  "" | *[!0-9]*)
+                    hypr_minor=0
+                    ;;
+                esac
+
+                if [ "$hypr_major" -gt 0 ] || [ "$hypr_minor" -ge 55 ]; then
+                  if ! run_live_hypr_command reload; then
+                    echo "WARN Failed to reload the active Hyprland configuration; persistent configuration is installed. Logout or reboot to activate it." >&2
+                  else
+                    if run_live_shell_command \
+                      "''${live_session_env[@]}" \
+                      "${pkgs.util-linux}/bin/setsid" \
+                      "${pkgs.systemd}/bin/systemd-run" \
+                      --user \
+                      --scope \
+                      --collect \
+                      --quiet \
+                      -- \
+                      "${config.xdg.configHome}/hypr/scripts/start-shell.sh"; then
+                      start_shell_status=0
+                    else
+                      start_shell_status=$?
+                    fi
+                    if [ "$start_shell_status" -ne 0 ]; then
+                      echo "WARN Failed to start the configured Wahrwelt shell profile (status $start_shell_status); persistent configuration is installed. Retry the shell switch or logout/reboot." >&2
+                    else
+                      wahrwelt_direct_end4_process_upgrade=""
+                      wahrwelt_direct_end4_process_runtime_hex=""
+                      wahrwelt_direct_end4_process_runtime_id=""
+                    fi
+                  fi
+                else
+                  echo "Skipping live Hyprland reload; running Hyprland $hypr_version cannot load Lua runtime. Logout or reboot after switch." >&2
+                fi
               fi
             fi
           '';
