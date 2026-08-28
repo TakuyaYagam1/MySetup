@@ -11,6 +11,7 @@ ShellRoot {
   id: root
 
   property var expectedScreens: []
+  readonly property string targetProfile: Quickshell.env("WAHRWELT_SHELL_TRANSITION_TARGET_PROFILE") || ""
   property real outgoingProgress: 0.0
   property real bridgeProgress: 0.0
   property real incomingProgress: 0.0
@@ -18,6 +19,9 @@ ShellRoot {
   property bool settleFenceArmed: false
 
   readonly property string transitionState: controller.state
+  readonly property int bridgePulseCount: controller.transitionModel
+    ? controller.transitionModel.bridgePulseCount
+    : 0
   readonly property bool surfaceVisible: transitionState === "capturing"
     || transitionState === "captured"
     || transitionState === "outgoing"
@@ -66,17 +70,31 @@ ShellRoot {
     outgoingProgress = 0.0;
     bridgeProgress = 0.0;
     incomingProgress = 0.0;
-    transitionAnimation.restart();
+    outgoingAnimation.restart();
   }
 
   function enterCoveredBridge() {
     coverFenceArmed = true;
   }
 
+  function beginCoveredBridge() {
+    if (transitionState !== "covered") {
+      abort();
+      return;
+    }
+
+    bridgeProgress = 0.0;
+    bridgeAnimation.restart();
+  }
+
   function enterIncoming() {
     if (!controller.beginIncoming()) {
       abort();
+      return;
     }
+
+    incomingProgress = 0.0;
+    incomingAnimation.restart();
   }
 
   function enterSettling() {
@@ -89,7 +107,9 @@ ShellRoot {
   }
 
   function abort() {
-    transitionAnimation.stop();
+    outgoingAnimation.stop();
+    bridgeAnimation.stop();
+    incomingAnimation.stop();
     coverFenceArmed = false;
     settleFenceArmed = false;
     controller.abort();
@@ -97,12 +117,13 @@ ShellRoot {
 
   TransitionController {
     id: controller
+    onCoveredReady: root.beginCoveredBridge()
     onExitRequested: Qt.callLater(() => Qt.quit())
   }
 
   Component.onCompleted: {
     const screens = (Quickshell.screens || []).slice();
-    controller.initialize(screenNames(screens));
+    controller.initialize(screenNames(screens), targetProfile);
     expectedScreens = screens;
   }
 
@@ -133,53 +154,43 @@ ShellRoot {
     }
   }
 
-  SequentialAnimation {
-    id: transitionAnimation
+  NumberAnimation {
+    id: outgoingAnimation
+    target: root
+    property: "outgoingProgress"
+    from: 0.0
+    to: 1.0
+    duration: controller.transitionModel
+      ? controller.transitionModel.outgoingDurationMs
+      : 3000
+    easing.type: Easing.InOutCubic
+    onFinished: root.enterCoveredBridge()
+  }
 
-    NumberAnimation {
-      target: root
-      property: "outgoingProgress"
-      from: 0.0
-      to: 1.0
-      duration: controller.transitionModel
-        ? controller.transitionModel.outgoingDurationMs
-        : 3000
-      easing.type: Easing.InOutCubic
-    }
+  NumberAnimation {
+    id: bridgeAnimation
+    target: root
+    property: "bridgeProgress"
+    from: 0.0
+    to: 1.0
+    duration: controller.transitionModel
+      ? controller.transitionModel.bridgeDurationMs
+      : 0
+    easing.type: Easing.Linear
+    onFinished: root.enterIncoming()
+  }
 
-    ScriptAction {
-      script: root.enterCoveredBridge()
-    }
-
-    NumberAnimation {
-      target: root
-      property: "bridgeProgress"
-      from: 0.0
-      to: 1.0
-      duration: controller.transitionModel
-        ? controller.transitionModel.bridgeDurationMs
-        : 4000
-      easing.type: Easing.Linear
-    }
-
-    ScriptAction {
-      script: root.enterIncoming()
-    }
-
-    NumberAnimation {
-      target: root
-      property: "incomingProgress"
-      from: 0.0
-      to: 1.0
-      duration: (controller.transitionModel
-        ? controller.transitionModel.incomingDurationMs
-        : 3000)
-      easing.type: Easing.InOutCubic
-    }
-
-    ScriptAction {
-      script: root.enterSettling()
-    }
+  NumberAnimation {
+    id: incomingAnimation
+    target: root
+    property: "incomingProgress"
+    from: 0.0
+    to: 1.0
+    duration: controller.transitionModel
+      ? controller.transitionModel.incomingDurationMs
+      : 3000
+    easing.type: Easing.InOutCubic
+    onFinished: root.enterSettling()
   }
 
   Timer {
@@ -250,7 +261,8 @@ ShellRoot {
         anchors.fill: parent
 
         readonly property real pulse: 0.5
-          - 0.5 * Math.cos(root.bridgeProgress * Math.PI * 8.0)
+          - 0.5 * Math.cos(root.bridgeProgress * Math.PI * 2.0
+            * root.bridgePulseCount)
 
         Rectangle {
           anchors.fill: parent

@@ -1,9 +1,21 @@
 var DEFAULT_OUTGOING_DURATION_MS = 3000;
-var DEFAULT_BRIDGE_DURATION_MS = 4000;
+var NORMAL_BRIDGE_DURATION_MS = 3000;
+var END4_BRIDGE_DURATION_MS = 5000;
 var DEFAULT_INCOMING_DURATION_MS = 3000;
 var CAPTURE_TIMEOUT_MS = 5000;
 var CAPTURED_TIMEOUT_MS = 1000;
+var COVER_FENCE_MARGIN_MS = 1000;
 var CLEANUP_MARGIN_MS = 750;
+
+function bridgeDurationMs(targetProfile) {
+  if (targetProfile === "caelestia" || targetProfile === "noctalia") {
+    return NORMAL_BRIDGE_DURATION_MS;
+  }
+  if (targetProfile === "end4" || targetProfile === "end4-pc") {
+    return END4_BRIDGE_DURATION_MS;
+  }
+  return 0;
+}
 
 function uniqueScreenNames(screenNames) {
   var names = [];
@@ -19,14 +31,17 @@ function uniqueScreenNames(screenNames) {
   return names;
 }
 
-function create(screenNames) {
+function create(screenNames, targetProfile) {
   var expected = uniqueScreenNames(screenNames || []);
+  var profile = typeof targetProfile === "string" ? targetProfile : "";
+  var bridgeDuration = bridgeDurationMs(profile);
   var totalDurationMs = DEFAULT_OUTGOING_DURATION_MS
-    + DEFAULT_BRIDGE_DURATION_MS
+    + bridgeDuration
     + DEFAULT_INCOMING_DURATION_MS;
 
   return {
-    state: expected.length === 0 ? "aborted" : "capturing",
+    state: expected.length === 0 || bridgeDuration === 0 ? "aborted" : "capturing",
+    targetProfile: profile,
     expected: expected,
     captured: {},
     capturedCount: 0,
@@ -34,7 +49,8 @@ function create(screenNames) {
     coverPresentedCount: 0,
     settlingPresented: {},
     outgoingDurationMs: DEFAULT_OUTGOING_DURATION_MS,
-    bridgeDurationMs: DEFAULT_BRIDGE_DURATION_MS,
+    bridgeDurationMs: bridgeDuration,
+    bridgePulseCount: bridgeDuration / 1000,
     incomingDurationMs: DEFAULT_INCOMING_DURATION_MS,
     totalDurationMs: totalDurationMs
   };
@@ -194,7 +210,7 @@ function watchdogTimeoutMs(model) {
   }
   if (model.state === "outgoing" || model.state === "covered"
       || model.state === "incoming" || model.state === "settling") {
-    return model.totalDurationMs + CLEANUP_MARGIN_MS;
+    return model.totalDurationMs + COVER_FENCE_MARGIN_MS + CLEANUP_MARGIN_MS;
   }
   return 0;
 }

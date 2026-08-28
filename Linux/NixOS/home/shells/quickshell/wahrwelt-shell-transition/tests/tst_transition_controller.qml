@@ -18,21 +18,29 @@ TestCase {
     signalName: "exitRequested"
   }
 
+  SignalSpy {
+    id: coveredSpy
+    signalName: "coveredReady"
+  }
+
   function init() {
     controller = createTemporaryObject(controllerComponent, testCase);
     verify(controller !== null);
     exitSpy.target = controller;
     exitSpy.clear();
+    coveredSpy.target = controller;
+    coveredSpy.clear();
   }
 
   function cleanup() {
     exitSpy.target = null;
+    coveredSpy.target = null;
     controller.destroy();
     controller = null;
   }
 
   function test_captureWatchdogFailsOpenWithoutClockInput() {
-    controller.initialize(["DP-1"]);
+    controller.initialize(["DP-1"], "caelestia");
     compare(controller.state, "capturing");
     compare(controller.captureWatchdogInterval, 5000);
     verify(controller.captureWatchdogRunning);
@@ -45,7 +53,7 @@ TestCase {
   }
 
   function test_oneMasterWatchdogCoversEveryVisiblePhase() {
-    controller.initialize(["DP-1"]);
+    controller.initialize(["DP-1"], "caelestia");
     controller.captureReady("DP-1");
     compare(controller.state, "captured");
     compare(controller.captureWatchdogInterval, 1000);
@@ -81,7 +89,7 @@ TestCase {
   }
 
   function test_masterWatchdogExpiryAbortsVisibleTransition() {
-    controller.initialize(["DP-1"]);
+    controller.initialize(["DP-1"], "caelestia");
     controller.captureReady("DP-1");
     verify(controller.beginTransition());
     verify(controller.coverFramePresented("DP-1"));
@@ -96,7 +104,7 @@ TestCase {
   }
 
   function test_frameLossAfterCaptureFailsOpen() {
-    controller.initialize(["DP-1"]);
+    controller.initialize(["DP-1"], "caelestia");
     controller.captureReady("DP-1");
     compare(controller.state, "captured");
 
@@ -108,7 +116,7 @@ TestCase {
   }
 
   function test_frameLossDuringOutgoingFailsOpen() {
-    controller.initialize(["DP-1"]);
+    controller.initialize(["DP-1"], "caelestia");
     controller.captureReady("DP-1");
     verify(controller.beginTransition());
     compare(controller.state, "outgoing");
@@ -121,7 +129,7 @@ TestCase {
   }
 
   function test_allScreensMustCaptureBeforeOutgoing() {
-    controller.initialize(["DP-1", "HDMI-A-1"]);
+    controller.initialize(["DP-1", "HDMI-A-1"], "caelestia");
     controller.captureReady("DP-1");
     compare(controller.state, "capturing");
     verify(!controller.beginTransition());
@@ -133,23 +141,27 @@ TestCase {
   }
 
   function test_allScreensMustPresentOpaqueCoverBeforeCovered() {
-    controller.initialize(["DP-1", "HDMI-A-1"]);
+    controller.initialize(["DP-1", "HDMI-A-1"], "caelestia");
     controller.captureReady("DP-1");
     controller.captureReady("HDMI-A-1");
     verify(controller.beginTransition());
 
     verify(controller.coverFramePresented("DP-1"));
     compare(controller.state, "outgoing");
+    compare(coveredSpy.count, 0);
     verify(controller.coverFramePresented("DP-1"));
     compare(controller.state, "outgoing");
+    compare(coveredSpy.count, 0);
     verify(controller.coverFramePresented("HDMI-A-1"));
     compare(controller.state, "outgoing");
+    compare(coveredSpy.count, 0);
     verify(controller.coverFramePresented("HDMI-A-1"));
     compare(controller.state, "covered");
+    compare(coveredSpy.count, 1);
   }
 
   function test_unknownCaptureScreenAbortsAndExits() {
-    controller.initialize(["DP-1"]);
+    controller.initialize(["DP-1"], "caelestia");
     controller.captureReady("HDMI-A-1");
 
     compare(controller.state, "aborted");
@@ -157,7 +169,7 @@ TestCase {
   }
 
   function test_unknownCoverScreenAbortsAndExits() {
-    controller.initialize(["DP-1"]);
+    controller.initialize(["DP-1"], "caelestia");
     controller.captureReady("DP-1");
     verify(controller.beginTransition());
 
@@ -167,7 +179,7 @@ TestCase {
   }
 
   function test_unknownSettlingScreenAbortsAndExits() {
-    controller.initialize(["DP-1"]);
+    controller.initialize(["DP-1"], "caelestia");
     controller.captureReady("DP-1");
     verify(controller.beginTransition());
     verify(controller.coverFramePresented("DP-1"));
@@ -181,12 +193,28 @@ TestCase {
   }
 
   function test_screenHotplugAborts() {
-    controller.initialize(["DP-1", "HDMI-A-1"]);
+    controller.initialize(["DP-1", "HDMI-A-1"], "caelestia");
 
     verify(!controller.checkScreens(["DP-1"]));
     compare(controller.state, "aborted");
     verify(!controller.captureWatchdogRunning);
     verify(!controller.masterWatchdogRunning);
     compare(exitSpy.count, 1);
+  }
+
+  function test_end4ReceivesExtendedVisibleWatchdog() {
+    controller.initialize(["DP-1"], "end4");
+    controller.captureReady("DP-1");
+
+    verify(controller.beginTransition());
+    compare(controller.masterWatchdogInterval, 12750);
+  }
+
+  function test_invalidExactTargetProfileAbortsBeforeCapture() {
+    controller.initialize(["DP-1"], "End4");
+
+    compare(controller.state, "aborted");
+    compare(exitSpy.count, 1);
+    verify(!controller.captureWatchdogRunning);
   }
 }

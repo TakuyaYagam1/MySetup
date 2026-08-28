@@ -5,6 +5,8 @@ repo_root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../../.." 
 process_lib="$repo_root/Linux/dots/hypr/scripts/shell-process.sh"
 fixture_dir="$(mktemp -d)"
 daemon_pid=""
+stop_pid_one=""
+stop_pid_two=""
 setsid_bin="$(command -v setsid)"
 original_path="$PATH"
 
@@ -47,6 +49,11 @@ cleanup() {
     kill -TERM "$daemon_pid" >/dev/null 2>&1 || true
     wait_for_exit "$daemon_pid" || kill -KILL "$daemon_pid" >/dev/null 2>&1 || true
   fi
+  for pid in "$stop_pid_one" "$stop_pid_two"; do
+    if [ -n "$pid" ] && process_is_live "$pid"; then
+      kill -KILL "$pid" >/dev/null 2>&1 || true
+    fi
+  done
   rm -rf -- "$fixture_dir"
 }
 trap cleanup EXIT HUP INT TERM
@@ -69,6 +76,39 @@ pid_file="$1"
 exit 0
 EOF
 chmod 0755 "$daemonizer"
+
+# shellcheck source=Linux/dots/hypr/scripts/shell-process.sh
+. "$process_lib"
+
+matching_pids() {
+  printf '%s\n' 1001
+  sleep 0.05
+  printf '%s\n' 1002
+}
+is_running multiple-pids || fail 'multiple matching PIDs were reported as stopped under pipefail'
+
+bash -c 'trap "" TERM; exec sleep 30' &
+stop_pid_one=$!
+disown "$stop_pid_one"
+bash -c 'trap "" TERM; exec sleep 30' &
+stop_pid_two=$!
+disown "$stop_pid_two"
+sleep 0.05
+matching_pids() {
+  local pid
+
+  for pid in "$stop_pid_one" "$stop_pid_two"; do
+    if process_is_live "$pid"; then
+      printf '%s\n' "$pid"
+      sleep 0.05
+    fi
+  done
+}
+stop_matching_group stubborn-pids || fail 'stubborn matching process group did not stop'
+process_is_live "$stop_pid_one" && fail 'first stubborn matching process survived KILL escalation'
+process_is_live "$stop_pid_two" && fail 'second stubborn matching process survived KILL escalation'
+stop_pid_one=""
+stop_pid_two=""
 
 cat >"$wrapper" <<'EOF'
 #!/usr/bin/env bash

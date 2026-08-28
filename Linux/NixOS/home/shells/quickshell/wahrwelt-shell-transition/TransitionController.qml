@@ -14,6 +14,7 @@ QtObject {
   readonly property alias masterWatchdogRunning: masterWatchdog.running
 
   signal exitRequested()
+  signal coveredReady()
 
   function armCaptureWatchdog() {
     captureWatchdog.stop();
@@ -45,8 +46,8 @@ QtObject {
     state = nextState;
   }
 
-  function initialize(screenNames) {
-    transitionModel = TransitionModel.create(screenNames);
+  function initialize(screenNames, targetProfile) {
+    transitionModel = TransitionModel.create(screenNames, targetProfile);
     state = "";
     syncState();
     if (state === "aborted") {
@@ -103,12 +104,16 @@ QtObject {
   }
 
   function coverFramePresented(screenName) {
+    const previousState = state;
     const accepted = TransitionModel.coverFramePresented(transitionModel, screenName);
     syncState();
     if (state === "aborted") {
       stopWatchdogs();
       exitRequested();
       return false;
+    }
+    if (accepted && previousState !== "covered" && state === "covered") {
+      coveredReady();
     }
     return accepted;
   }

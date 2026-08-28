@@ -56,15 +56,22 @@ const modelSource = fs.readFileSync(path.join(artifact, "transition-model.js"), 
 const transitionModel = {};
 vm.createContext(transitionModel);
 vm.runInContext(modelSource, transitionModel);
-const model = transitionModel.create(["contract-screen"]);
-assert.equal(model.outgoingDurationMs, 3000,
-  "old shell cover contract must be exactly 3000 ms");
-assert.equal(model.bridgeDurationMs, 4000,
-  "opaque handoff contract must be exactly 4000 ms");
-assert.equal(model.incomingDurationMs, 3000,
-  "new shell reveal contract must be exactly 3000 ms");
-assert.equal(model.totalDurationMs, 10000,
-  "complete visible transition contract must be exactly 10000 ms");
+for (const [profile, bridgeDurationMs, totalDurationMs] of [
+  ["caelestia", 3000, 9000],
+  ["noctalia", 3000, 9000],
+  ["end4", 5000, 11000],
+  ["end4-pc", 5000, 11000],
+]) {
+  const model = transitionModel.create(["contract-screen"], profile);
+  assert.equal(model.outgoingDurationMs, 3000,
+    `${profile} old shell cover contract must be exactly 3000 ms`);
+  assert.equal(model.bridgeDurationMs, bridgeDurationMs,
+    `${profile} opaque handoff contract`);
+  assert.equal(model.incomingDurationMs, 3000,
+    `${profile} new shell reveal contract must be exactly 3000 ms`);
+  assert.equal(model.totalDurationMs, totalDurationMs,
+    `${profile} complete visible transition contract`);
+}
 
 const shellSource = fs.readFileSync(path.join(artifact, "shell.qml"), "utf8");
 assert.match(shellSource, /id:\s*neutralVeilSource/,

@@ -26,9 +26,9 @@ in
       for name in WAHRWELT_END4_PROFILE WAHRWELT_QS_CONFIG qsConfig; do
         preserve_end4_env "$name"
       done
-      while IFS= read -r name; do
+      for name in "''${!ILLOGICAL_IMPULSE_@}"; do
         preserve_end4_env "$name"
-      done < <(compgen -e ILLOGICAL_IMPULSE_)
+      done
 
       if [ -r "$runtime_env" ]; then
         . "$runtime_env"

@@ -358,7 +358,11 @@ sleep() {
 wahrwelt_shell_transition_begin() {
   local mode="${WAHRWELT_TEST_TRANSITION_CAPTURE_MODE:-captured}"
 
-  test_event transition:begin
+  if [ "$#" -ne 1 ] || [ "$1" != "$profile" ]; then
+    test_event "transition:begin-invalid:${1:-missing}:expected-$profile"
+    return 1
+  fi
+  test_event "transition:begin:$1"
   test_add_process transition
   wahrwelt_shell_transition_started=1
   wahrwelt_shell_transition_test_state=capturing
@@ -408,16 +412,17 @@ wahrwelt_shell_transition_bridge_budget_available() {
 
   test_event "bridge-budget:$minimum_us"
   [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 0
+  wahrwelt_shell_transition_test_budget_checks=$((
+    ${wahrwelt_shell_transition_test_budget_checks:-0} + 1
+  ))
   case "${WAHRWELT_TEST_TRANSITION_BUDGET_MODE:-available}" in
     available) return 0 ;;
     deny-before-stop) return 1 ;;
-    expire-before-target) [ "$minimum_us" != 0 ] ;;
+    expire-before-target)
+      [ "$wahrwelt_shell_transition_test_budget_checks" -eq 1 ]
+      ;;
     expire-on-retry)
-      [ "$minimum_us" != 0 ] && return 0
-      wahrwelt_shell_transition_test_spawn_budget_checks=$((
-        ${wahrwelt_shell_transition_test_spawn_budget_checks:-0} + 1
-      ))
-      [ "$wahrwelt_shell_transition_test_spawn_budget_checks" -eq 1 ]
+      [ "$wahrwelt_shell_transition_test_budget_checks" -le 2 ]
       ;;
     *) return 1 ;;
   esac
@@ -576,8 +581,23 @@ stop_quickshells() {
   stop_end4
 }
 
+eval "$(declare -f stop_matching_group | sed '1s/^stop_matching_group /test_real_stop_matching_group /')"
+stop_matching_group() {
+  if [ "${WAHRWELT_TEST_FAIL_STOP_GROUP:-0}" -eq 1 ]; then
+    test_event stop-group:failure
+    return 1
+  fi
+  test_real_stop_matching_group "$@"
+}
+
+eval "$(declare -f stop_all_shells_for_switch | sed '1s/^stop_all_shells_for_switch /test_real_stop_all_shells_for_switch /')"
 stop_all_shells_for_switch() {
   local requested="$1"
+
+  if [ "${WAHRWELT_TEST_FAIL_STOP_GROUP:-0}" -eq 1 ]; then
+    test_real_stop_all_shells_for_switch "$requested"
+    return
+  fi
 
   stop_quickshells
   if [ "$(wahrwelt_shell_family "$requested")" != end4 ]; then
@@ -585,8 +605,14 @@ stop_all_shells_for_switch() {
   fi
 }
 
+eval "$(declare -f stop_inactive_shells | sed '1s/^stop_inactive_shells /test_real_stop_inactive_shells /')"
 stop_inactive_shells() {
   local requested="$1"
+
+  if [ "${WAHRWELT_TEST_FAIL_STOP_GROUP:-0}" -eq 1 ]; then
+    test_real_stop_inactive_shells "$requested"
+    return
+  fi
 
   stop_shell_selector
   case "$requested" in
@@ -1062,6 +1088,7 @@ run_switch() {
     WAHRWELT_TEST_TRANSITION_COVER_MODE="${WAHRWELT_TEST_TRANSITION_COVER_MODE:-covered}" \
     WAHRWELT_TEST_TRANSITION_READINESS_MODE="${WAHRWELT_TEST_TRANSITION_READINESS_MODE:-ready}" \
     WAHRWELT_TEST_TRANSITION_BUDGET_MODE="${WAHRWELT_TEST_TRANSITION_BUDGET_MODE:-available}" \
+    WAHRWELT_TEST_FAIL_STOP_GROUP="${WAHRWELT_TEST_FAIL_STOP_GROUP:-0}" \
     WAHRWELT_TEST_USE_REAL_PROFILE_START="${WAHRWELT_TEST_USE_REAL_PROFILE_START:-0}" \
     WAHRWELT_TEST_USE_REAL_RETRY="${WAHRWELT_TEST_USE_REAL_RETRY:-0}" \
     WAHRWELT_TEST_RETRY_NEVER_READY_PROFILE="${WAHRWELT_TEST_RETRY_NEVER_READY_PROFILE:-}" \
@@ -1087,6 +1114,8 @@ root="$(new_case_root visual-success-order)"
 seed_case "$root" noctalia
 run_switch "$root" end4
 assert_process_set "$root/processes" end4
+assert_event_before "$root/events" 'transition:begin:end4' 'transition:capture-ready' \
+  'visual transition receives the exact destination profile'
 assert_event_before "$root/events" 'stop:selector' 'transition:capture-ready' \
   'visual transition selector close'
 assert_event_before "$root/events" 'transition:capture-ready' 'transition:outgoing' \
@@ -1219,9 +1248,9 @@ if grep -Eq '^start:' "$root/events"; then
   fail 'exhausted pre-stop bridge budget started another shell'
 fi
 assert_event_before "$root/events" 'transition:covered' \
-  'bridge-budget:3000000' \
+  'bridge-budget:0' \
   'pre-stop bridge reserve is checked after the opaque cover'
-assert_event_before "$root/events" 'bridge-budget:3000000' \
+assert_event_before "$root/events" 'bridge-budget:0' \
   'transition:incoming' \
   'pre-stop bridge reserve failure keeps the old shell intact through incoming'
 assert_event_before "$root/events" 'transition:incoming' 'transition:done' \
@@ -1245,21 +1274,29 @@ assert_process_set "$root/processes" noctalia
 if grep -Fqx start:end4 "$root/events"; then
   fail 'expired target-spawn bridge budget launched the requested End4 shell'
 fi
-assert_event_before "$root/events" 'bridge-budget:3000000' \
-  'stop:noctalia' \
-  'destructive shell stop is guarded by the fixed bridge reserve'
+mapfile -t target_budget_lines < <(
+  grep -n -F 'bridge-budget:0' "$root/events" | cut -d: -f1
+)
+assert_eq 3 "${#target_budget_lines[@]}" \
+  'late target failure checks pre-stop, target, and fallback boundaries'
+target_stop_line="$(grep -n -m1 -F stop:noctalia "$root/events" | cut -d: -f1)"
+target_idle_line="$(grep -n -m1 -F ensure:end4-idle "$root/events" | cut -d: -f1)"
+target_abort_line="$(grep -n -m1 -F transition:abort "$root/events" | cut -d: -f1)"
+target_fallback_line="$(grep -n -m1 -F start:noctalia "$root/events" | cut -d: -f1)"
+if [ "${target_budget_lines[0]}" -ge "$target_stop_line" ] ||
+  [ "$target_stop_line" -ge "$target_idle_line" ] ||
+  [ "$target_idle_line" -ge "${target_budget_lines[1]}" ] ||
+  [ "${target_budget_lines[1]}" -ge "$target_abort_line" ] ||
+  [ "$target_abort_line" -ge "${target_budget_lines[2]}" ] ||
+  [ "${target_budget_lines[2]}" -ge "$target_fallback_line" ]; then
+  fail "late target budget ordering was not pre-stop < stop < target < abort < fallback
+$(grep -E '^(bridge-budget:0|stop:noctalia|ensure:end4-idle|transition:abort|start:noctalia)$' \
+    "$root/events" || true)"
+fi
 assert_event_before "$root/events" 'stop:noctalia' 'ensure:end4-idle' \
   'End4 idle preparation starts only after the old shell stop'
-assert_event_before "$root/events" 'ensure:end4-idle' \
-  'bridge-budget:0' \
-  'target spawn budget is checked after the final End4 pre-spawn wait'
-assert_event_before "$root/events" 'bridge-budget:0' \
-  'transition:abort' \
-  'expired target spawn exact-aborts the overlay'
 assert_event_before "$root/events" 'transition:abort' 'start:noctalia' \
   'fallback restores the previous shell only after exact overlay abort'
-assert_eq 2 "$(grep -Fc 'bridge-budget:0' "$root/events")" \
-  'late target failure checks target and fallback spawn budgets exactly once each'
 if grep -Fqx transition "$root/processes"; then
   fail 'late target budget failure retained its transition helper process'
 fi
@@ -1283,16 +1320,17 @@ assert_eq 1 "$(grep -Fc command:caelestia "$root/events")" \
 mapfile -t retry_budget_lines < <(
   grep -n -F 'bridge-budget:0' "$root/events" | cut -d: -f1
 )
-assert_eq 3 "${#retry_budget_lines[@]}" \
-  'retry path checks first attempt, rejected retry, and fallback attempt budgets'
+assert_eq 4 "${#retry_budget_lines[@]}" \
+  'retry path checks pre-stop, first attempt, rejected retry, and fallback budgets'
 retry_target_line="$(grep -n -m1 -F command:caelestia "$root/events" | cut -d: -f1)"
 retry_abort_line="$(grep -n -m1 -F transition:abort "$root/events" | cut -d: -f1)"
 retry_fallback_line="$(grep -n -m1 -F command:noctalia "$root/events" | cut -d: -f1)"
-if [ "${retry_budget_lines[0]}" -ge "$retry_target_line" ] ||
-  [ "$retry_target_line" -ge "${retry_budget_lines[1]}" ] ||
-  [ "${retry_budget_lines[1]}" -ge "$retry_abort_line" ] ||
-  [ "$retry_abort_line" -ge "${retry_budget_lines[2]}" ] ||
-  [ "${retry_budget_lines[2]}" -ge "$retry_fallback_line" ]; then
+if [ "${retry_budget_lines[0]}" -ge "${retry_budget_lines[1]}" ] ||
+  [ "${retry_budget_lines[1]}" -ge "$retry_target_line" ] ||
+  [ "$retry_target_line" -ge "${retry_budget_lines[2]}" ] ||
+  [ "${retry_budget_lines[2]}" -ge "$retry_abort_line" ] ||
+  [ "$retry_abort_line" -ge "${retry_budget_lines[3]}" ] ||
+  [ "${retry_budget_lines[3]}" -ge "$retry_fallback_line" ]; then
   fail "retry budget ordering did not block the late target before exact-abort and fallback
 $(grep -E '^(bridge-budget:0|command:|transition:abort)$' "$root/events" || true)"
 fi
@@ -1369,7 +1407,7 @@ run_switch "$root" caelestia >"$root/second-switch.out" 2>&1
 second_switch_status=$?
 set -e
 assert_eq 1 "$second_switch_status" 'nested visual transition reports the existing lock busy status'
-assert_eq 1 "$(grep -c '^transition:begin$' "$root/events" || true)" \
+assert_eq 1 "$(grep -c '^transition:begin:end4$' "$root/events" || true)" \
   'nested visual transition never reaches a second capture'
 : >"$transition_block.release"
 wait "$first_switch_pid" || fail 'first visual transition failed after lock release'
@@ -1624,6 +1662,30 @@ if [ "${WAHRWELT_TEST_SPOTIFY_ONLY:-0}" = 1 ]; then
 fi
 
 profiles=(caelestia noctalia end4 end4-pc)
+failure_case_index=0
+for previous in "${profiles[@]}"; do
+  for target in "${profiles[@]}"; do
+    failure_case_index=$((failure_case_index + 1))
+    root="$(new_case_root "stop-failure-matrix-$failure_case_index")"
+    seed_case "$root" "$previous"
+    before_instance="$(profile_instance "$root/processes" "$previous")"
+    before_state="$(capture_case_state "$root")"
+    if WAHRWELT_TEST_FAIL_STOP_GROUP=1 run_switch "$root" "$target"; then
+      fail "$previous -> $target stop failure unexpectedly returned success"
+    fi
+    after_state="$(capture_case_state "$root")"
+    assert_eq "$before_state" "$after_state" \
+      "$previous -> $target stop failure restores exact bundle and state"
+    assert_process_set "$root/processes" "$previous"
+    after_instance="$(profile_instance "$root/processes" "$previous")"
+    assert_eq "$before_instance" "$after_instance" \
+      "$previous -> $target stop failure preserves the old shell instance"
+    if [ "$target" != "$previous" ] && grep -Fqx "start:$target" "$root/events"; then
+      fail "$previous -> $target stop failure started the target shell"
+    fi
+  done
+done
+
 case_index=0
 for previous in "${profiles[@]}"; do
   for target in "${profiles[@]}"; do
@@ -1659,6 +1721,8 @@ for previous in "${profiles[@]}"; do
     assert_eq "$expected_variant" "$(tr -d '[:space:]' <"$state_dir/end4-variant")" \
       "$previous -> $target variant state"
     assert_process_set "$root/processes" "$target"
+    grep -Fqx "transition:begin:$target" "$root/events" ||
+      fail "$previous -> $target transition did not receive the exact destination profile"
     assert_success_order "$root/events" "$target" "$previous -> $target"
 
     before_instance="$(profile_instance "$root/processes" "$target")"

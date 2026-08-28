@@ -27,16 +27,61 @@ for (const source of productionSources) {
 const shellSource = productionSources[2];
 assert.match(
   shellSource,
-  /function beginTransition\(\)[\s\S]*controller\.beginTransition\(\)[\s\S]*transitionAnimation\.restart\(\)/,
-  "the visible 10 second timeline must start from the explicit IPC handoff",
+  /function beginTransition\(\)[\s\S]*controller\.beginTransition\(\)[\s\S]*outgoingAnimation\.restart\(\)/,
+  "the profile-aware visible timeline must start from the explicit IPC handoff",
 );
 for (const progressProperty of ["outgoingProgress", "bridgeProgress", "incomingProgress"]) {
   assert.match(
     shellSource,
     new RegExp(`property real ${progressProperty}:\\s*0\\.0`),
-    `the renderer must expose ${progressProperty} for the 3 + 4 + 3 timeline`,
+    `the renderer must expose ${progressProperty} for the profile-aware timeline`,
   );
 }
+assert.match(
+  shellSource,
+  /readonly property string targetProfile:\s*Quickshell\.env\("WAHRWELT_SHELL_TRANSITION_TARGET_PROFILE"\)\s*\|\|\s*""/,
+  "the renderer must read the exact destination profile from its scoped environment",
+);
+assert.match(
+  shellSource,
+  /Component\.onCompleted:[\s\S]*controller\.initialize\(screenNames\(screens\), targetProfile\)/,
+  "the exact destination profile must be validated while the transition model is created",
+);
+assert.match(
+  shellSource,
+  /TransitionController\s*\{[\s\S]*onCoveredReady:\s*root\.beginCoveredBridge\(\)/,
+  "the covered frame fence must be the only trigger for the visible bridge timer",
+);
+assert.match(
+  shellSource,
+  /id:\s*outgoingAnimation[\s\S]*onFinished:\s*root\.enterCoveredBridge\(\)/,
+  "the outgoing animation must arm the cover fence without starting the bridge timer",
+);
+assert.match(
+  shellSource,
+  /function beginCoveredBridge\(\)[\s\S]*transitionState !== "covered"[\s\S]*bridgeAnimation\.restart\(\)/,
+  "the full covered hold must start only after the exact covered state",
+);
+assert.match(
+  shellSource,
+  /id:\s*bridgeAnimation[\s\S]*onFinished:\s*root\.enterIncoming\(\)/,
+  "incoming reveal must wait for the complete profile-specific covered hold",
+);
+assert.doesNotMatch(
+  shellSource,
+  /SequentialAnimation/,
+  "one autonomous sequence must not consume covered hold time before the frame fence",
+);
+assert.match(
+  shellSource,
+  /readonly property int bridgePulseCount:\s*controller\.transitionModel\s*\?\s*controller\.transitionModel\.bridgePulseCount\s*:\s*0/,
+  "the renderer must not dereference its transition model before initialization",
+);
+assert.match(
+  shellSource,
+  /bridgeProgress\s*\*\s*Math\.PI\s*\*\s*2\.0\s*\*\s*root\.bridgePulseCount/,
+  "the neutral veil must show one pulse per requested covered second",
+);
 assert.match(
   shellSource,
   /id:\s*neutralVeilSource/,

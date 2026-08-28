@@ -3,7 +3,7 @@
 # shellcheck disable=SC2034,SC2154
 
 is_running() {
-  matching_pids "$1" | grep -q .
+  matching_pids "$1" | grep . >/dev/null
 }
 
 running_count() {
@@ -147,12 +147,12 @@ cleanup_legacy_end4_processes() {
 
   log "stopping pre-marker end4 process during runtime upgrade"
   for pid in "${pids[@]}"; do
-    if wahrwelt_legacy_end4_upgrade_pids "$tokens" | grep -Fqx -- "$pid"; then
+    if wahrwelt_legacy_end4_upgrade_pids "$tokens" | grep -Fx -- "$pid" >/dev/null; then
       kill -TERM "$pid" >/dev/null 2>&1 || true
     fi
   done
   for attempt in $(seq 1 20); do
-    if ! wahrwelt_legacy_end4_upgrade_pids "$tokens" | grep -q .; then
+    if ! wahrwelt_legacy_end4_upgrade_pids "$tokens" | grep . >/dev/null; then
       if ! legacy_end4_upgrade_tokens="$(wahrwelt_remove_end4_upgrade_tokens "$tokens")"; then
         log "failed to consume stopped pre-marker end4 process provenance"
         return 1
@@ -163,12 +163,12 @@ cleanup_legacy_end4_processes() {
   done
   while read -r pid; do
     [ -n "$pid" ] || continue
-    if wahrwelt_legacy_end4_upgrade_pids "$tokens" | grep -Fqx -- "$pid"; then
+    if wahrwelt_legacy_end4_upgrade_pids "$tokens" | grep -Fx -- "$pid" >/dev/null; then
       kill -KILL "$pid" >/dev/null 2>&1 || true
     fi
   done < <(wahrwelt_legacy_end4_upgrade_pids "$tokens" | sort -u)
   sleep 0.1
-  if wahrwelt_legacy_end4_upgrade_pids "$tokens" | grep -q .; then
+  if wahrwelt_legacy_end4_upgrade_pids "$tokens" | grep . >/dev/null; then
     log "failed to stop pre-marker end4 process during runtime upgrade"
     return 1
   fi

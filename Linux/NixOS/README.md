@@ -61,10 +61,11 @@ Manager-owned Hypr tree. The top-level adapter supplies the exact profile and
 QuickShell path while preserving canonical input, gestures, rules, and runtime
 ordering. End4 does not install another top-level shared-rules hook.
 
-Explicit runtime shell choices use one `3 + 4 + 3` honeycomb timeline: cover
-the old desktop, hand off shell ownership under an opaque animated veil, then
-reveal the live target. The old shell is not stopped until every output reports
-that two opaque cover frames have been swapped.
+Explicit runtime shell choices use a destination-aware honeycomb timeline.
+Caelestia and Noctalia use `3 + 3 + 3` seconds; End4 Official and End4 pC use
+`3 + 5 + 3` seconds. The old shell is not stopped until every output reports
+that two opaque cover frames have been swapped, and only then does the full
+three- or five-tick handoff interval begin.
 
 Activation migrates one legacy `~/.config/hypr/mysetup/` or
 `~/.config/hypr/wahrwelt/` user tree to `~/.config/hypr/user/`. It replaces

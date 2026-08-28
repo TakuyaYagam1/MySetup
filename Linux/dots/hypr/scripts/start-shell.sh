@@ -700,7 +700,7 @@ stop_inactive_shells() {
   if [ "$(wahrwelt_shell_family "$requested")" != end4 ]; then
     handles+=("$end4_idle_handle")
   fi
-  stop_matching_group "${handles[@]}" >/dev/null 2>&1 || true
+  stop_matching_group "${handles[@]}" >/dev/null 2>&1
 }
 
 stop_all_shells_for_switch() {
@@ -717,7 +717,7 @@ stop_all_shells_for_switch() {
   if [ "$(wahrwelt_shell_family "$requested")" != end4 ]; then
     handles+=("$end4_idle_handle")
   fi
-  stop_matching_group "${handles[@]}" >/dev/null 2>&1 || true
+  stop_matching_group "${handles[@]}" >/dev/null 2>&1
 }
 
 ensure_end4_idle() {
@@ -920,7 +920,7 @@ if [ -n "$requested_profile" ]; then
   stop_shell_selector
   if valid_profile "$previous" &&
     wahrwelt_shell_transition_profile_running "$previous"; then
-    if ! wahrwelt_shell_transition_begin; then
+    if ! wahrwelt_shell_transition_begin "$profile"; then
       log "shell transition capture unavailable; continuing without animation"
     fi
   else
@@ -954,7 +954,7 @@ if [ "$wahrwelt_shell_transition_active" -eq 1 ]; then
   fi
 fi
 
-if ! wahrwelt_shell_transition_bridge_budget_available 3000000; then
+if ! wahrwelt_shell_transition_bridge_budget_available 0; then
   log "shell transition bridge budget cannot cover destructive shell swap; current shell remains active"
   exit 1
 fi
@@ -971,9 +971,15 @@ fi
 shell_processes_touched=1
 shell_transition_old_shell_intact=0
 if [ "$previous" != "$profile" ] || [ -n "$requested_profile" ]; then
-  stop_all_shells_for_switch "$profile"
+  if ! stop_all_shells_for_switch "$profile"; then
+    log "aborting shell switch because an existing shell survived shutdown; profile=$profile"
+    exit 1
+  fi
 else
-  stop_inactive_shells "$profile"
+  if ! stop_inactive_shells "$profile"; then
+    log "aborting shell reuse because an inactive shell survived shutdown; profile=$profile"
+    exit 1
+  fi
 fi
 
 profile_start_attempted=1

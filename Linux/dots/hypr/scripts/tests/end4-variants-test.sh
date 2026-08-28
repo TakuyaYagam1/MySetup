@@ -7,7 +7,8 @@ installer_dir="$(CDPATH='' cd -- "$scripts_dir/../../../installer" && pwd)"
 test_root="$(mktemp -d)"
 original_home="$HOME"
 lock_test_pid=""
-trap '[ -z "$lock_test_pid" ] || kill "$lock_test_pid" 2>/dev/null || true; rm -rf -- "$test_root"' EXIT
+env_match_pid=""
+trap '[ -z "$lock_test_pid" ] || kill "$lock_test_pid" 2>/dev/null || true; [ -z "$env_match_pid" ] || kill "$env_match_pid" 2>/dev/null || true; rm -rf -- "$test_root"' EXIT
 
 export HOME="$test_root/home"
 export XDG_CONFIG_HOME="$HOME/.config"
@@ -76,6 +77,25 @@ assert_matches "$wahrwelt_end4_pc_env_pattern" "WAHRWELT_END4_PROFILE=end4-pc" "
 assert_not_matches "$wahrwelt_end4_env_pattern" "qsConfig=$XDG_CONFIG_HOME/quickshell/ii" "generic qsConfig does not identify End4"
 assert_not_matches "$wahrwelt_end4_env_pattern" "ILLOGICAL_IMPULSE_DOTFILES_SOURCE=$XDG_CONFIG_HOME" "generic End4 variable does not identify End4"
 assert_not_matches "$wahrwelt_end4_env_pattern" "WAHRWELT_END4_PROFILE=caelestia" "Caelestia with stale generic End4 variables is not End4"
+
+printf -v env_padding '%080000d' 0
+env -i \
+  WAHRWELT_END4_PROFILE=end4-pc \
+  "ZZZ_PADDING=$env_padding" \
+  "$(command -v sleep)" 30 &
+env_match_pid=$!
+for _ in $(seq 1 50); do
+  [ -r "/proc/$env_match_pid/environ" ] && break
+  command sleep 0.01
+done
+if ! wahrwelt_pid_has_env_regex "$env_match_pid" "$wahrwelt_end4_pc_env_pattern"; then
+  printf 'FAIL: exact End4 marker before a large environment payload was not detected under pipefail\n' >&2
+  exit 1
+fi
+kill "$env_match_pid" 2>/dev/null || true
+wait "$env_match_pid" 2>/dev/null || true
+env_match_pid=""
+unset env_padding
 
 legacy_entrypoint="$test_root/legacy-hyprland.lua"
 legacy_fixture_dir="$scripts_dir/../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
@@ -715,7 +735,7 @@ if [ -s "$start_lock_fixture/durable-tokens" ]; then
   printf 'FAIL: successful argumentless retry did not consume durable provenance\n' >&2
   exit 1
 fi
-assert_eq $'kill:__selector__:TERM\nwait:__selector__\nbridge-budget:3000000\nlegacy-cleanup' \
+assert_eq $'kill:__selector__:TERM\nwait:__selector__\nbridge-budget:0\nlegacy-cleanup' \
   "$(cat "$start_lock_fixture/lifecycle-events")" \
   'start-shell lock fixture skipped a wallpaper-only transition and reached provenance cleanup'
 

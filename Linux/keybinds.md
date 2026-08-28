@@ -73,12 +73,13 @@ hyprctl reload
 | --- | --- |
 | `Super+Shift+W` | Toggle the shell selector: Caelestia, Noctalia, or End4 with an Official/pC segmented choice |
 
-An explicit choice runs one continuous ten-second honeycomb transition: three
-seconds to cover the old desktop, four seconds for the shell handoff under an
-opaque animated veil, and three seconds to reveal the live target. Login and
-Home Manager auto-start do not animate. An unconfirmed opaque cover cancels the
-switch before the old shell stops; a late or failed target restores the previous
-shell.
+An explicit choice uses a destination-aware honeycomb transition. Caelestia
+and Noctalia use `3 + 3 + 3` seconds with three full handoff ticks. End4
+Official and End4 pC use `3 + 5 + 3` seconds with five full handoff ticks. The
+tick interval starts only after the opaque cover is confirmed on every output.
+Login and Home Manager auto-start do not animate. An unconfirmed cover cancels
+the switch before the old shell stops; a late or failed target restores the
+previous shell.
 
 ### Application launchers
 

@@ -9,8 +9,20 @@ wahrwelt_shell_transition_instance_id=
 wahrwelt_shell_transition_launcher_pid=
 wahrwelt_shell_transition_started=0
 wahrwelt_shell_transition_active=0
+wahrwelt_shell_transition_profile=
+wahrwelt_shell_transition_bridge_duration_us=
+wahrwelt_shell_transition_cover_deadline_us=
+wahrwelt_shell_transition_incoming_deadline_us=
 wahrwelt_shell_transition_visible_deadline_us=
 wahrwelt_shell_transition_cleanup_deadline_us=
+
+wahrwelt_shell_transition_profile_bridge_duration_us() {
+  case "${1:-}" in
+    caelestia | noctalia) printf '%s\n' 3000000 ;;
+    end4 | end4-pc) printf '%s\n' 5000000 ;;
+    *) return 1 ;;
+  esac
+}
 
 wahrwelt_shell_transition_now_us() {
   local uptime_value uptime_seconds uptime_fraction
@@ -131,6 +143,10 @@ wahrwelt_shell_transition_complete() {
   wahrwelt_shell_transition_active=0
   wahrwelt_shell_transition_started=0
   wahrwelt_shell_transition_instance_id=
+  wahrwelt_shell_transition_profile=
+  wahrwelt_shell_transition_bridge_duration_us=
+  wahrwelt_shell_transition_cover_deadline_us=
+  wahrwelt_shell_transition_incoming_deadline_us=
   wahrwelt_shell_transition_visible_deadline_us=
   wahrwelt_shell_transition_cleanup_deadline_us=
 }
@@ -209,6 +225,10 @@ wahrwelt_shell_transition_abort() {
   wahrwelt_shell_transition_active=0
   wahrwelt_shell_transition_started=0
   wahrwelt_shell_transition_instance_id=
+  wahrwelt_shell_transition_profile=
+  wahrwelt_shell_transition_bridge_duration_us=
+  wahrwelt_shell_transition_cover_deadline_us=
+  wahrwelt_shell_transition_incoming_deadline_us=
   wahrwelt_shell_transition_visible_deadline_us=
   wahrwelt_shell_transition_cleanup_deadline_us=
 }
@@ -238,17 +258,31 @@ wahrwelt_shell_transition_abort_signal_safe() {
   wahrwelt_shell_transition_active=0
   wahrwelt_shell_transition_started=0
   wahrwelt_shell_transition_instance_id=
+  wahrwelt_shell_transition_profile=
+  wahrwelt_shell_transition_bridge_duration_us=
+  wahrwelt_shell_transition_cover_deadline_us=
+  wahrwelt_shell_transition_incoming_deadline_us=
   wahrwelt_shell_transition_visible_deadline_us=
   wahrwelt_shell_transition_cleanup_deadline_us=
 }
 
 wahrwelt_shell_transition_begin() {
+  local profile="${1:-}" bridge_duration_us
   local status status_result now_us ids instance_count
   local deadline_us command_timeout list_result
+
+  [ "$#" -eq 1 ] || return 1
+  bridge_duration_us="$(
+    wahrwelt_shell_transition_profile_bridge_duration_us "$profile"
+  )" || return 1
 
   wahrwelt_shell_transition_active=0
   wahrwelt_shell_transition_started=0
   wahrwelt_shell_transition_instance_id=
+  wahrwelt_shell_transition_profile=
+  wahrwelt_shell_transition_bridge_duration_us=
+  wahrwelt_shell_transition_cover_deadline_us=
+  wahrwelt_shell_transition_incoming_deadline_us=
   wahrwelt_shell_transition_visible_deadline_us=
   wahrwelt_shell_transition_cleanup_deadline_us=
   wahrwelt_shell_transition_stop_launcher
@@ -266,8 +300,11 @@ wahrwelt_shell_transition_begin() {
     return 1
   }
   deadline_us=$((now_us + 1000000))
+  wahrwelt_shell_transition_profile="$profile"
+  wahrwelt_shell_transition_bridge_duration_us="$bridge_duration_us"
   wahrwelt_shell_transition_started=1
-  qs -c "$wahrwelt_shell_transition_config" >/dev/null 2>&1 &
+  WAHRWELT_SHELL_TRANSITION_TARGET_PROFILE="$profile" \
+    qs -c "$wahrwelt_shell_transition_config" >/dev/null 2>&1 &
   wahrwelt_shell_transition_launcher_pid=$!
   [[ "$wahrwelt_shell_transition_launcher_pid" =~ ^[1-9][0-9]*$ ]] || {
     wahrwelt_shell_transition_abort
@@ -328,11 +365,10 @@ wahrwelt_shell_transition_begin() {
             wahrwelt_shell_transition_abort
             return 1
           }
-          wahrwelt_shell_transition_visible_deadline_us=$((now_us + 10000000))
-          wahrwelt_shell_transition_cleanup_deadline_us=$((now_us + 10750000))
+          wahrwelt_shell_transition_cover_deadline_us=$((now_us + 4000000))
           command_timeout="$(
             wahrwelt_shell_transition_timeout_before \
-              "$wahrwelt_shell_transition_cleanup_deadline_us" 75000
+              "$wahrwelt_shell_transition_cover_deadline_us" 75000
           )" || {
             wahrwelt_shell_transition_abort
             return 1
@@ -345,7 +381,7 @@ wahrwelt_shell_transition_begin() {
           }
           command_timeout="$(
             wahrwelt_shell_transition_timeout_before \
-              "$wahrwelt_shell_transition_cleanup_deadline_us" 75000
+              "$wahrwelt_shell_transition_cover_deadline_us" 75000
           )" || {
             wahrwelt_shell_transition_abort
             return 1
@@ -425,13 +461,32 @@ wahrwelt_shell_transition_target_layers_ready() {
   ' <<<"$layers" >/dev/null
 }
 
+wahrwelt_shell_transition_anchor_covered_deadlines() {
+  local now_us
+
+  if [[ "$wahrwelt_shell_transition_incoming_deadline_us" =~ ^[0-9]+$ ]] &&
+    [[ "$wahrwelt_shell_transition_visible_deadline_us" =~ ^[0-9]+$ ]] &&
+    [[ "$wahrwelt_shell_transition_cleanup_deadline_us" =~ ^[0-9]+$ ]]; then
+    return 0
+  fi
+  [[ "$wahrwelt_shell_transition_bridge_duration_us" =~ ^[0-9]+$ ]] || return 1
+  now_us="$(wahrwelt_shell_transition_now_us)" || return 1
+  [[ "$now_us" =~ ^[0-9]+$ ]] || return 1
+  wahrwelt_shell_transition_incoming_deadline_us=$((\
+    now_us + wahrwelt_shell_transition_bridge_duration_us))
+  wahrwelt_shell_transition_visible_deadline_us=$((\
+    wahrwelt_shell_transition_incoming_deadline_us + 3000000))
+  wahrwelt_shell_transition_cleanup_deadline_us=$((\
+    wahrwelt_shell_transition_visible_deadline_us + 750000))
+}
+
 wahrwelt_shell_transition_wait_target_ready() {
   local profile="$1"
   local command_timeout incoming_deadline_us
 
   [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 0
-  [[ "$wahrwelt_shell_transition_visible_deadline_us" =~ ^[0-9]+$ ]] || return 1
-  incoming_deadline_us=$((wahrwelt_shell_transition_visible_deadline_us - 3000000))
+  [[ "$wahrwelt_shell_transition_incoming_deadline_us" =~ ^[0-9]+$ ]] || return 1
+  incoming_deadline_us="$wahrwelt_shell_transition_incoming_deadline_us"
   [ "$incoming_deadline_us" -gt 0 ] || return 1
   while command_timeout="$(
     wahrwelt_shell_transition_timeout_before \
@@ -451,10 +506,10 @@ wahrwelt_shell_transition_bridge_budget_available() {
 
   [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 0
   [[ "$minimum_us" =~ ^[0-9]{1,18}$ ]] || return 1
-  [[ "$wahrwelt_shell_transition_visible_deadline_us" =~ ^[0-9]+$ ]] || return 1
+  [[ "$wahrwelt_shell_transition_incoming_deadline_us" =~ ^[0-9]+$ ]] || return 1
   now_us="$(wahrwelt_shell_transition_now_us)" || return 1
   [[ "$now_us" =~ ^[0-9]+$ ]] || return 1
-  incoming_deadline_us=$((wahrwelt_shell_transition_visible_deadline_us - 3000000))
+  incoming_deadline_us="$wahrwelt_shell_transition_incoming_deadline_us"
   [ "$now_us" -lt "$incoming_deadline_us" ] || return 1
   remaining_us=$((incoming_deadline_us - now_us))
   minimum_us=$((10#$minimum_us))
@@ -465,11 +520,11 @@ wahrwelt_shell_transition_wait_covered() {
   local status status_result command_timeout cover_deadline_us
 
   [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 1
-  [[ "$wahrwelt_shell_transition_visible_deadline_us" =~ ^[0-9]+$ ]] || {
+  [[ "$wahrwelt_shell_transition_cover_deadline_us" =~ ^[0-9]+$ ]] || {
     wahrwelt_shell_transition_abort
     return 1
   }
-  cover_deadline_us=$((wahrwelt_shell_transition_visible_deadline_us - 6000000))
+  cover_deadline_us="$wahrwelt_shell_transition_cover_deadline_us"
   [ "$cover_deadline_us" -gt 0 ] || {
     wahrwelt_shell_transition_abort
     return 1
@@ -492,6 +547,10 @@ wahrwelt_shell_transition_wait_covered() {
     if [ "$status_result" -eq 0 ]; then
       case "$status" in
         covered)
+          wahrwelt_shell_transition_anchor_covered_deadlines || {
+            wahrwelt_shell_transition_abort
+            return 1
+          }
           return 0
           ;;
         captured | outgoing)
@@ -514,10 +573,10 @@ wahrwelt_shell_transition_wait_done() {
   local status command_timeout
 
   [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 0
-  [[ "$wahrwelt_shell_transition_visible_deadline_us" =~ ^[0-9]+$ ]] || {
-    wahrwelt_shell_transition_abort
-    return 1
-  }
+  if ! [[ "$wahrwelt_shell_transition_visible_deadline_us" =~ ^[0-9]+$ ]] ||
+    ! [[ "$wahrwelt_shell_transition_cleanup_deadline_us" =~ ^[0-9]+$ ]]; then
+    wahrwelt_shell_transition_wait_covered || return 1
+  fi
   [[ "$wahrwelt_shell_transition_cleanup_deadline_us" =~ ^[0-9]+$ ]] || {
     wahrwelt_shell_transition_abort
     return 1

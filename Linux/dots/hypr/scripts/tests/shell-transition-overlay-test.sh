@@ -15,6 +15,7 @@ uptime_file="$test_root/uptime"
 wall_clock_file="$test_root/wall-clock"
 wall_jumps="$test_root/wall-jumps"
 start_marker="$test_root/start-marker"
+launch_profile_file="$test_root/launch-profile"
 owned_id=ownednew01
 race_id=raceinst01
 status_mode=start-outgoing
@@ -29,6 +30,7 @@ layers_mode=ready
 : >"$instances"
 : >"$wall_jumps"
 : >"$start_marker"
+: >"$launch_profile_file"
 printf '%s\n' running >"$unrelated_state"
 printf '%s\n' 0 >"$status_count_file"
 printf '%s\n' 1000000 >"$clock_file"
@@ -79,6 +81,8 @@ reset_fixture() {
   : >"$operations"
   : >"$instances"
   : >"$start_marker"
+  : >"$launch_profile_file"
+  unset WAHRWELT_SHELL_TRANSITION_TARGET_PROFILE
   printf '%s\n' running >"$unrelated_state"
   printf '%s\n' 0 >"$status_count_file"
   printf '%s\n' 1000000 >"$clock_file"
@@ -243,20 +247,41 @@ qs_status() {
         return 1
       fi
       ;;
+    start-covered-then-unavailable)
+      if [ ! -s "$start_marker" ]; then
+        printf '%s\n' captured
+      elif [ "$status_calls" -le 2 ]; then
+        printf '%s\n' outgoing
+      elif [ "$status_calls" -eq 3 ]; then
+        printf '%s\n' covered
+      else
+        return 1
+      fi
+      ;;
     timeline)
       if [ ! -s "$start_marker" ]; then
         printf '%s\n' captured
       else
-        local started_us elapsed_us
+        local started_us elapsed_us bridge_us total_us
         started_us="$(cat "$start_marker")"
         elapsed_us=$(($(cat "$clock_file") - started_us))
+        case "$(cat "$launch_profile_file")" in
+          end4 | end4-pc)
+            bridge_us=5000000
+            total_us=11000000
+            ;;
+          *)
+            bridge_us=3000000
+            total_us=9000000
+            ;;
+        esac
         if [ "$elapsed_us" -lt 3000000 ]; then
           printf '%s\n' outgoing
-        elif [ "$elapsed_us" -lt 7000000 ]; then
+        elif [ "$elapsed_us" -lt $((3000000 + bridge_us)) ]; then
           printf '%s\n' covered
-        elif [ "$elapsed_us" -lt 9900000 ]; then
+        elif [ "$elapsed_us" -lt $((total_us - 100000)) ]; then
           printf '%s\n' incoming
-        elif [ "$elapsed_us" -lt 10000000 ]; then
+        elif [ "$elapsed_us" -lt "$total_us" ]; then
           printf '%s\n' settling
         else
           printf '%s\n' 'done'
@@ -275,6 +300,10 @@ qs() {
     printf '\t%s' "$@"
     printf '\n'
   } >>"$operations"
+  if [ -n "${WAHRWELT_SHELL_TRANSITION_TARGET_PROFILE+x}" ]; then
+    printf 'qs-target-profile\t%s\t%s\n' \
+      "$WAHRWELT_SHELL_TRANSITION_TARGET_PROFILE" "$*" >>"$operations"
+  fi
 
   case "$*" in
     '-c wahrwelt-shell-transition list -j')
@@ -315,6 +344,8 @@ qs() {
       esac
       ;;
     '-c wahrwelt-shell-transition')
+      printf '%s\n' "${WAHRWELT_SHELL_TRANSITION_TARGET_PROFILE:-}" \
+        >"$launch_profile_file"
       if [ "$launch_advance_us" -gt 0 ]; then
         advance_clock_us "$launch_advance_us"
       fi
@@ -397,10 +428,24 @@ export -f timeout sleep qs matching_pids hyprctl
 . "$helper"
 wahrwelt_shell_transition_uptime_file="$uptime_file"
 
+for invalid_profile in '' end4-pC unknown 'end4/pc'; do
+  reset_fixture
+  printf '%s\n' staleold01 >"$instances"
+  if wahrwelt_shell_transition_begin "$invalid_profile"; then
+    fail "invalid destination profile ${invalid_profile:-empty} activated capture"
+    wahrwelt_shell_transition_abort
+  fi
+  assert_eq staleold01 "$(cat "$instances")" \
+    "invalid destination profile ${invalid_profile:-empty} mutated existing overlay state"
+  if grep -q '^qs' "$operations"; then
+    fail "invalid destination profile ${invalid_profile:-empty} launched or cleaned an overlay"
+  fi
+done
+
 for valid_id in a1b2c3d a1b2c3d4e5f6g7h8; do
   reset_fixture
   owned_id="$valid_id"
-  if wahrwelt_shell_transition_begin; then
+  if wahrwelt_shell_transition_begin caelestia; then
     assert_eq "$valid_id" "$wahrwelt_shell_transition_instance_id" \
       "variable-length full instance ID $valid_id discovery"
     if ! assert_status="$(wahrwelt_shell_transition_status)"; then
@@ -423,7 +468,7 @@ owned_id=ownednew01
 for invalid_id in '' 'unsafe/id' 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklm'; do
   reset_fixture
   printf '%s\n' "$invalid_id" >"$instances"
-  if wahrwelt_shell_transition_begin; then
+  if wahrwelt_shell_transition_begin caelestia; then
     fail "invalid full instance ID ${invalid_id:-empty} activated capture"
   fi
   [ ! -s "$instances" ] ||
@@ -432,14 +477,15 @@ done
 
 reset_fixture
 printf '%s\n' dupid1234 dupid1234 >"$instances"
-if wahrwelt_shell_transition_begin; then
+if wahrwelt_shell_transition_begin caelestia; then
   fail 'duplicate full instance IDs activated capture'
 fi
 [ ! -s "$instances" ] || fail 'duplicate full instance IDs survived exact-config cleanup'
 
 reset_fixture
 printf '%s\n' staleold01 staleold02 >"$instances"
-wahrwelt_shell_transition_begin || fail 'stale-instance cleanup did not permit a fresh exact launch'
+wahrwelt_shell_transition_begin caelestia ||
+  fail 'stale-instance cleanup did not permit a fresh exact launch'
 assert_eq "$owned_id" "${wahrwelt_shell_transition_instance_id:-}" \
   'begin did not retain the full owned QuickShell instance ID'
 if grep -Eq $'qs\tipc\t-i\t(staleold01|staleold02)\t' "$operations"; then
@@ -456,7 +502,7 @@ wahrwelt_shell_transition_abort
 
 reset_fixture
 status_mode=unavailable-then-captured
-if ! wahrwelt_shell_transition_begin; then
+if ! wahrwelt_shell_transition_begin caelestia; then
   fail 'cold exact IPC registration was not retried to captured'
 fi
 [ "$(cat "$status_count_file")" -ge 5 ] || fail 'cold registration did not retry status'
@@ -464,7 +510,7 @@ wahrwelt_shell_transition_abort
 
 reset_fixture
 launch_mode=duplicate
-if wahrwelt_shell_transition_begin; then
+if wahrwelt_shell_transition_begin caelestia; then
   fail 'ambiguous duplicate post-launch instances activated capture'
 fi
 [ ! -s "$instances" ] || fail 'duplicate race cleanup retained a transition instance'
@@ -472,7 +518,7 @@ fi
 reset_fixture
 printf '%s\n' staleold01 staleold02 >"$instances"
 list_mode=malformed
-if wahrwelt_shell_transition_begin; then
+if wahrwelt_shell_transition_begin caelestia; then
   fail 'malformed instance JSON activated capture'
 fi
 [ ! -s "$instances" ] || fail 'malformed-list fallback did not clean every exact-config instance'
@@ -480,7 +526,7 @@ fi
 
 reset_fixture
 list_mode=fail-after-launch
-if wahrwelt_shell_transition_begin; then
+if wahrwelt_shell_transition_begin caelestia; then
   fail 'post-launch instance-list failure activated capture'
 fi
 [ ! -s "$instances" ] || fail 'post-launch list failure retained a transition instance'
@@ -488,14 +534,14 @@ fi
 
 reset_fixture
 launch_mode=fail-live
-if wahrwelt_shell_transition_begin; then
+if wahrwelt_shell_transition_begin caelestia; then
   fail 'nonzero launch that left a daemon activated capture'
 fi
 [ ! -s "$instances" ] || fail 'nonzero launch retained an exact transition daemon'
 
 reset_fixture
 launch_mode=late-register
-if wahrwelt_shell_transition_begin; then
+if wahrwelt_shell_transition_begin caelestia; then
   fail 'timed-out launch with delayed registration activated capture'
 fi
 command sleep 0.35
@@ -510,7 +556,7 @@ else
   reset_fixture
   status_mode=unavailable
   launch_advance_us=0
-  if wahrwelt_shell_transition_begin; then
+  if wahrwelt_shell_transition_begin caelestia; then
     fail 'permanently unavailable capture status activated overlay'
   fi
   assert_eq 2000000 "$(cat "$clock_file")" \
@@ -523,48 +569,74 @@ else
 
   reset_fixture
   printf '%s\n' malformed >"$uptime_file"
-  if wahrwelt_shell_transition_begin; then
+  if wahrwelt_shell_transition_begin caelestia; then
     fail 'malformed monotonic source activated capture'
   fi
   [ ! -s "$instances" ] || fail 'malformed monotonic source retained exact transition instances'
 fi
 
 reset_fixture
-status_mode=start-outgoing
-wahrwelt_shell_transition_begin || fail 'readiness fixture did not capture'
+status_mode=start-to-covered
+wahrwelt_shell_transition_begin caelestia || fail 'readiness fixture did not capture'
+wahrwelt_shell_transition_wait_covered || fail 'readiness fixture did not reach covered fence'
 layers_mode=ready
 wahrwelt_shell_transition_wait_target_ready caelestia ||
   fail 'exact target PID layer readiness rejected every output'
 wahrwelt_shell_transition_abort
 
-# A missing exact start call leaves the old desktop frozen instead of starting
-# the visible ten-second transition immediately after capture.
-reset_fixture
-status_mode=capture-delay-then-outgoing
-wahrwelt_shell_transition_begin || fail 'outgoing fixture did not launch and capture'
-transition_start_us="$(cat "$start_marker")"
-assert_eq 1250000 "$transition_start_us" \
-  'deadline fixture did not separate capture time from transition start'
-grep -Fqx $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tstart' "$operations" ||
-  fail 'begin did not send exact owned-instance start IPC'
-assert_eq outgoing "$(wahrwelt_shell_transition_status 2>/dev/null || true)" \
-  'begin did not leave the overlay in outgoing state'
-assert_eq "$((transition_start_us + 10000000))" \
-  "${wahrwelt_shell_transition_visible_deadline_us:-unset}" \
-  'visible deadline was not anchored once at transition start plus 10 seconds'
-assert_eq "$((transition_start_us + 10750000))" \
-  "${wahrwelt_shell_transition_cleanup_deadline_us:-unset}" \
-  'cleanup deadline was not anchored once at transition start plus 10.75 seconds'
-wahrwelt_shell_transition_abort
-assert_eq '' "${wahrwelt_shell_transition_visible_deadline_us:-}" \
-  'abort retained the visible deadline'
-assert_eq '' "${wahrwelt_shell_transition_cleanup_deadline_us:-}" \
-  'abort retained the cleanup deadline'
+# The destination profile is local to the overlay process. The exact covered
+# fence anchors the full 3s or 5s opaque bridge, followed by 3s incoming.
+while read -r destination_profile bridge_us; do
+  reset_fixture
+  status_mode=start-covered-after-three-seconds
+  wahrwelt_shell_transition_begin "$destination_profile" ||
+    fail "$destination_profile outgoing fixture did not launch and capture"
+  transition_start_us="$(cat "$start_marker")"
+  grep -Fqx $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tstart' "$operations" ||
+    fail "$destination_profile begin did not send exact owned-instance start IPC"
+  assert_eq outgoing "$(wahrwelt_shell_transition_status 2>/dev/null || true)" \
+    "$destination_profile begin did not leave the overlay in outgoing state"
+  assert_eq "$destination_profile" "$(cat "$launch_profile_file")" \
+    "$destination_profile launch did not receive its exact local profile"
+  assert_eq 1 "$(grep -Fxc \
+    $'qs-target-profile\t'"$destination_profile"$'\t-c wahrwelt-shell-transition' \
+    "$operations" || true)" \
+    "$destination_profile launch profile was not scoped to exactly one overlay command"
+  if [ -n "${WAHRWELT_SHELL_TRANSITION_TARGET_PROFILE+x}" ]; then
+    fail "$destination_profile launch leaked its profile into the orchestrator"
+  fi
+  assert_eq '' "${wahrwelt_shell_transition_visible_deadline_us:-}" \
+    "$destination_profile begin armed a bridge deadline before covered"
+  assert_eq '' "${wahrwelt_shell_transition_cleanup_deadline_us:-}" \
+    "$destination_profile begin armed cleanup before covered"
+  wahrwelt_shell_transition_wait_covered ||
+    fail "$destination_profile did not observe the exact covered fence"
+  covered_observed_us="$(cat "$clock_file")"
+  if [ "$covered_observed_us" -le $((transition_start_us + 3000000)) ]; then
+    fail "$destination_profile covered fixture did not exercise presentation grace"
+  fi
+  assert_eq "$((covered_observed_us + bridge_us + 3000000))" \
+    "${wahrwelt_shell_transition_visible_deadline_us:-unset}" \
+    "$destination_profile visible deadline"
+  assert_eq "$((covered_observed_us + bridge_us + 3750000))" \
+    "${wahrwelt_shell_transition_cleanup_deadline_us:-unset}" \
+    "$destination_profile cleanup deadline"
+  wahrwelt_shell_transition_abort
+  assert_eq '' "${wahrwelt_shell_transition_visible_deadline_us:-}" \
+    "$destination_profile abort retained the visible deadline"
+  assert_eq '' "${wahrwelt_shell_transition_cleanup_deadline_us:-}" \
+    "$destination_profile abort retained the cleanup deadline"
+done <<'EOF'
+caelestia 3000000
+noctalia 3000000
+end4 5000000
+end4-pc 5000000
+EOF
 
 reset_fixture
 status_mode=start-outgoing
 start_mode=failure
-if wahrwelt_shell_transition_begin; then
+if wahrwelt_shell_transition_begin caelestia; then
   fail 'failed exact start IPC activated the transition'
 fi
 [ ! -s "$instances" ] || fail 'failed exact start IPC retained the owned instance'
@@ -575,7 +647,7 @@ assert_eq '' "${wahrwelt_shell_transition_cleanup_deadline_us:-}" \
 
 reset_fixture
 status_mode=captured
-if wahrwelt_shell_transition_begin; then
+if wahrwelt_shell_transition_begin caelestia; then
   fail 'begin accepted captured after successful start IPC instead of outgoing'
 fi
 [ ! -s "$instances" ] || fail 'non-outgoing start retained the owned instance'
@@ -587,7 +659,7 @@ if ! declare -F wahrwelt_shell_transition_wait_covered >/dev/null; then
 else
   reset_fixture
   status_mode=start-to-covered
-  wahrwelt_shell_transition_begin || fail 'covered fixture did not start outgoing'
+  wahrwelt_shell_transition_begin caelestia || fail 'covered fixture did not start outgoing'
   wahrwelt_shell_transition_wait_covered ||
     fail 'wait_covered rejected the exact covered state'
   assert_eq covered "$(wahrwelt_shell_transition_status)" \
@@ -596,7 +668,8 @@ else
 
   reset_fixture
   status_mode=start-transient-then-covered
-  wahrwelt_shell_transition_begin || fail 'transient IPC fixture did not start outgoing'
+  wahrwelt_shell_transition_begin caelestia ||
+    fail 'transient IPC fixture did not start outgoing'
   wahrwelt_shell_transition_wait_covered ||
     fail 'wait_covered aborted after one transient outgoing IPC failure'
   assert_eq covered "$(wahrwelt_shell_transition_status)" \
@@ -606,7 +679,8 @@ else
 
   reset_fixture
   status_mode=start-covered-after-three-seconds
-  wahrwelt_shell_transition_begin || fail 'post-animation cover fixture did not start outgoing'
+  wahrwelt_shell_transition_begin caelestia ||
+    fail 'post-animation cover fixture did not start outgoing'
   wahrwelt_shell_transition_wait_covered ||
     fail 'wait_covered gave the presentation fence no grace after the three-second animation'
   assert_eq covered "$(wahrwelt_shell_transition_status)" \
@@ -615,67 +689,85 @@ else
 
   reset_fixture
   status_mode=start-outgoing-then-incoming
-  wahrwelt_shell_transition_begin || fail 'premature incoming fixture did not start'
+  wahrwelt_shell_transition_begin caelestia ||
+    fail 'premature incoming fixture did not start'
   if wahrwelt_shell_transition_wait_covered; then
     fail 'wait_covered accepted incoming without observing covered'
   fi
   [ ! -s "$instances" ] || fail 'invalid wait_covered state retained the owned instance'
 fi
 
-# Layer readiness shares the original visible deadline. Re-arming a private
-# readiness budget here would push the complete swap beyond ten seconds.
-reset_fixture
-status_mode=start-outgoing
-wahrwelt_shell_transition_begin || fail 'anchored readiness fixture did not start'
-anchored_visible_deadline="${wahrwelt_shell_transition_visible_deadline_us:-unset}"
-anchored_incoming_deadline=$((anchored_visible_deadline - 3000000))
-layers_mode=partial
-advance_clock_us 6850000
-if wahrwelt_shell_transition_wait_target_ready caelestia; then
-  fail 'permanently partial layers unexpectedly became ready'
-fi
-assert_eq "$anchored_visible_deadline" \
-  "${wahrwelt_shell_transition_visible_deadline_us:-unset}" \
-  'readiness re-armed the visible deadline'
-assert_eq "$anchored_incoming_deadline" "$(cat "$clock_file")" \
-  'readiness did not stop at the incoming phase boundary'
-wahrwelt_shell_transition_abort
+# Readiness and spawn guards share the profile-derived incoming boundary.
+while read -r destination_profile bridge_us; do
+  reset_fixture
+  status_mode=start-to-covered
+  wahrwelt_shell_transition_begin "$destination_profile" ||
+    fail "$destination_profile anchored readiness fixture did not start"
+  wahrwelt_shell_transition_wait_covered ||
+    fail "$destination_profile readiness fixture did not reach covered"
+  covered_observed_us="$(cat "$clock_file")"
+  anchored_visible_deadline="${wahrwelt_shell_transition_visible_deadline_us:-unset}"
+  anchored_incoming_deadline=$((covered_observed_us + bridge_us))
+  layers_mode=partial
+  advance_clock_us $((bridge_us - 150000))
+  if wahrwelt_shell_transition_wait_target_ready "$destination_profile"; then
+    fail "$destination_profile permanently partial layers unexpectedly became ready"
+  fi
+  assert_eq "$anchored_visible_deadline" \
+    "${wahrwelt_shell_transition_visible_deadline_us:-unset}" \
+    "$destination_profile readiness re-armed the visible deadline"
+  assert_eq "$anchored_incoming_deadline" "$(cat "$clock_file")" \
+    "$destination_profile readiness boundary"
+  wahrwelt_shell_transition_abort
+done <<'EOF'
+caelestia 3000000
+end4-pc 5000000
+EOF
 
 if ! declare -F wahrwelt_shell_transition_bridge_budget_available >/dev/null; then
   fail 'bridge_budget_available protocol function is missing'
 else
-  reset_fixture
-  status_mode=start-outgoing
-  wahrwelt_shell_transition_begin || fail 'bridge budget fixture did not start'
-  bridge_start_us="$(cat "$start_marker")"
-  bridge_incoming_boundary=$((bridge_start_us + 7000000))
-  advance_clock_us 6499999
-  if ! wahrwelt_shell_transition_bridge_budget_available 500000; then
-    fail 'bridge budget rejected a minimum ending one microsecond before incoming'
-  fi
-  if wahrwelt_shell_transition_bridge_budget_available 500001; then
-    fail 'bridge budget accepted a minimum ending exactly at incoming'
-  fi
-  advance_clock_us 500000
-  if ! wahrwelt_shell_transition_bridge_budget_available; then
-    fail 'zero bridge budget was rejected one microsecond before incoming'
-  fi
-  advance_clock_us 1
-  assert_eq "$bridge_incoming_boundary" "$(cat "$clock_file")" \
-    'bridge budget fixture missed the exact incoming boundary'
-  if wahrwelt_shell_transition_bridge_budget_available; then
-    fail 'zero bridge budget was accepted at the exact incoming boundary'
-  fi
-  if wahrwelt_shell_transition_bridge_budget_available invalid; then
-    fail 'bridge budget accepted a malformed minimum while active'
-  fi
-  assert_eq 1 "$wahrwelt_shell_transition_active" \
-    'bridge budget failure deactivated the transition'
-  assert_eq "$((bridge_start_us + 10000000))" \
-    "$wahrwelt_shell_transition_visible_deadline_us" \
-    'bridge budget check changed the visible deadline'
-  [ -s "$instances" ] || fail 'bridge budget failure cleaned the owned instance'
-  wahrwelt_shell_transition_abort
+  while read -r destination_profile bridge_us; do
+    reset_fixture
+    status_mode=start-to-covered
+    wahrwelt_shell_transition_begin "$destination_profile" ||
+      fail "$destination_profile bridge budget fixture did not start"
+    wahrwelt_shell_transition_wait_covered ||
+      fail "$destination_profile bridge fixture did not reach covered"
+    bridge_start_us="$(cat "$clock_file")"
+    bridge_incoming_boundary=$((bridge_start_us + bridge_us))
+    advance_clock_us $((bridge_us - 500001))
+    if ! wahrwelt_shell_transition_bridge_budget_available 500000; then
+      fail "$destination_profile bridge budget rejected a minimum before incoming"
+    fi
+    if wahrwelt_shell_transition_bridge_budget_available 500001; then
+      fail "$destination_profile bridge budget accepted an exact-boundary minimum"
+    fi
+    advance_clock_us 500000
+    if ! wahrwelt_shell_transition_bridge_budget_available; then
+      fail "$destination_profile zero budget was rejected before incoming"
+    fi
+    advance_clock_us 1
+    assert_eq "$bridge_incoming_boundary" "$(cat "$clock_file")" \
+      "$destination_profile bridge budget boundary"
+    if wahrwelt_shell_transition_bridge_budget_available; then
+      fail "$destination_profile zero budget was accepted at incoming"
+    fi
+    if wahrwelt_shell_transition_bridge_budget_available invalid; then
+      fail "$destination_profile bridge budget accepted a malformed minimum"
+    fi
+    assert_eq 1 "$wahrwelt_shell_transition_active" \
+      "$destination_profile bridge budget failure deactivated the transition"
+    assert_eq "$((bridge_start_us + bridge_us + 3000000))" \
+      "$wahrwelt_shell_transition_visible_deadline_us" \
+      "$destination_profile bridge budget changed the visible deadline"
+    [ -s "$instances" ] ||
+      fail "$destination_profile bridge budget failure cleaned the owned instance"
+    wahrwelt_shell_transition_abort
+  done <<'EOF'
+caelestia 3000000
+end4 5000000
+EOF
   wahrwelt_shell_transition_bridge_budget_available ||
     fail 'bridge budget rejected an inactive transition'
 fi
@@ -683,32 +775,44 @@ fi
 if ! declare -F wahrwelt_shell_transition_wait_done >/dev/null; then
   fail 'wait_done protocol function is missing'
 else
-  reset_fixture
-  status_mode=timeline
-  wahrwelt_shell_transition_begin || fail 'complete timeline fixture did not start'
-  timeline_start_us="$(cat "$start_marker")"
-  advance_clock_us 6900000
-  wahrwelt_shell_transition_wait_done || fail 'ten-second transition did not reach done'
-  assert_eq "$((timeline_start_us + 10000000))" "$(cat "$clock_file")" \
-    'wait_done did not use the start-anchored ten-second timeline'
-  assert_eq 0 "$wahrwelt_shell_transition_active" \
-    'completed transition remained active'
-  assert_eq '' "${wahrwelt_shell_transition_visible_deadline_us:-}" \
-    'completed transition retained the visible deadline'
-  assert_eq '' "${wahrwelt_shell_transition_cleanup_deadline_us:-}" \
-    'completed transition retained the cleanup deadline'
-  [ ! -s "$instances" ] || fail 'completed transition retained the owned instance'
-  if grep -Fqx $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tabort' "$operations"; then
-    fail 'normal completion sent abort IPC'
-  fi
-  grep -Fqx $'qs\tkill\t-i\townednew01' "$operations" ||
-    fail 'normal completion did not exact-kill the lingering owned instance'
+  while read -r destination_profile bridge_us total_us; do
+    reset_fixture
+    status_mode=timeline
+    wahrwelt_shell_transition_begin "$destination_profile" ||
+      fail "$destination_profile complete timeline fixture did not start"
+    timeline_start_us="$(cat "$start_marker")"
+    wahrwelt_shell_transition_wait_covered ||
+      fail "$destination_profile timeline did not observe covered"
+    covered_observed_us="$(cat "$clock_file")"
+    advance_clock_us $((bridge_us - 100000))
+    wahrwelt_shell_transition_wait_done ||
+      fail "$destination_profile transition did not reach done"
+    assert_eq "$((timeline_start_us + total_us))" "$(cat "$clock_file")" \
+      "$destination_profile wait_done timeline"
+    assert_eq 0 "$wahrwelt_shell_transition_active" \
+      "$destination_profile completed transition remained active"
+    assert_eq '' "${wahrwelt_shell_transition_visible_deadline_us:-}" \
+      "$destination_profile completion retained the visible deadline"
+    assert_eq '' "${wahrwelt_shell_transition_cleanup_deadline_us:-}" \
+      "$destination_profile completion retained the cleanup deadline"
+    [ ! -s "$instances" ] ||
+      fail "$destination_profile completion retained the owned instance"
+    if grep -Fqx $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tabort' "$operations"; then
+      fail "$destination_profile normal completion sent abort IPC"
+    fi
+    grep -Fqx $'qs\tkill\t-i\townednew01' "$operations" ||
+      fail "$destination_profile completion did not exact-kill its instance"
+  done <<'EOF'
+caelestia 3000000 9000000
+end4-pc 5000000 11000000
+EOF
 
   reset_fixture
-  status_mode=start-outgoing
-  wahrwelt_shell_transition_begin || fail 'stuck timeline fixture did not start'
+  status_mode=start-to-covered
+  wahrwelt_shell_transition_begin caelestia || fail 'stuck timeline fixture did not start'
+  wahrwelt_shell_transition_wait_covered || fail 'stuck timeline fixture did not reach covered'
   anchored_cleanup_deadline="${wahrwelt_shell_transition_cleanup_deadline_us:-unset}"
-  advance_clock_us 10600000
+  advance_clock_us 6600000
   if wahrwelt_shell_transition_wait_done; then
     fail 'permanently outgoing transition unexpectedly completed'
   fi
@@ -719,7 +823,8 @@ else
 
   reset_fixture
   status_mode=start-outgoing-then-unavailable
-  wahrwelt_shell_transition_begin || fail 'early status failure fixture did not start'
+  wahrwelt_shell_transition_begin caelestia ||
+    fail 'early status failure fixture did not start'
   if wahrwelt_shell_transition_wait_done; then
     fail 'early overlay disappearance was accepted as completion'
   fi
@@ -730,9 +835,12 @@ else
     fail 'early overlay disappearance did not exact-kill the owned instance'
 
   reset_fixture
-  status_mode=start-outgoing-then-unavailable
-  wahrwelt_shell_transition_begin || fail 'late status failure fixture did not start'
-  advance_clock_us 10000000
+  status_mode=start-covered-then-unavailable
+  wahrwelt_shell_transition_begin caelestia ||
+    fail 'late status failure fixture did not start'
+  wahrwelt_shell_transition_wait_covered ||
+    fail 'late status failure fixture did not reach covered'
+  advance_clock_us 6000000
   if wahrwelt_shell_transition_wait_done; then
     fail 'late overlay disappearance was accepted without explicit done'
   fi
@@ -744,7 +852,7 @@ else
 fi
 
 reset_fixture
-wahrwelt_shell_transition_begin || fail 'status vocabulary fixture did not capture'
+wahrwelt_shell_transition_begin caelestia || fail 'status vocabulary fixture did not capture'
 for allowed_status in capturing captured outgoing covered incoming settling 'done' aborted; do
   status_mode=fixed
   forced_status="$allowed_status"
@@ -755,7 +863,8 @@ done
 wahrwelt_shell_transition_abort
 
 reset_fixture
-wahrwelt_shell_transition_begin || fail 'signal-safe exact cleanup fixture did not capture'
+wahrwelt_shell_transition_begin caelestia ||
+  fail 'signal-safe exact cleanup fixture did not capture'
 wahrwelt_shell_transition_abort_signal_safe
 [ ! -s "$instances" ] || fail 'signal-safe exact cleanup retained the owned instance'
 assert_eq '' "${wahrwelt_shell_transition_visible_deadline_us:-}" \

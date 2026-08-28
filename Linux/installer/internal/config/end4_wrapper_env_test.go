@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestEnd4WrapperUsesXDGConfigAndPreservesCallerRuntimeEnvironment(t *testing.T) {
+func TestEnd4WrapperUsesXDGConfigAndPreservesCallerRuntimeEnvironmentWithoutCompgen(t *testing.T) {
 	testRoot := t.TempDir()
 	home := filepath.Join(testRoot, "home")
 	xdgConfig := filepath.Join(testRoot, "custom-config")
@@ -38,7 +38,7 @@ printf '%s\n' \
 		t.Fatal(err)
 	}
 
-	cmd := exec.Command("bash", wrapperPath)
+	cmd := exec.Command("bash", "-c", `enable -n compgen; . "$1"`, "bash", wrapperPath)
 	cmd.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
 		"HOME=" + home,

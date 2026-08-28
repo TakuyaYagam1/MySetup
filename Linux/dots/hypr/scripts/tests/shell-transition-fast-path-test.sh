@@ -116,6 +116,8 @@ wahrwelt_shell_transition_profile_running() {
 }
 
 wahrwelt_shell_transition_begin() {
+  test_record_operation "transition-profile:${1:-missing}"
+  [ "$#" -eq 1 ] && [ "$1" = "$profile" ] || return 1
   [ "${WAHRWELT_TEST_CAPTURE:-0}" -eq 1 ] || return 1
   wahrwelt_shell_transition_active=1
   test_record_operation transition-capture-ready
@@ -337,7 +339,8 @@ selector_stop_line="$(operation_line '^selector-stop$')"
 capture_ready_line="$(operation_line '^transition-capture-ready$')"
 outgoing_line="$(operation_line '^transition-outgoing$')"
 covered_line="$(operation_line '^transition-covered$')"
-bridge_budget_line="$(operation_line '^transition-bridge-budget:3000000$')"
+transition_profile_line="$(operation_line '^transition-profile:noctalia$')"
+bridge_budget_line="$(operation_line '^transition-bridge-budget:0$')"
 reload_line="$(operation_line '^hypr-reload$')"
 readiness_line="$(operation_line '^transition-readiness:noctalia$')"
 incoming_line="$(operation_line '^transition-incoming$')"
@@ -346,11 +349,13 @@ if [ -z "$runtime_snapshot_line" ] || [ -z "$shell_stop_line" ] ||
   [ -z "$target_start_line" ] || [ -z "$state_snapshot_line" ] ||
   [ -z "$selector_stop_line" ] || [ -z "$capture_ready_line" ] ||
   [ -z "$outgoing_line" ] || [ -z "$covered_line" ] ||
+  [ -z "$transition_profile_line" ] ||
   [ -z "$bridge_budget_line" ] ||
   [ -z "$reload_line" ] || [ -z "$readiness_line" ] ||
   [ -z "$incoming_line" ] || [ -z "$done_line" ] ||
   [ "$runtime_snapshot_line" -ge "$shell_stop_line" ] ||
   [ "$selector_stop_line" -ge "$capture_ready_line" ] ||
+  [ "$transition_profile_line" -ge "$capture_ready_line" ] ||
   [ "$capture_ready_line" -ge "$outgoing_line" ] ||
   [ "$outgoing_line" -ge "$runtime_snapshot_line" ] ||
   [ "$runtime_snapshot_line" -ge "$covered_line" ] ||

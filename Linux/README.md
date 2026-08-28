@@ -391,11 +391,12 @@ families, with a segmented Official/pC choice inside End4:
 - End4 Official -> profile ID `end4`, QuickShell config `ii`
 - End4 pC -> profile ID `end4-pc`, QuickShell config `end4-pC`
 
-An explicit selector choice runs one continuous ten-second transition. During
-the first three seconds the captured old desktop dissolves into an opaque
-honeycomb veil. The shell ownership swap runs under the animated veil during
-the next four seconds. The live target is revealed during the final three
-seconds. Login and Home Manager auto-start do not animate.
+An explicit selector choice runs one destination-aware transition. Caelestia
+and Noctalia take nine seconds: three seconds to hide, three full ticks for the
+shell handoff, and three seconds to reveal. End4 Official and End4 pC take
+eleven seconds with five full handoff ticks instead. The handoff interval starts
+only after every output has presented the opaque cover. Login and Home Manager
+auto-start do not animate.
 
 If capture cannot start, the switch continues without an overlay. If an opaque
 frame cannot be confirmed on every output, the switch is canceled before the

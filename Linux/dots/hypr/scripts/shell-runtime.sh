@@ -605,7 +605,7 @@ wahrwelt_pid_matches() {
   local pattern="$2"
 
   [ -n "$pid" ] || return 1
-  ps -p "$pid" -o args= 2>/dev/null | grep -qE "$pattern"
+  ps -p "$pid" -o args= 2>/dev/null | grep -E "$pattern" >/dev/null
 }
 
 wahrwelt_pid_has_env_regex() {
@@ -616,7 +616,7 @@ wahrwelt_pid_has_env_regex() {
   [ -n "$pid" ] || return 1
   env_file="/proc/$pid/environ"
   [ -r "$env_file" ] || return 1
-  { tr '\0' '\n' <"$env_file"; } 2>/dev/null | grep -qE "$regex"
+  grep -zqE "$regex" "$env_file" 2>/dev/null
 }
 
 wahrwelt_quickshell_pids() {
@@ -639,7 +639,7 @@ wahrwelt_noctalia_pids() {
 }
 
 wahrwelt_noctalia_running() {
-  wahrwelt_noctalia_pids | grep -q .
+  wahrwelt_noctalia_pids | grep . >/dev/null
 }
 
 wahrwelt_end4_profile_pids() {
@@ -660,7 +660,7 @@ wahrwelt_end4_profile_pids() {
 }
 
 wahrwelt_end4_profile_running() {
-  wahrwelt_end4_profile_pids "$1" | grep -q .
+  wahrwelt_end4_profile_pids "$1" | grep . >/dev/null
 }
 
 # Validate one PID/start-time/config token emitted by the exact Home Manager
