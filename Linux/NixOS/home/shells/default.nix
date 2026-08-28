@@ -454,7 +454,7 @@ in
           ]
           ''
             activation_helper="${runtimeActivation}/bin/wahrwelt-runtime-activation"
-            hyprctl_path="$(command -v hyprctl 2>/dev/null || true)"
+            hyprctl_path="${pkgs.hyprland}/bin/hyprctl"
             run_live_shell_command() {
               if [ -n "''${wahrwelt_direct_end4_process_runtime_hex:-}" ]; then
                 $DRY_RUN_CMD "$activation_helper" run-with-runtime-hex \
@@ -489,7 +489,15 @@ in
                   echo "Failed to reload the active Hyprland configuration" >&2
                   exit 1
                 fi
-                if run_live_shell_command "${config.xdg.configHome}/hypr/scripts/start-shell.sh"; then
+                if run_live_shell_command \
+                  "${pkgs.util-linux}/bin/setsid" \
+                  "${pkgs.systemd}/bin/systemd-run" \
+                  --user \
+                  --scope \
+                  --collect \
+                  --quiet \
+                  -- \
+                  "${config.xdg.configHome}/hypr/scripts/start-shell.sh"; then
                   start_shell_status=0
                 else
                   start_shell_status=$?

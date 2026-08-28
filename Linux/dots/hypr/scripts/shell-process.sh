@@ -194,6 +194,40 @@ dedupe_shell() {
   return 1
 }
 
+user_systemd_scope_available() {
+  command -v systemd-run >/dev/null 2>&1 || return 1
+  [ -n "${XDG_RUNTIME_DIR:-}" ] || return 1
+  [ -S "$XDG_RUNTIME_DIR/systemd/private" ]
+}
+
+launch_shell_process() {
+  local setsid_command
+
+  [ "$#" -gt 0 ] || return 2
+  if [ "$(type -t "$1" 2>/dev/null || true)" = function ]; then
+    "$@"
+    return
+  fi
+  setsid_command="$(command -v setsid)" || {
+    log "cannot isolate shell process: setsid command not found"
+    return 127
+  }
+
+  if user_systemd_scope_available; then
+    exec systemd-run \
+      --user \
+      --scope \
+      --collect \
+      --quiet \
+      --no-ask-password \
+      --expand-environment=no \
+      -- \
+      "$setsid_command" --fork "$@"
+  fi
+
+  exec "$setsid_command" --fork "$@"
+}
+
 start_with_retry() {
   local before_attempt_callback=""
 
@@ -218,7 +252,7 @@ start_with_retry() {
     if [ -n "$before_attempt_callback" ]; then
       "$before_attempt_callback" || return 1
     fi
-    ("$@" >>"$log_file" 2>&1 &)
+    (launch_shell_process "$@" >>"$log_file" 2>&1 &)
     for probe in $(seq 1 12); do
       if is_running "$pattern"; then
         log "$name started"

@@ -205,6 +205,26 @@ qs_status() {
         printf '%s\n' covered
       fi
       ;;
+    start-transient-then-covered)
+      if [ ! -s "$start_marker" ]; then
+        printf '%s\n' captured
+      elif [ "$status_calls" -eq 2 ]; then
+        printf '%s\n' outgoing
+      elif [ "$status_calls" -eq 3 ]; then
+        return 1
+      else
+        printf '%s\n' covered
+      fi
+      ;;
+    start-covered-after-three-seconds)
+      if [ ! -s "$start_marker" ]; then
+        printf '%s\n' captured
+      elif [ "$(cat "$clock_file")" -lt "$(($(cat "$start_marker") + 3100000))" ]; then
+        printf '%s\n' outgoing
+      else
+        printf '%s\n' covered
+      fi
+      ;;
     start-outgoing-then-incoming)
       if [ ! -s "$start_marker" ]; then
         printf '%s\n' captured
@@ -572,6 +592,25 @@ else
     fail 'wait_covered rejected the exact covered state'
   assert_eq covered "$(wahrwelt_shell_transition_status)" \
     'wait_covered returned before the overlay reached covered'
+  wahrwelt_shell_transition_abort
+
+  reset_fixture
+  status_mode=start-transient-then-covered
+  wahrwelt_shell_transition_begin || fail 'transient IPC fixture did not start outgoing'
+  wahrwelt_shell_transition_wait_covered ||
+    fail 'wait_covered aborted after one transient outgoing IPC failure'
+  assert_eq covered "$(wahrwelt_shell_transition_status)" \
+    'wait_covered did not recover to the exact covered state'
+  [ -s "$instances" ] || fail 'transient outgoing IPC failure killed the owned instance'
+  wahrwelt_shell_transition_abort
+
+  reset_fixture
+  status_mode=start-covered-after-three-seconds
+  wahrwelt_shell_transition_begin || fail 'post-animation cover fixture did not start outgoing'
+  wahrwelt_shell_transition_wait_covered ||
+    fail 'wait_covered gave the presentation fence no grace after the three-second animation'
+  assert_eq covered "$(wahrwelt_shell_transition_status)" \
+    'post-animation presentation grace returned before covered'
   wahrwelt_shell_transition_abort
 
   reset_fixture

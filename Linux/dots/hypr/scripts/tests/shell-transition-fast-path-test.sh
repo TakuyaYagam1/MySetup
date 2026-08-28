@@ -110,6 +110,11 @@ stop_shell_selector() {
   test_record_operation selector-stop
 }
 
+wahrwelt_shell_transition_profile_running() {
+  [ -s "$WAHRWELT_TEST_ACTIVE_PROFILE_FILE" ] || return 1
+  [ "$(tr -d '[:space:]' <"$WAHRWELT_TEST_ACTIVE_PROFILE_FILE")" = "$1" ]
+}
+
 wahrwelt_shell_transition_begin() {
   [ "${WAHRWELT_TEST_CAPTURE:-0}" -eq 1 ] || return 1
   wahrwelt_shell_transition_active=1
@@ -400,6 +405,28 @@ if [ -n "$unexpected_same_profile_work" ]; then
   fail "same-profile restart performed runtime or state publication work
 $unexpected_same_profile_work"
 fi
+
+# A persisted profile without its exact process is stale state, not a visual
+# source. The target must boot directly instead of waiting on a wallpaper-only
+# transition.
+: >"$active_profile_file"
+: >"$operations"
+run_switch 1 caelestia
+stale_transition_work="$(
+  grep -E '^transition-(capture|outgoing|covered|readiness|incoming|settling|done|abort)' \
+    "$operations" || true
+)"
+if [ -n "$stale_transition_work" ]; then
+  fail "stale previous profile started an optional transition
+$stale_transition_work"
+fi
+if [ "$(tr -d '[:space:]' <"$active_profile_file")" != caelestia ]; then
+  fail 'stale previous profile did not boot the requested Caelestia shell directly'
+fi
+
+# Restore the Noctalia runtime baseline for the fallback checks below.
+: >"$operations"
+run_switch 0 noctalia
 
 # The persisted previous profile can differ from an already prepared runtime.
 # A failed target start must still prepare and restart that previous profile.

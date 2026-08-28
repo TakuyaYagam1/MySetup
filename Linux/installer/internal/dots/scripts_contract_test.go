@@ -487,8 +487,12 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 		"hypr_supports_lua_runtime()",
 		"running Hyprland is older than 0.55",
 		"hyprctl reload",
-		`("$@" >>"$log_file" 2>&1 &)`,
-		`(caelestia resizer -d >>"$log_file" 2>&1 &)`,
+		"user_systemd_scope_available()",
+		"launch_shell_process()",
+		"exec systemd-run",
+		`"$setsid_command" --fork "$@"`,
+		`(launch_shell_process "$@" >>"$log_file" 2>&1 &)`,
+		`(launch_shell_process caelestia resizer -d >>"$log_file" 2>&1 &)`,
 		`dedupe_shell "caelestia"`,
 		`dedupe_shell "caelestia resizer"`,
 		`dedupe_shell "noctalia"`,
@@ -506,6 +510,10 @@ func TestStartShellScriptCleansDuplicateProfiles(t *testing.T) {
 	}
 	if strings.Contains(text, `pkill -u "$user_name" -x hypridle`) {
 		t.Fatalf("start-shell script must only stop the managed end4 hypridle instance\n%s", text)
+	}
+	if strings.Contains(text, `("$@" >>"$log_file" 2>&1 &)`) ||
+		strings.Contains(text, `(caelestia resizer -d >>"$log_file" 2>&1 &)`) {
+		t.Fatalf("shell processes must not inherit the runtime-lock process group\n%s", text)
 	}
 	if strings.Contains(text, `(^|[ /])noctalia([[:space:]]|$)`) {
 		t.Fatalf("noctalia process detection must not match bare profile arguments\n%s", text)

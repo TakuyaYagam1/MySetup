@@ -21,6 +21,7 @@ HYPR_SHELL_INTEGRATION_TESTS := \
 	Linux/dots/hypr/scripts/tests/snapshot-ownership-test.sh \
 	Linux/dots/hypr/scripts/tests/shell-runtime-dir-test.sh \
 	Linux/dots/hypr/scripts/tests/shell-runtime-env-test.sh \
+	Linux/dots/hypr/scripts/tests/shell-process-lifecycle-test.sh \
 	Linux/dots/hypr/scripts/tests/close-active-test.sh \
 	Linux/dots/hypr/scripts/tests/shell-transition-overlay-test.sh \
 	Linux/dots/hypr/scripts/tests/shell-transition-fast-path-test.sh \

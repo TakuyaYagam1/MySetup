@@ -382,12 +382,25 @@ wahrwelt_shell_transition_begin() {
   esac
 }
 
+wahrwelt_shell_transition_profile_running() {
+  test_has_process "$1"
+}
+
 wahrwelt_shell_transition_wait_covered() {
   [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 0
   [ "${wahrwelt_shell_transition_test_state:-}" = outgoing ] || return 1
 
-  test_event transition:covered
-  wahrwelt_shell_transition_test_state=covered
+  case "${WAHRWELT_TEST_TRANSITION_COVER_MODE:-covered}" in
+    covered)
+      test_event transition:covered
+      wahrwelt_shell_transition_test_state=covered
+      ;;
+    failure)
+      test_event transition:cover-failed
+      return 1
+      ;;
+    *) return 1 ;;
+  esac
 }
 
 wahrwelt_shell_transition_bridge_budget_available() {
@@ -648,6 +661,11 @@ start_with_retry() {
     return 0
   fi
   test_real_start_with_retry "$@"
+}
+
+launch_shell_process() {
+  test_event "launch:$*"
+  "$@"
 }
 
 caelestia-shell() {
@@ -1041,6 +1059,7 @@ run_switch() {
     WAHRWELT_TEST_REPLACE_AFTER_PUBLISH_INDEX="$replace_after_publish_index" \
     WAHRWELT_TEST_FAIL_RELOAD="$fail_reload" \
     WAHRWELT_TEST_TRANSITION_CAPTURE_MODE="${WAHRWELT_TEST_TRANSITION_CAPTURE_MODE:-captured}" \
+    WAHRWELT_TEST_TRANSITION_COVER_MODE="${WAHRWELT_TEST_TRANSITION_COVER_MODE:-covered}" \
     WAHRWELT_TEST_TRANSITION_READINESS_MODE="${WAHRWELT_TEST_TRANSITION_READINESS_MODE:-ready}" \
     WAHRWELT_TEST_TRANSITION_BUDGET_MODE="${WAHRWELT_TEST_TRANSITION_BUDGET_MODE:-available}" \
     WAHRWELT_TEST_USE_REAL_PROFILE_START="${WAHRWELT_TEST_USE_REAL_PROFILE_START:-0}" \
@@ -1116,6 +1135,42 @@ for capture_mode in timeout malformed absent; do
     fail "$capture_mode capture failure attempted completion wait"
   fi
 done
+
+root="$(new_case_root visual-cover-failure-fallback)"
+seed_case "$root" noctalia
+if ! WAHRWELT_TEST_TRANSITION_COVER_MODE=failure run_switch "$root" end4; then
+  fail 'optional cover failure blocked the requested shell start'
+fi
+assert_process_set "$root/processes" end4
+grep -Fqx transition:abort "$root/events" ||
+  fail 'cover failure did not clean the optional transition'
+if grep -Fqx transition "$root/processes"; then
+  fail 'cover failure retained its optional transition process'
+fi
+if grep -Fqx transition:wait-done "$root/events"; then
+  fail 'cover failure attempted transition completion after cleanup'
+fi
+
+root="$(new_case_root visual-stale-previous-state)"
+seed_case "$root" noctalia
+printf '%s\n' unmanaged-hypridle >"$root/processes"
+if ! run_switch "$root" end4; then
+  fail 'stale previous state blocked the requested shell start'
+fi
+assert_process_set "$root/processes" end4
+if grep -Eq '^transition:' "$root/events"; then
+  fail "stale previous state started a wallpaper-only transition
+$(grep '^transition:' "$root/events")"
+fi
+
+root="$(new_case_root visual-caelestia-resizer-ownership)"
+seed_case "$root" noctalia
+WAHRWELT_TEST_USE_REAL_PROFILE_START=1 \
+  WAHRWELT_TEST_USE_REAL_RETRY=1 \
+  run_switch "$root" caelestia
+assert_process_set "$root/processes" caelestia
+grep -Fqx 'launch:caelestia resizer -d' "$root/events" ||
+  fail 'Caelestia resizer bypassed the detached shell process launcher'
 
 root="$(new_case_root visual-pre-stop-prepare-failure)"
 seed_case "$root" noctalia
@@ -1291,8 +1346,9 @@ printf '%s\n' invalid >"$root/home/.local/state/wahrwelt/active-shell"
 if run_switch "$root" end4 "" end4; then
   fail 'visual unrecoverable target failure returned success'
 fi
-grep -Fqx transition:abort "$root/events" ||
-  fail 'unrecoverable EXIT cleanup did not abort the visual transition'
+if grep -Eq '^transition:' "$root/events"; then
+  fail 'invalid previous state started a wallpaper-only visual transition'
+fi
 if grep -Fqx transition "$root/processes"; then
   fail 'unrecoverable EXIT cleanup retained its helper process'
 fi

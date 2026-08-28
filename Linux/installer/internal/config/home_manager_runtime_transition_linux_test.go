@@ -1277,7 +1277,7 @@ func TestRenderedHomeManagerSeedBuildsTopOnlyEnd4BundleBeforeCanonicalMain(t *te
 	}
 }
 
-func TestRenderedHomeManagerLiveSyncUsesProcessRuntimeWithoutInheritedEnvironment(t *testing.T) {
+func TestRenderedHomeManagerLiveSyncUsesStoreToolsAndEscapesActivationCgroup(t *testing.T) {
 	if _, err := exec.LookPath("nix"); err != nil {
 		t.Skipf("nix is unavailable: %v", err)
 	}
@@ -1323,14 +1323,14 @@ func TestRenderedHomeManagerLiveSyncUsesProcessRuntimeWithoutInheritedEnvironmen
 	})
 
 	commandLog := filepath.Join(dir, "live-commands")
-	fakeBin := filepath.Join(dir, "bin")
-	if err := os.Mkdir(fakeBin, 0o700); err != nil {
+	hyprlandPackage := filepath.Join(dir, "hyprland-package")
+	if err := os.MkdirAll(filepath.Join(hyprlandPackage, "bin"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	hyprctl := filepath.Join(fakeBin, "hyprctl")
+	hyprctl := filepath.Join(hyprlandPackage, "bin", "hyprctl")
 	hyprctlScript := `#!/usr/bin/env bash
 set -euo pipefail
-printf 'hyprctl\t%s\t%s\n' "$XDG_RUNTIME_DIR" "$*" >>"$LIVE_COMMAND_LOG"
+printf 'hyprctl\t%s\t%s\t%s\n' "$0" "$XDG_RUNTIME_DIR" "$*" >>"$LIVE_COMMAND_LOG"
 case "${1:-}" in
   instances | reload) ;;
   version) printf '%s\n' 'Hyprland 0.55.0' ;;
@@ -1338,6 +1338,27 @@ case "${1:-}" in
 esac
 `
 	if err := os.WriteFile(hyprctl, []byte(hyprctlScript), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	systemdPackage := filepath.Join(dir, "systemd-package")
+	if err := os.MkdirAll(filepath.Join(systemdPackage, "bin"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	systemdRun := filepath.Join(systemdPackage, "bin", "systemd-run")
+	systemdRunScript := `#!/usr/bin/env bash
+set -euo pipefail
+printf 'systemd-run\t%s\t%s\t%s\n' "$0" "$XDG_RUNTIME_DIR" "$*" >>"$LIVE_COMMAND_LOG"
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = -- ]; then
+    shift
+    break
+  fi
+  shift
+done
+[ "$#" -gt 0 ]
+exec "$@"
+`
+	if err := os.WriteFile(systemdRun, []byte(systemdRunScript), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	scriptsDir := filepath.Join(configHome, "hypr", "scripts")
@@ -1356,8 +1377,16 @@ printf 'start-shell\t%s\n' "$XDG_RUNTIME_DIR" >>"$LIVE_COMMAND_LOG"
 		t.Fatal(err)
 	}
 
-	rendered := renderHomeManagerShellActivationForTest(t, configHome, stateHome, dots)
+	rendered := renderHomeManagerShellActivationForTest(
+		t,
+		configHome,
+		stateHome,
+		dots,
+		hyprlandPackage,
+		systemdPackage,
+	)
 	cmd := exec.Command("bash", "-euo", "pipefail", "-c", rendered)
+	pathWithoutHyprctl := pathWithoutCommandForTest(t, "hyprctl")
 	for _, value := range os.Environ() {
 		if !strings.HasPrefix(value, "XDG_RUNTIME_DIR=") &&
 			!strings.HasPrefix(value, "PATH=") &&
@@ -1367,22 +1396,44 @@ printf 'start-shell\t%s\n' "$XDG_RUNTIME_DIR" >>"$LIVE_COMMAND_LOG"
 	}
 	cmd.Env = append(
 		cmd.Env,
-		"PATH="+fakeBin+":"+os.Getenv("PATH"),
+		"PATH="+pathWithoutHyprctl,
 		"DRY_RUN_CMD=",
 		"LIVE_COMMAND_LOG="+commandLog,
 	)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("rendered live transition without inherited XDG runtime: %v\n%s", err, output)
+		t.Fatalf("rendered live transition without PATH hyprctl: %v\n%s", err, output)
 	}
-	wantLog := strings.Join([]string{
-		"hyprctl\t" + processRuntime + "\tinstances",
-		"hyprctl\t" + processRuntime + "\tversion",
-		"hyprctl\t" + processRuntime + "\treload",
-		"start-shell\t" + processRuntime,
-		"",
-	}, "\n")
-	if got := readContractFile(t, commandLog); got != wantLog {
-		t.Fatalf("live commands did not share the process-derived XDG runtime:\ngot:\n%s\nwant:\n%s", got, wantLog)
+	probe := exec.Command("bash", "-c", "command -v hyprctl")
+	probe.Env = []string{"PATH=" + pathWithoutHyprctl}
+	if output, err := probe.CombinedOutput(); err == nil {
+		t.Fatalf("sanitized activation PATH unexpectedly resolves hyprctl: %s", output)
+	}
+	lines := strings.Split(strings.TrimSpace(readContractFile(t, commandLog)), "\n")
+	if len(lines) != 5 {
+		t.Fatalf("live command count = %d, want 5:\n%s", len(lines), strings.Join(lines, "\n"))
+	}
+	for index, command := range []string{"instances", "version", "reload"} {
+		fields := strings.Split(lines[index], "\t")
+		if len(fields) != 4 || fields[0] != "hyprctl" || fields[2] != processRuntime || fields[3] != command {
+			t.Fatalf("hyprctl %s invocation = %q", command, lines[index])
+		}
+		if !strings.HasPrefix(fields[1], "/nix/store/") || !strings.HasSuffix(fields[1], "-hyprland-live-sync-test/bin/hyprctl") {
+			t.Fatalf("hyprctl %s did not use the rendered Nix store binary: %q", command, fields[1])
+		}
+	}
+	systemdFields := strings.Split(lines[3], "\t")
+	if len(systemdFields) != 4 || systemdFields[0] != "systemd-run" || systemdFields[2] != processRuntime {
+		t.Fatalf("scoped shell launcher invocation = %q", lines[3])
+	}
+	if !strings.HasPrefix(systemdFields[1], "/nix/store/") || !strings.HasSuffix(systemdFields[1], "-systemd-live-sync-test/bin/systemd-run") {
+		t.Fatalf("shell launcher did not use the rendered systemd-run binary: %q", systemdFields[1])
+	}
+	wantScope := fmt.Sprintf(`--user --scope --collect --quiet -- %s`, startShell)
+	if systemdFields[3] != wantScope {
+		t.Fatalf("shell launcher scope = %q, want %q", systemdFields[3], wantScope)
+	}
+	if got := lines[4]; got != "start-shell\t"+processRuntime {
+		t.Fatalf("start-shell did not inherit the process-derived XDG runtime: %q", got)
 	}
 }
 
@@ -1421,7 +1472,13 @@ func TestHomeManagerLiveSyncConsumesDirectEnd4UpgradeProvenanceOnce(t *testing.T
 		`run_live_shell_command "$hyprctl_path" instances`,
 		`run_live_shell_command "$hyprctl_path" version`,
 		`run_live_shell_command "$hyprctl_path" reload`,
-		`run_live_shell_command "${config.xdg.configHome}/hypr/scripts/start-shell.sh"`,
+		`hyprctl_path="${pkgs.hyprland}/bin/hyprctl"`,
+		`"${pkgs.util-linux}/bin/setsid"`,
+		`"${pkgs.systemd}/bin/systemd-run"`,
+		`--user`,
+		`--scope`,
+		`--collect`,
+		`"${config.xdg.configHome}/hypr/scripts/start-shell.sh"`,
 		`wahrwelt_direct_end4_process_upgrade=""`,
 		`wahrwelt_direct_end4_process_runtime_hex=""`,
 		`wahrwelt_direct_end4_process_runtime_id=""`,
@@ -1602,7 +1659,10 @@ in module.home.activation.seedHyprShellRuntime
 	return string(rendered)
 }
 
-func renderHomeManagerShellActivationForTest(t *testing.T, configHome, stateHome, dots string) string {
+func renderHomeManagerShellActivationForTest(
+	t *testing.T,
+	configHome, stateHome, dots, hyprlandPackage, systemdPackage string,
+) string {
 	t.Helper()
 	modulePath := absoluteTestPath(t, "../../../NixOS/home/shells/default.nix")
 	helperRoot := t.TempDir()
@@ -1628,8 +1688,10 @@ let
     bash = "/usr";
     coreutils = %q;
     diffutils = %q;
+    hyprland = builtins.path { path = builtins.toPath %q; name = "hyprland-live-sync-test"; };
     python3 = "/usr";
-    util-linux = "/usr";
+    systemd = builtins.path { path = builtins.toPath %q; name = "systemd-live-sync-test"; };
+    util-linux = %q;
     writeShellApplication = _: %q;
     writeText = name: text: builtins.toFile name text;
   };
@@ -1638,12 +1700,45 @@ in module.home.activation.seedHyprShellRuntime + "\n" + module.home.activation.l
 `, configHome, stateHome, dots,
 		resolvedCommandPackageRoot(t, "mkdir"),
 		resolvedCommandPackageRoot(t, "cmp"),
+		hyprlandPackage,
+		systemdPackage,
+		resolvedCommandPackageRoot(t, "setsid"),
 		helperRoot, modulePath)
 	rendered, err := exec.Command("nix", "eval", "--impure", "--raw", "--expr", expression).CombinedOutput()
 	if err != nil {
 		t.Fatalf("render Home Manager shell activation: %v\n%s", err, rendered)
 	}
 	return string(rendered)
+}
+
+func pathWithoutCommandForTest(t *testing.T, excluded string) string {
+	t.Helper()
+	bin := t.TempDir()
+	linked := make(map[string]struct{})
+	for _, directory := range filepath.SplitList(os.Getenv("PATH")) {
+		entries, err := os.ReadDir(directory)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			name := entry.Name()
+			if name == excluded {
+				continue
+			}
+			if _, exists := linked[name]; exists {
+				continue
+			}
+			info, err := entry.Info()
+			if err != nil || info.IsDir() || info.Mode().Perm()&0o111 == 0 {
+				continue
+			}
+			if err := os.Symlink(filepath.Join(directory, name), filepath.Join(bin, name)); err != nil {
+				t.Fatal(err)
+			}
+			linked[name] = struct{}{}
+		}
+	}
+	return bin
 }
 
 func installEnd4RuntimeAssetsForTest(t *testing.T, configHome, dots string) {

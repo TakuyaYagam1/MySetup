@@ -771,7 +771,7 @@ start_profile_shell() {
       fi
 
       if command -v caelestia >/dev/null 2>&1 && ! is_running "$caelestia_resizer_handle"; then
-        (caelestia resizer -d >>"$log_file" 2>&1 &)
+        (launch_shell_process caelestia resizer -d >>"$log_file" 2>&1 &)
       fi
       ;;
 
@@ -918,8 +918,13 @@ fi
 
 if [ -n "$requested_profile" ]; then
   stop_shell_selector
-  if ! wahrwelt_shell_transition_begin; then
-    log "shell transition capture unavailable; continuing without animation"
+  if valid_profile "$previous" &&
+    wahrwelt_shell_transition_profile_running "$previous"; then
+    if ! wahrwelt_shell_transition_begin; then
+      log "shell transition capture unavailable; continuing without animation"
+    fi
+  else
+    log "shell transition skipped because previous profile has no running process; previous=${previous:-absent}"
   fi
 fi
 
@@ -941,8 +946,11 @@ fi
 
 if [ "$wahrwelt_shell_transition_active" -eq 1 ]; then
   if ! wahrwelt_shell_transition_wait_covered; then
-    log "shell transition did not reach a presented opaque cover; current shell remains active"
-    exit 1
+    log "shell transition cover unavailable; disabling optional animation and continuing shell switch"
+    if [ "$wahrwelt_shell_transition_active" -eq 1 ] ||
+      [ "$wahrwelt_shell_transition_started" -eq 1 ]; then
+      wahrwelt_shell_transition_abort
+    fi
   fi
 fi
 

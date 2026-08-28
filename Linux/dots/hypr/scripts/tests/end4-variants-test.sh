@@ -715,8 +715,8 @@ if [ -s "$start_lock_fixture/durable-tokens" ]; then
   printf 'FAIL: successful argumentless retry did not consume durable provenance\n' >&2
   exit 1
 fi
-assert_eq $'kill:__selector__:TERM\nwait:__selector__\ntransition-begin\nbridge-budget:3000000\nlegacy-cleanup' \
+assert_eq $'kill:__selector__:TERM\nwait:__selector__\nbridge-budget:3000000\nlegacy-cleanup' \
   "$(cat "$start_lock_fixture/lifecycle-events")" \
-  'start-shell lock fixture reached selector stop, transition hook, and provenance cleanup'
+  'start-shell lock fixture skipped a wallpaper-only transition and reached provenance cleanup'
 
 printf 'OK end4 runtime variants\n'

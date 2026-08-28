@@ -389,6 +389,17 @@ wahrwelt_shell_transition_profile_handle() {
   esac
 }
 
+wahrwelt_shell_transition_profile_running() {
+  local profile="$1"
+  local handle pid
+
+  handle="$(wahrwelt_shell_transition_profile_handle "$profile")" || return 1
+  while IFS= read -r pid; do
+    [[ "$pid" =~ ^[1-9][0-9]*$ ]] && return 0
+  done < <(matching_pids "$handle")
+  return 1
+}
+
 wahrwelt_shell_transition_target_layers_ready() {
   local profile="$1"
   local timeout_duration="${2:-0.075s}"
@@ -451,36 +462,48 @@ wahrwelt_shell_transition_bridge_budget_available() {
 }
 
 wahrwelt_shell_transition_wait_covered() {
-  local status command_timeout
+  local status status_result command_timeout cover_deadline_us
 
   [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 1
   [[ "$wahrwelt_shell_transition_visible_deadline_us" =~ ^[0-9]+$ ]] || {
     wahrwelt_shell_transition_abort
     return 1
   }
+  cover_deadline_us=$((wahrwelt_shell_transition_visible_deadline_us - 6000000))
+  [ "$cover_deadline_us" -gt 0 ] || {
+    wahrwelt_shell_transition_abort
+    return 1
+  }
   while command_timeout="$(
     wahrwelt_shell_transition_timeout_before \
-      "$wahrwelt_shell_transition_visible_deadline_us" 75000
+      "$cover_deadline_us" 500000
   )"; do
-    if ! status="$(
+    if status="$(
       wahrwelt_shell_transition_status_with_timeout "$command_timeout" 2>/dev/null
     )"; then
+      status_result=0
+    else
+      status_result=$?
+    fi
+    if [ "$status_result" -eq 2 ]; then
       wahrwelt_shell_transition_abort
       return 1
     fi
-    case "$status" in
-      covered)
-        return 0
-        ;;
-      captured | outgoing)
-        ;;
-      *)
-        wahrwelt_shell_transition_abort
-        return 1
-        ;;
-    esac
+    if [ "$status_result" -eq 0 ]; then
+      case "$status" in
+        covered)
+          return 0
+          ;;
+        captured | outgoing)
+          ;;
+        *)
+          wahrwelt_shell_transition_abort
+          return 1
+          ;;
+      esac
+    fi
     wahrwelt_shell_transition_sleep_before \
-      "$wahrwelt_shell_transition_visible_deadline_us" 50000 || break
+      "$cover_deadline_us" 50000 || break
   done
 
   wahrwelt_shell_transition_abort
