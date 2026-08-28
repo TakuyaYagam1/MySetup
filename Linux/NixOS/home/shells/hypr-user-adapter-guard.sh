@@ -151,7 +151,7 @@ classify_target() {
   [ -f "$target" ] || ownership_collision
   target_digest="$(digest "$target")"
   if [ "$target_digest" = "$current_digest" ]; then
-    classification=current-regular
+    classification="current-regular"
     return 0
   fi
   if is_historical_digest "$target_digest"; then

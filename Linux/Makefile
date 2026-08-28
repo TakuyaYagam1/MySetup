@@ -17,6 +17,7 @@ STYLUA := $(NIX_RUN)stylua --
 # find -print0 chains keep paths with spaces intact (e.g. NixOS/home/noctalia/.../Catppuccin Lavender/).
 NIX_FIND := find $(NIXOS_DIR) -type f -name '*.nix' -print0
 SHELL_FIND := find $(DOTS_DIR)/hypr/scripts -type f -name '*.sh' -print0
+SHELL_LINT_DIRS := Linux/dots/hypr/scripts Linux/NixOS
 FISH_FIND := find $(DOTS_DIR)/hypr/scripts -type f -name '*.fish' -print0
 LUA_DIRS := $(DOTS_DIR)/nvim $(DOTS_DIR)/hypr
 LUA_FIND := find $(LUA_DIRS) -type f -name '*.lua' -print0
@@ -120,8 +121,8 @@ lint-shell: lint-shell-bash lint-shell-fish ## shellcheck + fish -n
 
 .PHONY: lint-shell-bash
 lint-shell-bash: ## bash -n syntax + shellcheck -x (CWD=repo root for source= follow)
-	@$(SHELL_FIND) | xargs -0 -r -n1 bash -n
-	@cd $(REPO_ROOT) && find Linux/dots/hypr/scripts -type f -name '*.sh' -print0 | xargs -0 -r shellcheck -x
+	@cd $(REPO_ROOT) && find $(SHELL_LINT_DIRS) -type f -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
+	@cd $(REPO_ROOT) && find $(SHELL_LINT_DIRS) -type f -name '*.sh' -print0 | xargs -0 -r shellcheck -x
 
 .PHONY: lint-shell-fish
 lint-shell-fish: ## fish -n on dots/hypr/scripts/*.fish
