@@ -1582,6 +1582,153 @@ printf '%s\n' session-ready >>"$LIVE_COMMAND_LOG"
 	}
 }
 
+func TestRenderedHomeManagerLiveSyncRejectsUntrustedInstanceDiscovery(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skipf("nix is unavailable: %v", err)
+	}
+	tests := []struct {
+		name               string
+		instances          string
+		waylandDisplay     string
+		inheritedSignature string
+	}{
+		{
+			name: "stale inherited signature conflicts with Wayland socket",
+			instances: `[
+  {"instance":"stale-signature","time":1234567890,"pid":4241,"wl_socket":"wayland-stale"},
+  {"instance":"socket-signature","time":1234567891,"pid":4242,"wl_socket":"wayland-live"}
+]`,
+			waylandDisplay:     "wayland-live",
+			inheritedSignature: "stale-signature",
+		},
+		{
+			name:           "numeric instance matching Wayland socket",
+			instances:      `[{"instance":123,"time":1234567890,"pid":4242,"wl_socket":"wayland-live"}]`,
+			waylandDisplay: "wayland-live",
+		},
+		{
+			name:           "malformed JSON",
+			instances:      `{bad`,
+			waylandDisplay: "wayland-live",
+		},
+		{
+			name:           "non-array JSON",
+			instances:      `{"instance":"not-an-array","time":1234567890,"pid":4242,"wl_socket":"wayland-live"}`,
+			waylandDisplay: "wayland-live",
+		},
+		{
+			name:           "empty instance list",
+			instances:      `[]`,
+			waylandDisplay: "wayland-live",
+		},
+		{
+			name: "ambiguous Wayland socket",
+			instances: `[
+  {"instance":"first-signature","time":1234567890,"pid":4241,"wl_socket":"wayland-live"},
+  {"instance":"second-signature","time":1234567891,"pid":4242,"wl_socket":"wayland-live"}
+]`,
+			waylandDisplay: "wayland-live",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			home := filepath.Join(dir, "home")
+			configHome := filepath.Join(home, ".config")
+			stateHome := filepath.Join(home, ".local", "state")
+			for _, path := range []string{home, configHome, stateHome} {
+				if err := os.MkdirAll(path, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			forbiddenLog := filepath.Join(dir, "forbidden-live-command")
+			hyprlandPackage := filepath.Join(dir, "hyprland-package")
+			if err := os.MkdirAll(filepath.Join(hyprlandPackage, "bin"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			hyprctl := filepath.Join(hyprlandPackage, "bin", "hyprctl")
+			hyprctlScript := `#!/usr/bin/env bash
+set -euo pipefail
+effective_signature="${HYPRLAND_INSTANCE_SIGNATURE:-}"
+if [ "${1:-}" = -i ]; then
+  effective_signature="${2:-}"
+  shift 2
+fi
+if [ "$*" = '-j instances' ]; then
+  printf '%s\n' "$HYPR_INSTANCES_PAYLOAD"
+  exit 0
+fi
+printf 'hyprctl\t%s\t%s\n' "$effective_signature" "$*" >>"$FORBIDDEN_LIVE_COMMAND_LOG"
+exit 97
+`
+			if err := os.WriteFile(hyprctl, []byte(hyprctlScript), 0o700); err != nil {
+				t.Fatal(err)
+			}
+
+			systemdPackage := filepath.Join(dir, "systemd-package")
+			if err := os.MkdirAll(filepath.Join(systemdPackage, "bin"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			systemdRun := filepath.Join(systemdPackage, "bin", "systemd-run")
+			systemdRunScript := `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' systemd-run >>"$FORBIDDEN_LIVE_COMMAND_LOG"
+exit 97
+`
+			if err := os.WriteFile(systemdRun, []byte(systemdRunScript), 0o700); err != nil {
+				t.Fatal(err)
+			}
+
+			scriptsDir := filepath.Join(configHome, "hypr", "scripts")
+			if err := os.MkdirAll(scriptsDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			startShell := filepath.Join(scriptsDir, "start-shell.sh")
+			startShellScript := `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' start-shell >>"$FORBIDDEN_LIVE_COMMAND_LOG"
+exit 97
+`
+			if err := os.WriteFile(startShell, []byte(startShellScript), 0o700); err != nil {
+				t.Fatal(err)
+			}
+
+			rendered := renderHomeManagerShellActivationForTest(
+				t,
+				configHome,
+				stateHome,
+				absoluteTestPath(t, "../../../dots"),
+				hyprlandPackage,
+				systemdPackage,
+			)
+			cmd := exec.Command("bash", "-euo", "pipefail", "-c", rendered)
+			cmd.Env = []string{
+				"HOME=" + home,
+				"USER=tester",
+				"LOGNAME=tester",
+				"PATH=" + pathWithoutCommandsForTest(t, "hyprctl", "awk", "jq"),
+				"DRY_RUN_CMD=",
+				"FORBIDDEN_LIVE_COMMAND_LOG=" + forbiddenLog,
+				"HYPR_INSTANCES_PAYLOAD=" + test.instances,
+				"WAYLAND_DISPLAY=" + test.waylandDisplay,
+			}
+			if test.inheritedSignature != "" {
+				cmd.Env = append(cmd.Env, "HYPRLAND_INSTANCE_SIGNATURE="+test.inheritedSignature)
+			}
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("untrusted instance discovery aborted Home Manager activation: %v\n%s", err, output)
+			}
+			if data, err := os.ReadFile(forbiddenLog); err == nil {
+				t.Fatalf("untrusted instance discovery invoked a live command:\n%s", data)
+			} else if !os.IsNotExist(err) {
+				t.Fatalf("inspect forbidden live command log: %v", err)
+			}
+		})
+	}
+}
+
 func TestHomeManagerSeedRunsAfterLinkGeneration(t *testing.T) {
 	shells := readContractFile(t, "../../../NixOS/home/shells/default.nix")
 	start := strings.Index(shells, "seedHyprShellRuntime =")

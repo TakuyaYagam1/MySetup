@@ -472,10 +472,16 @@ in
                   if type != "array" then empty
                   else
                     . as $instances
-                    | [$instances[]? | select(.instance == $existing) | .instance] | unique as $by_existing
-                    | [$instances[]? | select($socket != "" and .wl_socket == $socket) | .instance] | unique as $by_socket
-                    | [$instances[]? | .instance | select(type == "string" and length > 0)] | unique as $all
-                    | if $existing != "" and ($by_existing | length) == 1 then $by_existing[0]
+                    | [$instances[]?
+                        | select((.instance | type) == "string" and (.instance | length) > 0)] as $valid
+                    | [$valid[] | select($existing != "" and .instance == $existing) | .instance]
+                      | unique as $by_existing
+                    | [$valid[] | select($socket != "" and .wl_socket == $socket) | .instance]
+                      | unique as $by_socket
+                    | [$valid[] | .instance] | unique as $all
+                    | if ($by_existing | length) == 1 and ($by_socket | length) == 1 then
+                        if $by_existing[0] == $by_socket[0] then $by_existing[0] else empty end
+                      elif ($by_existing | length) == 1 then $by_existing[0]
                       elif ($by_socket | length) == 1 then $by_socket[0]
                       elif ($all | length) == 1 then $all[0]
                       else empty
