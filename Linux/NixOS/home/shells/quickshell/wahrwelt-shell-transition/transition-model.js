@@ -30,6 +30,20 @@ function targetLogoAsset(targetProfile) {
   return "";
 }
 
+function bridgeTicksConsumed(model, progress) {
+  if (!model || model.bridgeTickCount <= 0) {
+    return 0;
+  }
+
+  var normalized = Number(progress);
+  if (!isFinite(normalized)) {
+    return 0;
+  }
+  normalized = Math.max(0, Math.min(1, normalized));
+  return Math.min(model.bridgeTickCount,
+    Math.floor(normalized * model.bridgeTickCount));
+}
+
 function uniqueScreenNames(screenNames) {
   var names = [];
 
@@ -48,6 +62,7 @@ function create(screenNames, targetProfile) {
   var expected = uniqueScreenNames(screenNames || []);
   var profile = typeof targetProfile === "string" ? targetProfile : "";
   var bridgeDuration = bridgeDurationMs(profile);
+  var bridgeTickCount = bridgeDuration / 1000;
   var logoAsset = targetLogoAsset(profile);
   var totalDurationMs = DEFAULT_OUTGOING_DURATION_MS
     + bridgeDuration
@@ -65,6 +80,7 @@ function create(screenNames, targetProfile) {
     settlingPresented: {},
     outgoingDurationMs: DEFAULT_OUTGOING_DURATION_MS,
     bridgeDurationMs: bridgeDuration,
+    bridgeTickCount: bridgeTickCount,
     incomingDurationMs: DEFAULT_INCOMING_DURATION_MS,
     totalDurationMs: totalDurationMs
   };

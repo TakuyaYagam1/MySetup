@@ -200,6 +200,15 @@ qs_status() {
         printf '%s\n' captured
       fi
       ;;
+    cold-capture-then-outgoing)
+      if [ -s "$start_marker" ]; then
+        printf '%s\n' outgoing
+      elif [ "$(cat "$clock_file")" -lt 3000000 ]; then
+        printf '%s\n' capturing
+      else
+        printf '%s\n' captured
+      fi
+      ;;
     start-to-covered)
       if [ ! -s "$start_marker" ]; then
         printf '%s\n' captured
@@ -509,6 +518,15 @@ fi
 wahrwelt_shell_transition_abort
 
 reset_fixture
+status_mode=cold-capture-then-outgoing
+if ! wahrwelt_shell_transition_begin caelestia; then
+  fail 'cold ScreencopyView capture inside the QML watchdog was rejected'
+fi
+[ "$(cat "$clock_file")" -ge 3000000 ] ||
+  fail 'cold capture fixture did not cross the old one-second helper deadline'
+wahrwelt_shell_transition_abort
+
+reset_fixture
 launch_mode=duplicate
 if wahrwelt_shell_transition_begin caelestia; then
   fail 'ambiguous duplicate post-launch instances activated capture'
@@ -559,8 +577,8 @@ else
   if wahrwelt_shell_transition_begin caelestia; then
     fail 'permanently unavailable capture status activated overlay'
   fi
-  assert_eq 2000000 "$(cat "$clock_file")" \
-    'monotonic capture deadline was not exactly 1000ms including launch'
+  assert_eq 6000000 "$(cat "$clock_file")" \
+    'monotonic capture deadline was not aligned to the 5000ms QML watchdog'
   grep -Fqx forward "$wall_jumps" || fail 'capture timing did not simulate a forward wall jump'
   grep -Fqx backward "$wall_jumps" || fail 'capture timing did not simulate a backward wall jump'
   if grep -Eq $'^qs\t(-n\t)?-d\t-c\twahrwelt-shell-transition$' "$operations"; then

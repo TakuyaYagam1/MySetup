@@ -6,6 +6,7 @@ import QtQuick.Window
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import "transition-model.js" as TransitionModel
 
 ShellRoot {
   id: root
@@ -22,6 +23,9 @@ ShellRoot {
   readonly property url targetLogoSource: controller.transitionModel
     ? Qt.resolvedUrl(controller.transitionModel.targetLogoAsset)
     : ""
+  readonly property int consumedBridgeTicks: controller.transitionModel
+    ? TransitionModel.bridgeTicksConsumed(controller.transitionModel, root.bridgeProgress)
+    : 0
   readonly property bool surfaceVisible: transitionState === "capturing"
     || transitionState === "captured"
     || transitionState === "outgoing"
@@ -274,6 +278,39 @@ ShellRoot {
           fillMode: Image.PreserveAspectFit
           smooth: true
           mipmap: true
+        }
+
+        Row {
+          id: bridgeTicks
+
+          anchors.top: targetLogo.bottom
+          anchors.topMargin: Math.max(18, Math.min(parent.width, parent.height) * 0.025)
+          anchors.horizontalCenter: targetLogo.horizontalCenter
+          spacing: Math.max(8, Math.min(parent.width, parent.height) * 0.01)
+          visible: root.transitionState === "covered"
+
+          Repeater {
+            model: controller.transitionModel
+              ? controller.transitionModel.bridgeTickCount
+              : 0
+
+            delegate: Rectangle {
+              required property int index
+
+              width: Math.max(18, Math.min(window.width, window.height) * 0.025)
+              height: Math.max(4, Math.min(window.width, window.height) * 0.006)
+              radius: height / 2
+              color: "white"
+              opacity: index < root.consumedBridgeTicks ? 0.18 : 0.95
+
+              Behavior on opacity {
+                NumberAnimation {
+                  duration: 180
+                  easing.type: Easing.OutCubic
+                }
+              }
+            }
+          }
         }
       }
 

@@ -5,6 +5,7 @@
 wahrwelt_shell_transition_config=wahrwelt-shell-transition
 wahrwelt_shell_transition_target=shellTransition
 wahrwelt_shell_transition_uptime_file=/proc/uptime
+wahrwelt_shell_transition_capture_timeout_us=5000000
 wahrwelt_shell_transition_instance_id=
 wahrwelt_shell_transition_launcher_pid=
 wahrwelt_shell_transition_started=0
@@ -299,7 +300,10 @@ wahrwelt_shell_transition_begin() {
     wahrwelt_shell_transition_cleanup_all || true
     return 1
   }
-  deadline_us=$((now_us + 1000000))
+  # Match the QML capture watchdog. Cold ScreencopyView initialization after a
+  # Home Manager activation can take longer than one second, while the visible
+  # 9s/11s timeline remains anchored only after capture succeeds.
+  deadline_us=$((now_us + wahrwelt_shell_transition_capture_timeout_us))
   wahrwelt_shell_transition_profile="$profile"
   wahrwelt_shell_transition_bridge_duration_us="$bridge_duration_us"
   wahrwelt_shell_transition_started=1

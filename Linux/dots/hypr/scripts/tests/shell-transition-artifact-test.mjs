@@ -80,8 +80,10 @@ for (const [profile, bridgeDurationMs, totalDurationMs] of [
       ? "assets/noctalia.svg"
       : "assets/illogical-impulse.svg",
   `${profile} target logo artifact contract`);
-  assert.equal(Object.prototype.hasOwnProperty.call(model, "bridgePulseCount"), false,
-    `${profile} must not expose a countdown pulse contract`);
+  assert.equal(model.bridgeTickCount, bridgeDurationMs / 1000,
+    `${profile} must expose one discrete countdown tick per covered second`);
+  assert.equal(transitionModel.bridgeTicksConsumed(model, 1), bridgeDurationMs / 1000,
+    `${profile} must consume every countdown tick at the bridge boundary`);
 }
 
 const shellSource = fs.readFileSync(path.join(artifact, "shell.qml"), "utf8");
@@ -90,9 +92,12 @@ assert.match(shellSource, /id:\s*neutralVeilSource/,
 assert.match(shellSource,
   /Image\s*\{[\s\S]*id:\s*targetLogo[\s\S]*anchors\.centerIn:\s*parent[\s\S]*source:\s*root\.targetLogoSource/,
   "transition artifact must center the exact target logo on its handoff veil");
+assert.match(shellSource,
+  /id:\s*bridgeTicks[\s\S]*visible:\s*root\.transitionState === "covered"[\s\S]*bridgeTickCount/,
+  "transition artifact must show the profile-specific graphical countdown below the logo");
 assert.doesNotMatch(shellSource,
-  /\bbridgePulseCount\b|\breadonly property real pulse\b|Math\.cos|\bText\s*\{|countdown/i,
-  "transition artifact must not contain a pulse, text, or countdown");
+  /\bbridgePulseCount\b|\breadonly property real pulse\b|Math\.cos|\bText\s*\{/,
+  "transition artifact must not contain a full-screen pulse or countdown text");
 assert.match(shellSource, /easing\.type: Easing\.InOutCubic/,
   "shell cover and reveal must use a smooth eased curve");
 

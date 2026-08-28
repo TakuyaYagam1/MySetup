@@ -92,15 +92,25 @@ assert.match(
   /id:\s*neutralVeilSource[\s\S]*Image\s*\{[\s\S]*id:\s*targetLogo[\s\S]*anchors\.centerIn:\s*parent[\s\S]*source:\s*root\.targetLogoSource[\s\S]*fillMode:\s*Image\.PreserveAspectFit/,
   "the covered handoff must show the exact target logo centered without stretching it",
 );
-assert.doesNotMatch(
+assert.match(
   shellSource,
-  /\bbridgePulseCount\b|\breadonly property real pulse\b|Math\.cos/,
-  "the covered handoff must not pulse or expose a visual countdown",
+  /id:\s*bridgeTicks[\s\S]*visible:\s*root\.transitionState === "covered"[\s\S]*model:\s*controller\.transitionModel\s*\?\s*controller\.transitionModel\.bridgeTickCount\s*:\s*0/,
+  "the covered handoff must show the profile-specific tick count below the logo",
+);
+assert.match(
+  shellSource,
+  /bridgeTicksConsumed\(controller\.transitionModel, root\.bridgeProgress\)[\s\S]*index < root\.consumedBridgeTicks/,
+  "one discrete tick must be visibly consumed for each completed bridge second",
 );
 assert.doesNotMatch(
   shellSource,
-  /\bText\s*\{|countdown/i,
-  "the covered handoff must not render text or a countdown",
+  /\bbridgePulseCount\b|\breadonly property real pulse\b|Math\.cos/,
+  "the covered handoff must not restore the old full-screen pulse",
+);
+assert.doesNotMatch(
+  shellSource,
+  /\bText\s*\{/,
+  "the covered handoff must keep the countdown graphical and text-free",
 );
 assert.match(
   shellSource,

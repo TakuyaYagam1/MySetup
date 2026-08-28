@@ -191,8 +191,22 @@ start_selector() {
   wait_for_selector_spawn || true
 }
 
+probe_shell_switch_lock() {
+  local helper status=0
+
+  helper="$(wahrwelt_lock_fs_helper_path)" || return 1
+  "$helper" runtime-lock-run \
+    --root "$wahrwelt_runtime_session_public_dir" \
+    --name wahrwelt-shell-v2.lock \
+    --wait-ms 0 \
+    -- "$BASH" -c ':' || status=$?
+  return "$status"
+}
+
 switch_shell() {
   local profile="$1"
+  local probe_status=0
+  local start_status=0
 
   if ! wahrwelt_valid_shell_profile "$profile"; then
     log "rejecting invalid profile switch request: ${profile:-empty}"
@@ -204,9 +218,25 @@ switch_shell() {
     exit 1
   fi
 
+  probe_shell_switch_lock || probe_status=$?
+  case "$probe_status" in
+    0) ;;
+    75)
+      log "shell switch already active; ignoring profile=$profile"
+      return 0
+      ;;
+    *)
+      log "shell switch lock probe failed; status=$probe_status"
+      exit 1
+      ;;
+  esac
+
   log "dispatching shell switch profile=$profile script=$start_shell_script"
-  bash "$start_shell_script" "$profile" >>"$log_file" 2>&1 &
+  # Keep the selector lock until start-shell releases the authoritative shell
+  # lock, so there is no probe-to-acquire window for another selector action.
+  bash "$start_shell_script" "$profile" >>"$log_file" 2>&1 || start_status=$?
   stop_selector
+  return "$start_status"
 }
 
 case "$action" in
@@ -225,6 +255,19 @@ case "$action" in
       stop_selector
       exit 0
     fi
+    probe_status=0
+    probe_shell_switch_lock || probe_status=$?
+    case "$probe_status" in
+      0) ;;
+      75)
+        log "shell switch already active; ignoring selector toggle"
+        exit 0
+        ;;
+      *)
+        log "shell switch lock probe failed; status=$probe_status"
+        exit 1
+        ;;
+    esac
     start_selector
     ;;
   close)

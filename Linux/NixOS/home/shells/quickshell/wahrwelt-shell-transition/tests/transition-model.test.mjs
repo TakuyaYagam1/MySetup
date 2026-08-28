@@ -28,8 +28,8 @@ function createTwoScreenModel(profile = "caelestia") {
   assert.equal(model.bridgeDurationMs, 3000, "normal covered shell handoff must last exactly 3000 ms");
   assert.equal(model.targetLogoAsset, "assets/caelestia.svg",
     "the default target must use the existing Caelestia logo asset");
-  assert.equal(Object.prototype.hasOwnProperty.call(model, "bridgePulseCount"), false,
-    "the covered handoff must not expose a countdown pulse contract");
+  assert.equal(model.bridgeTickCount, 3,
+    "the normal covered handoff must expose one visible tick per second");
   assert.equal(model.incomingDurationMs, 3000, "new shell reveal must last exactly 3000 ms");
   assert.equal(model.totalDurationMs, 9000, "the complete normal visible transition must last exactly 9000 ms");
   assert.equal(transitionModel.capture(model, "DP-1"), true);
@@ -49,8 +49,8 @@ for (const [profile, targetLogoAsset] of [
   assert.equal(model.targetLogoAsset, targetLogoAsset,
     `${profile} must use its existing selector logo`);
   assert.equal(model.bridgeDurationMs, 3000, `${profile} must retain the three-second covered handoff`);
-  assert.equal(Object.prototype.hasOwnProperty.call(model, "bridgePulseCount"), false,
-    `${profile} must not expose a covered countdown pulse`);
+  assert.equal(model.bridgeTickCount, 3,
+    `${profile} must expose three discrete covered countdown ticks`);
   assert.equal(model.totalDurationMs, 9000, `${profile} must retain the nine-second visible timeline`);
   assert.equal(transitionModel.capture(model, "DP-1"), true);
   assert.equal(transitionModel.beginTransition(model), true);
@@ -64,13 +64,47 @@ for (const profile of ["end4", "end4-pc"]) {
   assert.equal(model.targetLogoAsset, "assets/illogical-impulse.svg",
     `${profile} must share the existing Illogical Impulse selector logo`);
   assert.equal(model.bridgeDurationMs, 5000, `${profile} must receive a five-second covered handoff`);
-  assert.equal(Object.prototype.hasOwnProperty.call(model, "bridgePulseCount"), false,
-    `${profile} must not expose a covered countdown pulse`);
+  assert.equal(model.bridgeTickCount, 5,
+    `${profile} must expose five discrete covered countdown ticks`);
   assert.equal(model.totalDurationMs, 11000, `${profile} must receive the eleven-second visible timeline`);
   assert.equal(transitionModel.capture(model, "DP-1"), true);
   assert.equal(transitionModel.beginTransition(model), true);
   assert.equal(transitionModel.watchdogTimeoutMs(model), 12750,
     `${profile} watchdog must include the cover-fence and cleanup margins`);
+}
+
+{
+  const model = transitionModel.create(["DP-1"], "caelestia");
+  for (const [progress, consumed] of [
+    [-1, 0],
+    [0, 0],
+    [0.32, 0],
+    [1 / 3, 1],
+    [0.65, 1],
+    [2 / 3, 2],
+    [0.99, 2],
+    [1, 3],
+    [2, 3],
+  ]) {
+    assert.equal(transitionModel.bridgeTicksConsumed(model, progress), consumed,
+      `normal bridge progress ${progress} must consume ${consumed} ticks`);
+  }
+}
+
+{
+  const model = transitionModel.create(["DP-1"], "end4");
+  for (const [progress, consumed] of [
+    [0, 0],
+    [0.19, 0],
+    [0.2, 1],
+    [0.4, 2],
+    [0.8, 4],
+    [0.99, 4],
+    [1, 5],
+  ]) {
+    assert.equal(transitionModel.bridgeTicksConsumed(model, progress), consumed,
+      `End4 bridge progress ${progress} must consume ${consumed} ticks`);
+  }
 }
 
 for (const profile of ["", "END4", "end4-pc ", "unknown"]) {
