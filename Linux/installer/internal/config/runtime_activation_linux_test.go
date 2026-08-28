@@ -850,6 +850,77 @@ func TestHomeManagerUserActivationAcceptsOnlyExactOldGenerationAdapterLink(t *te
 	}
 }
 
+func TestHomeManagerUserActivationAcceptsOnlyKnownNixOSManagedAdapterLink(t *testing.T) {
+	currentPath := "../../../dots/hypr/hyprland.lua"
+	current := readContractFile(t, currentPath)
+	fixtures := map[string]struct {
+		content string
+		wantOK  bool
+	}{
+		"current": {
+			content: current,
+			wantOK:  true,
+		},
+		"historical": {
+			content: readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua"),
+			wantOK:  true,
+		},
+		"unknown": {
+			content: "-- unknown store adapter\n",
+		},
+	}
+	for name, fixture := range fixtures {
+		t.Run(name, func(t *testing.T) {
+			managed := addHomeManagerAdapterStoreFixture(t, "user", fixture.content)
+			dir := t.TempDir()
+			userDir := filepath.Join(dir, "user")
+			if err := os.Mkdir(userDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			target := filepath.Join(userDir, "hyprland.lua")
+			if err := os.Symlink(managed.adapter, target); err != nil {
+				t.Fatal(err)
+			}
+			oldManaged := addHomeManagerAdapterStoreFixture(t, "wahrwelt", fixture.content)
+			unrelatedGeneration := filepath.Join(dir, "unrelated-generation")
+			if err := os.MkdirAll(unrelatedGeneration, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(oldManaged.root, filepath.Join(unrelatedGeneration, "home-files")); err != nil {
+				t.Fatal(err)
+			}
+			defaultSource := filepath.Join(dir, "default-source.lua")
+			if err := os.WriteFile(defaultSource, []byte("-- managed default\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			output, err := exec.Command(
+				"bash",
+				runtimeActivationHelper,
+				"activate-user-dir",
+				userDir,
+				currentPath,
+				unrelatedGeneration,
+				defaultSource,
+			).CombinedOutput()
+			if fixture.wantOK && err != nil {
+				t.Fatalf("known NixOS-managed adapter link rejected: %v\n%s", err, output)
+			}
+			if !fixture.wantOK && (err == nil || !strings.Contains(string(output), "ownership collision")) {
+				t.Fatalf("unknown store adapter accepted: err=%v\n%s", err, output)
+			}
+			if got, readErr := os.Readlink(target); readErr != nil || got != managed.adapter {
+				t.Fatalf("managed adapter link changed: target=%q err=%v", got, readErr)
+			}
+			if fixture.wantOK {
+				if got := readContractFile(t, filepath.Join(userDir, "default.lua")); got != "-- managed default\n" {
+					t.Fatalf("default seed content = %q", got)
+				}
+			}
+		})
+	}
+}
+
 func runtimeLegacyFixtures(t *testing.T) ([]string, []byte) {
 	t.Helper()
 	legacyDir := "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"

@@ -13,7 +13,7 @@ absolute_symlink_target() {
     /*) ;;
     *) target="$(dirname -- "$link")/$target" ;;
   esac
-  readlink -m -- "$target"
+  realpath -m -s -- "$target"
 }
 
 end4_source_from_current_generation() {
@@ -45,7 +45,12 @@ end4_source_from_immutable_home_manager_files() {
   [[ "$store_item" =~ ^[0-9a-df-np-sv-z]{32}-home-manager-files$ ]] || return 1
   [ "$suffix" = ".config/hypr/end4" ] || return 1
   resolved="$(readlink -f -- "$source" 2>/dev/null || true)"
-  [ -n "$resolved" ] && [ -d "$resolved" ] && [ -f "$resolved/hyprland.lua" ] || return 1
+  [[ "$resolved" =~ ^/nix/store/[0-9a-df-np-sv-z]{32}-end4-hypr-validated$ ]] || return 1
+  [ "$(stat -Lc '%u:%a' -- "$resolved" 2>/dev/null || true)" = 0:555 ] || return 1
+  [ "$(stat -Lc '%u:%a' -- "$resolved/hyprland.lua" 2>/dev/null || true)" = 0:444 ] || return 1
+  [ "$(stat -Lc '%u:%a' -- "$resolved/.wahrwelt-runtime-contract" 2>/dev/null || true)" = 0:444 ] || return 1
+  [ "$(sha256sum -- "$resolved/.wahrwelt-runtime-contract" 2>/dev/null | awk '{print $1}')" = \
+    1d383cff084bb68da410e31c70fb6404630708dd10169960bd4441cfb2e81091 ] || return 1
   printf '%s' "$resolved"
 }
 

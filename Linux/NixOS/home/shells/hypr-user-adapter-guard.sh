@@ -35,6 +35,59 @@ is_historical_digest() {
   return 1
 }
 
+is_root_owned_readonly_directory() {
+  local path="$1"
+  local identity owner mode
+
+  [ -d "$path" ] && [ ! -L "$path" ] || return 1
+  identity="$(stat -Lc '%u:%a' -- "$path" 2>/dev/null)" || return 1
+  owner="${identity%%:*}"
+  mode="${identity#*:}"
+  [ "$owner" = 0 ] && [[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+  (( (8#$mode & 8#022) == 0 ))
+}
+
+is_root_owned_store_leaf() {
+  local path="$1"
+  local allow_symlink="$2"
+  local owner mode
+
+  owner="$(stat -c '%u' -- "$path" 2>/dev/null)" || return 1
+  [ "$owner" = 0 ] || return 1
+  if [ -L "$path" ]; then
+    [ "$allow_symlink" -eq 1 ]
+    return
+  fi
+  [ -f "$path" ] || return 1
+  mode="$(stat -c '%a' -- "$path" 2>/dev/null)" || return 1
+  [[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+  (( (8#$mode & 8#222) == 0 ))
+}
+
+is_immutable_nix_store_leaf() {
+  local path="$1"
+  local allow_symlink="$2"
+  local object_path suffix current leaf index
+  local components=()
+
+  [[ "$path" =~ ^(/nix/store/[0-9abcdfghijklmnpqrsvwxyz]{32}-[^/]+)(/.*)?$ ]] || return 1
+  object_path="${BASH_REMATCH[1]}"
+  suffix="${BASH_REMATCH[2]:-}"
+  leaf="$object_path"
+  if [ -n "$suffix" ]; then
+    is_root_owned_readonly_directory "$object_path" || return 1
+    IFS=/ read -r -a components <<<"${suffix#/}"
+    [ "${#components[@]}" -gt 0 ] || return 1
+    current="$object_path"
+    for ((index = 0; index + 1 < ${#components[@]}; index++)); do
+      current="$current/${components[index]}"
+      is_root_owned_readonly_directory "$current" || return 1
+    done
+    leaf="$current/${components[${#components[@]} - 1]}"
+  fi
+  is_root_owned_store_leaf "$leaf" "$allow_symlink"
+}
+
 if [ -L "$current_source" ] || [ ! -f "$current_source" ]; then
   printf 'Wahrwelt managed Hypr user adapter source is not a regular file: %s\n' "$current_source" >&2
   exit 1
@@ -53,12 +106,33 @@ classify_target() {
   fi
 
   if [ -L "$target" ]; then
-    [ -n "$old_generation" ] || ownership_collision
-    old_home_files="$(readlink -e -- "$old_generation/home-files" 2>/dev/null || true)"
     raw_target="$(readlink -- "$target" 2>/dev/null || true)"
     resolved_target="$(readlink -e -- "$target" 2>/dev/null || true)"
-    [ -n "$old_home_files" ] && [ -n "$raw_target" ] && [ -n "$resolved_target" ] || ownership_collision
+    [ -n "$raw_target" ] && [ -n "$resolved_target" ] || ownership_collision
     [ -f "$resolved_target" ] && [ ! -L "$resolved_target" ] || ownership_collision
+
+    if [[ "$raw_target" =~ ^/nix/store/[0-9abcdfghijklmnpqrsvwxyz]{32}-home-manager-files/\.config/hypr/(user|wahrwelt|mysetup)/hyprland\.lua$ ]] &&
+      is_immutable_nix_store_leaf "$raw_target" 1 &&
+      is_immutable_nix_store_leaf "$resolved_target" 0; then
+      target_digest="$(digest "$resolved_target")"
+      if [ "$target_digest" = "$current_digest" ] || is_historical_digest "$target_digest"; then
+        linked_identity="$(stat -Lc '%d:%i' -- "$target" 2>/dev/null || true)"
+        raw_identity="$(stat -Lc '%d:%i' -- "$raw_target" 2>/dev/null || true)"
+        resolved_identity="$(stat -Lc '%d:%i' -- "$resolved_target" 2>/dev/null || true)"
+        if [ -n "$linked_identity" ] && [ "$linked_identity" = "$raw_identity" ] &&
+          [ "$linked_identity" = "$resolved_identity" ] &&
+          [ "$(readlink -- "$target" 2>/dev/null || true)" = "$raw_target" ] &&
+          [ "$(readlink -e -- "$target" 2>/dev/null || true)" = "$resolved_target" ] &&
+          [ "$(digest "$resolved_target")" = "$target_digest" ]; then
+          classification=nixos-home-manager-link
+          return 0
+        fi
+      fi
+    fi
+
+    [ -n "$old_generation" ] || ownership_collision
+    old_home_files="$(readlink -e -- "$old_generation/home-files" 2>/dev/null || true)"
+    [ -n "$old_home_files" ] || ownership_collision
 
     for namespace in user wahrwelt mysetup; do
       expected="$old_home_files/.config/hypr/$namespace/hyprland.lua"

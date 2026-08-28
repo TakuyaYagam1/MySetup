@@ -26,6 +26,13 @@ HISTORICAL_ADAPTER_DIGESTS = {
     "a547d710e9fd13ca8829e17caa378a14ee9d6a0d114426731e0ab363e9328118",
     "3666c398dbba460e9b3dac54f396a7f53ad2093f49967c05e4588e66c41f08eb",
 }
+NIX_STORE_OBJECT_RE = re.compile(
+    r"^(/nix/store/[0-9abcdfghijklmnpqrsvwxyz]{32}-[^/]+)(/.*)?$"
+)
+NIXOS_HOME_MANAGER_ADAPTER_RE = re.compile(
+    r"^/nix/store/[0-9abcdfghijklmnpqrsvwxyz]{32}-home-manager-files/"
+    r"\.config/hypr/(?:user|wahrwelt|mysetup)/hyprland\.lua$"
+)
 
 libc = ctypes.CDLL(None, use_errno=True)
 linkat = libc.linkat
@@ -422,7 +429,112 @@ def managed_regular_token(parent_fd, name, source, label, display_path):
     return info.st_dev, info.st_ino, hashlib.sha256(content).digest()
 
 
-def validate_home_manager_adapter_link(parent_fd, name, old_generation, label, display_path):
+def immutable_nix_store_leaf(path, allow_symlink):
+    matched = NIX_STORE_OBJECT_RE.fullmatch(path)
+    if matched is None:
+        return False
+    object_path = matched.group(1)
+    suffix = matched.group(2)
+    leaf = object_path
+    if suffix:
+        try:
+            root_info = os.lstat(object_path)
+        except OSError:
+            return False
+        if (
+            not stat.S_ISDIR(root_info.st_mode)
+            or root_info.st_uid != 0
+            or root_info.st_mode & 0o022
+        ):
+            return False
+        current = object_path
+        components = [component for component in suffix.split(os.sep) if component]
+        if not components:
+            return False
+        for component in components[:-1]:
+            current = os.path.join(current, component)
+            try:
+                current_info = os.lstat(current)
+            except OSError:
+                return False
+            if (
+                not stat.S_ISDIR(current_info.st_mode)
+                or current_info.st_uid != 0
+                or current_info.st_mode & 0o022
+            ):
+                return False
+        leaf = os.path.join(current, components[-1])
+    try:
+        leaf_info = os.lstat(leaf)
+    except OSError:
+        return False
+    if leaf_info.st_uid != 0:
+        return False
+    if stat.S_ISLNK(leaf_info.st_mode):
+        return allow_symlink
+    return stat.S_ISREG(leaf_info.st_mode) and not leaf_info.st_mode & 0o222
+
+
+def validate_nixos_home_manager_adapter_link(
+    parent_fd,
+    name,
+    current_source,
+    pinned,
+    label,
+    display_path,
+):
+    raw_target = os.readlink(name, dir_fd=parent_fd)
+    if NIXOS_HOME_MANAGER_ADAPTER_RE.fullmatch(raw_target) is None:
+        return False
+    resolved_target = os.path.realpath(raw_target)
+    if not immutable_nix_store_leaf(raw_target, True) or not immutable_nix_store_leaf(
+        resolved_target, False
+    ):
+        return False
+    try:
+        linked_fd = os.open(name, os.O_RDONLY | os.O_CLOEXEC, dir_fd=parent_fd)
+    except OSError:
+        return False
+    try:
+        opened = os.fstat(linked_fd)
+        content = read_fd(linked_fd)
+    finally:
+        os.close(linked_fd)
+    if not stat.S_ISREG(opened.st_mode):
+        return False
+    content_digest = hashlib.sha256(content).hexdigest()
+    current_content = read_regular(current_source, label)
+    if content != current_content and content_digest not in HISTORICAL_ADAPTER_DIGESTS:
+        return False
+    try:
+        raw_info = os.stat(raw_target, follow_symlinks=True)
+        linked_info = os.stat(name, dir_fd=parent_fd, follow_symlinks=True)
+    except OSError:
+        return False
+    validate_chain(pinned, label, display_path)
+    if identity(raw_info) != identity(opened) or identity(linked_info) != identity(opened):
+        return False
+    return True
+
+
+def validate_home_manager_adapter_link(
+    parent_fd,
+    name,
+    old_generation,
+    current_source,
+    pinned,
+    label,
+    display_path,
+):
+    if validate_nixos_home_manager_adapter_link(
+        parent_fd,
+        name,
+        current_source,
+        pinned,
+        label,
+        display_path,
+    ):
+        return
     if not old_generation:
         ownership_collision(label, display_path, "unowned adapter symlink")
     home_files = os.path.realpath(os.path.join(old_generation, "home-files"))
@@ -453,7 +565,15 @@ def prepare_user_adapter(parent_fd, current_source, old_generation, pinned, disp
     if classification == "absent":
         return adapter_token(parent_fd, name, label, display_path)
     if classification == "symlink":
-        validate_home_manager_adapter_link(parent_fd, name, old_generation, label, display_path)
+        validate_home_manager_adapter_link(
+            parent_fd,
+            name,
+            old_generation,
+            current_source,
+            pinned,
+            label,
+            display_path,
+        )
         token = adapter_token(parent_fd, name, label, display_path)
         if token[0] != "symlink" or token[1:3] != identity(initial):
             ownership_collision(label, display_path, "adapter symlink changed during provenance check")

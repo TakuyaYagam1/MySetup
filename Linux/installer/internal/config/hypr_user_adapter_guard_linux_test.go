@@ -3,6 +3,7 @@
 package config
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"os"
@@ -65,6 +66,13 @@ func TestHyprUserAdapterGuardAcceptsOnlyActiveGenerationSymlink(t *testing.T) {
 			},
 		},
 		{
+			name:   "arbitrary-current-symlink",
+			target: filepath.Join(t.TempDir(), "adapter.lua"),
+			prepare: func(path string) error {
+				return os.WriteFile(path, []byte(readContractFile(t, current)), 0o444)
+			},
+		},
+		{
 			name:   "broken-symlink",
 			target: filepath.Join(t.TempDir(), "missing.lua"),
 		},
@@ -91,6 +99,113 @@ func TestHyprUserAdapterGuardAcceptsOnlyActiveGenerationSymlink(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHyprUserAdapterGuardAcceptsExactNixOSManagedGenerationSymlink(t *testing.T) {
+	current := "../../../dots/hypr/hyprland.lua"
+	fixtures := map[string]struct {
+		content string
+		wantOK  bool
+	}{
+		"current": {
+			content: readContractFile(t, current),
+			wantOK:  true,
+		},
+		"historical": {
+			content: readContractFile(t, "../../../NixOS/home/migrations/v1_to_v2/hypr-runtime/user-adapter-wahrwelt-v1.lua"),
+			wantOK:  true,
+		},
+		"unknown": {
+			content: "-- unknown store adapter\n",
+		},
+	}
+	for name, fixture := range fixtures {
+		t.Run(name, func(t *testing.T) {
+			managed := addHomeManagerAdapterStoreFixture(t, "user", fixture.content)
+			leaf := filepath.Join(t.TempDir(), "hyprland.lua")
+			if err := os.Symlink(managed.adapter, leaf); err != nil {
+				t.Fatal(err)
+			}
+			oldManaged := addHomeManagerAdapterStoreFixture(t, "wahrwelt", fixture.content)
+			unrelatedGeneration := t.TempDir()
+			if err := os.Symlink(oldManaged.root, filepath.Join(unrelatedGeneration, "home-files")); err != nil {
+				t.Fatal(err)
+			}
+
+			output, err := exec.Command(
+				"bash",
+				hyprUserAdapterGuard,
+				"check",
+				leaf,
+				current,
+				unrelatedGeneration,
+			).CombinedOutput()
+			if fixture.wantOK && err != nil {
+				t.Fatalf("exact NixOS-managed generation link rejected: %v\n%s", err, output)
+			}
+			if !fixture.wantOK && (err == nil || !strings.Contains(string(output), "ownership collision")) {
+				t.Fatalf("unknown store adapter accepted: err=%v\n%s", err, output)
+			}
+			if got, readErr := os.Readlink(leaf); readErr != nil || got != managed.adapter {
+				t.Fatalf("managed link changed: target=%q err=%v", got, readErr)
+			}
+		})
+	}
+}
+
+type homeManagerAdapterStoreFixture struct {
+	root    string
+	adapter string
+}
+
+func addHomeManagerAdapterStoreFixture(t *testing.T, namespace, content string) homeManagerAdapterStoreFixture {
+	t.Helper()
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skipf("nix is unavailable: %v", err)
+	}
+	source := filepath.Join(t.TempDir(), "hm_hyprland.lua")
+	if err := os.WriteFile(source, []byte(content), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	storeSource := addNixStorePath(t, "hm_hyprland.lua", source)
+	filesTree := filepath.Join(t.TempDir(), "home-manager-files")
+	adapter := filepath.Join(filesTree, ".config", "hypr", namespace, "hyprland.lua")
+	if err := os.MkdirAll(filepath.Dir(adapter), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(storeSource, adapter); err != nil {
+		t.Fatal(err)
+	}
+	storeRoot := addNixStorePath(t, "home-manager-files", filesTree)
+	return homeManagerAdapterStoreFixture{
+		root:    storeRoot,
+		adapter: filepath.Join(storeRoot, ".config", "hypr", namespace, "hyprland.lua"),
+	}
+}
+
+func addNixStorePath(t *testing.T, name, path string) string {
+	t.Helper()
+	cmd := exec.Command(
+		"nix",
+		"--extra-experimental-features",
+		"nix-command",
+		"store",
+		"add-path",
+		"--name",
+		name,
+		path,
+	)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("add Home Manager adapter fixture to the Nix store: %v\n%s", err, stderr.String())
+	}
+	storePath := strings.TrimSpace(string(output))
+	if !strings.HasPrefix(storePath, "/nix/store/") || !strings.HasSuffix(storePath, "-"+name) {
+		t.Fatalf("unexpected fixture store path: %q", storePath)
+	}
+	return storePath
 }
 
 func TestHyprUserAdapterGuardPreparesOnlyExactRegularFixture(t *testing.T) {
