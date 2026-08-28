@@ -49,4 +49,9 @@ func TestDeveloperContainersUseRootlessPodmanCompatibility(t *testing.T) {
 			t.Fatalf("rootless container contract is missing %q\n%s", required, virtualization)
 		}
 	}
+
+	fish := readPrivilegeContractFile(t, "../../../NixOS/home/programs/fish.nix")
+	if !strings.Contains(fish, `docker = "podman";`) {
+		t.Fatalf("Fish does not route Docker CLI commands through rootless Podman\n%s", fish)
+	}
 }

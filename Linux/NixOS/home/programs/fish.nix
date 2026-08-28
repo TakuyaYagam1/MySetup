@@ -62,6 +62,7 @@ in
       reboot = "systemctl reboot";
       poweroff = "systemctl poweroff";
 
+      docker = "podman";
       dc = "podman-compose";
       dps = "podman ps";
       dpsa = "podman ps -a";
