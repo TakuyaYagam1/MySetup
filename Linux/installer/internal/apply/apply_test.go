@@ -65,23 +65,6 @@ func runValidatedStagingTestCommand(ctx context.Context, name string, args ...st
 	if name == "sudo" && len(args) > 0 && args[0] == "-n" {
 		args = args[1:]
 	}
-	if name == "sudo" && len(args) >= 6 && args[1] == "-c" && args[2] == privilegedStagingCleanupPython {
-		parentPath := args[3]
-		stagingName := args[4]
-		expectedPath := args[5]
-		visible, err := os.Lstat(filepath.Join(parentPath, stagingName))
-		if err != nil {
-			return true, err
-		}
-		expected, err := os.Stat(expectedPath)
-		if err != nil {
-			return true, err
-		}
-		if !visible.IsDir() || !os.SameFile(visible, expected) {
-			return true, fmt.Errorf("test staging cleanup identity mismatch")
-		}
-		return true, os.RemoveAll(filepath.Join(parentPath, stagingName))
-	}
 	if filepath.Base(name) != "nix-store" {
 		return false, nil
 	}

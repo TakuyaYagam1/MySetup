@@ -141,49 +141,6 @@ func (r *validatedStagingMutationRunner) OutputInPinnedDirectory(ctx context.Con
 
 func (*validatedStagingMutationRunner) IsDryRun() bool { return false }
 
-type userNamespaceCleanupRunner struct{}
-
-func (*userNamespaceCleanupRunner) Command(ctx context.Context, name string, args ...string) error {
-	return runUserNamespaceCleanup(ctx, name, args, nil)
-}
-
-func runUserNamespaceCleanup(ctx context.Context, name string, args []string, transform func(string) string) error {
-	if name != "sudo" || len(args) < 12 || args[0] != "-n" || args[3] != privilegedStagingCleanupPython {
-		return fmt.Errorf("unexpected cleanup command %s %s", name, strings.Join(args, " "))
-	}
-	commandArgs := append([]string(nil), args[1:]...)
-	if transform != nil {
-		commandArgs[2] = transform(commandArgs[2])
-	}
-	commandArgs[len(commandArgs)-3] = "0"
-	commandArgs[len(commandArgs)-2] = "0"
-	parent, err := os.Open(commandArgs[3])
-	if err != nil {
-		return err
-	}
-	defer parent.Close()
-	expected, err := os.Open(commandArgs[5])
-	if err != nil {
-		return err
-	}
-	defer expected.Close()
-	commandArgs[3] = "/proc/self/fd/3"
-	commandArgs[5] = "/proc/self/fd/4"
-	cmd := exec.CommandContext(ctx, "unshare", append([]string{"-Ur", commandArgs[0]}, commandArgs[1:]...)...)
-	cmd.ExtraFiles = []*os.File{parent, expected}
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("user-namespace cleanup failed: %w: %s", err, strings.TrimSpace(string(output)))
-	}
-	return nil
-}
-
-func (*userNamespaceCleanupRunner) Output(context.Context, string, ...string) (string, error) {
-	return "", fmt.Errorf("unexpected cleanup output command")
-}
-
-func (*userNamespaceCleanupRunner) IsDryRun() bool { return false }
-
 type rootOnlySecretsRunner struct{ calls int }
 
 func (r *rootOnlySecretsRunner) Command(ctx context.Context, name string, args ...string) error {
@@ -212,22 +169,6 @@ func (*rootOnlySecretsRunner) Output(context.Context, string, ...string) (string
 }
 
 func (*rootOnlySecretsRunner) IsDryRun() bool { return false }
-
-type crashingUserNamespaceCleanupRunner struct{}
-
-func (*crashingUserNamespaceCleanupRunner) Command(ctx context.Context, name string, args ...string) error {
-	return runUserNamespaceCleanup(ctx, name, args, func(script string) string {
-		needle := "    require_public_expected(parent)\n\n    tree = os.open"
-		replacement := "    require_public_expected(parent)\n    os._exit(73)\n\n    tree = os.open"
-		return strings.Replace(script, needle, replacement, 1)
-	})
-}
-
-func (*crashingUserNamespaceCleanupRunner) Output(context.Context, string, ...string) (string, error) {
-	return "", fmt.Errorf("unexpected cleanup output command")
-}
-
-func (*crashingUserNamespaceCleanupRunner) IsDryRun() bool { return false }
 
 func TestPrepareStagedApplyDryBuildsImmutablePublicationCandidate(t *testing.T) {
 	repo, dest := fakeRepo(t)
@@ -435,7 +376,7 @@ func TestStagingCleanupPreservesPublicReplacementAndDisplacedTree(t *testing.T) 
 	writeExecutable(t, filepath.Join(bin, "sudo"), "#!/bin/sh\nexec \"$@\"\n")
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
 
-	err = workspace.cleanup(context.Background(), run.Runner{Stdout: io.Discard, Stderr: io.Discard})
+	err = workspace.cleanup()
 	if err == nil || !strings.Contains(err.Error(), "staging tree changed") {
 		t.Fatalf("staging replacement cleanup error = %v", err)
 	}
@@ -638,7 +579,7 @@ func TestRootOnlySecretsFallbackWritesPinnedDisplacedStagingTree(t *testing.T) {
 	}
 }
 
-func TestStagingCleanupFreezesAndRemovesExactTree(t *testing.T) {
+func TestStagingCleanupRemovesExactTreeWithFDHelper(t *testing.T) {
 	t.Setenv("TMPDIR", t.TempDir())
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	workspace, err := createStagingWorkspace()
@@ -657,7 +598,7 @@ func TestStagingCleanupFreezesAndRemovesExactTree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := workspace.cleanup(context.Background(), &userNamespaceCleanupRunner{}); err != nil {
+	if err := workspace.cleanup(); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(workspace.path); !os.IsNotExist(err) {
@@ -675,7 +616,7 @@ func TestStagingCleanupFreezesAndRemovesExactTree(t *testing.T) {
 	}
 }
 
-func TestStagingCleanupNeverStartsAnInteractiveSudoPrompt(t *testing.T) {
+func TestStagingCleanupRemovesOwnedTreeWithoutExternalCommand(t *testing.T) {
 	t.Setenv("TMPDIR", t.TempDir())
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	workspace, err := createStagingWorkspace()
@@ -683,24 +624,27 @@ func TestStagingCleanupNeverStartsAnInteractiveSudoPrompt(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer workspace.close()
-	authUnavailable := errors.New("cached sudo credential unavailable")
-	runner := &fakeRunner{failOn: func(name string, args []string) error {
-		if name == "sudo" && len(args) > 0 && args[0] == "-n" {
-			return authUnavailable
-		}
-		return fmt.Errorf("interactive cleanup command attempted: %s %s", name, strings.Join(args, " "))
-	}}
-
-	err = workspace.cleanup(context.Background(), runner)
-	if !errors.Is(err, authUnavailable) {
-		t.Fatalf("non-interactive cleanup error = %v", err)
+	marker := filepath.Join(t.TempDir(), "external-command-ran")
+	bin := t.TempDir()
+	for _, command := range []string{"sudo", "python3", "wahrwelt-fs-helper"} {
+		writeExecutable(t, filepath.Join(bin, command), "#!/bin/sh\nprintf ran >\"$WAHRWELT_TEST_CLEANUP_MARKER\"\nexit 99\n")
 	}
-	if len(runner.calls) != 1 || runner.calls[0].name != "sudo" || len(runner.calls[0].args) == 0 || runner.calls[0].args[0] != "-n" {
-		t.Fatalf("cleanup command can prompt interactively: %s", commandSummary(runner.calls))
+	t.Setenv("WAHRWELT_TEST_CLEANUP_MARKER", marker)
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+
+	err = workspace.cleanup()
+	if err != nil {
+		t.Fatalf("fd-based cleanup failed: %v", err)
+	}
+	if _, err := os.Lstat(workspace.path); !os.IsNotExist(err) {
+		t.Fatalf("exact staging tree remained after cleanup: %v", err)
+	}
+	if _, err := os.Lstat(marker); !os.IsNotExist(err) {
+		t.Fatalf("staging cleanup invoked an external command: %v", err)
 	}
 }
 
-func TestStagingCleanupCrashCannotBlockNextWorkspace(t *testing.T) {
+func TestStagingCleanupRefusalCannotBlockNextWorkspace(t *testing.T) {
 	t.Setenv("TMPDIR", t.TempDir())
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	first, err := createStagingWorkspace()
@@ -708,44 +652,41 @@ func TestStagingCleanupCrashCannotBlockNextWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer first.close()
-	if err := os.WriteFile(filepath.Join(first.path, "retained.txt"), []byte("retained after crash\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(first.path, "retained.txt"), []byte("retained after refusal\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	err = first.cleanup(context.Background(), &crashingUserNamespaceCleanupRunner{})
+	if err := os.Chmod(first.path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	err = first.cleanup()
 	if err == nil {
-		t.Fatal("injected cleanup crash was accepted as success")
+		t.Fatal("staging metadata change was accepted during cleanup")
 	}
 	parentPath := filepath.Dir(first.path)
 	parentInfo, statErr := os.Stat(parentPath)
 	if statErr != nil {
 		t.Fatal(statErr)
 	}
-	if parentInfo.Mode().Perm()&0o200 != 0 {
-		t.Fatalf("crash hook did not strand the dedicated parent read-only: %04o", parentInfo.Mode().Perm())
+	if parentInfo.Mode().Perm()&0o200 == 0 {
+		t.Fatalf("cleanup refusal changed the dedicated parent mode: %04o", parentInfo.Mode().Perm())
 	}
-	if got := readLegacyUserMigrationFile(t, filepath.Join(first.path, "retained.txt")); got != "retained after crash\n" {
-		t.Fatalf("crashed workspace bytes changed: %q", got)
+	if got := readLegacyUserMigrationFile(t, filepath.Join(first.path, "retained.txt")); got != "retained after refusal\n" {
+		t.Fatalf("refused workspace bytes changed: %q", got)
 	}
 
 	second, err := createStagingWorkspace()
 	if err != nil {
-		t.Fatalf("next workspace was blocked by crashed sibling: %v", err)
+		t.Fatalf("next workspace was blocked by refused sibling: %v", err)
 	}
 	defer second.close()
 	if filepath.Dir(second.path) == parentPath {
-		t.Fatal("workspaces unexpectedly share the crash-sensitive lock parent")
+		t.Fatal("workspaces unexpectedly share one failure-sensitive parent")
 	}
 	if err := os.WriteFile(filepath.Join(second.path, "next.txt"), []byte("next workspace\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := second.cleanup(context.Background(), &userNamespaceCleanupRunner{}); err != nil {
-		t.Fatalf("next workspace cleanup failed after sibling crash: %v", err)
-	}
-
-	// User-namespace root maps back to the test UID, so restore this deliberate
-	// crash artifact for testing.TempDir's own controlled cleanup.
-	if err := os.Chmod(parentPath, 0o700); err != nil {
-		t.Fatal(err)
+	if err := second.cleanup(); err != nil {
+		t.Fatalf("next workspace cleanup failed after sibling refusal: %v", err)
 	}
 }
 
@@ -794,7 +735,7 @@ func TestOuterWorkspaceReplacementRefusesValidationAndCleanup(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "staging outer container changed") {
 		t.Fatalf("outer replacement validation error = %v", err)
 	}
-	if err := workspace.cleanup(context.Background(), runner); err == nil || !strings.Contains(err.Error(), "staging outer container changed") {
+	if err := workspace.cleanup(); err == nil || !strings.Contains(err.Error(), "staging outer container changed") {
 		t.Fatalf("outer replacement cleanup error = %v", err)
 	}
 	recoveryPath := workspace.ownedRecoveryPath()

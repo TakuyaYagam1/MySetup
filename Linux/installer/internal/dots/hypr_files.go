@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
@@ -570,7 +571,7 @@ func inspectManagedHyprUserEntrypoint(
 		return state, nil
 	}
 	if state.info.Mode()&os.ModeSymlink != 0 {
-		if _, ok := activeHomeManagerTargets[state.linkTarget]; !ok {
+		if !isManagedHomeManagerHyprEntrypointTarget(state.linkTarget, activeHomeManagerTargets) {
 			return managedHyprEntrypointState{}, unownedManagedHyprEntrypointError(path)
 		}
 		if !recognizedManagedHyprEntrypointHash(state.contentHash, currentEntrypoint) {
@@ -601,7 +602,7 @@ func snapshotManagedHyprEntrypoint(
 		if err != nil {
 			return managedHyprEntrypointState{}, err
 		}
-		if _, ok := activeHomeManagerTargets[state.linkTarget]; !ok {
+		if !isManagedHomeManagerHyprEntrypointTarget(state.linkTarget, activeHomeManagerTargets) {
 			return state, nil
 		}
 		data, _, readErr := readRegularFileNoFollowResolved(state.linkTarget)
@@ -622,6 +623,47 @@ func snapshotManagedHyprEntrypoint(
 		state.contentHash = sha256.Sum256(data)
 	}
 	return state, nil
+}
+
+func isManagedHomeManagerHyprEntrypointTarget(
+	target string,
+	activeHomeManagerTargets managedHyprEntrypointTargets,
+) bool {
+	if _, ok := activeHomeManagerTargets[target]; ok {
+		return true
+	}
+	return isNixStoreHomeManagerHyprEntrypointTarget(target)
+}
+
+func isNixStoreHomeManagerHyprEntrypointTarget(target string) bool {
+	const storePrefix = "/nix/store/"
+	const objectSuffix = "-home-manager-files"
+	if !strings.HasPrefix(target, storePrefix) {
+		return false
+	}
+	parts := strings.Split(strings.TrimPrefix(target, storePrefix), "/")
+	if len(parts) != 5 || parts[1] != ".config" || parts[2] != "hypr" || parts[4] != "hyprland.lua" {
+		return false
+	}
+	if parts[3] != migrationv1tov2.CanonicalUserNamespace &&
+		parts[3] != migrationv1tov2.LegacyWahrweltNamespace &&
+		parts[3] != migrationv1tov2.LegacyMySetupNamespace {
+		return false
+	}
+	object := parts[0]
+	if !strings.HasSuffix(object, objectSuffix) {
+		return false
+	}
+	hash := strings.TrimSuffix(object, objectSuffix)
+	if len(hash) != 32 {
+		return false
+	}
+	for _, char := range hash {
+		if !strings.ContainsRune("0123456789abcdfghijklmnpqrsvwxyz", char) {
+			return false
+		}
+	}
+	return true
 }
 
 func readRegularFileNoFollowResolved(path string) ([]byte, os.FileInfo, error) {

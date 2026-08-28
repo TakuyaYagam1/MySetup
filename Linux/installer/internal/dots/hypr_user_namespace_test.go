@@ -383,6 +383,48 @@ func TestWriteHyprLocalConfigAcceptsOnlyExactActiveHomeManagerEntrypoint(t *test
 	}
 }
 
+func TestManagedHomeManagerHyprEntrypointTargetRejectsMutableAliasToActiveManagedInode(t *testing.T) {
+	dir := t.TempDir()
+	managed := filepath.Join(dir, "managed-hyprland.lua")
+	if err := os.WriteFile(managed, []byte("-- managed\n"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	active := filepath.Join(dir, "active-hyprland.lua")
+	mutableAlias := filepath.Join(dir, "failed-hyprland.lua")
+	for _, target := range []string{active, mutableAlias} {
+		if err := os.Symlink(managed, target); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if isManagedHomeManagerHyprEntrypointTarget(mutableAlias, managedHyprEntrypointTargets{active: {}}) {
+		t.Fatalf("mutable alias to active managed inode was accepted: %s", mutableAlias)
+	}
+}
+
+func TestNixStoreHomeManagerHyprEntrypointTargetRequiresExactManagedShape(t *testing.T) {
+	validHash := "0123456789abcdfghijklmnpqrsvwxyz"
+	for _, target := range []string{
+		"/nix/store/" + validHash + "-home-manager-files/.config/hypr/user/hyprland.lua",
+		"/nix/store/" + validHash + "-home-manager-files/.config/hypr/wahrwelt/hyprland.lua",
+		"/nix/store/" + validHash + "-home-manager-files/.config/hypr/mysetup/hyprland.lua",
+	} {
+		if !isNixStoreHomeManagerHyprEntrypointTarget(target) {
+			t.Fatalf("exact Home Manager adapter target was rejected: %s", target)
+		}
+	}
+	for _, target := range []string{
+		"nix/store/" + validHash + "-home-manager-files/.config/hypr/user/hyprland.lua",
+		"/nix/store/0123456789abcdefghijklmnopqrstuv-home-manager-files/.config/hypr/user/hyprland.lua",
+		"/nix/store/" + validHash + "-home-manager-files/.config/hypr/custom/hyprland.lua",
+		"/nix/store/" + validHash + "-home-manager-files/.config/hypr/user/nested/hyprland.lua",
+		"/nix/store/" + validHash + "-other/.config/hypr/user/hyprland.lua",
+	} {
+		if isNixStoreHomeManagerHyprEntrypointTarget(target) {
+			t.Fatalf("non-managed Home Manager adapter target was accepted: %s", target)
+		}
+	}
+}
+
 func TestWriteHyprLocalConfigPreservesHistoricalActiveHomeManagerEntrypoint(t *testing.T) {
 	home := t.TempDir()
 	hyprDir := filepath.Join(home, ".config", "hypr")

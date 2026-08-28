@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/config"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/defaults"
@@ -98,7 +97,7 @@ func Run(ctx context.Context, opts Options) error {
 		return fmt.Errorf("create staging: %w", err)
 	}
 	runErr := runStagedApply(ctx, runner, src, workspace, opts, modes)
-	cleanupErr := workspace.cleanup(ctx, runner)
+	cleanupErr := workspace.cleanup()
 	if cleanupErr != nil {
 		cleanupErr = workspace.retainedCleanupError(cleanupErr)
 	}
@@ -485,124 +484,6 @@ type stagingWorkspace struct {
 	dirStat       unix.Stat_t
 }
 
-const privilegedStagingCleanupPython = `
-import errno
-import os
-import stat
-import sys
-
-parent_path, name, expected_path, parent_token, expected_token, owner, group, mode_text = sys.argv[1:]
-owner = int(owner)
-group = int(group)
-original_mode = int(mode_text, 8)
-
-def token(value):
-    return f"{value.st_dev}:{value.st_ino}"
-
-def mount_id(fd):
-    with open(f"/proc/self/fdinfo/{fd}", "r", encoding="ascii") as handle:
-        for line in handle:
-            if line.startswith("mnt_id:"):
-                return int(line.split(":", 1)[1].strip())
-    raise RuntimeError("descriptor has no mount id")
-
-def public_stat(parent):
-    try:
-        return os.stat(name, dir_fd=parent, follow_symlinks=False)
-    except FileNotFoundError:
-        return None
-
-def require_public_expected(parent):
-    visible = public_stat(parent)
-    if visible is None or not stat.S_ISDIR(visible.st_mode) or token(visible) != expected_token:
-        raise RuntimeError("staging public name changed; replacement retained")
-
-def open_directory(parent, child_name, before):
-    child = os.open(child_name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
-    actual = os.fstat(child)
-    if token(actual) != token(before):
-        os.close(child)
-        raise RuntimeError(f"staging child changed while pinning: {child_name}")
-    return child
-
-def freeze_tree(directory, tree_mount):
-    os.fchmod(directory, 0o500)
-    os.fchown(directory, 0, 0)
-    os.fchmod(directory, 0o500)
-    frozen = os.fstat(directory)
-    if frozen.st_uid != 0 or frozen.st_mode & 0o222:
-        raise RuntimeError("staging directory did not become root-only")
-    for child_name in os.listdir(directory):
-        before = os.stat(child_name, dir_fd=directory, follow_symlinks=False)
-        if not stat.S_ISDIR(before.st_mode):
-            continue
-        child = open_directory(directory, child_name, before)
-        try:
-            if mount_id(child) != tree_mount:
-                raise RuntimeError(f"staging mount boundary retained: {child_name}")
-            freeze_tree(child, tree_mount)
-        finally:
-            os.close(child)
-
-def purge_tree(directory, tree_mount):
-    for child_name in os.listdir(directory):
-        before = os.stat(child_name, dir_fd=directory, follow_symlinks=False)
-        if stat.S_ISDIR(before.st_mode):
-            child = open_directory(directory, child_name, before)
-            try:
-                if mount_id(child) != tree_mount:
-                    raise RuntimeError(f"staging mount boundary retained during purge: {child_name}")
-                purge_tree(child, tree_mount)
-            finally:
-                os.close(child)
-            os.rmdir(child_name, dir_fd=directory)
-        else:
-            os.unlink(child_name, dir_fd=directory)
-
-parent = os.open(parent_path, os.O_RDONLY | os.O_DIRECTORY)
-expected = os.open(expected_path, os.O_RDONLY | os.O_DIRECTORY)
-locked = False
-try:
-    parent_before = os.fstat(parent)
-    expected_before = os.fstat(expected)
-    if token(parent_before) != parent_token or token(expected_before) != expected_token:
-        raise RuntimeError("staging cleanup descriptor identity changed")
-    if parent_before.st_uid != owner or parent_before.st_gid != group or stat.S_IMODE(parent_before.st_mode) != original_mode:
-        raise RuntimeError("staging parent metadata changed; tree retained")
-    require_public_expected(parent)
-
-    locked = True
-    os.fchmod(parent, 0o500)
-    os.fchown(parent, 0, 0)
-    os.fchmod(parent, 0o500)
-    parent_locked = os.fstat(parent)
-    if parent_locked.st_uid != 0 or parent_locked.st_mode & 0o222:
-        raise RuntimeError("staging parent did not become root-only")
-    require_public_expected(parent)
-
-    tree = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
-    try:
-        tree_before = os.fstat(tree)
-        if token(tree_before) != expected_token:
-            raise RuntimeError("staging tree changed after parent lock")
-        parent_mount = mount_id(parent)
-        tree_mount = mount_id(tree)
-        if tree_mount != parent_mount:
-            raise RuntimeError("staging root is a mount boundary; tree retained")
-        freeze_tree(tree, tree_mount)
-        purge_tree(tree, tree_mount)
-    finally:
-        os.close(tree)
-    os.rmdir(name, dir_fd=parent)
-finally:
-    os.close(expected)
-    if locked:
-        os.fchmod(parent, 0o500)
-        os.fchown(parent, owner, group)
-        os.fchmod(parent, original_mode)
-    os.close(parent)
-`
-
 func (w *stagingWorkspace) close() {
 	if w == nil {
 		return
@@ -700,37 +581,45 @@ func (w *stagingWorkspace) verifyVisible() error {
 	return nil
 }
 
-func (w *stagingWorkspace) cleanup(ctx context.Context, runner run.CommandRunner) error {
+func sameStagingDirectoryIdentity(identity fsowner.Identity, expected unix.Stat_t) bool {
+	return identity.Device == expected.Dev &&
+		identity.Inode == expected.Ino &&
+		identity.Kind == fsowner.KindDirectory &&
+		identity.UID == expected.Uid &&
+		identity.Mode&0o7777 == expected.Mode&0o7777
+}
+
+func (w *stagingWorkspace) cleanup() error {
 	if w == nil || w.base == nil || w.parent == nil || w.directory == nil {
 		return fmt.Errorf("missing pinned staging workspace")
 	}
 	if err := w.verifyVisible(); err != nil {
 		return err
 	}
-	if runner.IsDryRun() {
-		fmt.Printf("WARN dry-run staging retained at %s because safe cleanup requires privileged execution\n", w.path)
-		return nil
-	}
-	pythonPath, err := privilegedPythonPath()
+	parent, err := fsowner.OpenDirectory(w.parent.Name())
 	if err != nil {
 		return err
 	}
-	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-	defer cancel()
-	err = runner.Command(cleanupCtx, "sudo", "-n", pythonPath, "-c", privilegedStagingCleanupPython,
-		fileDescriptorPath(w.parent),
-		w.name,
-		fileDescriptorPath(w.directory),
-		fmt.Sprintf("%d:%d", w.parentStat.Dev, w.parentStat.Ino),
-		fmt.Sprintf("%d:%d", w.dirStat.Dev, w.dirStat.Ino),
-		strconv.FormatUint(uint64(w.parentStat.Uid), 10),
-		strconv.FormatUint(uint64(w.parentStat.Gid), 10),
-		strconv.FormatUint(uint64(w.parentStat.Mode&0o7777), 8),
-	)
-	runtime.KeepAlive(w.parent)
-	runtime.KeepAlive(w.directory)
-	runtime.KeepAlive(w.base)
+	defer closeFileDirectory(parent)
+	parentIdentity := parent.Identity()
+	if !sameStagingDirectoryIdentity(parentIdentity, w.parentStat) {
+		return fmt.Errorf("staging parent metadata changed; tree retained")
+	}
+	entry, err := parent.Inspect(w.name)
 	if err != nil {
+		return err
+	}
+	if !sameStagingDirectoryIdentity(entry.Identity, w.dirStat) {
+		return fmt.Errorf("staging tree metadata changed; tree retained")
+	}
+	if err := parent.RemoveDirectory(w.name, entry.Identity, fsowner.RemoveOptions{
+		UID:        w.dirStat.Uid,
+		Recursive:  true,
+		SameDevice: true,
+	}); err != nil {
+		return err
+	}
+	if err := parent.Sync(); err != nil {
 		return err
 	}
 	parentFD, fdErr := checkedFileDescriptor(w.parent, "staging parent")
