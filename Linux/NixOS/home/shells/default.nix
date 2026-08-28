@@ -467,7 +467,7 @@ in
             }
             if [ -n "$hyprctl_path" ] && [ "''${hyprctl_path#/}" != "$hyprctl_path" ] && \
               [ -x "$hyprctl_path" ] && run_live_shell_command "$hyprctl_path" instances >/dev/null 2>&1; then
-              hypr_version="$(run_live_shell_command "$hyprctl_path" version 2>/dev/null | awk 'NR == 1 { print $2 }')"
+              hypr_version="$(run_live_shell_command "$hyprctl_path" version 2>/dev/null | ${pkgs.gawk}/bin/awk 'NR == 1 { print $2 }')"
               hypr_version="''${hypr_version#v}"
               hypr_major="''${hypr_version%%.*}"
               hypr_rest="''${hypr_version#*.}"

@@ -1386,7 +1386,7 @@ printf 'start-shell\t%s\n' "$XDG_RUNTIME_DIR" >>"$LIVE_COMMAND_LOG"
 		systemdPackage,
 	)
 	cmd := exec.Command("bash", "-euo", "pipefail", "-c", rendered)
-	pathWithoutHyprctl := pathWithoutCommandForTest(t, "hyprctl")
+	pathWithoutStoreTools := pathWithoutCommandsForTest(t, "hyprctl", "awk")
 	for _, value := range os.Environ() {
 		if !strings.HasPrefix(value, "XDG_RUNTIME_DIR=") &&
 			!strings.HasPrefix(value, "PATH=") &&
@@ -1396,17 +1396,19 @@ printf 'start-shell\t%s\n' "$XDG_RUNTIME_DIR" >>"$LIVE_COMMAND_LOG"
 	}
 	cmd.Env = append(
 		cmd.Env,
-		"PATH="+pathWithoutHyprctl,
+		"PATH="+pathWithoutStoreTools,
 		"DRY_RUN_CMD=",
 		"LIVE_COMMAND_LOG="+commandLog,
 	)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("rendered live transition without PATH hyprctl: %v\n%s", err, output)
+		t.Fatalf("rendered live transition without PATH tools: %v\n%s", err, output)
 	}
-	probe := exec.Command("bash", "-c", "command -v hyprctl")
-	probe.Env = []string{"PATH=" + pathWithoutHyprctl}
-	if output, err := probe.CombinedOutput(); err == nil {
-		t.Fatalf("sanitized activation PATH unexpectedly resolves hyprctl: %s", output)
+	for _, excluded := range []string{"hyprctl", "awk"} {
+		probe := exec.Command("bash", "-c", "command -v -- \"$1\"", "bash", excluded)
+		probe.Env = []string{"PATH=" + pathWithoutStoreTools}
+		if output, err := probe.CombinedOutput(); err == nil {
+			t.Fatalf("sanitized activation PATH unexpectedly resolves %s: %s", excluded, output)
+		}
 	}
 	lines := strings.Split(strings.TrimSpace(readContractFile(t, commandLog)), "\n")
 	if len(lines) != 5 {
@@ -1688,6 +1690,7 @@ let
     bash = "/usr";
     coreutils = %q;
     diffutils = %q;
+    gawk = %q;
     hyprland = builtins.path { path = builtins.toPath %q; name = "hyprland-live-sync-test"; };
     python3 = "/usr";
     systemd = builtins.path { path = builtins.toPath %q; name = "systemd-live-sync-test"; };
@@ -1697,9 +1700,10 @@ let
   };
   module = import (builtins.toPath %q) { inherit config homeLibs inputs lib pkgs; };
 in module.home.activation.seedHyprShellRuntime + "\n" + module.home.activation.liveSyncHyprShell
-`, configHome, stateHome, dots,
+	`, configHome, stateHome, dots,
 		resolvedCommandPackageRoot(t, "mkdir"),
 		resolvedCommandPackageRoot(t, "cmp"),
+		resolvedCommandPackageRoot(t, "awk"),
 		hyprlandPackage,
 		systemdPackage,
 		resolvedCommandPackageRoot(t, "setsid"),
@@ -1711,10 +1715,14 @@ in module.home.activation.seedHyprShellRuntime + "\n" + module.home.activation.l
 	return string(rendered)
 }
 
-func pathWithoutCommandForTest(t *testing.T, excluded string) string {
+func pathWithoutCommandsForTest(t *testing.T, excluded ...string) string {
 	t.Helper()
 	bin := t.TempDir()
 	linked := make(map[string]struct{})
+	excludedNames := make(map[string]struct{}, len(excluded))
+	for _, name := range excluded {
+		excludedNames[name] = struct{}{}
+	}
 	for _, directory := range filepath.SplitList(os.Getenv("PATH")) {
 		entries, err := os.ReadDir(directory)
 		if err != nil {
@@ -1722,7 +1730,7 @@ func pathWithoutCommandForTest(t *testing.T, excluded string) string {
 		}
 		for _, entry := range entries {
 			name := entry.Name()
-			if name == excluded {
+			if _, skip := excludedNames[name]; skip {
 				continue
 			}
 			if _, exists := linked[name]; exists {
