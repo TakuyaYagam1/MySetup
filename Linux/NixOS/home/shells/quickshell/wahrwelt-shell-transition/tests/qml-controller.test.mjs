@@ -15,6 +15,11 @@ const shaderSource = fs.readFileSync(
   path.join(sourceDir, "shaders", "honeycomb.frag"),
   "utf8",
 );
+assert.equal(
+  fs.existsSync(path.join(sourceDir, "assets")),
+  false,
+  "transition sources must reuse selector SVGs instead of duplicating repository assets",
+);
 
 for (const source of productionSources) {
   assert.doesNotMatch(
@@ -74,18 +79,28 @@ assert.doesNotMatch(
 );
 assert.match(
   shellSource,
-  /readonly property int bridgePulseCount:\s*controller\.transitionModel\s*\?\s*controller\.transitionModel\.bridgePulseCount\s*:\s*0/,
-  "the renderer must not dereference its transition model before initialization",
-);
-assert.match(
-  shellSource,
-  /bridgeProgress\s*\*\s*Math\.PI\s*\*\s*2\.0\s*\*\s*root\.bridgePulseCount/,
-  "the neutral veil must show one pulse per requested covered second",
+  /readonly property url targetLogoSource:\s*controller\.transitionModel\s*\?\s*Qt\.resolvedUrl\(controller\.transitionModel\.targetLogoAsset\)\s*:\s*""/,
+  "the renderer must resolve the validated target logo without dereferencing an uninitialized model",
 );
 assert.match(
   shellSource,
   /id:\s*neutralVeilSource/,
-  "the renderer must keep an opaque animated veil between the two shells",
+  "the renderer must keep an opaque veil between the two shells",
+);
+assert.match(
+  shellSource,
+  /id:\s*neutralVeilSource[\s\S]*Image\s*\{[\s\S]*id:\s*targetLogo[\s\S]*anchors\.centerIn:\s*parent[\s\S]*source:\s*root\.targetLogoSource[\s\S]*fillMode:\s*Image\.PreserveAspectFit/,
+  "the covered handoff must show the exact target logo centered without stretching it",
+);
+assert.doesNotMatch(
+  shellSource,
+  /\bbridgePulseCount\b|\breadonly property real pulse\b|Math\.cos/,
+  "the covered handoff must not pulse or expose a visual countdown",
+);
+assert.doesNotMatch(
+  shellSource,
+  /\bText\s*\{|countdown/i,
+  "the covered handoff must not render text or a countdown",
 );
 assert.match(
   shellSource,

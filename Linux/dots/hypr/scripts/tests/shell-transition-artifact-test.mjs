@@ -19,6 +19,9 @@ const expectedFiles = [
   "shell.qml",
   "TransitionController.qml",
   "transition-model.js",
+  "assets/caelestia.svg",
+  "assets/illogical-impulse.svg",
+  "assets/noctalia.svg",
   "shaders/honeycomb.frag",
   "shaders/honeycomb.frag.qsb",
   "shaders/LICENSE-Noctalia-MIT.txt",
@@ -71,13 +74,32 @@ for (const [profile, bridgeDurationMs, totalDurationMs] of [
     `${profile} new shell reveal contract must be exactly 3000 ms`);
   assert.equal(model.totalDurationMs, totalDurationMs,
     `${profile} complete visible transition contract`);
+  assert.equal(model.targetLogoAsset, profile === "caelestia"
+    ? "assets/caelestia.svg"
+    : profile === "noctalia"
+      ? "assets/noctalia.svg"
+      : "assets/illogical-impulse.svg",
+  `${profile} target logo artifact contract`);
+  assert.equal(Object.prototype.hasOwnProperty.call(model, "bridgePulseCount"), false,
+    `${profile} must not expose a countdown pulse contract`);
 }
 
 const shellSource = fs.readFileSync(path.join(artifact, "shell.qml"), "utf8");
 assert.match(shellSource, /id:\s*neutralVeilSource/,
-  "transition artifact must contain the opaque animated handoff veil");
+  "transition artifact must contain the opaque handoff veil");
+assert.match(shellSource,
+  /Image\s*\{[\s\S]*id:\s*targetLogo[\s\S]*anchors\.centerIn:\s*parent[\s\S]*source:\s*root\.targetLogoSource/,
+  "transition artifact must center the exact target logo on its handoff veil");
+assert.doesNotMatch(shellSource,
+  /\bbridgePulseCount\b|\breadonly property real pulse\b|Math\.cos|\bText\s*\{|countdown/i,
+  "transition artifact must not contain a pulse, text, or countdown");
 assert.match(shellSource, /easing\.type: Easing\.InOutCubic/,
   "shell cover and reveal must use a smooth eased curve");
+
+for (const asset of ["caelestia.svg", "illogical-impulse.svg", "noctalia.svg"]) {
+  const assetSource = fs.readFileSync(path.join(artifact, "assets", asset), "utf8");
+  assert.match(assetSource, /<svg\b/, `${asset} must remain an SVG in the transition artifact`);
+}
 
 const shaderSource = fs.readFileSync(
   path.join(artifact, "shaders/honeycomb.frag"), "utf8");

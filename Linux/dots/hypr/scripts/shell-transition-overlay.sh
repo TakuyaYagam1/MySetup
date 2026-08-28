@@ -482,20 +482,20 @@ wahrwelt_shell_transition_anchor_covered_deadlines() {
 
 wahrwelt_shell_transition_wait_target_ready() {
   local profile="$1"
-  local command_timeout incoming_deadline_us
+  local command_timeout visible_deadline_us
 
   [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 0
-  [[ "$wahrwelt_shell_transition_incoming_deadline_us" =~ ^[0-9]+$ ]] || return 1
-  incoming_deadline_us="$wahrwelt_shell_transition_incoming_deadline_us"
-  [ "$incoming_deadline_us" -gt 0 ] || return 1
+  [[ "$wahrwelt_shell_transition_visible_deadline_us" =~ ^[0-9]+$ ]] || return 1
+  visible_deadline_us="$wahrwelt_shell_transition_visible_deadline_us"
+  [ "$visible_deadline_us" -gt 0 ] || return 1
   while command_timeout="$(
     wahrwelt_shell_transition_timeout_before \
-      "$incoming_deadline_us" 75000
+      "$visible_deadline_us" 75000
   )"; do
     wahrwelt_shell_transition_target_layers_ready \
       "$profile" "$command_timeout" && return 0
     wahrwelt_shell_transition_sleep_before \
-      "$incoming_deadline_us" 100000 || break
+      "$visible_deadline_us" 100000 || break
   done
   return 1
 }
@@ -512,6 +512,25 @@ wahrwelt_shell_transition_bridge_budget_available() {
   incoming_deadline_us="$wahrwelt_shell_transition_incoming_deadline_us"
   [ "$now_us" -lt "$incoming_deadline_us" ] || return 1
   remaining_us=$((incoming_deadline_us - now_us))
+  minimum_us=$((10#$minimum_us))
+  [ "$minimum_us" -lt "$remaining_us" ]
+}
+
+# The covered bridge is a visual dwell, not the final process-spawn deadline.
+# A target that finishes stopping the old shell at the bridge boundary may
+# still start while the three-second incoming reveal remains fully visible.
+wahrwelt_shell_transition_target_spawn_budget_available() {
+  local minimum_us="${1:-0}"
+  local now_us visible_deadline_us remaining_us
+
+  [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 0
+  [[ "$minimum_us" =~ ^[0-9]{1,18}$ ]] || return 1
+  [[ "$wahrwelt_shell_transition_visible_deadline_us" =~ ^[0-9]+$ ]] || return 1
+  now_us="$(wahrwelt_shell_transition_now_us)" || return 1
+  [[ "$now_us" =~ ^[0-9]+$ ]] || return 1
+  visible_deadline_us="$wahrwelt_shell_transition_visible_deadline_us"
+  [ "$now_us" -lt "$visible_deadline_us" ] || return 1
+  remaining_us=$((visible_deadline_us - now_us))
   minimum_us=$((10#$minimum_us))
   [ "$minimum_us" -lt "$remaining_us" ]
 }

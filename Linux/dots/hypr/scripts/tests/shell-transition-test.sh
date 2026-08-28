@@ -428,6 +428,22 @@ wahrwelt_shell_transition_bridge_budget_available() {
   esac
 }
 
+wahrwelt_shell_transition_target_spawn_budget_available() {
+  local minimum_us="${1:-0}"
+
+  test_event "target-spawn-budget:$minimum_us"
+  [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 0
+  wahrwelt_shell_transition_test_target_spawn_budget_checks=$((${wahrwelt_shell_transition_test_target_spawn_budget_checks:-0} + 1))
+  case "${WAHRWELT_TEST_TRANSITION_TARGET_SPAWN_BUDGET_MODE:-available}" in
+    available) return 0 ;;
+    exhausted) return 1 ;;
+    expire-on-retry)
+      [ "$wahrwelt_shell_transition_test_target_spawn_budget_checks" -eq 1 ]
+      ;;
+    *) return 1 ;;
+  esac
+}
+
 wahrwelt_shell_transition_wait_target_ready() {
   local mode="${WAHRWELT_TEST_TRANSITION_READINESS_MODE:-ready}"
 
@@ -1259,38 +1275,56 @@ if grep -Fqx transition "$root/processes"; then
   fail 'pre-stop bridge reserve failure retained its transition helper process'
 fi
 
+root="$(new_case_root visual-bridge-expired-before-target-spawn)"
+seed_case "$root" caelestia
+if ! WAHRWELT_TEST_TRANSITION_BUDGET_MODE=expire-before-target \
+  WAHRWELT_TEST_TRANSITION_TARGET_SPAWN_BUDGET_MODE=available \
+  WAHRWELT_TEST_USE_REAL_PROFILE_START=1 \
+  run_switch "$root" noctalia; then
+  fail 'target inside the visible incoming phase was rejected after the bridge expired'
+fi
+assert_eq noctalia "$(tr -d '\n' <"$root/home/.local/state/wahrwelt/active-shell")" \
+  'bridge expiry during shutdown still persists the requested Noctalia profile'
+assert_process_set "$root/processes" noctalia
+grep -Fqx start:noctalia "$root/events" ||
+  fail 'bridge expiry during shutdown did not launch Noctalia inside the visible incoming phase'
+if grep -Fqx start:caelestia "$root/events"; then
+  fail 'bridge expiry during shutdown incorrectly rolled back to Caelestia'
+fi
+
 root="$(new_case_root visual-late-target-budget-exhausted)"
 seed_case "$root" noctalia
 before_state="$(capture_case_state "$root")"
-if WAHRWELT_TEST_TRANSITION_BUDGET_MODE=expire-before-target \
+if WAHRWELT_TEST_TRANSITION_TARGET_SPAWN_BUDGET_MODE=exhausted \
   WAHRWELT_TEST_USE_REAL_PROFILE_START=1 \
   run_switch "$root" end4; then
-  fail 'expired target-spawn bridge budget unexpectedly returned success'
+  fail 'expired visible target-spawn budget unexpectedly returned success'
 fi
 after_state="$(capture_case_state "$root")"
 assert_eq "$before_state" "$after_state" \
-  'expired target-spawn bridge budget preserves the previous state'
+  'expired visible target-spawn budget preserves the previous state'
 assert_process_set "$root/processes" noctalia
 if grep -Fqx start:end4 "$root/events"; then
-  fail 'expired target-spawn bridge budget launched the requested End4 shell'
+  fail 'expired visible target-spawn budget launched the requested End4 shell'
 fi
-mapfile -t target_budget_lines < <(
-  grep -n -F 'bridge-budget:0' "$root/events" | cut -d: -f1
+mapfile -t target_spawn_budget_lines < <(
+  grep -n -F 'target-spawn-budget:1000000' "$root/events" | cut -d: -f1
 )
-assert_eq 3 "${#target_budget_lines[@]}" \
-  'late target failure checks pre-stop, target, and fallback boundaries'
+assert_eq 2 "${#target_spawn_budget_lines[@]}" \
+  'late target failure checks target and fallback visible boundaries'
+target_bridge_line="$(grep -n -m1 -F 'bridge-budget:0' "$root/events" | cut -d: -f1)"
 target_stop_line="$(grep -n -m1 -F stop:noctalia "$root/events" | cut -d: -f1)"
 target_idle_line="$(grep -n -m1 -F ensure:end4-idle "$root/events" | cut -d: -f1)"
 target_abort_line="$(grep -n -m1 -F transition:abort "$root/events" | cut -d: -f1)"
 target_fallback_line="$(grep -n -m1 -F start:noctalia "$root/events" | cut -d: -f1)"
-if [ "${target_budget_lines[0]}" -ge "$target_stop_line" ] ||
+if [ "$target_bridge_line" -ge "$target_stop_line" ] ||
   [ "$target_stop_line" -ge "$target_idle_line" ] ||
-  [ "$target_idle_line" -ge "${target_budget_lines[1]}" ] ||
-  [ "${target_budget_lines[1]}" -ge "$target_abort_line" ] ||
-  [ "$target_abort_line" -ge "${target_budget_lines[2]}" ] ||
-  [ "${target_budget_lines[2]}" -ge "$target_fallback_line" ]; then
-  fail "late target budget ordering was not pre-stop < stop < target < abort < fallback
-$(grep -E '^(bridge-budget:0|stop:noctalia|ensure:end4-idle|transition:abort|start:noctalia)$' \
+  [ "$target_idle_line" -ge "${target_spawn_budget_lines[0]}" ] ||
+  [ "${target_spawn_budget_lines[0]}" -ge "$target_abort_line" ] ||
+  [ "$target_abort_line" -ge "${target_spawn_budget_lines[1]}" ] ||
+  [ "${target_spawn_budget_lines[1]}" -ge "$target_fallback_line" ]; then
+  fail "late target budget ordering was not bridge < stop < target < abort < fallback
+$(grep -E '^(bridge-budget:0|target-spawn-budget:1000000|stop:noctalia|ensure:end4-idle|transition:abort|start:noctalia)$' \
     "$root/events" || true)"
 fi
 assert_event_before "$root/events" 'stop:noctalia' 'ensure:end4-idle' \
@@ -1304,35 +1338,34 @@ fi
 root="$(new_case_root visual-retry-budget-exhausted)"
 seed_case "$root" noctalia
 before_state="$(capture_case_state "$root")"
-if WAHRWELT_TEST_TRANSITION_BUDGET_MODE=expire-on-retry \
+if WAHRWELT_TEST_TRANSITION_TARGET_SPAWN_BUDGET_MODE=expire-on-retry \
   WAHRWELT_TEST_USE_REAL_PROFILE_START=1 \
   WAHRWELT_TEST_USE_REAL_RETRY=1 \
   WAHRWELT_TEST_RETRY_NEVER_READY_PROFILE=caelestia \
   run_switch "$root" caelestia; then
-  fail 'expired retry-attempt bridge budget unexpectedly returned success'
+  fail 'expired retry-attempt visible budget unexpectedly returned success'
 fi
 after_state="$(capture_case_state "$root")"
 assert_eq "$before_state" "$after_state" \
-  'expired retry-attempt bridge budget preserves the previous state'
+  'expired retry-attempt visible budget preserves the previous state'
 assert_process_set "$root/processes" noctalia
 assert_eq 1 "$(grep -Fc command:caelestia "$root/events")" \
   'retry budget expiry blocks every late Caelestia process launch'
 mapfile -t retry_budget_lines < <(
-  grep -n -F 'bridge-budget:0' "$root/events" | cut -d: -f1
+  grep -n -F 'target-spawn-budget:1000000' "$root/events" | cut -d: -f1
 )
-assert_eq 4 "${#retry_budget_lines[@]}" \
-  'retry path checks pre-stop, first attempt, rejected retry, and fallback budgets'
+assert_eq 3 "${#retry_budget_lines[@]}" \
+  'retry path checks first attempt, rejected retry, and fallback visible budgets'
 retry_target_line="$(grep -n -m1 -F command:caelestia "$root/events" | cut -d: -f1)"
 retry_abort_line="$(grep -n -m1 -F transition:abort "$root/events" | cut -d: -f1)"
 retry_fallback_line="$(grep -n -m1 -F command:noctalia "$root/events" | cut -d: -f1)"
-if [ "${retry_budget_lines[0]}" -ge "${retry_budget_lines[1]}" ] ||
-  [ "${retry_budget_lines[1]}" -ge "$retry_target_line" ] ||
-  [ "$retry_target_line" -ge "${retry_budget_lines[2]}" ] ||
-  [ "${retry_budget_lines[2]}" -ge "$retry_abort_line" ] ||
-  [ "$retry_abort_line" -ge "${retry_budget_lines[3]}" ] ||
-  [ "${retry_budget_lines[3]}" -ge "$retry_fallback_line" ]; then
+if [ "${retry_budget_lines[0]}" -ge "$retry_target_line" ] ||
+  [ "$retry_target_line" -ge "${retry_budget_lines[1]}" ] ||
+  [ "${retry_budget_lines[1]}" -ge "$retry_abort_line" ] ||
+  [ "$retry_abort_line" -ge "${retry_budget_lines[2]}" ] ||
+  [ "${retry_budget_lines[2]}" -ge "$retry_fallback_line" ]; then
   fail "retry budget ordering did not block the late target before exact-abort and fallback
-$(grep -E '^(bridge-budget:0|command:|transition:abort)$' "$root/events" || true)"
+$(grep -E '^(target-spawn-budget:1000000|command:|transition:abort)$' "$root/events" || true)"
 fi
 if grep -Fqx transition "$root/processes"; then
   fail 'retry budget failure retained its transition helper process'

@@ -114,12 +114,21 @@ let
           ${shellTransitionRoot}/shell.qml \
           ${shellTransitionRoot}/TransitionController.qml
 
-        mkdir -p "$out/shaders"
+        mkdir -p "$out/assets" "$out/shaders"
         install -m 0444 ${shellTransitionRoot}/shell.qml "$out/shell.qml"
         install -m 0444 \
           ${shellTransitionRoot}/TransitionController.qml \
           "$out/TransitionController.qml"
         install -m 0444 ${shellTransitionRoot}/transition-model.js "$out/transition-model.js"
+        install -m 0444 \
+          ${shellSelectorRoot}/assets/caelestia.svg \
+          "$out/assets/caelestia.svg"
+        install -m 0444 \
+          ${shellSelectorRoot}/assets/illogical-impulse.svg \
+          "$out/assets/illogical-impulse.svg"
+        install -m 0444 \
+          ${shellSelectorRoot}/assets/noctalia.svg \
+          "$out/assets/noctalia.svg"
         install -m 0444 \
           ${shellTransitionRoot}/shaders/honeycomb.frag \
           "$out/shaders/honeycomb.frag"

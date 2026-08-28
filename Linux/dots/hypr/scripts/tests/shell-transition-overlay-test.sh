@@ -697,7 +697,7 @@ else
   [ ! -s "$instances" ] || fail 'invalid wait_covered state retained the owned instance'
 fi
 
-# Readiness and spawn guards share the profile-derived incoming boundary.
+# Readiness remains bounded by the end of the visible incoming reveal.
 while read -r destination_profile bridge_us; do
   reset_fixture
   status_mode=start-to-covered
@@ -706,8 +706,7 @@ while read -r destination_profile bridge_us; do
   wahrwelt_shell_transition_wait_covered ||
     fail "$destination_profile readiness fixture did not reach covered"
   covered_observed_us="$(cat "$clock_file")"
-  anchored_visible_deadline="${wahrwelt_shell_transition_visible_deadline_us:-unset}"
-  anchored_incoming_deadline=$((covered_observed_us + bridge_us))
+  anchored_visible_deadline=$((covered_observed_us + bridge_us + 3000000))
   layers_mode=partial
   advance_clock_us $((bridge_us - 150000))
   if wahrwelt_shell_transition_wait_target_ready "$destination_profile"; then
@@ -716,7 +715,7 @@ while read -r destination_profile bridge_us; do
   assert_eq "$anchored_visible_deadline" \
     "${wahrwelt_shell_transition_visible_deadline_us:-unset}" \
     "$destination_profile readiness re-armed the visible deadline"
-  assert_eq "$anchored_incoming_deadline" "$(cat "$clock_file")" \
+  assert_eq "$anchored_visible_deadline" "$(cat "$clock_file")" \
     "$destination_profile readiness boundary"
   wahrwelt_shell_transition_abort
 done <<'EOF'
@@ -770,6 +769,54 @@ end4 5000000
 EOF
   wahrwelt_shell_transition_bridge_budget_available ||
     fail 'bridge budget rejected an inactive transition'
+fi
+
+if ! declare -F wahrwelt_shell_transition_target_spawn_budget_available >/dev/null; then
+  fail 'target_spawn_budget_available protocol function is missing'
+else
+  while read -r destination_profile bridge_us; do
+    reset_fixture
+    status_mode=start-to-covered
+    wahrwelt_shell_transition_begin "$destination_profile" ||
+      fail "$destination_profile target spawn budget fixture did not start"
+    wahrwelt_shell_transition_wait_covered ||
+      fail "$destination_profile target spawn fixture did not reach covered"
+    bridge_start_us="$(cat "$clock_file")"
+    target_visible_boundary=$((bridge_start_us + bridge_us + 3000000))
+    advance_clock_us $((bridge_us + 3000000 - 500001))
+    if ! wahrwelt_shell_transition_target_spawn_budget_available 500000; then
+      fail "$destination_profile target spawn budget rejected a visible reserve"
+    fi
+    if wahrwelt_shell_transition_target_spawn_budget_available 500001; then
+      fail "$destination_profile target spawn budget accepted an exact reserve boundary"
+    fi
+    advance_clock_us 500000
+    if ! wahrwelt_shell_transition_target_spawn_budget_available; then
+      fail "$destination_profile zero target spawn budget was rejected before overlay cleanup"
+    fi
+    advance_clock_us 1
+    assert_eq "$target_visible_boundary" "$(cat "$clock_file")" \
+      "$destination_profile target spawn visible boundary"
+    if wahrwelt_shell_transition_target_spawn_budget_available; then
+      fail "$destination_profile target spawn budget was accepted after the visible reveal"
+    fi
+    if wahrwelt_shell_transition_target_spawn_budget_available invalid; then
+      fail "$destination_profile target spawn budget accepted a malformed minimum"
+    fi
+    assert_eq 1 "$wahrwelt_shell_transition_active" \
+      "$destination_profile target spawn budget failure deactivated the transition"
+    assert_eq "$target_visible_boundary" \
+      "$wahrwelt_shell_transition_visible_deadline_us" \
+      "$destination_profile target spawn budget changed the visible deadline"
+    [ -s "$instances" ] ||
+      fail "$destination_profile target spawn budget failure cleaned the owned instance"
+    wahrwelt_shell_transition_abort
+  done <<'EOF'
+caelestia 3000000
+end4 5000000
+EOF
+  wahrwelt_shell_transition_target_spawn_budget_available ||
+    fail 'target spawn budget rejected an inactive transition'
 fi
 
 if ! declare -F wahrwelt_shell_transition_wait_done >/dev/null; then

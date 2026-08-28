@@ -19,9 +19,9 @@ ShellRoot {
   property bool settleFenceArmed: false
 
   readonly property string transitionState: controller.state
-  readonly property int bridgePulseCount: controller.transitionModel
-    ? controller.transitionModel.bridgePulseCount
-    : 0
+  readonly property url targetLogoSource: controller.transitionModel
+    ? Qt.resolvedUrl(controller.transitionModel.targetLogoAsset)
+    : ""
   readonly property bool surfaceVisible: transitionState === "capturing"
     || transitionState === "captured"
     || transitionState === "outgoing"
@@ -260,18 +260,20 @@ ShellRoot {
         id: neutralVeilSource
         anchors.fill: parent
 
-        readonly property real pulse: 0.5
-          - 0.5 * Math.cos(root.bridgeProgress * Math.PI * 2.0
-            * root.bridgePulseCount)
-
         Rectangle {
           anchors.fill: parent
-          color: Qt.rgba(
-            0.035 + neutralVeilSource.pulse * 0.018,
-            0.043 + neutralVeilSource.pulse * 0.022,
-            0.061 + neutralVeilSource.pulse * 0.030,
-            1.0
-          )
+          color: Qt.rgba(0.035, 0.043, 0.061, 1.0)
+        }
+
+        Image {
+          id: targetLogo
+          anchors.centerIn: parent
+          width: Math.min(parent.width, parent.height) * 0.18
+          height: width
+          source: root.targetLogoSource
+          fillMode: Image.PreserveAspectFit
+          smooth: true
+          mipmap: true
         }
       }
 

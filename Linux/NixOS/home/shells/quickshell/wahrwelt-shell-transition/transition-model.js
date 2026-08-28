@@ -17,6 +17,19 @@ function bridgeDurationMs(targetProfile) {
   return 0;
 }
 
+function targetLogoAsset(targetProfile) {
+  if (targetProfile === "caelestia") {
+    return "assets/caelestia.svg";
+  }
+  if (targetProfile === "noctalia") {
+    return "assets/noctalia.svg";
+  }
+  if (targetProfile === "end4" || targetProfile === "end4-pc") {
+    return "assets/illogical-impulse.svg";
+  }
+  return "";
+}
+
 function uniqueScreenNames(screenNames) {
   var names = [];
 
@@ -35,6 +48,7 @@ function create(screenNames, targetProfile) {
   var expected = uniqueScreenNames(screenNames || []);
   var profile = typeof targetProfile === "string" ? targetProfile : "";
   var bridgeDuration = bridgeDurationMs(profile);
+  var logoAsset = targetLogoAsset(profile);
   var totalDurationMs = DEFAULT_OUTGOING_DURATION_MS
     + bridgeDuration
     + DEFAULT_INCOMING_DURATION_MS;
@@ -42,6 +56,7 @@ function create(screenNames, targetProfile) {
   return {
     state: expected.length === 0 || bridgeDuration === 0 ? "aborted" : "capturing",
     targetProfile: profile,
+    targetLogoAsset: logoAsset,
     expected: expected,
     captured: {},
     capturedCount: 0,
@@ -50,7 +65,6 @@ function create(screenNames, targetProfile) {
     settlingPresented: {},
     outgoingDurationMs: DEFAULT_OUTGOING_DURATION_MS,
     bridgeDurationMs: bridgeDuration,
-    bridgePulseCount: bridgeDuration / 1000,
     incomingDurationMs: DEFAULT_INCOMING_DURATION_MS,
     totalDurationMs: totalDurationMs
   };

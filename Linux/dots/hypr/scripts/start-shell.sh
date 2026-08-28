@@ -739,18 +739,18 @@ ensure_end4_idle() {
   return 1
 }
 
-guard_profile_spawn_bridge_budget() {
-  if wahrwelt_shell_transition_bridge_budget_available 0; then
+guard_profile_spawn_visible_budget() {
+  if wahrwelt_shell_transition_target_spawn_budget_available 1000000; then
     return 0
   fi
 
-  log "shell transition bridge budget expired before target spawn; profile=$profile"
+  log "shell transition visible budget expired before target spawn; profile=$profile"
   wahrwelt_shell_transition_abort
   return 1
 }
 
 start_profile_with_retry() {
-  start_with_retry --before-attempt guard_profile_spawn_bridge_budget "$@"
+  start_with_retry --before-attempt guard_profile_spawn_visible_budget "$@"
 }
 
 start_profile_shell() {
