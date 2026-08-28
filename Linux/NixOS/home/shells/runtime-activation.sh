@@ -33,6 +33,10 @@ NIXOS_HOME_MANAGER_ADAPTER_RE = re.compile(
     r"^/nix/store/[0-9abcdfghijklmnpqrsvwxyz]{32}-home-manager-files/"
     r"\.config/hypr/(?:user|wahrwelt|mysetup)/hyprland\.lua$"
 )
+NIXOS_HOME_MANAGER_TOP_LEVEL_RUNTIME_RE = re.compile(
+    r"^/nix/store/[0-9abcdfghijklmnpqrsvwxyz]{32}-home-manager-files/"
+    r"\.config/hypr/hyprland\.lua$"
+)
 
 libc = ctypes.CDLL(None, use_errno=True)
 linkat = libc.linkat
@@ -329,16 +333,25 @@ def classify_top_level_runtime_at(
             f"{hashlib.sha256(content).hexdigest()}"
         )
 
-    if not old_generation:
-        ownership_collision(label, display_path, "unowned symlink")
     normalized_relative = os.path.normpath(expected_relative)
     if os.path.isabs(expected_relative) or normalized_relative in {".", ".."} or normalized_relative.startswith(".." + os.sep):
         ownership_collision(label, display_path, "invalid managed relative path")
-    home_files = os.path.realpath(os.path.join(os.path.abspath(old_generation), "home-files"))
-    expected = os.path.join(home_files, normalized_relative)
     raw_target = os.readlink(name, dir_fd=parent_fd)
-    if raw_target != expected:
-        ownership_collision(label, display_path, "symlink is not owned by the old Home Manager generation")
+    expected = None
+    if old_generation:
+        home_files = os.path.realpath(os.path.join(os.path.abspath(old_generation), "home-files"))
+        old_generation_target = os.path.join(home_files, normalized_relative)
+        if raw_target == old_generation_target:
+            expected = old_generation_target
+    if expected is None and (
+        normalized_relative == ".config/hypr/hyprland.lua"
+        and NIXOS_HOME_MANAGER_TOP_LEVEL_RUNTIME_RE.fullmatch(raw_target) is not None
+        and immutable_nix_store_leaf(raw_target, True)
+        and immutable_nix_store_leaf(os.path.realpath(raw_target), False)
+    ):
+        expected = raw_target
+    if expected is None:
+        ownership_collision(label, display_path, "symlink is not owned by Home Manager")
     try:
         expected_info = os.stat(expected, follow_symlinks=True)
         linked_info = os.stat(name, dir_fd=parent_fd, follow_symlinks=True)

@@ -13,6 +13,7 @@ import (
 
 	migrationv1tov2 "github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/migrations/v1_to_v2"
 	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/run"
+	"github.com/TakuyaYagam1/wahrwelt/Linux/installer/internal/shellruntime"
 	"golang.org/x/sys/unix"
 )
 
@@ -629,28 +630,43 @@ func isManagedHomeManagerHyprEntrypointTarget(
 	target string,
 	activeHomeManagerTargets managedHyprEntrypointTargets,
 ) bool {
-	if _, ok := activeHomeManagerTargets[target]; ok {
+	if _, ok := activeHomeManagerTargets[target]; ok && isImmutableNixStoreHomeManagerHyprEntrypointTarget(target) {
 		return true
 	}
-	return isNixStoreHomeManagerHyprEntrypointTarget(target)
+	return isImmutableNixStoreHomeManagerHyprEntrypointTarget(target)
 }
 
 func isNixStoreHomeManagerHyprEntrypointTarget(target string) bool {
+	for _, namespace := range []string{
+		migrationv1tov2.CanonicalUserNamespace,
+		migrationv1tov2.LegacyWahrweltNamespace,
+		migrationv1tov2.LegacyMySetupNamespace,
+	} {
+		if isNixStoreHomeManagerHyprTarget(target, namespace+"/hyprland.lua") {
+			return true
+		}
+	}
+	return false
+}
+
+func isNixStoreHomeManagerHyprTarget(target, relative string) bool {
+	return managedHomeManagerHyprRelativePath(relative) && isNixStoreHomeManagerHyprPath(target, relative)
+}
+
+func isNixStoreHomeManagerHyprPath(target, relative string) bool {
 	const storePrefix = "/nix/store/"
 	const objectSuffix = "-home-manager-files"
 	if !strings.HasPrefix(target, storePrefix) {
 		return false
 	}
-	parts := strings.Split(strings.TrimPrefix(target, storePrefix), "/")
-	if len(parts) != 5 || parts[1] != ".config" || parts[2] != "hypr" || parts[4] != "hyprland.lua" {
+	normalizedRelative := filepath.ToSlash(filepath.Clean(filepath.FromSlash(relative)))
+	if normalizedRelative != relative || normalizedRelative == "." || strings.HasPrefix(normalizedRelative, "../") {
 		return false
 	}
-	if parts[3] != migrationv1tov2.CanonicalUserNamespace &&
-		parts[3] != migrationv1tov2.LegacyWahrweltNamespace &&
-		parts[3] != migrationv1tov2.LegacyMySetupNamespace {
+	object, managedPath, ok := strings.Cut(strings.TrimPrefix(target, storePrefix), "/")
+	if !ok || managedPath != ".config/hypr/"+normalizedRelative {
 		return false
 	}
-	object := parts[0]
 	if !strings.HasSuffix(object, objectSuffix) {
 		return false
 	}
@@ -664,6 +680,111 @@ func isNixStoreHomeManagerHyprEntrypointTarget(target string) bool {
 		}
 	}
 	return true
+}
+
+func isImmutableNixStoreHomeManagerHyprEntrypointTarget(target string) bool {
+	for _, namespace := range []string{
+		migrationv1tov2.CanonicalUserNamespace,
+		migrationv1tov2.LegacyWahrweltNamespace,
+		migrationv1tov2.LegacyMySetupNamespace,
+	} {
+		if isImmutableNixStoreHomeManagerHyprPath(target, namespace+"/hyprland.lua") {
+			return true
+		}
+	}
+	return false
+}
+
+func isImmutableNixStoreHomeManagerHyprTarget(target, relative string) bool {
+	return managedHomeManagerHyprRelativePath(relative) && isImmutableNixStoreHomeManagerHyprPath(target, relative)
+}
+
+func isImmutableNixStoreHomeManagerHyprPath(target, relative string) bool {
+	if !isNixStoreHomeManagerHyprPath(target, relative) || !immutableNixStoreLeaf(target, true) {
+		return false
+	}
+	resolved, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		return false
+	}
+	return immutableNixStoreLeaf(resolved, false)
+}
+
+func immutableNixStoreLeaf(path string, allowSymlink bool) bool {
+	components, ok := nixStorePathComponents(path)
+	if !ok {
+		return false
+	}
+	current := "/nix/store"
+	for index, component := range components {
+		current = filepath.Join(current, component)
+		var info unix.Stat_t
+		if err := unix.Lstat(current, &info); err != nil ||
+			!immutableNixStoreComponent(info, index == len(components)-1, allowSymlink) {
+			return false
+		}
+	}
+	return true
+}
+
+func nixStorePathComponents(path string) ([]string, bool) {
+	const storePrefix = "/nix/store/"
+	if filepath.Clean(path) != path || !strings.HasPrefix(path, storePrefix) {
+		return nil, false
+	}
+	components := strings.Split(strings.TrimPrefix(path, storePrefix), string(os.PathSeparator))
+	if len(components) == 0 || !validNixStoreObjectName(components[0]) {
+		return nil, false
+	}
+	for _, component := range components {
+		if component == "" || component == "." || component == ".." {
+			return nil, false
+		}
+	}
+	return components, true
+}
+
+func immutableNixStoreComponent(info unix.Stat_t, final, allowSymlink bool) bool {
+	if info.Uid != 0 {
+		return false
+	}
+	if !final {
+		return info.Mode&unix.S_IFMT == unix.S_IFDIR && info.Mode&0o222 == 0
+	}
+	if info.Mode&unix.S_IFMT == unix.S_IFLNK {
+		return allowSymlink
+	}
+	return info.Mode&unix.S_IFMT == unix.S_IFREG && info.Mode&0o222 == 0
+}
+
+func validNixStoreObjectName(name string) bool {
+	if len(name) < 34 || name[32] != '-' {
+		return false
+	}
+	for _, char := range name[:32] {
+		if !strings.ContainsRune("0123456789abcdfghijklmnpqrsvwxyz", char) {
+			return false
+		}
+	}
+	return true
+}
+
+func managedHomeManagerHyprRelativePath(relative string) bool {
+	for _, candidate := range shellruntime.RuntimeFiles {
+		if relative == candidate {
+			return true
+		}
+	}
+	for _, namespace := range []string{
+		migrationv1tov2.CanonicalUserNamespace,
+		migrationv1tov2.LegacyWahrweltNamespace,
+		migrationv1tov2.LegacyMySetupNamespace,
+	} {
+		if relative == namespace+"/hyprland.lua" {
+			return true
+		}
+	}
+	return false
 }
 
 func readRegularFileNoFollowResolved(path string) ([]byte, os.FileInfo, error) {

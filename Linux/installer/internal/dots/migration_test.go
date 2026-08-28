@@ -1351,15 +1351,15 @@ func TestMigrateLegacyUserPathsAcceptsExactActiveHomeManagerHyprAdapter(t *testi
 	}
 
 	generation := filepath.Join(home, "home-manager-generation")
-	managedTarget := filepath.Join(generation, "home-files", ".config", "hypr", "wahrwelt", "hyprland.lua")
-	if err := os.MkdirAll(filepath.Dir(managedTarget), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	managedSource, err := os.ReadFile("../../../dots/hypr/hyprland.lua")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(managedTarget, managedSource, 0o644); err != nil {
+	homeFiles, managedTarget := addHomeManagerFilesStoreLeaf(t, "wahrwelt/hyprland.lua", string(managedSource))
+	if err := os.MkdirAll(generation, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(homeFiles, filepath.Join(generation, "home-files")); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(managedTarget, filepath.Join(legacy, "hyprland.lua")); err != nil {

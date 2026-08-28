@@ -492,7 +492,7 @@ func applyDirectEnd4MigrationAssetPlan(
 		state := tx.states[publication.path]
 		asset := assets[publication.path]
 		if directEnd4MigrationRegularAssetReady(publication, state) ||
-			directEnd4MigrationAssetIsCurrentHomeManagerSymlink(home, publication, state, asset) {
+			directEnd4MigrationAssetIsHomeManagerSymlink(home, publication, state, asset) {
 			continue
 		}
 		if err := tx.mutate(runtimeMutationWrite, publication.path, func() (runtimePathState, error) {
@@ -551,7 +551,7 @@ func validateDirectEnd4MigrationAssetState(home string, publication runtimePubli
 		return false, nil
 	}
 	if state.snapshot.kind == runtimeSnapshotSymlink {
-		content, active := directEnd4MigrationActiveHomeManagerSymlinkContent(home, publication, state, asset)
+		content, active := directEnd4MigrationHomeManagerSymlinkContent(home, publication, state, asset)
 		if !active {
 			return false, fmt.Errorf("unowned direct End4 migration asset collision: %s", publication.path)
 		}
@@ -584,17 +584,17 @@ func isHistoricalDirectEnd4MigrationAsset(sourceRel string, content []byte) bool
 	return migrationv1tov2.IsHistoricalDirectEnd4Asset(sourceRel, content)
 }
 
-func directEnd4MigrationAssetIsCurrentHomeManagerSymlink(
+func directEnd4MigrationAssetIsHomeManagerSymlink(
 	home string,
 	publication runtimePublication,
 	state runtimePathState,
 	asset directEnd4MigrationAsset,
 ) bool {
-	content, active := directEnd4MigrationActiveHomeManagerSymlinkContent(home, publication, state, asset)
+	content, active := directEnd4MigrationHomeManagerSymlinkContent(home, publication, state, asset)
 	return active && content == publication.content
 }
 
-func directEnd4MigrationActiveHomeManagerSymlinkContent(
+func directEnd4MigrationHomeManagerSymlinkContent(
 	home string,
 	publication runtimePublication,
 	state runtimePathState,
@@ -610,7 +610,7 @@ func directEnd4MigrationActiveHomeManagerSymlinkContent(
 	}
 	target := state.snapshot.linkTarget
 	if !filepath.IsAbs(target) {
-		target = filepath.Join(filepath.Dir(publication.path), target)
+		return "", false
 	}
 	candidates := []string{rel}
 	if asset.sourceRel == "hyprland.lua" {
@@ -618,8 +618,7 @@ func directEnd4MigrationActiveHomeManagerSymlinkContent(
 	}
 	active := false
 	for _, candidate := range candidates {
-		activeTarget, ok := activeHomeManagerHyprTarget(home, candidate)
-		if ok && filepath.Clean(target) == activeTarget {
+		if isImmutableNixStoreHomeManagerHyprPath(target, filepath.ToSlash(candidate)) {
 			active = true
 			break
 		}
@@ -656,23 +655,15 @@ func supportedStableTopLevelRuntime(home, path string, state runtimePathState) b
 	case runtimeSnapshotRegular:
 		return string(state.snapshot.content) == want
 	case runtimeSnapshotSymlink:
-		target := state.snapshot.linkTarget
-		if !filepath.IsAbs(target) {
-			target = filepath.Join(filepath.Dir(path), target)
-		}
-		activeTarget, ok := activeHomeManagerTopLevelRuntimeTarget(home)
-		if !ok || filepath.Clean(target) != activeTarget {
+		target, ok := managedHomeManagerTopLevelRuntimeTarget(home, path, state.snapshot.linkTarget)
+		if !ok {
 			return false
 		}
-		data, _, err := readRegularFileNoFollowResolved(activeTarget)
+		data, _, err := readRegularFileNoFollowResolved(target)
 		return err == nil && string(data) == want
 	default:
 		return false
 	}
-}
-
-func activeHomeManagerTopLevelRuntimeTarget(home string) (string, bool) {
-	return activeHomeManagerRuntimeTarget(home, "hyprland.lua")
 }
 
 func readableHyprUserAdapters(hyprDir string) (canonical, legacy bool) {
@@ -1027,36 +1018,36 @@ func isHistoricalEnd4SharedRuntimePayload(home, hyprDir, path, content string) b
 }
 
 func runtimePublicationIsPreservedHomeManagerSymlink(home string, publication runtimePublication, state runtimePathState) bool {
-	if state.snapshot.kind != runtimeSnapshotSymlink || filepath.Dir(publication.path) != filepath.Join(home, ".config", "hypr") {
+	if state.snapshot.kind != runtimeSnapshotSymlink {
 		return false
 	}
-	target := state.snapshot.linkTarget
-	if !filepath.IsAbs(target) {
-		target = filepath.Join(filepath.Dir(publication.path), target)
-	}
-	activeTarget, ok := activeHomeManagerRuntimeTarget(home, filepath.Base(publication.path))
-	if !ok || filepath.Clean(target) != activeTarget {
+	target, ok := managedHomeManagerTopLevelRuntimeTarget(home, publication.path, state.snapshot.linkTarget)
+	if !ok {
 		return false
 	}
-	data, _, err := readRegularFileNoFollowResolved(activeTarget)
+	data, _, err := readRegularFileNoFollowResolved(target)
 	return err == nil && string(data) == publication.content
 }
 
-func activeHomeManagerRuntimeTarget(home, name string) (string, bool) {
-	return activeHomeManagerHyprTarget(home, name)
-}
-
-func activeHomeManagerHyprTarget(home, rel string) (string, bool) {
-	currentHome := filepath.Join(home, ".local", "state", "home-manager", "gcroots", "current-home")
-	homeFiles, err := filepath.EvalSymlinks(filepath.Join(currentHome, "home-files"))
-	if err != nil || !filepath.IsAbs(homeFiles) {
+func managedHomeManagerTopLevelRuntimeTarget(home, path, rawTarget string) (string, bool) {
+	if filepath.Dir(path) != filepath.Join(home, ".config", "hypr") {
 		return "", false
 	}
-	info, err := os.Lstat(homeFiles)
-	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+	name := filepath.Base(path)
+	managedName := false
+	for _, candidate := range shellruntime.RuntimeFiles {
+		if name == candidate {
+			managedName = true
+			break
+		}
+	}
+	if !managedName {
 		return "", false
 	}
-	return filepath.Join(homeFiles, ".config", "hypr", filepath.FromSlash(rel)), true
+	if filepath.IsAbs(rawTarget) && isImmutableNixStoreHomeManagerHyprTarget(rawTarget, name) {
+		return rawTarget, true
+	}
+	return "", false
 }
 
 func validateLegacyRuntimeFileState(path string, state runtimePathState, home, hyprDir string) error {

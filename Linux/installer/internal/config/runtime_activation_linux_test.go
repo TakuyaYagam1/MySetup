@@ -109,6 +109,105 @@ func startScriptBarrier(t *testing.T, script, barrier string, args ...string) *a
 	return process
 }
 
+func TestHomeManagerRuntimeActivationAcceptsFailedGenerationStableStoreLink(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skipf("nix is unavailable: %v", err)
+	}
+	stableSource := filepath.Join(t.TempDir(), "stable-hyprland.lua")
+	const stable = "-- stable failed-generation delegator\n"
+	if err := os.WriteFile(stableSource, []byte(stable), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	stableStore := addNixStorePath(t, "hm_hyprhyprland.lua", stableSource)
+	filesTree := filepath.Join(t.TempDir(), "home-manager-files")
+	managedTarget := filepath.Join(filesTree, ".config", "hypr", "hyprland.lua")
+	if err := os.MkdirAll(filepath.Dir(managedTarget), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(stableStore, managedTarget); err != nil {
+		t.Fatal(err)
+	}
+	filesStore := addNixStorePath(t, "home-manager-files", filesTree)
+	failedGenerationTarget := filepath.Join(filesStore, ".config", "hypr", "hyprland.lua")
+	liveTarget := filepath.Join(t.TempDir(), "hypr", "hyprland.lua")
+	if err := os.MkdirAll(filepath.Dir(liveTarget), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(failedGenerationTarget, liveTarget); err != nil {
+		t.Fatal(err)
+	}
+
+	output, err := exec.Command(
+		"bash",
+		runtimeActivationHelper,
+		"classify-top-level-runtime",
+		liveTarget,
+		"",
+		".config/hypr/hyprland.lua",
+		stableStore,
+		stableStore,
+	).CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed-generation Home Manager runtime link was rejected: %v\n%s", err, output)
+	}
+	if got := strings.TrimSpace(string(output)); !strings.HasPrefix(got, "stable-link|") {
+		t.Fatalf("failed-generation runtime classification = %q, want stable-link", got)
+	}
+	if got, err := os.Readlink(liveTarget); err != nil || got != failedGenerationTarget {
+		t.Fatalf("failed-generation runtime link changed: target=%q err=%v", got, err)
+	}
+}
+
+func TestHomeManagerRuntimeActivationRejectsStoreLinkToMutableStablePayload(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skipf("nix is unavailable: %v", err)
+	}
+	const stable = "-- stable mutable delegator\n"
+	stableSource := filepath.Join(t.TempDir(), "stable-hyprland.lua")
+	if err := os.WriteFile(stableSource, []byte(stable), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	stableStore := addNixStorePath(t, "hm_hyprhyprland.lua", stableSource)
+	mutablePayload := filepath.Join(t.TempDir(), "mutable-hyprland.lua")
+	if err := os.WriteFile(mutablePayload, []byte(stable), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	filesTree := filepath.Join(t.TempDir(), "home-manager-files")
+	managedTarget := filepath.Join(filesTree, ".config", "hypr", "hyprland.lua")
+	if err := os.MkdirAll(filepath.Dir(managedTarget), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(mutablePayload, managedTarget); err != nil {
+		t.Fatal(err)
+	}
+	filesStore := addNixStorePath(t, "home-manager-files", filesTree)
+	storeTarget := filepath.Join(filesStore, ".config", "hypr", "hyprland.lua")
+	liveTarget := filepath.Join(t.TempDir(), "hypr", "hyprland.lua")
+	if err := os.MkdirAll(filepath.Dir(liveTarget), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(storeTarget, liveTarget); err != nil {
+		t.Fatal(err)
+	}
+
+	output, err := exec.Command(
+		"bash",
+		runtimeActivationHelper,
+		"classify-top-level-runtime",
+		liveTarget,
+		"",
+		".config/hypr/hyprland.lua",
+		stableStore,
+		stableStore,
+	).CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "ownership collision") {
+		t.Fatalf("store link to mutable stable payload was accepted: err=%v\n%s", err, output)
+	}
+	if got, err := os.Readlink(liveTarget); err != nil || got != storeTarget {
+		t.Fatalf("rejected mutable runtime link changed: target=%q err=%v", got, err)
+	}
+}
+
 func (process *activationBarrierProcess) releaseExpectFailure(t *testing.T) string {
 	t.Helper()
 	if _, err := process.continueW.Write([]byte{'1'}); err != nil {

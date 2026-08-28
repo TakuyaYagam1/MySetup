@@ -312,7 +312,7 @@ func TestInspectManagedHyprUserEntrypointRejectsSymlinkToFIFOWithoutBlocking(t *
 	}
 }
 
-func TestWriteHyprLocalConfigAcceptsOnlyExactActiveHomeManagerEntrypoint(t *testing.T) {
+func TestWriteHyprLocalConfigPreservesExactImmutableHomeManagerEntrypointsAcrossGenerations(t *testing.T) {
 	home := t.TempDir()
 	hyprDir := filepath.Join(home, ".config", "hypr")
 	source := t.TempDir()
@@ -321,20 +321,24 @@ func TestWriteHyprLocalConfigAcceptsOnlyExactActiveHomeManagerEntrypoint(t *test
 		t.Fatal(err)
 	}
 
-	makeGeneration := func(name string) (string, string) {
+	makeHomeFiles := func(name string) (string, string) {
 		t.Helper()
-		generation := filepath.Join(home, name)
-		leaf := filepath.Join(generation, "home-files", ".config", "hypr", "wahrwelt", "hyprland.lua")
-		if err := os.MkdirAll(filepath.Dir(leaf), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(leaf, []byte(current), 0o444); err != nil {
-			t.Fatal(err)
-		}
-		return generation, leaf
+		filesTree := filepath.Join(t.TempDir(), "home-manager-files")
+		leaf := filepath.Join(filesTree, ".config", "hypr", "wahrwelt", "hyprland.lua")
+		writeModeTestFile(t, leaf, current, 0o444)
+		writeModeTestFile(t, filepath.Join(filesTree, ".generation-marker"), name+"\n", 0o444)
+		storeRoot := addHomeManagerFilesNixStorePath(t, filesTree)
+		return storeRoot, filepath.Join(storeRoot, ".config", "hypr", "wahrwelt", "hyprland.lua")
 	}
-	activeGeneration, activeLeaf := makeGeneration("active-generation")
-	_, staleLeaf := makeGeneration("stale-generation")
+	activeHomeFiles, activeLeaf := makeHomeFiles("active-generation")
+	_, failedLeaf := makeHomeFiles("failed-generation")
+	activeGeneration := filepath.Join(home, "active-generation")
+	if err := os.MkdirAll(activeGeneration, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(activeHomeFiles, filepath.Join(activeGeneration, "home-files")); err != nil {
+		t.Fatal(err)
+	}
 	gcroot := filepath.Join(home, ".local", "state", "home-manager", "gcroots", "current-home")
 	if err := os.MkdirAll(filepath.Dir(gcroot), 0o755); err != nil {
 		t.Fatal(err)
@@ -346,10 +350,9 @@ func TestWriteHyprLocalConfigAcceptsOnlyExactActiveHomeManagerEntrypoint(t *test
 	for _, tc := range []struct {
 		name       string
 		linkTarget string
-		wantError  bool
 	}{
 		{name: "active", linkTarget: activeLeaf},
-		{name: "stale", linkTarget: staleLeaf, wantError: true},
+		{name: "failed", linkTarget: failedLeaf},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			caseHyprDir := filepath.Join(hyprDir, tc.name)
@@ -362,22 +365,12 @@ func TestWriteHyprLocalConfigAcceptsOnlyExactActiveHomeManagerEntrypoint(t *test
 				t.Fatal(err)
 			}
 
-			err := writeHyprLocalConfigFilesForHome(source, caseHyprDir, home)
-			if tc.wantError {
-				if err == nil || !strings.Contains(err.Error(), "unowned managed Hypr user adapter collision") {
-					t.Fatalf("expected stale-generation collision, got %v", err)
-				}
-				if target, readErr := os.Readlink(entrypoint); readErr != nil || target != tc.linkTarget {
-					t.Fatalf("stale link changed: target=%q err=%v", target, readErr)
-				}
-				return
-			}
-			if err != nil {
+			if err := writeHyprLocalConfigFilesForHome(source, caseHyprDir, home); err != nil {
 				t.Fatal(err)
 			}
 			migrated := filepath.Join(caseHyprDir, "user", "hyprland.lua")
 			if target, readErr := os.Readlink(migrated); readErr != nil || target != tc.linkTarget {
-				t.Fatalf("active Home Manager link was not preserved: target=%q err=%v", target, readErr)
+				t.Fatalf("immutable Home Manager link was not preserved: target=%q err=%v", target, readErr)
 			}
 		})
 	}
@@ -398,6 +391,27 @@ func TestManagedHomeManagerHyprEntrypointTargetRejectsMutableAliasToActiveManage
 	}
 	if isManagedHomeManagerHyprEntrypointTarget(mutableAlias, managedHyprEntrypointTargets{active: {}}) {
 		t.Fatalf("mutable alias to active managed inode was accepted: %s", mutableAlias)
+	}
+}
+
+func TestManagedHomeManagerHyprEntrypointTargetRejectsStoreLinkToMutablePayload(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skipf("nix is unavailable: %v", err)
+	}
+	mutablePayload := filepath.Join(t.TempDir(), "mutable-hyprland.lua")
+	writeModeTestFile(t, mutablePayload, historicalManagedHyprEntrypointFixtures[0].content, 0o644)
+	filesTree := filepath.Join(t.TempDir(), "home-manager-files")
+	managedTarget := filepath.Join(filesTree, ".config", "hypr", "user", "hyprland.lua")
+	if err := os.MkdirAll(filepath.Dir(managedTarget), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(mutablePayload, managedTarget); err != nil {
+		t.Fatal(err)
+	}
+	filesStore := addHomeManagerFilesNixStorePath(t, filesTree)
+	storeTarget := filepath.Join(filesStore, ".config", "hypr", "user", "hyprland.lua")
+	if isManagedHomeManagerHyprEntrypointTarget(storeTarget, nil) {
+		t.Fatalf("Home Manager adapter store link to mutable payload was accepted: %s", storeTarget)
 	}
 }
 
@@ -425,6 +439,38 @@ func TestNixStoreHomeManagerHyprEntrypointTargetRequiresExactManagedShape(t *tes
 	}
 }
 
+func TestNixStoreHomeManagerHyprRuntimeTargetRequiresExactManagedShape(t *testing.T) {
+	validHash := "0123456789abcdfghijklmnpqrsvwxyz"
+	for _, name := range shellruntime.RuntimeFiles {
+		target := "/nix/store/" + validHash + "-home-manager-files/.config/hypr/" + name
+		if !isNixStoreHomeManagerHyprTarget(target, name) {
+			t.Fatalf("exact Home Manager runtime target was rejected: %s", target)
+		}
+	}
+	for _, fixture := range []struct {
+		target   string
+		relative string
+	}{
+		{target: "/tmp/" + validHash + "-home-manager-files/.config/hypr/hyprland.lua", relative: "hyprland.lua"},
+		{target: "/nix/store/" + validHash + "-home-manager-files/.config/hypr/private.lua", relative: "private.lua"},
+		{target: "/nix/store/" + validHash + "-home-manager-files/.config/hypr/hyprland.lua", relative: "nested/../hyprland.lua"},
+		{target: "/nix/store/" + validHash + "-home-manager-files/.config/hypr/hyprlock.conf", relative: "hyprland.lua"},
+	} {
+		if isNixStoreHomeManagerHyprTarget(fixture.target, fixture.relative) {
+			t.Fatalf("non-exact Home Manager runtime target was accepted: target=%s relative=%s", fixture.target, fixture.relative)
+		}
+	}
+}
+
+func TestManagedHomeManagerTopLevelRuntimeTargetRejectsNonCanonicalStorePath(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, ".config", "hypr", "hyprland.lua")
+	rawTarget := "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-home-manager-files/.config/hypr/../hypr/hyprland.lua"
+	if target, ok := managedHomeManagerTopLevelRuntimeTarget(home, path, rawTarget); ok {
+		t.Fatalf("non-canonical Home Manager target was accepted: %s", target)
+	}
+}
+
 func TestWriteHyprLocalConfigPreservesHistoricalActiveHomeManagerEntrypoint(t *testing.T) {
 	home := t.TempDir()
 	hyprDir := filepath.Join(home, ".config", "hypr")
@@ -434,11 +480,15 @@ func TestWriteHyprLocalConfigPreservesHistoricalActiveHomeManagerEntrypoint(t *t
 	}
 
 	generation := filepath.Join(home, "home-manager-generation")
-	managedTarget := filepath.Join(generation, "home-files", ".config", "hypr", "wahrwelt", "hyprland.lua")
-	if err := os.MkdirAll(filepath.Dir(managedTarget), 0o755); err != nil {
+	homeFiles, managedTarget := addHomeManagerFilesStoreLeaf(
+		t,
+		"wahrwelt/hyprland.lua",
+		historicalManagedHyprEntrypointFixtures[0].content,
+	)
+	if err := os.MkdirAll(generation, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(managedTarget, []byte(historicalManagedHyprEntrypointFixtures[0].content), 0o644); err != nil {
+	if err := os.Symlink(homeFiles, filepath.Join(generation, "home-files")); err != nil {
 		t.Fatal(err)
 	}
 	gcroot := filepath.Join(home, ".local", "state", "home-manager", "gcroots", "current-home")

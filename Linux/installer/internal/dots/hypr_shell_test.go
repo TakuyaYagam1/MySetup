@@ -564,7 +564,7 @@ func TestWriteHyprRuntimeShellStatePreservesActiveHomeManagerTopLevelEntrypoint(
 	profile, _ := shellruntime.ProfileByID(shellruntime.Caelestia)
 	writeRuntimeProfileAssets(t, home, hyprDir, profile)
 	writeTestFile(t, shellruntime.ActiveShellStatePath(home), profile.ID+"\n")
-	topLevel, target, storePayload, want := prepareActiveHomeManagerTopLevelEntrypoint(t, home, hyprDir)
+	topLevel, target, want := prepareActiveHomeManagerTopLevelEntrypoint(t, home, hyprDir)
 	before, err := os.Lstat(topLevel)
 	if err != nil {
 		t.Fatal(err)
@@ -580,8 +580,216 @@ func TestWriteHyprRuntimeShellStatePreservesActiveHomeManagerTopLevelEntrypoint(
 	if err != nil || !os.SameFile(before, after) {
 		t.Fatalf("active Home Manager top-level entrypoint identity changed: before=%v after=%v err=%v", before, after, err)
 	}
-	if got, err := os.Readlink(target); err != nil || got != storePayload || readTestFile(t, target) != want {
-		t.Fatalf("active Home Manager store entrypoint changed: target=%q err=%v", got, err)
+	if got := readTestFile(t, target); got != want {
+		t.Fatalf("active Home Manager store entrypoint changed: %q", got)
+	}
+}
+
+func TestWriteHyprRuntimeShellStatePreservesFailedHomeManagerGenerationRuntimeLinks(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skipf("nix is unavailable: %v", err)
+	}
+	t.Setenv("XDG_STATE_HOME", "")
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	profile, _ := shellruntime.ProfileByID(shellruntime.Caelestia)
+	writeRuntimeProfileAssets(t, home, hyprDir, profile)
+	writeTestFile(t, shellruntime.ActiveShellStatePath(home), profile.ID+"\n")
+
+	plan := buildRuntimeTransactionPlan(home, hyprDir, profile)
+	filesTree := filepath.Join(t.TempDir(), "home-manager-files")
+	managedRoot := filepath.Join(filesTree, ".config", "hypr")
+	wantTargets := make(map[string]string, len(shellruntime.RuntimeFiles))
+	for _, publication := range plan.publications {
+		if filepath.Dir(publication.path) != hyprDir {
+			continue
+		}
+		writeModeTestFile(
+			t,
+			filepath.Join(managedRoot, filepath.Base(publication.path)),
+			publication.content,
+			0o444,
+		)
+	}
+	storeRoot := addHomeManagerFilesNixStorePath(t, filesTree)
+	for _, name := range shellruntime.RuntimeFiles {
+		path := filepath.Join(hyprDir, name)
+		target := filepath.Join(storeRoot, ".config", "hypr", name)
+		if err := os.Symlink(target, path); err != nil {
+			t.Fatal(err)
+		}
+		wantTargets[path] = target
+	}
+
+	if err := writeHyprRuntimeShellState(home, hyprDir); err != nil {
+		t.Fatalf("failed Home Manager generation runtime links were rejected: %v", err)
+	}
+	for path, target := range wantTargets {
+		if got, err := os.Readlink(path); err != nil || got != target {
+			t.Fatalf("failed-generation runtime link changed at %s: target=%q err=%v", path, got, err)
+		}
+	}
+}
+
+func TestManagedUserNamespaceRuntimeTargetsAcceptsFailedHomeManagerGenerationEntrypoint(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skipf("nix is unavailable: %v", err)
+	}
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	stable := stableRuntimeSourceConfig(
+		shellruntime.RuntimeFile(home, "hyprland.lua"),
+		"Wahrwelt stable Hyprland entrypoint.",
+	)
+	filesTree := filepath.Join(t.TempDir(), "home-manager-files")
+	managedTarget := filepath.Join(filesTree, ".config", "hypr", "hyprland.lua")
+	writeModeTestFile(t, managedTarget, stable, 0o444)
+	filesStore := addHomeManagerFilesNixStorePath(t, filesTree)
+	failedGenerationTarget := filepath.Join(filesStore, ".config", "hypr", "hyprland.lua")
+	if err := os.MkdirAll(hyprDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	topLevel := filepath.Join(hyprDir, "hyprland.lua")
+	if err := os.Symlink(failedGenerationTarget, topLevel); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := managedUserNamespaceRuntimeTargets(home, hyprDir); err != nil {
+		t.Fatalf("failed Home Manager generation entrypoint was rejected: %v", err)
+	}
+	if got, err := os.Readlink(topLevel); err != nil || got != failedGenerationTarget {
+		t.Fatalf("failed-generation entrypoint changed: target=%q err=%v", got, err)
+	}
+}
+
+func TestManagedUserNamespaceRuntimeTargetsRejectsFailedGenerationEntrypointWithWrongPayload(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skipf("nix is unavailable: %v", err)
+	}
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	filesTree := filepath.Join(t.TempDir(), "home-manager-files")
+	managedTarget := filepath.Join(filesTree, ".config", "hypr", "hyprland.lua")
+	const unknown = "-- private runtime in a store-shaped tree\n"
+	writeModeTestFile(t, managedTarget, unknown, 0o444)
+	filesStore := addHomeManagerFilesNixStorePath(t, filesTree)
+	failedGenerationTarget := filepath.Join(filesStore, ".config", "hypr", "hyprland.lua")
+	if err := os.MkdirAll(hyprDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	topLevel := filepath.Join(hyprDir, "hyprland.lua")
+	if err := os.Symlink(failedGenerationTarget, topLevel); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := managedUserNamespaceRuntimeTargets(home, hyprDir)
+	if err == nil || !strings.Contains(err.Error(), "unowned top-level Hypr runtime collision") {
+		t.Fatalf("unknown failed-generation payload was accepted: %v", err)
+	}
+	if got, err := os.Readlink(topLevel); err != nil || got != failedGenerationTarget {
+		t.Fatalf("unknown failed-generation entrypoint changed: target=%q err=%v", got, err)
+	}
+}
+
+func TestManagedUserNamespaceRuntimeTargetsRejectsStoreLinkToMutablePayload(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skipf("nix is unavailable: %v", err)
+	}
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	stable := stableRuntimeSourceConfig(
+		shellruntime.RuntimeFile(home, "hyprland.lua"),
+		"Wahrwelt stable Hyprland entrypoint.",
+	)
+	mutablePayload := filepath.Join(t.TempDir(), "mutable-hyprland.lua")
+	writeModeTestFile(t, mutablePayload, stable, 0o644)
+	filesTree := filepath.Join(t.TempDir(), "home-manager-files")
+	managedTarget := filepath.Join(filesTree, ".config", "hypr", "hyprland.lua")
+	if err := os.MkdirAll(filepath.Dir(managedTarget), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(mutablePayload, managedTarget); err != nil {
+		t.Fatal(err)
+	}
+	filesStore := addHomeManagerFilesNixStorePath(t, filesTree)
+	storeTarget := filepath.Join(filesStore, ".config", "hypr", "hyprland.lua")
+	if err := os.MkdirAll(hyprDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	topLevel := filepath.Join(hyprDir, "hyprland.lua")
+	if err := os.Symlink(storeTarget, topLevel); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := managedUserNamespaceRuntimeTargets(home, hyprDir)
+	if err == nil || !strings.Contains(err.Error(), "unowned top-level Hypr runtime collision") {
+		t.Fatalf("store link to mutable payload was accepted: %v", err)
+	}
+	if got, err := os.Readlink(topLevel); err != nil || got != storeTarget {
+		t.Fatalf("mutable store-shaped entrypoint changed: target=%q err=%v", got, err)
+	}
+}
+
+func TestManagedUserNamespaceRuntimeTargetsRejectsMutableCurrentHomeAlias(t *testing.T) {
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	stable := stableRuntimeSourceConfig(
+		shellruntime.RuntimeFile(home, "hyprland.lua"),
+		"Wahrwelt stable Hyprland entrypoint.",
+	)
+	generation := filepath.Join(home, "mutable-home-manager-generation")
+	managedTarget := filepath.Join(generation, "home-files", ".config", "hypr", "hyprland.lua")
+	writeModeTestFile(t, managedTarget, stable, 0o444)
+	currentHome := filepath.Join(home, ".local", "state", "home-manager", "gcroots", "current-home")
+	if err := os.MkdirAll(filepath.Dir(currentHome), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(generation, currentHome); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(hyprDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	topLevel := filepath.Join(hyprDir, "hyprland.lua")
+	if err := os.Symlink(managedTarget, topLevel); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := managedUserNamespaceRuntimeTargets(home, hyprDir)
+	if err == nil || !strings.Contains(err.Error(), "unowned top-level Hypr runtime collision") {
+		t.Fatalf("mutable current-home alias was accepted: %v", err)
+	}
+}
+
+func TestDirectEnd4MigrationAcceptsFailedHomeManagerGenerationAsset(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skipf("nix is unavailable: %v", err)
+	}
+	home := t.TempDir()
+	hyprDir := filepath.Join(home, ".config", "hypr")
+	const content = "-- managed variables\n"
+	filesTree := filepath.Join(t.TempDir(), "home-manager-files")
+	managedTarget := filepath.Join(filesTree, ".config", "hypr", "variables.lua")
+	writeModeTestFile(t, managedTarget, content, 0o444)
+	filesStore := addHomeManagerFilesNixStorePath(t, filesTree)
+	storeTarget := filepath.Join(filesStore, ".config", "hypr", "variables.lua")
+	publicationPath := filepath.Join(hyprDir, "variables.lua")
+	if err := os.MkdirAll(hyprDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(storeTarget, publicationPath); err != nil {
+		t.Fatal(err)
+	}
+	state, err := snapshotRuntimePathState(publicationPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publication := runtimePublication{path: publicationPath, content: content, mode: 0o644}
+	asset := directEnd4MigrationAsset{sourceRel: "variables.lua", destRel: "variables.lua", mode: 0o644}
+
+	got, ok := directEnd4MigrationHomeManagerSymlinkContent(home, publication, state, asset)
+	if !ok || got != content {
+		t.Fatalf("failed-generation End4 asset classification = (%q, %v), want exact managed content", got, ok)
 	}
 }
 
@@ -592,7 +800,7 @@ func TestWriteHyprRuntimeShellStateRejectsConcurrentReplacementOfPreservedHomeMa
 	profile, _ := shellruntime.ProfileByID(shellruntime.Caelestia)
 	writeRuntimeProfileAssets(t, home, hyprDir, profile)
 	writeTestFile(t, shellruntime.ActiveShellStatePath(home), profile.ID+"\n")
-	topLevel, _, _, _ := prepareActiveHomeManagerTopLevelEntrypoint(t, home, hyprDir)
+	topLevel, _, _ := prepareActiveHomeManagerTopLevelEntrypoint(t, home, hyprDir)
 	const winner = "concurrent private entrypoint\n"
 	currentHome := filepath.Join(home, ".local", "state", "home-manager", "gcroots", "current-home")
 	newGeneration := filepath.Join(home, ".concurrent-home-manager-generation")
@@ -626,14 +834,14 @@ func TestWriteHyprRuntimeShellStateRejectsConcurrentReplacementOfPreservedHomeMa
 	}
 }
 
-func TestWriteHyprRuntimeShellStateRejectsConcurrentHomeManagerGenerationSwitch(t *testing.T) {
+func TestWriteHyprRuntimeShellStatePreservesImmutableLinkAcrossConcurrentHomeManagerGenerationSwitch(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "")
 	home := t.TempDir()
 	hyprDir := filepath.Join(home, ".config", "hypr")
 	profile, _ := shellruntime.ProfileByID(shellruntime.Caelestia)
 	writeRuntimeProfileAssets(t, home, hyprDir, profile)
 	writeTestFile(t, shellruntime.ActiveShellStatePath(home), profile.ID+"\n")
-	topLevel, target, _, _ := prepareActiveHomeManagerTopLevelEntrypoint(t, home, hyprDir)
+	topLevel, target, _ := prepareActiveHomeManagerTopLevelEntrypoint(t, home, hyprDir)
 	before, err := os.Lstat(topLevel)
 	if err != nil {
 		t.Fatal(err)
@@ -655,8 +863,8 @@ func TestWriteHyprRuntimeShellStateRejectsConcurrentHomeManagerGenerationSwitch(
 		}
 		return os.Symlink(newGeneration, currentHome)
 	})
-	if err == nil || !strings.Contains(err.Error(), "preserved Home Manager shell runtime changed before commit") {
-		t.Fatalf("concurrent Home Manager generation error = %v", err)
+	if err != nil {
+		t.Fatalf("immutable Home Manager link was rejected after current generation switched: %v", err)
 	}
 	after, statErr := os.Lstat(topLevel)
 	if statErr != nil || !os.SameFile(before, after) {
@@ -670,21 +878,18 @@ func TestWriteHyprRuntimeShellStateRejectsConcurrentHomeManagerGenerationSwitch(
 	}
 }
 
-func prepareActiveHomeManagerTopLevelEntrypoint(t *testing.T, home, hyprDir string) (topLevel, target, storePayload, payload string) {
+func prepareActiveHomeManagerTopLevelEntrypoint(t *testing.T, home, hyprDir string) (topLevel, target, payload string) {
 	t.Helper()
 	generation := filepath.Join(home, ".home-manager-generation")
-	homeFiles := filepath.Join(generation, "home-files")
-	target = filepath.Join(homeFiles, ".config", "hypr", "hyprland.lua")
 	payload = stableRuntimeSourceConfig(
 		shellruntime.RuntimeFile(home, "hyprland.lua"),
 		"Wahrwelt stable Hyprland entrypoint.",
 	)
-	storePayload = filepath.Join(home, ".nix-store", "hm-hyprland.lua")
-	writeModeTestFile(t, storePayload, payload, 0o444)
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	homeFiles, target := addHomeManagerFilesStoreLeaf(t, "hyprland.lua", payload)
+	if err := os.MkdirAll(generation, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(storePayload, target); err != nil {
+	if err := os.Symlink(homeFiles, filepath.Join(generation, "home-files")); err != nil {
 		t.Fatal(err)
 	}
 	currentHome := filepath.Join(home, ".local", "state", "home-manager", "gcroots", "current-home")
@@ -698,7 +903,39 @@ func prepareActiveHomeManagerTopLevelEntrypoint(t *testing.T, home, hyprDir stri
 	if err := os.Symlink(target, topLevel); err != nil {
 		t.Fatal(err)
 	}
-	return topLevel, target, storePayload, payload
+	return topLevel, target, payload
+}
+
+func addHomeManagerFilesNixStorePath(t *testing.T, source string) string {
+	t.Helper()
+	const name = "home-manager-files"
+	output, err := exec.Command(
+		"nix",
+		"--extra-experimental-features",
+		"nix-command",
+		"store",
+		"add-path",
+		"--name",
+		name,
+		source,
+	).CombinedOutput()
+	if err != nil {
+		t.Fatalf("add runtime fixture to the Nix store: %v\n%s", err, output)
+	}
+	storePath := strings.TrimSpace(string(output))
+	if !strings.HasPrefix(storePath, "/nix/store/") || !strings.HasSuffix(storePath, "-"+name) {
+		t.Fatalf("unexpected runtime fixture store path: %q", storePath)
+	}
+	return storePath
+}
+
+func addHomeManagerFilesStoreLeaf(t *testing.T, relative, content string) (string, string) {
+	t.Helper()
+	filesTree := filepath.Join(t.TempDir(), "home-manager-files")
+	leaf := filepath.Join(filesTree, ".config", "hypr", filepath.FromSlash(relative))
+	writeModeTestFile(t, leaf, content, 0o444)
+	storeRoot := addHomeManagerFilesNixStorePath(t, filesTree)
+	return storeRoot, filepath.Join(storeRoot, ".config", "hypr", filepath.FromSlash(relative))
 }
 
 func TestRuntimeTransactionRollbackPreservesConcurrentWinner(t *testing.T) {

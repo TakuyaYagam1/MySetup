@@ -703,20 +703,11 @@ func TestApplyDefersDirectEnd4BundleForHistoricalActiveHomeManagerAsset(t *testi
 	if err := os.Remove(legacyAdapter); err != nil {
 		t.Fatal(err)
 	}
-	gcroot := filepath.Join(home, ".local", "state", "home-manager", "gcroots", "current-home")
-	generation, err := os.Readlink(gcroot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	activeTarget := filepath.Join(generation, "home-files", ".config", "hypr", "wahrwelt", "hyprland.lua")
-	storeTarget := filepath.Join(t.TempDir(), "historical-hyprland.lua")
-	writeTestFile(t, storeTarget, historicalCanonicalHyprUserAdapter)
-	if err := os.MkdirAll(filepath.Dir(activeTarget), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(storeTarget, activeTarget); err != nil {
-		t.Fatal(err)
-	}
+	_, activeTarget := addHomeManagerFilesStoreLeaf(
+		t,
+		"wahrwelt/hyprland.lua",
+		historicalCanonicalHyprUserAdapter,
+	)
 	if err := os.Symlink(activeTarget, legacyAdapter); err != nil {
 		t.Fatal(err)
 	}
@@ -976,16 +967,12 @@ func TestApplyPublishesDirectEnd4StateMainBeforeTopLevelCommit(t *testing.T) {
 func TestApplyPreservesSupportedHomeManagerStableTopLevelEntrypoint(t *testing.T) {
 	home, hyprDir, _ := prepareLegacyHyprUserRuntime(t)
 	generation := filepath.Join(t.TempDir(), "home-manager-generation")
-	topTarget := filepath.Join(generation, "home-files", ".config", "hypr", "hyprland.lua")
-	if err := os.MkdirAll(filepath.Dir(topTarget), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	stable := stableRuntimeSourceConfig(shellruntime.RuntimeFile(home, "hyprland.lua"), "Wahrwelt stable Hyprland entrypoint.")
-	storePayload := filepath.Join(t.TempDir(), "hm-hyprland.lua")
-	if err := os.WriteFile(storePayload, []byte(stable), 0o444); err != nil {
+	homeFiles, topTarget := addHomeManagerFilesStoreLeaf(t, "hyprland.lua", stable)
+	if err := os.MkdirAll(generation, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(storePayload, topTarget); err != nil {
+	if err := os.Symlink(homeFiles, filepath.Join(generation, "home-files")); err != nil {
 		t.Fatal(err)
 	}
 	gcroot := filepath.Join(home, ".local", "state", "home-manager", "gcroots", "current-home")
