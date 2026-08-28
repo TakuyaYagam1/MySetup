@@ -1,7 +1,9 @@
-var DEFAULT_DURATION_MS = 3000;
+var DEFAULT_OUTGOING_DURATION_MS = 3000;
+var DEFAULT_BRIDGE_DURATION_MS = 4000;
+var DEFAULT_INCOMING_DURATION_MS = 3000;
 var CAPTURE_TIMEOUT_MS = 5000;
-var CAPTURED_TIMEOUT_MS = 30000;
-var CLEANUP_MARGIN_MS = 1000;
+var CAPTURED_TIMEOUT_MS = 1000;
+var CLEANUP_MARGIN_MS = 750;
 
 function uniqueScreenNames(screenNames) {
   var names = [];
@@ -17,15 +19,24 @@ function uniqueScreenNames(screenNames) {
   return names;
 }
 
-function create(screenNames, durationMs) {
+function create(screenNames) {
   var expected = uniqueScreenNames(screenNames || []);
+  var totalDurationMs = DEFAULT_OUTGOING_DURATION_MS
+    + DEFAULT_BRIDGE_DURATION_MS
+    + DEFAULT_INCOMING_DURATION_MS;
 
   return {
     state: expected.length === 0 ? "aborted" : "capturing",
     expected: expected,
     captured: {},
     capturedCount: 0,
-    durationMs: durationMs === undefined ? DEFAULT_DURATION_MS : durationMs
+    coverPresented: {},
+    coverPresentedCount: 0,
+    settlingPresented: {},
+    outgoingDurationMs: DEFAULT_OUTGOING_DURATION_MS,
+    bridgeDurationMs: DEFAULT_BRIDGE_DURATION_MS,
+    incomingDurationMs: DEFAULT_INCOMING_DURATION_MS,
+    totalDurationMs: totalDurationMs
   };
 }
 
@@ -68,6 +79,9 @@ function captureFailed(model, screenName) {
   if (model.state === "aborted" || model.state === "done") {
     return false;
   }
+  if (model.state === "covered" || model.state === "incoming" || model.state === "settling") {
+    return false;
+  }
 
   abort(model);
   return true;
@@ -87,12 +101,87 @@ function screensMatch(model, screenNames) {
   return matches;
 }
 
-function reveal(model) {
+function beginTransition(model) {
   if (model.state !== "captured") {
     return false;
   }
 
-  model.state = "revealing";
+  model.state = "outgoing";
+  model.coverPresented = {};
+  model.coverPresentedCount = 0;
+  return true;
+}
+
+function coverFramePresented(model, screenName) {
+  var name = String(screenName);
+  var count;
+
+  if (model.state !== "outgoing") {
+    return false;
+  }
+  if (model.expected.indexOf(name) === -1) {
+    abort(model);
+    return false;
+  }
+  count = model.coverPresented[name] || 0;
+  if (count >= 2) {
+    return false;
+  }
+
+  model.coverPresented[name] = count + 1;
+  if (model.coverPresented[name] === 2) {
+    model.coverPresentedCount += 1;
+  }
+  if (model.coverPresentedCount === model.expected.length) {
+    model.state = "covered";
+  }
+  return true;
+}
+
+function beginIncoming(model) {
+  if (model.state !== "covered") {
+    return false;
+  }
+
+  model.state = "incoming";
+  return true;
+}
+
+function beginSettling(model) {
+  if (model.state !== "incoming") {
+    return false;
+  }
+
+  model.state = "settling";
+  model.settlingPresented = {};
+  return true;
+}
+
+function settlingFramePresented(model, screenName) {
+  var name = String(screenName);
+  var count;
+
+  if (model.state !== "settling") {
+    return false;
+  }
+  if (model.expected.indexOf(name) === -1) {
+    abort(model);
+    return false;
+  }
+
+  count = model.settlingPresented[name] || 0;
+  if (count >= 2) {
+    return false;
+  }
+  model.settlingPresented[name] = count + 1;
+
+  for (var i = 0; i < model.expected.length; i++) {
+    if ((model.settlingPresented[model.expected[i]] || 0) < 2) {
+      return true;
+    }
+  }
+
+  model.state = "done";
   return true;
 }
 
@@ -103,8 +192,9 @@ function watchdogTimeoutMs(model) {
   if (model.state === "captured") {
     return CAPTURED_TIMEOUT_MS;
   }
-  if (model.state === "revealing") {
-    return model.durationMs + CLEANUP_MARGIN_MS;
+  if (model.state === "outgoing" || model.state === "covered"
+      || model.state === "incoming" || model.state === "settling") {
+    return model.totalDurationMs + CLEANUP_MARGIN_MS;
   }
   return 0;
 }
@@ -115,25 +205,4 @@ function expireWatchdog(model) {
   }
 
   return abort(model);
-}
-
-function progress(model, elapsedMs) {
-  if (model.state === "done") {
-    return 1;
-  }
-  if (model.state !== "revealing") {
-    return 0;
-  }
-
-  var elapsed = Math.max(0, elapsedMs);
-  return Math.min(1, elapsed / model.durationMs);
-}
-
-function completeReveal(model) {
-  if (model.state !== "revealing") {
-    return false;
-  }
-
-  model.state = "done";
-  return true;
 }

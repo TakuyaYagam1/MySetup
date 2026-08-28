@@ -14,10 +14,12 @@ clock_file="$test_root/monotonic-us"
 uptime_file="$test_root/uptime"
 wall_clock_file="$test_root/wall-clock"
 wall_jumps="$test_root/wall-jumps"
-reveal_marker="$test_root/reveal-marker"
+start_marker="$test_root/start-marker"
 owned_id=ownednew01
 race_id=raceinst01
-status_mode=captured
+status_mode=start-outgoing
+forced_status=
+start_mode=success
 launch_mode=success
 list_mode=normal
 launch_advance_us=0
@@ -26,7 +28,7 @@ layers_mode=ready
 : >"$operations"
 : >"$instances"
 : >"$wall_jumps"
-: >"$reveal_marker"
+: >"$start_marker"
 printf '%s\n' running >"$unrelated_state"
 printf '%s\n' 0 >"$status_count_file"
 printf '%s\n' 1000000 >"$clock_file"
@@ -76,13 +78,15 @@ advance_clock_us() {
 reset_fixture() {
   : >"$operations"
   : >"$instances"
-  : >"$reveal_marker"
+  : >"$start_marker"
   printf '%s\n' running >"$unrelated_state"
   printf '%s\n' 0 >"$status_count_file"
   printf '%s\n' 1000000 >"$clock_file"
   printf '%s\n' 1000000000 >"$wall_clock_file"
   : >"$wall_jumps"
-  status_mode=captured
+  status_mode=start-outgoing
+  forced_status=
+  start_mode=success
   launch_mode=success
   list_mode=normal
   launch_advance_us=0
@@ -167,30 +171,78 @@ qs_status() {
   case "$status_mode" in
     captured) printf '%s\n' captured ;;
     unavailable-then-captured)
-      case "$status_calls" in
-        1 | 2 | 3) return 1 ;;
-        4) printf '%s\n' capturing ;;
-        *) printf '%s\n' captured ;;
-      esac
+      if [ -s "$start_marker" ]; then
+        printf '%s\n' outgoing
+      else
+        case "$status_calls" in
+          1 | 2 | 3) return 1 ;;
+          4) printf '%s\n' capturing ;;
+          *) printf '%s\n' captured ;;
+        esac
+      fi
       ;;
     unavailable) return 1 ;;
     malformed) printf '%s\n' 'captured extra' ;;
     capturing) printf '%s\n' capturing ;;
-    reveal-exit)
-      if [ -s "$reveal_marker" ]; then
-        if [ "$status_calls" -ge 2 ]; then
-          remove_instance "$id"
-          return 1
-        fi
-        printf '%s\n' revealing
+    fixed) printf '%s\n' "$forced_status" ;;
+    start-outgoing)
+      [ -s "$start_marker" ] && printf '%s\n' outgoing || printf '%s\n' captured
+      ;;
+    capture-delay-then-outgoing)
+      if [ -s "$start_marker" ]; then
+        printf '%s\n' outgoing
       else
+        advance_clock_us 250000
         printf '%s\n' captured
       fi
       ;;
-    reveal-stuck)
-      [ -s "$reveal_marker" ] && printf '%s\n' revealing || printf '%s\n' captured
+    start-to-covered)
+      if [ ! -s "$start_marker" ]; then
+        printf '%s\n' captured
+      elif [ "$(cat "$clock_file")" -lt "$(($(cat "$start_marker") + 150000))" ]; then
+        printf '%s\n' outgoing
+      else
+        printf '%s\n' covered
+      fi
       ;;
-    reveal-unavailable-live) return 1 ;;
+    start-outgoing-then-incoming)
+      if [ ! -s "$start_marker" ]; then
+        printf '%s\n' captured
+      elif [ "$status_calls" -le 2 ]; then
+        printf '%s\n' outgoing
+      else
+        printf '%s\n' incoming
+      fi
+      ;;
+    start-outgoing-then-unavailable)
+      if [ ! -s "$start_marker" ]; then
+        printf '%s\n' captured
+      elif [ "$status_calls" -le 2 ]; then
+        printf '%s\n' outgoing
+      else
+        return 1
+      fi
+      ;;
+    timeline)
+      if [ ! -s "$start_marker" ]; then
+        printf '%s\n' captured
+      else
+        local started_us elapsed_us
+        started_us="$(cat "$start_marker")"
+        elapsed_us=$(($(cat "$clock_file") - started_us))
+        if [ "$elapsed_us" -lt 3000000 ]; then
+          printf '%s\n' outgoing
+        elif [ "$elapsed_us" -lt 7000000 ]; then
+          printf '%s\n' covered
+        elif [ "$elapsed_us" -lt 9900000 ]; then
+          printf '%s\n' incoming
+        elif [ "$elapsed_us" -lt 10000000 ]; then
+          printf '%s\n' settling
+        else
+          printf '%s\n' 'done'
+        fi
+      fi
+      ;;
     *) return 1 ;;
   esac
 }
@@ -272,10 +324,10 @@ qs() {
     command_name="$6"
     case "$command_name" in
       status) qs_status "$id" ;;
-      reveal)
+      start)
         instance_exists "$id" || return 1
-        printf '%s\n' revealed >"$reveal_marker"
-        printf '%s\n' 0 >"$status_count_file"
+        [ "$start_mode" = success ] || return 1
+        cat "$clock_file" >"$start_marker"
         ;;
       abort) instance_exists "$id" ;;
       *) return 97 ;;
@@ -290,7 +342,7 @@ qs() {
     [ -n "$id" ] || return 1
     case "$6" in
       status) qs_status "$id" ;;
-      reveal) printf '%s\n' revealed >"$reveal_marker" ;;
+      start) cat "$clock_file" >"$start_marker" ;;
       abort) return 0 ;;
       *) return 97 ;;
     esac
@@ -334,7 +386,7 @@ for valid_id in a1b2c3d a1b2c3d4e5f6g7h8; do
     if ! assert_status="$(wahrwelt_shell_transition_status)"; then
       fail "variable-length full instance ID $valid_id status IPC failed"
     else
-      assert_eq captured "$assert_status" \
+      assert_eq outgoing "$assert_status" \
         "variable-length full instance ID $valid_id exact status"
     fi
   else
@@ -377,7 +429,7 @@ for stale_id in staleold01 staleold02; do
   grep -Fqx $'qs\tkill\t-i\t'"$stale_id" "$operations" ||
     fail "stale transition instance $stale_id was not exact-killed"
 done
-assert_eq captured "$(wahrwelt_shell_transition_status)" 'owned instance exact IPC status'
+assert_eq outgoing "$(wahrwelt_shell_transition_status)" 'owned instance exact IPC status'
 [ -s "$unrelated_state" ] || fail 'stale cleanup removed unrelated QuickShell state'
 wahrwelt_shell_transition_abort
 [ ! -s "$instances" ] || fail 'exact abort retained a transition instance'
@@ -432,17 +484,6 @@ if [ -s "$instances" ]; then
 fi
 : >"$instances"
 
-reset_fixture
-wahrwelt_shell_transition_begin || fail 'reveal failure fixture did not capture'
-status_mode=reveal-unavailable-live
-wahrwelt_shell_transition_reveal_and_wait || true
-[ ! -s "$instances" ] || fail 'reveal status failure retained the owned instance'
-grep -Fqx $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tabort' "$operations" ||
-  fail 'reveal status failure did not exact-abort the owned instance'
-grep -Fqx $'qs\tkill\t-i\townednew01' "$operations" ||
-  fail 'reveal status failure did not exact-kill the owned instance'
-[ -s "$unrelated_state" ] || fail 'reveal failure removed unrelated QuickShell state'
-
 if grep -q 'EPOCHREALTIME' "$helper"; then
   fail 'transition deadlines still depend on mutable wall clock EPOCHREALTIME'
 else
@@ -461,21 +502,6 @@ else
   fi
 
   reset_fixture
-  printf '%s\n' 3000000 >"$clock_file"
-  write_uptime
-  status_mode=captured
-  wahrwelt_shell_transition_begin || fail 'reveal deadline fixture did not capture'
-  reveal_start_us="$(cat "$clock_file")"
-  status_mode=reveal-stuck
-  if wahrwelt_shell_transition_reveal_and_wait; then
-    fail 'stuck reveal unexpectedly completed'
-  fi
-  assert_eq "$((reveal_start_us + 3750000))" "$(cat "$clock_file")" \
-    'reveal deadline was not exactly 3750ms monotonic'
-  grep -Fqx forward "$wall_jumps" || fail 'reveal timing did not simulate a forward wall jump'
-  grep -Fqx backward "$wall_jumps" || fail 'reveal timing did not simulate a backward wall jump'
-
-  reset_fixture
   printf '%s\n' malformed >"$uptime_file"
   if wahrwelt_shell_transition_begin; then
     fail 'malformed monotonic source activated capture'
@@ -484,21 +510,219 @@ else
 fi
 
 reset_fixture
-status_mode=captured
+status_mode=start-outgoing
 wahrwelt_shell_transition_begin || fail 'readiness fixture did not capture'
 layers_mode=ready
 wahrwelt_shell_transition_wait_target_ready caelestia ||
   fail 'exact target PID layer readiness rejected every output'
-layers_mode=partial
-if wahrwelt_shell_transition_wait_target_ready caelestia; then
-  fail 'partial multi-output layer readiness reported ready'
+wahrwelt_shell_transition_abort
+
+# A missing exact start call leaves the old desktop frozen instead of starting
+# the visible ten-second transition immediately after capture.
+reset_fixture
+status_mode=capture-delay-then-outgoing
+wahrwelt_shell_transition_begin || fail 'outgoing fixture did not launch and capture'
+transition_start_us="$(cat "$start_marker")"
+assert_eq 1250000 "$transition_start_us" \
+  'deadline fixture did not separate capture time from transition start'
+grep -Fqx $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tstart' "$operations" ||
+  fail 'begin did not send exact owned-instance start IPC'
+assert_eq outgoing "$(wahrwelt_shell_transition_status 2>/dev/null || true)" \
+  'begin did not leave the overlay in outgoing state'
+assert_eq "$((transition_start_us + 10000000))" \
+  "${wahrwelt_shell_transition_visible_deadline_us:-unset}" \
+  'visible deadline was not anchored once at transition start plus 10 seconds'
+assert_eq "$((transition_start_us + 10750000))" \
+  "${wahrwelt_shell_transition_cleanup_deadline_us:-unset}" \
+  'cleanup deadline was not anchored once at transition start plus 10.75 seconds'
+wahrwelt_shell_transition_abort
+assert_eq '' "${wahrwelt_shell_transition_visible_deadline_us:-}" \
+  'abort retained the visible deadline'
+assert_eq '' "${wahrwelt_shell_transition_cleanup_deadline_us:-}" \
+  'abort retained the cleanup deadline'
+
+reset_fixture
+status_mode=start-outgoing
+start_mode=failure
+if wahrwelt_shell_transition_begin; then
+  fail 'failed exact start IPC activated the transition'
 fi
+[ ! -s "$instances" ] || fail 'failed exact start IPC retained the owned instance'
+assert_eq '' "${wahrwelt_shell_transition_visible_deadline_us:-}" \
+  'failed exact start IPC retained the visible deadline'
+assert_eq '' "${wahrwelt_shell_transition_cleanup_deadline_us:-}" \
+  'failed exact start IPC retained the cleanup deadline'
+
+reset_fixture
+status_mode=captured
+if wahrwelt_shell_transition_begin; then
+  fail 'begin accepted captured after successful start IPC instead of outgoing'
+fi
+[ ! -s "$instances" ] || fail 'non-outgoing start retained the owned instance'
+assert_eq '' "${wahrwelt_shell_transition_visible_deadline_us:-}" \
+  'non-outgoing start retained the visible deadline'
+
+if ! declare -F wahrwelt_shell_transition_wait_covered >/dev/null; then
+  fail 'wait_covered protocol function is missing'
+else
+  reset_fixture
+  status_mode=start-to-covered
+  wahrwelt_shell_transition_begin || fail 'covered fixture did not start outgoing'
+  wahrwelt_shell_transition_wait_covered ||
+    fail 'wait_covered rejected the exact covered state'
+  assert_eq covered "$(wahrwelt_shell_transition_status)" \
+    'wait_covered returned before the overlay reached covered'
+  wahrwelt_shell_transition_abort
+
+  reset_fixture
+  status_mode=start-outgoing-then-incoming
+  wahrwelt_shell_transition_begin || fail 'premature incoming fixture did not start'
+  if wahrwelt_shell_transition_wait_covered; then
+    fail 'wait_covered accepted incoming without observing covered'
+  fi
+  [ ! -s "$instances" ] || fail 'invalid wait_covered state retained the owned instance'
+fi
+
+# Layer readiness shares the original visible deadline. Re-arming a private
+# readiness budget here would push the complete swap beyond ten seconds.
+reset_fixture
+status_mode=start-outgoing
+wahrwelt_shell_transition_begin || fail 'anchored readiness fixture did not start'
+anchored_visible_deadline="${wahrwelt_shell_transition_visible_deadline_us:-unset}"
+anchored_incoming_deadline=$((anchored_visible_deadline - 3000000))
+layers_mode=partial
+advance_clock_us 6850000
+if wahrwelt_shell_transition_wait_target_ready caelestia; then
+  fail 'permanently partial layers unexpectedly became ready'
+fi
+assert_eq "$anchored_visible_deadline" \
+  "${wahrwelt_shell_transition_visible_deadline_us:-unset}" \
+  'readiness re-armed the visible deadline'
+assert_eq "$anchored_incoming_deadline" "$(cat "$clock_file")" \
+  'readiness did not stop at the incoming phase boundary'
+wahrwelt_shell_transition_abort
+
+if ! declare -F wahrwelt_shell_transition_bridge_budget_available >/dev/null; then
+  fail 'bridge_budget_available protocol function is missing'
+else
+  reset_fixture
+  status_mode=start-outgoing
+  wahrwelt_shell_transition_begin || fail 'bridge budget fixture did not start'
+  bridge_start_us="$(cat "$start_marker")"
+  bridge_incoming_boundary=$((bridge_start_us + 7000000))
+  advance_clock_us 6499999
+  if ! wahrwelt_shell_transition_bridge_budget_available 500000; then
+    fail 'bridge budget rejected a minimum ending one microsecond before incoming'
+  fi
+  if wahrwelt_shell_transition_bridge_budget_available 500001; then
+    fail 'bridge budget accepted a minimum ending exactly at incoming'
+  fi
+  advance_clock_us 500000
+  if ! wahrwelt_shell_transition_bridge_budget_available; then
+    fail 'zero bridge budget was rejected one microsecond before incoming'
+  fi
+  advance_clock_us 1
+  assert_eq "$bridge_incoming_boundary" "$(cat "$clock_file")" \
+    'bridge budget fixture missed the exact incoming boundary'
+  if wahrwelt_shell_transition_bridge_budget_available; then
+    fail 'zero bridge budget was accepted at the exact incoming boundary'
+  fi
+  if wahrwelt_shell_transition_bridge_budget_available invalid; then
+    fail 'bridge budget accepted a malformed minimum while active'
+  fi
+  assert_eq 1 "$wahrwelt_shell_transition_active" \
+    'bridge budget failure deactivated the transition'
+  assert_eq "$((bridge_start_us + 10000000))" \
+    "$wahrwelt_shell_transition_visible_deadline_us" \
+    'bridge budget check changed the visible deadline'
+  [ -s "$instances" ] || fail 'bridge budget failure cleaned the owned instance'
+  wahrwelt_shell_transition_abort
+  wahrwelt_shell_transition_bridge_budget_available ||
+    fail 'bridge budget rejected an inactive transition'
+fi
+
+if ! declare -F wahrwelt_shell_transition_wait_done >/dev/null; then
+  fail 'wait_done protocol function is missing'
+else
+  reset_fixture
+  status_mode=timeline
+  wahrwelt_shell_transition_begin || fail 'complete timeline fixture did not start'
+  timeline_start_us="$(cat "$start_marker")"
+  advance_clock_us 6900000
+  wahrwelt_shell_transition_wait_done || fail 'ten-second transition did not reach done'
+  assert_eq "$((timeline_start_us + 10000000))" "$(cat "$clock_file")" \
+    'wait_done did not use the start-anchored ten-second timeline'
+  assert_eq 0 "$wahrwelt_shell_transition_active" \
+    'completed transition remained active'
+  assert_eq '' "${wahrwelt_shell_transition_visible_deadline_us:-}" \
+    'completed transition retained the visible deadline'
+  assert_eq '' "${wahrwelt_shell_transition_cleanup_deadline_us:-}" \
+    'completed transition retained the cleanup deadline'
+  [ ! -s "$instances" ] || fail 'completed transition retained the owned instance'
+  if grep -Fqx $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tabort' "$operations"; then
+    fail 'normal completion sent abort IPC'
+  fi
+  grep -Fqx $'qs\tkill\t-i\townednew01' "$operations" ||
+    fail 'normal completion did not exact-kill the lingering owned instance'
+
+  reset_fixture
+  status_mode=start-outgoing
+  wahrwelt_shell_transition_begin || fail 'stuck timeline fixture did not start'
+  anchored_cleanup_deadline="${wahrwelt_shell_transition_cleanup_deadline_us:-unset}"
+  advance_clock_us 10600000
+  if wahrwelt_shell_transition_wait_done; then
+    fail 'permanently outgoing transition unexpectedly completed'
+  fi
+  assert_eq "$anchored_cleanup_deadline" "$(cat "$clock_file")" \
+    'wait_done re-armed instead of consuming the start-anchored cleanup deadline'
+  assert_eq '' "${wahrwelt_shell_transition_cleanup_deadline_us:-}" \
+    'timed-out transition retained the cleanup deadline'
+
+  reset_fixture
+  status_mode=start-outgoing-then-unavailable
+  wahrwelt_shell_transition_begin || fail 'early status failure fixture did not start'
+  if wahrwelt_shell_transition_wait_done; then
+    fail 'early overlay disappearance was accepted as completion'
+  fi
+  [ ! -s "$instances" ] || fail 'early overlay disappearance retained the owned instance'
+  grep -Fqx $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tabort' "$operations" ||
+    fail 'early overlay disappearance did not exact-abort the owned instance'
+  grep -Fqx $'qs\tkill\t-i\townednew01' "$operations" ||
+    fail 'early overlay disappearance did not exact-kill the owned instance'
+
+  reset_fixture
+  status_mode=start-outgoing-then-unavailable
+  wahrwelt_shell_transition_begin || fail 'late status failure fixture did not start'
+  advance_clock_us 10000000
+  if wahrwelt_shell_transition_wait_done; then
+    fail 'late overlay disappearance was accepted without explicit done'
+  fi
+  [ ! -s "$instances" ] || fail 'late overlay disappearance retained the owned instance'
+  grep -Fqx $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tabort' "$operations" ||
+    fail 'late overlay disappearance did not exact-abort the owned instance'
+  grep -Fqx $'qs\tkill\t-i\townednew01' "$operations" ||
+    fail 'late overlay disappearance did not exact-kill the owned instance'
+fi
+
+reset_fixture
+wahrwelt_shell_transition_begin || fail 'status vocabulary fixture did not capture'
+for allowed_status in capturing captured outgoing covered incoming settling 'done' aborted; do
+  status_mode=fixed
+  forced_status="$allowed_status"
+  assert_eq "$allowed_status" \
+    "$(wahrwelt_shell_transition_status 2>/dev/null || true)" \
+    "status rejected protocol state $allowed_status"
+done
 wahrwelt_shell_transition_abort
 
 reset_fixture
 wahrwelt_shell_transition_begin || fail 'signal-safe exact cleanup fixture did not capture'
 wahrwelt_shell_transition_abort_signal_safe
 [ ! -s "$instances" ] || fail 'signal-safe exact cleanup retained the owned instance'
+assert_eq '' "${wahrwelt_shell_transition_visible_deadline_us:-}" \
+  'signal-safe cleanup retained the visible deadline'
+assert_eq '' "${wahrwelt_shell_transition_cleanup_deadline_us:-}" \
+  'signal-safe cleanup retained the cleanup deadline'
 grep -Fqx $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tabort' "$operations" ||
   fail 'signal-safe cleanup did not exact-abort the discovered instance'
 grep -Fqx $'qs\tkill\t-i\townednew01' "$operations" ||
@@ -525,7 +749,7 @@ if kill -0 "$owned_launcher_pid" 2>/dev/null; then
 fi
 
 if grep $'^qs\t' "$operations" |
-  grep -Ev $'^qs\t(-c\twahrwelt-shell-transition(\t(list\t-j|kill))?|kill\t-i\t[a-z0-9]{1,64}|ipc\t-i\t[a-z0-9]{1,64}\tcall\tshellTransition\t(status|reveal|abort))$' |
+  grep -Ev $'^qs\t(-c\twahrwelt-shell-transition(\t(list\t-j|kill))?|kill\t-i\t[a-z0-9]{1,64}|ipc\t-i\t[a-z0-9]{1,64}\tcall\tshellTransition\t(status|start|abort))$' |
   grep -q .; then
   fail "transition helper issued a non-exact QuickShell command
 $(cat "$operations")"

@@ -31,43 +31,67 @@ TestCase {
     controller = null;
   }
 
-  function test_watchdogSignalFailsOpenWithoutClockInput() {
+  function test_captureWatchdogFailsOpenWithoutClockInput() {
     controller.initialize(["DP-1"]);
     compare(controller.state, "capturing");
-    compare(controller.watchdogInterval, 5000);
-    verify(controller.watchdogRunning);
+    compare(controller.captureWatchdogInterval, 5000);
+    verify(controller.captureWatchdogRunning);
 
-    controller.phaseWatchdog.triggered();
+    controller.captureWatchdog.triggered();
     compare(controller.state, "aborted");
-    verify(!controller.watchdogRunning);
+    verify(!controller.captureWatchdogRunning);
+    verify(!controller.masterWatchdogRunning);
     compare(exitSpy.count, 1);
   }
 
-  function test_revealGetsFreshCleanupDeadline() {
+  function test_oneMasterWatchdogCoversEveryVisiblePhase() {
     controller.initialize(["DP-1"]);
     controller.captureReady("DP-1");
     compare(controller.state, "captured");
-    compare(controller.watchdogInterval, 30000);
+    compare(controller.captureWatchdogInterval, 1000);
+    verify(controller.captureWatchdogRunning);
 
-    verify(controller.reveal());
-    compare(controller.state, "revealing");
-    compare(controller.watchdogInterval, 4000);
-    verify(controller.watchdogRunning);
+    verify(controller.beginTransition());
+    compare(controller.state, "outgoing");
+    compare(controller.masterWatchdogInterval, 10750);
+    verify(!controller.captureWatchdogRunning);
+    verify(controller.masterWatchdogRunning);
     compare(exitSpy.count, 0);
 
-    controller.completeReveal();
+    verify(controller.coverFramePresented("DP-1"));
+    compare(controller.state, "outgoing");
+    verify(controller.coverFramePresented("DP-1"));
+    compare(controller.state, "covered");
+    verify(controller.masterWatchdogRunning);
+
+    verify(controller.beginIncoming());
+    compare(controller.state, "incoming");
+    verify(controller.masterWatchdogRunning);
+
+    verify(controller.beginSettling());
+    compare(controller.state, "settling");
+    verify(controller.masterWatchdogRunning);
+
+    verify(controller.settlingFramePresented("DP-1"));
+    compare(controller.state, "settling");
+    verify(controller.settlingFramePresented("DP-1"));
     compare(controller.state, "done");
-    verify(!controller.watchdogRunning);
-    compare(exitSpy.count, 1);
+    verify(!controller.masterWatchdogRunning);
+    compare(exitSpy.count, 0);
   }
 
-  function test_explicitWatchdogExpiryAbortsCapturedPhase() {
+  function test_masterWatchdogExpiryAbortsVisibleTransition() {
     controller.initialize(["DP-1"]);
     controller.captureReady("DP-1");
-    compare(controller.state, "captured");
+    verify(controller.beginTransition());
+    verify(controller.coverFramePresented("DP-1"));
+    compare(controller.state, "outgoing");
+    verify(controller.coverFramePresented("DP-1"));
+    compare(controller.state, "covered");
 
-    verify(controller.expireWatchdog());
+    controller.masterWatchdog.triggered();
     compare(controller.state, "aborted");
+    verify(!controller.masterWatchdogRunning);
     compare(exitSpy.count, 1);
   }
 
@@ -78,32 +102,82 @@ TestCase {
 
     verify(controller.captureFailed("DP-1"));
     compare(controller.state, "aborted");
-    verify(!controller.watchdogRunning);
+    verify(!controller.captureWatchdogRunning);
+    verify(!controller.masterWatchdogRunning);
     compare(exitSpy.count, 1);
   }
 
-  function test_frameLossDuringRevealFailsOpen() {
+  function test_frameLossDuringOutgoingFailsOpen() {
     controller.initialize(["DP-1"]);
     controller.captureReady("DP-1");
-    verify(controller.reveal());
-    compare(controller.state, "revealing");
+    verify(controller.beginTransition());
+    compare(controller.state, "outgoing");
 
     verify(controller.captureFailed("DP-1"));
     compare(controller.state, "aborted");
-    verify(!controller.watchdogRunning);
+    verify(!controller.captureWatchdogRunning);
+    verify(!controller.masterWatchdogRunning);
     compare(exitSpy.count, 1);
   }
 
-  function test_allScreensMustCaptureBeforeReveal() {
+  function test_allScreensMustCaptureBeforeOutgoing() {
     controller.initialize(["DP-1", "HDMI-A-1"]);
     controller.captureReady("DP-1");
     compare(controller.state, "capturing");
-    verify(!controller.reveal());
+    verify(!controller.beginTransition());
 
     controller.captureReady("HDMI-A-1");
     compare(controller.state, "captured");
-    verify(controller.reveal());
-    compare(controller.state, "revealing");
+    verify(controller.beginTransition());
+    compare(controller.state, "outgoing");
+  }
+
+  function test_allScreensMustPresentOpaqueCoverBeforeCovered() {
+    controller.initialize(["DP-1", "HDMI-A-1"]);
+    controller.captureReady("DP-1");
+    controller.captureReady("HDMI-A-1");
+    verify(controller.beginTransition());
+
+    verify(controller.coverFramePresented("DP-1"));
+    compare(controller.state, "outgoing");
+    verify(controller.coverFramePresented("DP-1"));
+    compare(controller.state, "outgoing");
+    verify(controller.coverFramePresented("HDMI-A-1"));
+    compare(controller.state, "outgoing");
+    verify(controller.coverFramePresented("HDMI-A-1"));
+    compare(controller.state, "covered");
+  }
+
+  function test_unknownCaptureScreenAbortsAndExits() {
+    controller.initialize(["DP-1"]);
+    controller.captureReady("HDMI-A-1");
+
+    compare(controller.state, "aborted");
+    compare(exitSpy.count, 1);
+  }
+
+  function test_unknownCoverScreenAbortsAndExits() {
+    controller.initialize(["DP-1"]);
+    controller.captureReady("DP-1");
+    verify(controller.beginTransition());
+
+    verify(!controller.coverFramePresented("HDMI-A-1"));
+    compare(controller.state, "aborted");
+    compare(exitSpy.count, 1);
+  }
+
+  function test_unknownSettlingScreenAbortsAndExits() {
+    controller.initialize(["DP-1"]);
+    controller.captureReady("DP-1");
+    verify(controller.beginTransition());
+    verify(controller.coverFramePresented("DP-1"));
+    verify(controller.coverFramePresented("DP-1"));
+    verify(controller.beginIncoming());
+    verify(controller.beginSettling());
+
+    verify(!controller.settlingFramePresented("HDMI-A-1"));
+    compare(controller.state, "aborted");
+    compare(exitSpy.count, 1);
   }
 
   function test_screenHotplugAborts() {
@@ -111,7 +185,8 @@ TestCase {
 
     verify(!controller.checkScreens(["DP-1"]));
     compare(controller.state, "aborted");
-    verify(!controller.watchdogRunning);
+    verify(!controller.captureWatchdogRunning);
+    verify(!controller.masterWatchdogRunning);
     compare(exitSpy.count, 1);
   }
 }

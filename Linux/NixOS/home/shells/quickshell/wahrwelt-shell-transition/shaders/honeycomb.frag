@@ -72,5 +72,6 @@ void main() {
         radius + softEdge,
         distanceFromCenter
     );
-    fragColor = texture(source, uv) * frozenAlpha * ubuf.qt_Opacity;
+    float globalFade = 1.0 - clamp(ubuf.progress, 0.0, 1.0);
+    fragColor = texture(source, uv) * frozenAlpha * globalFade * ubuf.qt_Opacity;
 }

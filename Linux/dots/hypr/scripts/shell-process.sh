@@ -195,6 +195,14 @@ dedupe_shell() {
 }
 
 start_with_retry() {
+  local before_attempt_callback=""
+
+  if [ "${1:-}" = --before-attempt ]; then
+    before_attempt_callback="${2:-}"
+    [ "$(type -t "$before_attempt_callback" 2>/dev/null || true)" = function ] || return 1
+    shift 2
+  fi
+
   local name="$1"
   local pattern="$2"
   shift 2
@@ -207,6 +215,9 @@ start_with_retry() {
   local attempt probe
   for attempt in 1 2 3 4 5; do
     log "starting $name attempt $attempt: $*"
+    if [ -n "$before_attempt_callback" ]; then
+      "$before_attempt_callback" || return 1
+    fi
     ("$@" >>"$log_file" 2>&1 &)
     for probe in $(seq 1 12); do
       if is_running "$pattern"; then

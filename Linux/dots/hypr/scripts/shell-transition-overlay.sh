@@ -9,6 +9,8 @@ wahrwelt_shell_transition_instance_id=
 wahrwelt_shell_transition_launcher_pid=
 wahrwelt_shell_transition_started=0
 wahrwelt_shell_transition_active=0
+wahrwelt_shell_transition_visible_deadline_us=
+wahrwelt_shell_transition_cleanup_deadline_us=
 
 wahrwelt_shell_transition_now_us() {
   local uptime_value uptime_seconds uptime_fraction
@@ -118,6 +120,21 @@ wahrwelt_shell_transition_stop_launcher() {
   wait "$launcher_pid" 2>/dev/null || true
 }
 
+wahrwelt_shell_transition_complete() {
+  local owned_id="$wahrwelt_shell_transition_instance_id"
+
+  if command -v qs >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1 &&
+    wahrwelt_shell_transition_valid_instance_id "$owned_id"; then
+    wahrwelt_shell_transition_kill_id "$owned_id" || true
+  fi
+  wahrwelt_shell_transition_stop_launcher
+  wahrwelt_shell_transition_active=0
+  wahrwelt_shell_transition_started=0
+  wahrwelt_shell_transition_instance_id=
+  wahrwelt_shell_transition_visible_deadline_us=
+  wahrwelt_shell_transition_cleanup_deadline_us=
+}
+
 wahrwelt_shell_transition_cleanup_all() {
   local attempt ids instance_id list_result
   local untrusted_list_seen=0
@@ -164,7 +181,7 @@ wahrwelt_shell_transition_status_with_timeout() {
       call "$wahrwelt_shell_transition_target" status 2>/dev/null
   )" || return 1
   case "$status" in
-    capturing | captured | revealing | done | aborted)
+    capturing | captured | outgoing | covered | incoming | settling | done | aborted)
       printf '%s\n' "$status"
       ;;
     *)
@@ -192,6 +209,8 @@ wahrwelt_shell_transition_abort() {
   wahrwelt_shell_transition_active=0
   wahrwelt_shell_transition_started=0
   wahrwelt_shell_transition_instance_id=
+  wahrwelt_shell_transition_visible_deadline_us=
+  wahrwelt_shell_transition_cleanup_deadline_us=
 }
 
 # The runtime-lock supervisor escalates a forwarded signal after one second.
@@ -219,6 +238,8 @@ wahrwelt_shell_transition_abort_signal_safe() {
   wahrwelt_shell_transition_active=0
   wahrwelt_shell_transition_started=0
   wahrwelt_shell_transition_instance_id=
+  wahrwelt_shell_transition_visible_deadline_us=
+  wahrwelt_shell_transition_cleanup_deadline_us=
 }
 
 wahrwelt_shell_transition_begin() {
@@ -228,6 +249,8 @@ wahrwelt_shell_transition_begin() {
   wahrwelt_shell_transition_active=0
   wahrwelt_shell_transition_started=0
   wahrwelt_shell_transition_instance_id=
+  wahrwelt_shell_transition_visible_deadline_us=
+  wahrwelt_shell_transition_cleanup_deadline_us=
   wahrwelt_shell_transition_stop_launcher
   command -v qs >/dev/null 2>&1 || return 1
   command -v jq >/dev/null 2>&1 || return 1
@@ -297,6 +320,47 @@ wahrwelt_shell_transition_begin() {
     if [ "$status_result" -eq 0 ]; then
       case "$status" in
         captured)
+          now_us="$(wahrwelt_shell_transition_now_us)" || {
+            wahrwelt_shell_transition_abort
+            return 1
+          }
+          [[ "$now_us" =~ ^[0-9]+$ ]] || {
+            wahrwelt_shell_transition_abort
+            return 1
+          }
+          wahrwelt_shell_transition_visible_deadline_us=$((now_us + 10000000))
+          wahrwelt_shell_transition_cleanup_deadline_us=$((now_us + 10750000))
+          command_timeout="$(
+            wahrwelt_shell_transition_timeout_before \
+              "$wahrwelt_shell_transition_cleanup_deadline_us" 75000
+          )" || {
+            wahrwelt_shell_transition_abort
+            return 1
+          }
+          timeout "$command_timeout" qs ipc \
+            -i "$wahrwelt_shell_transition_instance_id" \
+            call "$wahrwelt_shell_transition_target" start >/dev/null 2>&1 || {
+            wahrwelt_shell_transition_abort
+            return 1
+          }
+          command_timeout="$(
+            wahrwelt_shell_transition_timeout_before \
+              "$wahrwelt_shell_transition_cleanup_deadline_us" 75000
+          )" || {
+            wahrwelt_shell_transition_abort
+            return 1
+          }
+          status="$(
+            wahrwelt_shell_transition_status_with_timeout \
+              "$command_timeout" 2>/dev/null
+          )" || {
+            wahrwelt_shell_transition_abort
+            return 1
+          }
+          [ "$status" = outgoing ] || {
+            wahrwelt_shell_transition_abort
+            return 1
+          }
           wahrwelt_shell_transition_active=1
           return 0
           ;;
@@ -327,6 +391,7 @@ wahrwelt_shell_transition_profile_handle() {
 
 wahrwelt_shell_transition_target_layers_ready() {
   local profile="$1"
+  local timeout_duration="${2:-0.075s}"
   local handle layers pids_json
   local pids=()
 
@@ -339,7 +404,7 @@ wahrwelt_shell_transition_target_layers_ready() {
     split("\n") | map(select(length > 0) | tonumber)
   ')" || return 1
   command -v timeout >/dev/null 2>&1 || return 0
-  layers="$(timeout 0.075s hyprctl -j layers 2>/dev/null)" || return 1
+  layers="$(timeout "$timeout_duration" hyprctl -j layers 2>/dev/null)" || return 1
   jq -e --argjson targetPids "$pids_json" '
     type == "object" and length > 0 and
     all(to_entries[];
@@ -351,61 +416,113 @@ wahrwelt_shell_transition_target_layers_ready() {
 
 wahrwelt_shell_transition_wait_target_ready() {
   local profile="$1"
-  local attempt
+  local command_timeout incoming_deadline_us
 
   [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 0
-  for attempt in $(seq 1 12); do
-    wahrwelt_shell_transition_target_layers_ready "$profile" && return 0
-    [ "$attempt" -eq 12 ] || sleep 0.1
+  [[ "$wahrwelt_shell_transition_visible_deadline_us" =~ ^[0-9]+$ ]] || return 1
+  incoming_deadline_us=$((wahrwelt_shell_transition_visible_deadline_us - 3000000))
+  [ "$incoming_deadline_us" -gt 0 ] || return 1
+  while command_timeout="$(
+    wahrwelt_shell_transition_timeout_before \
+      "$incoming_deadline_us" 75000
+  )"; do
+    wahrwelt_shell_transition_target_layers_ready \
+      "$profile" "$command_timeout" && return 0
+    wahrwelt_shell_transition_sleep_before \
+      "$incoming_deadline_us" 100000 || break
   done
   return 1
 }
 
-wahrwelt_shell_transition_reveal_and_wait() {
-  local status now_us command_timeout
-  local deadline_us
+wahrwelt_shell_transition_bridge_budget_available() {
+  local minimum_us="${1:-0}"
+  local now_us incoming_deadline_us remaining_us
 
   [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 0
-  now_us="$(wahrwelt_shell_transition_now_us)" || {
-    wahrwelt_shell_transition_abort
-    return 1
-  }
-  [[ "$now_us" =~ ^[0-9]+$ ]] || {
-    wahrwelt_shell_transition_abort
-    return 1
-  }
-  deadline_us=$((now_us + 3750000))
-  command_timeout="$(wahrwelt_shell_transition_timeout_before "$deadline_us" 75000)" || {
-    wahrwelt_shell_transition_abort
-    return 1
-  }
-  timeout "$command_timeout" qs ipc -i "$wahrwelt_shell_transition_instance_id" \
-    call "$wahrwelt_shell_transition_target" reveal >/dev/null 2>&1 || {
-    wahrwelt_shell_transition_abort
-    return 1
-  }
+  [[ "$minimum_us" =~ ^[0-9]{1,18}$ ]] || return 1
+  [[ "$wahrwelt_shell_transition_visible_deadline_us" =~ ^[0-9]+$ ]] || return 1
+  now_us="$(wahrwelt_shell_transition_now_us)" || return 1
+  [[ "$now_us" =~ ^[0-9]+$ ]] || return 1
+  incoming_deadline_us=$((wahrwelt_shell_transition_visible_deadline_us - 3000000))
+  [ "$now_us" -lt "$incoming_deadline_us" ] || return 1
+  remaining_us=$((incoming_deadline_us - now_us))
+  minimum_us=$((10#$minimum_us))
+  [ "$minimum_us" -lt "$remaining_us" ]
+}
 
-  while :; do
-    command_timeout="$(wahrwelt_shell_transition_timeout_before "$deadline_us" 75000)" || break
+wahrwelt_shell_transition_wait_covered() {
+  local status command_timeout
+
+  [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 1
+  [[ "$wahrwelt_shell_transition_visible_deadline_us" =~ ^[0-9]+$ ]] || {
+    wahrwelt_shell_transition_abort
+    return 1
+  }
+  while command_timeout="$(
+    wahrwelt_shell_transition_timeout_before \
+      "$wahrwelt_shell_transition_visible_deadline_us" 75000
+  )"; do
     if ! status="$(
       wahrwelt_shell_transition_status_with_timeout "$command_timeout" 2>/dev/null
     )"; then
       wahrwelt_shell_transition_abort
-      return 0
+      return 1
     fi
     case "$status" in
-      revealing | captured)
-        ;;
-      done)
-        wahrwelt_shell_transition_abort
+      covered)
         return 0
+        ;;
+      captured | outgoing)
         ;;
       *)
         wahrwelt_shell_transition_abort
         return 1
         ;;
     esac
-    wahrwelt_shell_transition_sleep_before "$deadline_us" 50000 || break
+    wahrwelt_shell_transition_sleep_before \
+      "$wahrwelt_shell_transition_visible_deadline_us" 50000 || break
+  done
+
+  wahrwelt_shell_transition_abort
+  return 1
+}
+
+wahrwelt_shell_transition_wait_done() {
+  local status command_timeout
+
+  [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 0
+  [[ "$wahrwelt_shell_transition_visible_deadline_us" =~ ^[0-9]+$ ]] || {
+    wahrwelt_shell_transition_abort
+    return 1
+  }
+  [[ "$wahrwelt_shell_transition_cleanup_deadline_us" =~ ^[0-9]+$ ]] || {
+    wahrwelt_shell_transition_abort
+    return 1
+  }
+  while command_timeout="$(
+    wahrwelt_shell_transition_timeout_before \
+      "$wahrwelt_shell_transition_cleanup_deadline_us" 75000
+  )"; do
+    if ! status="$(
+      wahrwelt_shell_transition_status_with_timeout "$command_timeout" 2>/dev/null
+    )"; then
+      wahrwelt_shell_transition_abort
+      return 1
+    fi
+    case "$status" in
+      done)
+        wahrwelt_shell_transition_complete
+        return 0
+        ;;
+      outgoing | covered | incoming | settling)
+        ;;
+      *)
+        wahrwelt_shell_transition_abort
+        return 1
+        ;;
+    esac
+    wahrwelt_shell_transition_sleep_before \
+      "$wahrwelt_shell_transition_cleanup_deadline_us" 50000 || break
   done
 
   wahrwelt_shell_transition_abort

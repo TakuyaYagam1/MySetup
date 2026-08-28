@@ -2,6 +2,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Window
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -10,14 +11,36 @@ ShellRoot {
   id: root
 
   property var expectedScreens: []
-  property real transitionProgress: 0.0
+  property real outgoingProgress: 0.0
+  property real bridgeProgress: 0.0
+  property real incomingProgress: 0.0
+  property bool coverFenceArmed: false
+  property bool settleFenceArmed: false
 
   readonly property string transitionState: controller.state
+  readonly property bool surfaceVisible: transitionState === "capturing"
+    || transitionState === "captured"
+    || transitionState === "outgoing"
+    || transitionState === "covered"
+    || transitionState === "incoming"
+    || transitionState === "settling"
   readonly property bool inputBlocking: transitionState === "capturing"
     || transitionState === "captured"
-    || transitionState === "revealing"
-  readonly property bool frameVisible: transitionState === "captured"
-    || transitionState === "revealing"
+    || transitionState === "outgoing"
+    || transitionState === "covered"
+    || transitionState === "incoming"
+  readonly property bool frameVisible: transitionState === "outgoing"
+    || transitionState === "covered"
+    || transitionState === "incoming"
+    || transitionState === "settling"
+
+  onTransitionStateChanged: {
+    if (transitionState === "done") {
+      doneExitTimer.restart();
+    } else {
+      doneExitTimer.stop();
+    }
+  }
 
   function screenNames(screens) {
     const names = [];
@@ -35,15 +58,40 @@ ShellRoot {
     controller.captureFailed(screenName);
   }
 
-  function reveal() {
-    if (!controller.reveal()) {
+  function beginTransition() {
+    if (!controller.beginTransition()) {
       return;
     }
 
-    revealAnimation.restart();
+    outgoingProgress = 0.0;
+    bridgeProgress = 0.0;
+    incomingProgress = 0.0;
+    transitionAnimation.restart();
+  }
+
+  function enterCoveredBridge() {
+    coverFenceArmed = true;
+  }
+
+  function enterIncoming() {
+    if (!controller.beginIncoming()) {
+      abort();
+    }
+  }
+
+  function enterSettling() {
+    if (!controller.beginSettling()) {
+      abort();
+      return;
+    }
+
+    settleFenceArmed = true;
   }
 
   function abort() {
+    transitionAnimation.stop();
+    coverFenceArmed = false;
+    settleFenceArmed = false;
     controller.abort();
   }
 
@@ -76,8 +124,8 @@ ShellRoot {
       return root.transitionState;
     }
 
-    function reveal(): void {
-      root.reveal();
+    function start(): void {
+      root.beginTransition();
     }
 
     function abort(): void {
@@ -85,16 +133,60 @@ ShellRoot {
     }
   }
 
-  NumberAnimation {
-    id: revealAnimation
-    target: root
-    property: "transitionProgress"
-    from: 0.0
-    to: 1.0
-    duration: controller.transitionModel ? controller.transitionModel.durationMs : 3000
-    easing.type: Easing.Linear
+  SequentialAnimation {
+    id: transitionAnimation
 
-    onFinished: controller.completeReveal()
+    NumberAnimation {
+      target: root
+      property: "outgoingProgress"
+      from: 0.0
+      to: 1.0
+      duration: controller.transitionModel
+        ? controller.transitionModel.outgoingDurationMs
+        : 3000
+      easing.type: Easing.InOutCubic
+    }
+
+    ScriptAction {
+      script: root.enterCoveredBridge()
+    }
+
+    NumberAnimation {
+      target: root
+      property: "bridgeProgress"
+      from: 0.0
+      to: 1.0
+      duration: controller.transitionModel
+        ? controller.transitionModel.bridgeDurationMs
+        : 4000
+      easing.type: Easing.Linear
+    }
+
+    ScriptAction {
+      script: root.enterIncoming()
+    }
+
+    NumberAnimation {
+      target: root
+      property: "incomingProgress"
+      from: 0.0
+      to: 1.0
+      duration: (controller.transitionModel
+        ? controller.transitionModel.incomingDurationMs
+        : 3000)
+      easing.type: Easing.InOutCubic
+    }
+
+    ScriptAction {
+      script: root.enterSettling()
+    }
+  }
+
+  Timer {
+    id: doneExitTimer
+    interval: 2000
+    repeat: false
+    onTriggered: Qt.quit()
   }
 
   Variants {
@@ -107,8 +199,9 @@ ShellRoot {
       property bool deliveredFrame: false
 
       screen: modelData
-      visible: root.inputBlocking
+      visible: root.surfaceVisible
       color: "transparent"
+      surfaceFormat.opaque: false
 
       anchors.top: true
       anchors.left: true
@@ -152,18 +245,107 @@ ShellRoot {
         visible: false
       }
 
+      Item {
+        id: neutralVeilSource
+        anchors.fill: parent
+
+        readonly property real pulse: 0.5
+          - 0.5 * Math.cos(root.bridgeProgress * Math.PI * 8.0)
+
+        Rectangle {
+          anchors.fill: parent
+          color: Qt.rgba(
+            0.035 + neutralVeilSource.pulse * 0.018,
+            0.043 + neutralVeilSource.pulse * 0.022,
+            0.061 + neutralVeilSource.pulse * 0.030,
+            1.0
+          )
+        }
+      }
+
+      ShaderEffectSource {
+        id: neutralVeilTexture
+        anchors.fill: parent
+        sourceItem: neutralVeilSource
+        hideSource: true
+        live: true
+        recursive: true
+        visible: false
+      }
+
       ShaderEffect {
         anchors.fill: parent
         visible: root.frameVisible
 
-        property variant source: frozenTexture
-        property real progress: root.transitionProgress
+        property variant source: neutralVeilTexture
+        property real progress: root.transitionState === "incoming"
+          || root.transitionState === "settling"
+          ? root.incomingProgress
+          : 0.0
         property real cellSize: 0.04
         property real aspectRatio: width / Math.max(height, 1)
         property real centerX: 0.5
         property real centerY: 0.5
 
         fragmentShader: Qt.resolvedUrl("shaders/honeycomb.frag.qsb")
+      }
+
+      ShaderEffect {
+        anchors.fill: parent
+        visible: root.transitionState === "outgoing"
+
+        property variant source: frozenTexture
+        property real progress: root.outgoingProgress
+        property real cellSize: 0.04
+        property real aspectRatio: width / Math.max(height, 1)
+        property real centerX: 0.5
+        property real centerY: 0.5
+
+        fragmentShader: Qt.resolvedUrl("shaders/honeycomb.frag.qsb")
+      }
+
+      Item {
+        id: frameProbe
+        anchors.fill: parent
+        visible: false
+      }
+
+      Connections {
+        target: frameProbe.Window.window
+
+        function onFrameSwapped() {
+          if (root.coverFenceArmed && root.transitionState === "outgoing") {
+            controller.coverFramePresented(window.modelData.name);
+            if (root.transitionState === "covered") {
+              root.coverFenceArmed = false;
+            } else if (root.transitionState === "outgoing") {
+              frameProbe.Window.window.update();
+            }
+          } else if (root.settleFenceArmed && root.transitionState === "settling") {
+            controller.settlingFramePresented(window.modelData.name);
+            if (root.transitionState === "settling") {
+              frameProbe.Window.window.update();
+            } else {
+              root.settleFenceArmed = false;
+            }
+          }
+        }
+      }
+
+      Connections {
+        target: root
+
+        function onCoverFenceArmedChanged() {
+          if (root.coverFenceArmed && frameProbe.Window.window) {
+            frameProbe.Window.window.update();
+          }
+        }
+
+        function onSettleFenceArmedChanged() {
+          if (root.settleFenceArmed && frameProbe.Window.window) {
+            frameProbe.Window.window.update();
+          }
+        }
       }
 
       Item {

@@ -24,7 +24,10 @@ function createTwoScreenModel() {
 {
   const model = createTwoScreenModel();
   assert.equal(transitionModel.status(model), "capturing");
-  assert.equal(model.durationMs, 3000, "the visible reveal must last exactly 3000 ms");
+  assert.equal(model.outgoingDurationMs, 3000, "old shell cover must last exactly 3000 ms");
+  assert.equal(model.bridgeDurationMs, 4000, "covered shell handoff must last exactly 4000 ms");
+  assert.equal(model.incomingDurationMs, 3000, "new shell reveal must last exactly 3000 ms");
+  assert.equal(model.totalDurationMs, 10000, "the complete visible transition must last exactly 10000 ms");
   assert.equal(transitionModel.capture(model, "DP-1"), true);
   assert.equal(transitionModel.status(model), "capturing");
   assert.equal(transitionModel.capture(model, "DP-1"), false);
@@ -35,30 +38,39 @@ function createTwoScreenModel() {
 
 {
   const model = createTwoScreenModel();
-  assert.equal(transitionModel.reveal(model), false);
+  assert.equal(transitionModel.beginTransition(model), false);
   assert.equal(transitionModel.status(model), "capturing");
-  assert.equal(transitionModel.progress(model, 5000), 0);
 }
 
 {
   const model = createTwoScreenModel();
   transitionModel.capture(model, "DP-1");
   transitionModel.capture(model, "HDMI-A-1");
-  assert.equal(transitionModel.reveal(model), true);
-  assert.equal(transitionModel.status(model), "revealing");
-  assert.equal(transitionModel.progress(model, -1), 0);
-  assert.equal(transitionModel.progress(model, 1500), 0.5);
-  assert.equal(transitionModel.progress(model, 2999), 0.9996666666666667);
-  assert.equal(transitionModel.status(model), "revealing");
-  assert.equal(transitionModel.progress(model, 3000), 1);
-  assert.equal(
-    transitionModel.status(model),
-    "revealing",
-    "relative progress must not replace NumberAnimation completion",
-  );
-  assert.equal(transitionModel.completeReveal(model), true);
+  assert.equal(transitionModel.beginTransition(model), true);
+  assert.equal(transitionModel.status(model), "outgoing");
+  assert.equal(transitionModel.beginTransition(model), false);
+  assert.equal(transitionModel.coverFramePresented(model, "DP-1"), true);
+  assert.equal(transitionModel.status(model), "outgoing");
+  assert.equal(transitionModel.coverFramePresented(model, "DP-1"), true);
+  assert.equal(transitionModel.status(model), "outgoing");
+  assert.equal(transitionModel.coverFramePresented(model, "DP-1"), false);
+  assert.equal(transitionModel.coverFramePresented(model, "HDMI-A-1"), true);
+  assert.equal(transitionModel.status(model), "outgoing");
+  assert.equal(transitionModel.coverFramePresented(model, "HDMI-A-1"), true);
+  assert.equal(transitionModel.status(model), "covered");
+  assert.equal(transitionModel.coverFramePresented(model, "HDMI-A-1"), false);
+  assert.equal(transitionModel.beginIncoming(model), true);
+  assert.equal(transitionModel.status(model), "incoming");
+  assert.equal(transitionModel.beginSettling(model), true);
+  assert.equal(transitionModel.status(model), "settling");
+  assert.equal(transitionModel.settlingFramePresented(model, "DP-1"), true);
+  assert.equal(transitionModel.settlingFramePresented(model, "HDMI-A-1"), true);
+  assert.equal(transitionModel.status(model), "settling");
+  assert.equal(transitionModel.settlingFramePresented(model, "DP-1"), true);
+  assert.equal(transitionModel.status(model), "settling");
+  assert.equal(transitionModel.settlingFramePresented(model, "HDMI-A-1"), true);
   assert.equal(transitionModel.status(model), "done");
-  assert.equal(transitionModel.completeReveal(model), false);
+  assert.equal(transitionModel.settlingFramePresented(model, "HDMI-A-1"), false);
 }
 
 {
@@ -74,8 +86,7 @@ function createTwoScreenModel() {
   assert.equal(transitionModel.captureFailed(model, "DP-1"), true);
   assert.equal(transitionModel.status(model), "aborted");
   assert.equal(transitionModel.capture(model, "HDMI-A-1"), false);
-  assert.equal(transitionModel.reveal(model), false);
-  assert.equal(transitionModel.progress(model, 5000), 0);
+  assert.equal(transitionModel.beginTransition(model), false);
 }
 
 {
@@ -89,8 +100,8 @@ function createTwoScreenModel() {
 {
   const model = transitionModel.create(["DP-1"]);
   transitionModel.capture(model, "DP-1");
-  transitionModel.reveal(model);
-  assert.equal(transitionModel.status(model), "revealing");
+  transitionModel.beginTransition(model);
+  assert.equal(transitionModel.status(model), "outgoing");
   assert.equal(transitionModel.captureFailed(model, "DP-1"), true);
   assert.equal(transitionModel.status(model), "aborted");
 }
@@ -120,7 +131,7 @@ assert.equal(
   const model = transitionModel.create(["DP-1"]);
   transitionModel.capture(model, "DP-1");
   assert.equal(transitionModel.status(model), "captured");
-  assert.equal(transitionModel.watchdogTimeoutMs(model), 30000);
+  assert.equal(transitionModel.watchdogTimeoutMs(model), 1000);
   assert.equal(transitionModel.expireWatchdog(model), true);
   assert.equal(transitionModel.status(model), "aborted");
 }
@@ -128,10 +139,15 @@ assert.equal(
 {
   const model = transitionModel.create(["DP-1"]);
   transitionModel.capture(model, "DP-1");
-  assert.equal(transitionModel.reveal(model), true);
-  assert.equal(transitionModel.watchdogTimeoutMs(model), 4000);
+  assert.equal(transitionModel.beginTransition(model), true);
+  assert.equal(transitionModel.watchdogTimeoutMs(model), 10750);
+  assert.equal(transitionModel.coverFramePresented(model, "DP-1"), true);
+  assert.equal(transitionModel.coverFramePresented(model, "DP-1"), true);
+  assert.equal(transitionModel.watchdogTimeoutMs(model), 10750);
+  assert.equal(transitionModel.beginIncoming(model), true);
+  assert.equal(transitionModel.watchdogTimeoutMs(model), 10750);
   assert.equal(transitionModel.expireWatchdog(model), true);
   assert.equal(transitionModel.status(model), "aborted");
 }
 
-console.log("OK shell transition state and progress model");
+console.log("OK shell transition 3 + 4 + 3 state model");

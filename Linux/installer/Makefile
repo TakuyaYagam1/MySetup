@@ -140,7 +140,7 @@ shell-selector-model-check: ## Check shell selector family and End4 variant beha
 	cd $(REPO_ROOT) && $(NODE) Linux/NixOS/home/shells/quickshell/wahrwelt-shell-selector/tests/selector-model.test.mjs
 
 .PHONY: shell-transition-model-check
-shell-transition-model-check: ## Check shell transition state and exact reveal duration
+shell-transition-model-check: ## Check the exact 3 + 4 + 3 shell transition timeline
 	cd $(REPO_ROOT) && $(NODE) Linux/NixOS/home/shells/quickshell/wahrwelt-shell-transition/tests/transition-model.test.mjs
 
 .PHONY: hypr-integration-check

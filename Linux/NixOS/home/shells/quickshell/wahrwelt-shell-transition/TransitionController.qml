@@ -8,17 +8,32 @@ QtObject {
 
   property var transitionModel: null
   property string state: ""
-  property int watchdogInterval: 0
-  readonly property alias watchdogRunning: phaseWatchdog.running
+  property int captureWatchdogInterval: 0
+  property int masterWatchdogInterval: 0
+  readonly property alias captureWatchdogRunning: captureWatchdog.running
+  readonly property alias masterWatchdogRunning: masterWatchdog.running
 
   signal exitRequested()
 
-  function armWatchdog() {
-    phaseWatchdog.stop();
-    watchdogInterval = TransitionModel.watchdogTimeoutMs(transitionModel);
-    if (watchdogInterval > 0) {
-      phaseWatchdog.start();
+  function armCaptureWatchdog() {
+    captureWatchdog.stop();
+    captureWatchdogInterval = TransitionModel.watchdogTimeoutMs(transitionModel);
+    if (captureWatchdogInterval > 0) {
+      captureWatchdog.start();
     }
+  }
+
+  function armMasterWatchdog() {
+    masterWatchdog.stop();
+    masterWatchdogInterval = TransitionModel.watchdogTimeoutMs(transitionModel);
+    if (masterWatchdogInterval > 0) {
+      masterWatchdog.start();
+    }
+  }
+
+  function stopWatchdogs() {
+    captureWatchdog.stop();
+    masterWatchdog.stop();
   }
 
   function syncState() {
@@ -28,7 +43,6 @@ QtObject {
     }
 
     state = nextState;
-    armWatchdog();
   }
 
   function initialize(screenNames) {
@@ -37,12 +51,21 @@ QtObject {
     syncState();
     if (state === "aborted") {
       exitRequested();
+      return;
     }
+    armCaptureWatchdog();
   }
 
   function captureReady(screenName) {
-    if (TransitionModel.capture(transitionModel, screenName)) {
-      syncState();
+    const accepted = TransitionModel.capture(transitionModel, screenName);
+    syncState();
+    if (state === "aborted") {
+      stopWatchdogs();
+      exitRequested();
+      return;
+    }
+    if (accepted && state === "captured") {
+      armCaptureWatchdog();
     }
   }
 
@@ -52,6 +75,7 @@ QtObject {
     }
 
     syncState();
+    stopWatchdogs();
     exitRequested();
     return true;
   }
@@ -62,12 +86,44 @@ QtObject {
     }
 
     syncState();
+    stopWatchdogs();
     exitRequested();
     return false;
   }
 
-  function reveal() {
-    if (!TransitionModel.reveal(transitionModel)) {
+  function beginTransition() {
+    if (!TransitionModel.beginTransition(transitionModel)) {
+      return false;
+    }
+
+    syncState();
+    captureWatchdog.stop();
+    armMasterWatchdog();
+    return true;
+  }
+
+  function coverFramePresented(screenName) {
+    const accepted = TransitionModel.coverFramePresented(transitionModel, screenName);
+    syncState();
+    if (state === "aborted") {
+      stopWatchdogs();
+      exitRequested();
+      return false;
+    }
+    return accepted;
+  }
+
+  function beginIncoming() {
+    if (!TransitionModel.beginIncoming(transitionModel)) {
+      return false;
+    }
+
+    syncState();
+    return true;
+  }
+
+  function beginSettling() {
+    if (!TransitionModel.beginSettling(transitionModel)) {
       return false;
     }
 
@@ -81,34 +137,56 @@ QtObject {
     }
 
     syncState();
+    stopWatchdogs();
     exitRequested();
     return true;
   }
 
-  function completeReveal() {
-    if (!TransitionModel.completeReveal(transitionModel)) {
-      return false;
-    }
-
+  function settlingFramePresented(screenName) {
+    const accepted = TransitionModel.settlingFramePresented(transitionModel, screenName);
     syncState();
-    exitRequested();
-    return true;
+    if (state === "done") {
+      stopWatchdogs();
+    } else if (state === "aborted") {
+      stopWatchdogs();
+      exitRequested();
+    }
+    return accepted;
   }
 
-  function expireWatchdog() {
+  function expireCaptureWatchdog() {
     if (!TransitionModel.expireWatchdog(transitionModel)) {
       return false;
     }
 
     syncState();
+    stopWatchdogs();
     exitRequested();
     return true;
   }
 
-  property Timer phaseWatchdog: Timer {
-    id: phaseWatchdog
-    interval: controller.watchdogInterval
+  function expireMasterWatchdog() {
+    if (!TransitionModel.expireWatchdog(transitionModel)) {
+      return false;
+    }
+
+    syncState();
+    stopWatchdogs();
+    exitRequested();
+    return true;
+  }
+
+  property Timer captureWatchdog: Timer {
+    id: captureWatchdog
+    interval: controller.captureWatchdogInterval
     repeat: false
-    onTriggered: controller.expireWatchdog()
+    onTriggered: controller.expireCaptureWatchdog()
+  }
+
+  property Timer masterWatchdog: Timer {
+    id: masterWatchdog
+    interval: controller.masterWatchdogInterval
+    repeat: false
+    onTriggered: controller.expireMasterWatchdog()
   }
 }

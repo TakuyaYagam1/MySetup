@@ -575,14 +575,17 @@ printf '%s\n' \
   >"$fake_bin/hyprlock"
 chmod 0755 "$fake_bin/pgrep" "$fake_bin/hyprctl" "$fake_bin/hyprlock"
 
-WAHRWELT_END4_PROFILE=end4 sleep 30 &
+env WAHRWELT_END4_PROFILE=end4 sleep 30 &
 lock_test_pid=$!
+lock_marker_ready=0
 for _ in $(seq 1 50); do
   if tr '\0' '\n' <"/proc/$lock_test_pid/environ" 2>/dev/null | grep -Fqx 'WAHRWELT_END4_PROFILE=end4'; then
+    lock_marker_ready=1
     break
   fi
-  sleep 0.01
+  command sleep 0.01
 done
+assert_eq 1 "$lock_marker_ready" "exact End4 lock fixture publishes its process marker"
 printf '%s\n' end4 >"$wahrwelt_active_shell_state"
 : >"$lock_log"
 PATH="$fake_bin:$PATH" \
@@ -664,9 +667,14 @@ printf '%s\n' \
   '  printf "%s\n" transition-begin >>"$WAHRWELT_START_LOCK_FIXTURE/lifecycle-events"' \
   '  return 1' \
   '}' \
+  'wahrwelt_shell_transition_wait_covered() { return 0; }' \
+  'wahrwelt_shell_transition_bridge_budget_available() {' \
+  '  printf "bridge-budget:%s\n" "${1:-0}" >>"$WAHRWELT_START_LOCK_FIXTURE/lifecycle-events"' \
+  '}' \
   'wahrwelt_shell_transition_wait_target_ready() { return 0; }' \
-  'wahrwelt_shell_transition_reveal_and_wait() { return 0; }' \
+  'wahrwelt_shell_transition_wait_done() { return 0; }' \
   'wahrwelt_shell_transition_abort() { :; }' \
+  'wahrwelt_shell_transition_abort_signal_safe() { :; }' \
   >"$start_lock_fixture/shell-transition-overlay.sh"
 
 : >"$start_lock_fixture/start-shell.log"
@@ -707,7 +715,7 @@ if [ -s "$start_lock_fixture/durable-tokens" ]; then
   printf 'FAIL: successful argumentless retry did not consume durable provenance\n' >&2
   exit 1
 fi
-assert_eq $'kill:__selector__:TERM\nwait:__selector__\ntransition-begin\nlegacy-cleanup' \
+assert_eq $'kill:__selector__:TERM\nwait:__selector__\ntransition-begin\nbridge-budget:3000000\nlegacy-cleanup' \
   "$(cat "$start_lock_fixture/lifecycle-events")" \
   'start-shell lock fixture reached selector stop, transition hook, and provenance cleanup'
 

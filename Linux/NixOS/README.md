@@ -61,6 +61,11 @@ Manager-owned Hypr tree. The top-level adapter supplies the exact profile and
 QuickShell path while preserving canonical input, gestures, rules, and runtime
 ordering. End4 does not install another top-level shared-rules hook.
 
+Explicit runtime shell choices use one `3 + 4 + 3` honeycomb timeline: cover
+the old desktop, hand off shell ownership under an opaque animated veil, then
+reveal the live target. The old shell is not stopped until every output reports
+that two opaque cover frames have been swapped.
+
 Activation migrates one legacy `~/.config/hypr/mysetup/` or
 `~/.config/hypr/wahrwelt/` user tree to `~/.config/hypr/user/`. It replaces
 only known generated runtime entrypoints. Unknown files and link targets are

@@ -56,12 +56,26 @@ const modelSource = fs.readFileSync(path.join(artifact, "transition-model.js"), 
 const transitionModel = {};
 vm.createContext(transitionModel);
 vm.runInContext(modelSource, transitionModel);
-assert.equal(transitionModel.create(["contract-screen"]).durationMs, 3000,
-  "visible reveal model contract must be exactly 3000 ms");
+const model = transitionModel.create(["contract-screen"]);
+assert.equal(model.outgoingDurationMs, 3000,
+  "old shell cover contract must be exactly 3000 ms");
+assert.equal(model.bridgeDurationMs, 4000,
+  "opaque handoff contract must be exactly 4000 ms");
+assert.equal(model.incomingDurationMs, 3000,
+  "new shell reveal contract must be exactly 3000 ms");
+assert.equal(model.totalDurationMs, 10000,
+  "complete visible transition contract must be exactly 10000 ms");
 
 const shellSource = fs.readFileSync(path.join(artifact, "shell.qml"), "utf8");
-assert.match(shellSource, /easing\.type: Easing\.Linear/,
-  "visible reveal must advance uniformly from center to display edges");
+assert.match(shellSource, /id:\s*neutralVeilSource/,
+  "transition artifact must contain the opaque animated handoff veil");
+assert.match(shellSource, /easing\.type: Easing\.InOutCubic/,
+  "shell cover and reveal must use a smooth eased curve");
+
+const shaderSource = fs.readFileSync(
+  path.join(artifact, "shaders/honeycomb.frag"), "utf8");
+assert.match(shaderSource, /frozenAlpha \* globalFade/,
+  "honeycomb edges must fade throughout each phase");
 
 const notice = fs.readFileSync(
   path.join(artifact, "shaders/LICENSE-Noctalia-MIT.txt"), "utf8");

@@ -139,6 +139,7 @@ spotify_focus_monitor_before=""
 spotify_focus_window_before=""
 spotify_focus_window_pid_before=""
 shell_transition_restore_ready=0
+shell_transition_old_shell_intact=1
 shell_exit_signal_status=0
 
 discard_switch_snapshots() {
@@ -215,11 +216,14 @@ cleanup_start_shell() {
     log "failed to restore Spotify activation after shell transaction cleanup"
   fi
   if [ "$wahrwelt_shell_transition_active" -eq 1 ]; then
-    if [ "$transition_restored" -eq 1 ] || [ "$shell_transition_restore_ready" -eq 1 ]; then
+    if [ "$shell_transition_old_shell_intact" -eq 1 ]; then
+      wahrwelt_shell_transition_wait_done ||
+        log "failed to finish intact-shell transition; exact overlay was cleaned"
+    elif [ "$transition_restored" -eq 1 ] || [ "$shell_transition_restore_ready" -eq 1 ]; then
       wahrwelt_shell_transition_wait_target_ready "$profile" ||
-        log "restored shell transition readiness timeout; revealing anyway"
-      wahrwelt_shell_transition_reveal_and_wait ||
-        log "failed to reveal restored shell transition; exact overlay was cleaned"
+        log "restored shell was not ready before transition incoming phase"
+      wahrwelt_shell_transition_wait_done ||
+        log "failed to finish restored shell transition; exact overlay was cleaned"
     else
       wahrwelt_shell_transition_abort
     fi
@@ -735,6 +739,20 @@ ensure_end4_idle() {
   return 1
 }
 
+guard_profile_spawn_bridge_budget() {
+  if wahrwelt_shell_transition_bridge_budget_available 0; then
+    return 0
+  fi
+
+  log "shell transition bridge budget expired before target spawn; profile=$profile"
+  wahrwelt_shell_transition_abort
+  return 1
+}
+
+start_profile_with_retry() {
+  start_with_retry --before-attempt guard_profile_spawn_bridge_budget "$@"
+}
+
 start_profile_shell() {
   case "$profile" in
     caelestia)
@@ -742,9 +760,11 @@ start_profile_shell() {
       dedupe_shell "caelestia resizer" "$caelestia_resizer_handle" stop_caelestia_resizer || true
 
       if command -v caelestia-shell >/dev/null 2>&1; then
-        start_with_retry "caelestia-shell" "$caelestia_handle" caelestia-shell -d || return 1
+        start_profile_with_retry \
+          "caelestia-shell" "$caelestia_handle" caelestia-shell -d || return 1
       elif command -v caelestia >/dev/null 2>&1; then
-        start_with_retry "caelestia" "$caelestia_handle" caelestia shell -d || return 1
+        start_profile_with_retry \
+          "caelestia" "$caelestia_handle" caelestia shell -d || return 1
       else
         log "caelestia command not found"
         return 1
@@ -761,7 +781,8 @@ start_profile_shell() {
       local noctalia_cmd
       local noctalia_daemon_flag
       if noctalia_cmd="$(wahrwelt_noctalia_command)" && noctalia_daemon_flag="$(wahrwelt_noctalia_daemon_flag)"; then
-        start_with_retry "noctalia" "$noctalia_handle" "$noctalia_cmd" "$noctalia_daemon_flag" || return 1
+        start_profile_with_retry \
+          "noctalia" "$noctalia_handle" "$noctalia_cmd" "$noctalia_daemon_flag" || return 1
       else
         log "noctalia command not found"
         return 1
@@ -790,7 +811,7 @@ start_profile_shell() {
 
       if command -v qs-end4 >/dev/null 2>&1; then
         end4_quickshell_path="$(wahrwelt_end4_quickshell_path "$profile")" || return 1
-        start_with_retry "end4 ($profile)" "$end4_exact_handle" \
+        start_profile_with_retry "end4 ($profile)" "$end4_exact_handle" \
           env \
           WAHRWELT_END4_PROFILE="$profile" \
           WAHRWELT_QS_CONFIG="$end4_quickshell_path" \
@@ -895,6 +916,13 @@ if [ -f "$persistent_state_file" ]; then
   previous="$(tr -d '[:space:]' <"$persistent_state_file" 2>/dev/null || true)"
 fi
 
+if [ -n "$requested_profile" ]; then
+  stop_shell_selector
+  if ! wahrwelt_shell_transition_begin; then
+    log "shell transition capture unavailable; continuing without animation"
+  fi
+fi
+
 if ! begin_switch_transaction; then
   log "unable to snapshot shell runtime transaction; profile=$profile"
   exit 1
@@ -911,15 +939,21 @@ if ! begin_spotify_focus_guard; then
   exit 1
 fi
 
-if [ -n "$requested_profile" ]; then
-  stop_shell_selector
-  if ! wahrwelt_shell_transition_begin; then
-    log "shell transition capture unavailable; continuing without animation"
+if [ "$wahrwelt_shell_transition_active" -eq 1 ]; then
+  if ! wahrwelt_shell_transition_wait_covered; then
+    log "shell transition did not reach a presented opaque cover; current shell remains active"
+    exit 1
   fi
+fi
+
+if ! wahrwelt_shell_transition_bridge_budget_available 3000000; then
+  log "shell transition bridge budget cannot cover destructive shell swap; current shell remains active"
+  exit 1
 fi
 
 if [ -n "$legacy_end4_upgrade_tokens" ]; then
   shell_processes_touched=1
+  shell_transition_old_shell_intact=0
   if ! cleanup_legacy_end4_processes; then
     log "aborting shell switch after pre-marker end4 cleanup failure; profile=$profile"
     exit 1
@@ -927,6 +961,7 @@ if [ -n "$legacy_end4_upgrade_tokens" ]; then
 fi
 
 shell_processes_touched=1
+shell_transition_old_shell_intact=0
 if [ "$previous" != "$profile" ] || [ -n "$requested_profile" ]; then
   stop_all_shells_for_switch "$profile"
 else
@@ -969,9 +1004,9 @@ propagate_runtime_environment
 finish_spotify_focus_guard_async
 if [ "$wahrwelt_shell_transition_active" -eq 1 ]; then
   wahrwelt_shell_transition_wait_target_ready "$profile" ||
-    log "shell transition target readiness timeout; revealing anyway"
-  wahrwelt_shell_transition_reveal_and_wait ||
-    log "shell transition reveal failed; exact overlay was cleaned"
+    log "shell transition target was not ready before incoming phase"
+  wahrwelt_shell_transition_wait_done ||
+    log "shell transition completion failed; exact overlay was cleaned"
 fi
 switch_transaction_active=0
 profile_start_attempted=0

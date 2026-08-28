@@ -391,14 +391,17 @@ families, with a segmented Official/pC choice inside End4:
 - End4 Official -> profile ID `end4`, QuickShell config `ii`
 - End4 pC -> profile ID `end4-pc`, QuickShell config `end4-pC`
 
-An explicit selector choice uses a fullscreen captured freeze-frame and reveals
-the selected shell with a honeycomb wipe. The visible reveal lasts exactly five
-seconds after the target starts and reports ready; it is not a five-second
-pre-switch cooldown. Login and Home Manager auto-start do not animate.
+An explicit selector choice runs one continuous ten-second transition. During
+the first three seconds the captured old desktop dissolves into an opaque
+honeycomb veil. The shell ownership swap runs under the animated veil during
+the next four seconds. The live target is revealed during the final three
+seconds. Login and Home Manager auto-start do not animate.
 
-Capture, IPC, or readiness failures fail open and do not change the shell
-result. If the selected shell fails, rollback restores the previous shell under
-the overlay before it is revealed.
+If capture cannot start, the switch continues without an overlay. If an opaque
+frame cannot be confirmed on every output, the switch is canceled before the
+old shell stops. If the target cannot launch before the reveal boundary, the
+previous shell is restored. Target readiness does not restart or extend the
+timeline. If the selected shell fails, rollback restores the previous shell.
 
 The full per-shell keybind reference (common + Caelestia + Noctalia + End4)
 lives in the [GitHub Wiki](https://github.com/TakuyaYagam1/wahrwelt/wiki) or

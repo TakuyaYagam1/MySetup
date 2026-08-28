@@ -114,14 +114,25 @@ wahrwelt_shell_transition_begin() {
   [ "${WAHRWELT_TEST_CAPTURE:-0}" -eq 1 ] || return 1
   wahrwelt_shell_transition_active=1
   test_record_operation transition-capture-ready
+  test_record_operation transition-outgoing
+}
+
+wahrwelt_shell_transition_wait_covered() {
+  test_record_operation transition-covered
+}
+
+wahrwelt_shell_transition_bridge_budget_available() {
+  test_record_operation "transition-bridge-budget:${1:-0}"
 }
 
 wahrwelt_shell_transition_wait_target_ready() {
   test_record_operation "transition-readiness:$1"
 }
 
-wahrwelt_shell_transition_reveal_and_wait() {
-  test_record_operation transition-reveal
+wahrwelt_shell_transition_wait_done() {
+  test_record_operation transition-incoming
+  test_record_operation transition-settling
+  test_record_operation transition-done
   wahrwelt_shell_transition_active=0
 }
 
@@ -319,22 +330,34 @@ target_start_line="$(operation_line '^shell-start:noctalia$')"
 state_snapshot_line="$(operation_line '^snapshot-begin:\.state-switch-rollback-$')"
 selector_stop_line="$(operation_line '^selector-stop$')"
 capture_ready_line="$(operation_line '^transition-capture-ready$')"
+outgoing_line="$(operation_line '^transition-outgoing$')"
+covered_line="$(operation_line '^transition-covered$')"
+bridge_budget_line="$(operation_line '^transition-bridge-budget:3000000$')"
 reload_line="$(operation_line '^hypr-reload$')"
 readiness_line="$(operation_line '^transition-readiness:noctalia$')"
-reveal_line="$(operation_line '^transition-reveal$')"
+incoming_line="$(operation_line '^transition-incoming$')"
+done_line="$(operation_line '^transition-done$')"
 if [ -z "$runtime_snapshot_line" ] || [ -z "$shell_stop_line" ] ||
   [ -z "$target_start_line" ] || [ -z "$state_snapshot_line" ] ||
   [ -z "$selector_stop_line" ] || [ -z "$capture_ready_line" ] ||
-  [ -z "$reload_line" ] || [ -z "$readiness_line" ] || [ -z "$reveal_line" ] ||
+  [ -z "$outgoing_line" ] || [ -z "$covered_line" ] ||
+  [ -z "$bridge_budget_line" ] ||
+  [ -z "$reload_line" ] || [ -z "$readiness_line" ] ||
+  [ -z "$incoming_line" ] || [ -z "$done_line" ] ||
   [ "$runtime_snapshot_line" -ge "$shell_stop_line" ] ||
   [ "$selector_stop_line" -ge "$capture_ready_line" ] ||
-  [ "$capture_ready_line" -ge "$shell_stop_line" ] ||
+  [ "$capture_ready_line" -ge "$outgoing_line" ] ||
+  [ "$outgoing_line" -ge "$runtime_snapshot_line" ] ||
+  [ "$runtime_snapshot_line" -ge "$covered_line" ] ||
+  [ "$covered_line" -ge "$bridge_budget_line" ] ||
+  [ "$bridge_budget_line" -ge "$shell_stop_line" ] ||
   [ "$shell_stop_line" -ge "$target_start_line" ] ||
   [ "$target_start_line" -ge "$state_snapshot_line" ] ||
   [ "$state_snapshot_line" -ge "$reload_line" ] ||
   [ "$reload_line" -ge "$readiness_line" ] ||
-  [ "$readiness_line" -ge "$reveal_line" ]; then
-  fail "ordinary transition order does not preserve capture, single-shell start, reload, readiness, and reveal
+  [ "$readiness_line" -ge "$incoming_line" ] ||
+  [ "$incoming_line" -ge "$done_line" ]; then
+  fail "ordinary transition order does not preserve outgoing, covered swap, readiness, incoming, and done
 $(grep -E '^(snapshot-begin|selector-stop|transition-|shell-stop|shell-start|hypr-reload):?' "$operations" || true)"
 fi
 
