@@ -1330,10 +1330,25 @@ func TestRenderedHomeManagerLiveSyncUsesStoreToolsAndEscapesActivationCgroup(t *
 	hyprctl := filepath.Join(hyprlandPackage, "bin", "hyprctl")
 	hyprctlScript := `#!/usr/bin/env bash
 set -euo pipefail
-printf 'hyprctl\t%s\t%s\t%s\n' "$0" "$XDG_RUNTIME_DIR" "$*" >>"$LIVE_COMMAND_LOG"
-case "${1:-}" in
-  instances | reload) ;;
-  version) printf '%s\n' 'Hyprland 0.55.0' ;;
+expected_signature=0123456789abcdef_1234567890_123456789
+effective_signature="${HYPRLAND_INSTANCE_SIGNATURE:-}"
+if [ "${1:-}" = -i ]; then
+  effective_signature="${2:-}"
+  shift 2
+fi
+printf 'hyprctl\t%s\t%s\t%s\t%s\n' \
+  "$0" "$XDG_RUNTIME_DIR" "$effective_signature" "$*" >>"$LIVE_COMMAND_LOG"
+case "$*" in
+  instances | '-j instances')
+    printf '%s\n' '[{"instance":"0123456789abcdef_1234567890_123456789","time":1234567890,"pid":4242,"wl_socket":"wayland-test"}]'
+    ;;
+  version)
+    [ "$effective_signature" = "$expected_signature" ] || exit 65
+    printf '%s\n' 'Hyprland 0.55.0'
+    ;;
+  reload)
+    [ "$effective_signature" = "$expected_signature" ] || exit 65
+    ;;
   *) exit 64 ;;
 esac
 `
@@ -1347,7 +1362,8 @@ esac
 	systemdRun := filepath.Join(systemdPackage, "bin", "systemd-run")
 	systemdRunScript := `#!/usr/bin/env bash
 set -euo pipefail
-printf 'systemd-run\t%s\t%s\t%s\n' "$0" "$XDG_RUNTIME_DIR" "$*" >>"$LIVE_COMMAND_LOG"
+printf 'systemd-run\t%s\t%s\t%s\t%s\n' \
+  "$0" "$XDG_RUNTIME_DIR" "${HYPRLAND_INSTANCE_SIGNATURE:-}" "$*" >>"$LIVE_COMMAND_LOG"
 while [ "$#" -gt 0 ]; do
   if [ "$1" = -- ]; then
     shift
@@ -1371,7 +1387,9 @@ set -euo pipefail
 shopt -s nullglob
 tokens=("$XDG_RUNTIME_DIR"/wahrwelt-end4-upgrade/*:*:ii)
 [ "${#tokens[@]}" -eq 1 ]
-printf 'start-shell\t%s\n' "$XDG_RUNTIME_DIR" >>"$LIVE_COMMAND_LOG"
+[ "${HYPRLAND_INSTANCE_SIGNATURE:-}" = 0123456789abcdef_1234567890_123456789 ]
+printf 'start-shell\t%s\t%s\n' \
+  "$XDG_RUNTIME_DIR" "$HYPRLAND_INSTANCE_SIGNATURE" >>"$LIVE_COMMAND_LOG"
 `
 	if err := os.WriteFile(startShell, []byte(startShellScript), 0o700); err != nil {
 		t.Fatal(err)
@@ -1386,9 +1404,11 @@ printf 'start-shell\t%s\n' "$XDG_RUNTIME_DIR" >>"$LIVE_COMMAND_LOG"
 		systemdPackage,
 	)
 	cmd := exec.Command("bash", "-euo", "pipefail", "-c", rendered)
-	pathWithoutStoreTools := pathWithoutCommandsForTest(t, "hyprctl", "awk")
+	pathWithoutStoreTools := pathWithoutCommandsForTest(t, "hyprctl", "awk", "jq")
 	for _, value := range os.Environ() {
 		if !strings.HasPrefix(value, "XDG_RUNTIME_DIR=") &&
+			!strings.HasPrefix(value, "HYPRLAND_INSTANCE_SIGNATURE=") &&
+			!strings.HasPrefix(value, "WAYLAND_DISPLAY=") &&
 			!strings.HasPrefix(value, "PATH=") &&
 			!strings.HasPrefix(value, "DRY_RUN_CMD=") {
 			cmd.Env = append(cmd.Env, value)
@@ -1399,11 +1419,12 @@ printf 'start-shell\t%s\n' "$XDG_RUNTIME_DIR" >>"$LIVE_COMMAND_LOG"
 		"PATH="+pathWithoutStoreTools,
 		"DRY_RUN_CMD=",
 		"LIVE_COMMAND_LOG="+commandLog,
+		"WAYLAND_DISPLAY=wayland-test",
 	)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("rendered live transition without PATH tools: %v\n%s", err, output)
 	}
-	for _, excluded := range []string{"hyprctl", "awk"} {
+	for _, excluded := range []string{"hyprctl", "awk", "jq"} {
 		probe := exec.Command("bash", "-c", "command -v -- \"$1\"", "bash", excluded)
 		probe.Env = []string{"PATH=" + pathWithoutStoreTools}
 		if output, err := probe.CombinedOutput(); err == nil {
@@ -1414,28 +1435,150 @@ printf 'start-shell\t%s\n' "$XDG_RUNTIME_DIR" >>"$LIVE_COMMAND_LOG"
 	if len(lines) != 5 {
 		t.Fatalf("live command count = %d, want 5:\n%s", len(lines), strings.Join(lines, "\n"))
 	}
-	for index, command := range []string{"instances", "version", "reload"} {
+	for index, command := range []string{"-j instances", "version", "reload"} {
 		fields := strings.Split(lines[index], "\t")
-		if len(fields) != 4 || fields[0] != "hyprctl" || fields[2] != processRuntime || fields[3] != command {
+		if len(fields) != 5 || fields[0] != "hyprctl" || fields[2] != processRuntime || fields[4] != command {
 			t.Fatalf("hyprctl %s invocation = %q", command, lines[index])
+		}
+		if index == 0 && fields[3] != "" {
+			t.Fatalf("hyprctl instance discovery was unexpectedly pre-scoped: %q", lines[index])
+		}
+		if index > 0 && fields[3] != "0123456789abcdef_1234567890_123456789" {
+			t.Fatalf("hyprctl %s did not select the exact live instance: %q", command, lines[index])
 		}
 		if !strings.HasPrefix(fields[1], "/nix/store/") || !strings.HasSuffix(fields[1], "-hyprland-live-sync-test/bin/hyprctl") {
 			t.Fatalf("hyprctl %s did not use the rendered Nix store binary: %q", command, fields[1])
 		}
 	}
 	systemdFields := strings.Split(lines[3], "\t")
-	if len(systemdFields) != 4 || systemdFields[0] != "systemd-run" || systemdFields[2] != processRuntime {
+	if len(systemdFields) != 5 || systemdFields[0] != "systemd-run" || systemdFields[2] != processRuntime ||
+		systemdFields[3] != "0123456789abcdef_1234567890_123456789" {
 		t.Fatalf("scoped shell launcher invocation = %q", lines[3])
 	}
 	if !strings.HasPrefix(systemdFields[1], "/nix/store/") || !strings.HasSuffix(systemdFields[1], "-systemd-live-sync-test/bin/systemd-run") {
 		t.Fatalf("shell launcher did not use the rendered systemd-run binary: %q", systemdFields[1])
 	}
 	wantScope := fmt.Sprintf(`--user --scope --collect --quiet -- %s`, startShell)
-	if systemdFields[3] != wantScope {
-		t.Fatalf("shell launcher scope = %q, want %q", systemdFields[3], wantScope)
+	if systemdFields[4] != wantScope {
+		t.Fatalf("shell launcher scope = %q, want %q", systemdFields[4], wantScope)
 	}
-	if got := lines[4]; got != "start-shell\t"+processRuntime {
+	if got := lines[4]; got != "start-shell\t"+processRuntime+"\t0123456789abcdef_1234567890_123456789" {
 		t.Fatalf("start-shell did not inherit the process-derived XDG runtime: %q", got)
+	}
+}
+
+func TestRenderedHomeManagerLiveSyncBuildsExactSessionEnvironmentWithoutMigration(t *testing.T) {
+	if _, err := exec.LookPath("nix"); err != nil {
+		t.Skipf("nix is unavailable: %v", err)
+	}
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
+	configHome := filepath.Join(home, ".config")
+	stateHome := filepath.Join(home, ".local", "state")
+	for _, path := range []string{home, configHome, stateHome} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	commandLog := filepath.Join(dir, "live-commands")
+	signature := "abcdef0123456789_1234567890_987654321"
+	runtimeDir := fmt.Sprintf("/run/user/%d", os.Getuid())
+	hyprlandPackage := filepath.Join(dir, "hyprland-package")
+	if err := os.MkdirAll(filepath.Join(hyprlandPackage, "bin"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	hyprctl := filepath.Join(hyprlandPackage, "bin", "hyprctl")
+	hyprctlScript := `#!/usr/bin/env bash
+set -euo pipefail
+expected_signature=abcdef0123456789_1234567890_987654321
+effective_signature="${HYPRLAND_INSTANCE_SIGNATURE:-}"
+if [ "${1:-}" = -i ]; then
+  effective_signature="${2:-}"
+  shift 2
+fi
+case "$*" in
+  '-j instances')
+    printf '%s\n' '[{"instance":"abcdef0123456789_1234567890_987654321","time":1234567890,"pid":4242,"wl_socket":"wayland-test"}]'
+    ;;
+  version)
+    [ "$effective_signature" = "$expected_signature" ] || exit 65
+    printf '%s\n' 'Hyprland 0.55.0'
+    ;;
+  reload)
+    [ "$effective_signature" = "$expected_signature" ] || exit 65
+    ;;
+  *) exit 64 ;;
+esac
+`
+	if err := os.WriteFile(hyprctl, []byte(hyprctlScript), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	systemdPackage := filepath.Join(dir, "systemd-package")
+	if err := os.MkdirAll(filepath.Join(systemdPackage, "bin"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	systemdRun := filepath.Join(systemdPackage, "bin", "systemd-run")
+	systemdRunScript := `#!/usr/bin/env bash
+set -euo pipefail
+[ "${XDG_RUNTIME_DIR:-}" = "$EXPECTED_RUNTIME_DIR" ]
+[ "${DBUS_SESSION_BUS_ADDRESS:-}" = "unix:path=$EXPECTED_RUNTIME_DIR/bus" ]
+[ "${HYPRLAND_INSTANCE_SIGNATURE:-}" = "$EXPECTED_SIGNATURE" ]
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = -- ]; then
+    shift
+    break
+  fi
+  shift
+done
+exec "$@"
+`
+	if err := os.WriteFile(systemdRun, []byte(systemdRunScript), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	scriptsDir := filepath.Join(configHome, "hypr", "scripts")
+	if err := os.MkdirAll(scriptsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	startShell := filepath.Join(scriptsDir, "start-shell.sh")
+	startShellScript := `#!/usr/bin/env bash
+set -euo pipefail
+[ "${XDG_RUNTIME_DIR:-}" = "$EXPECTED_RUNTIME_DIR" ]
+[ "${DBUS_SESSION_BUS_ADDRESS:-}" = "unix:path=$EXPECTED_RUNTIME_DIR/bus" ]
+[ "${HYPRLAND_INSTANCE_SIGNATURE:-}" = "$EXPECTED_SIGNATURE" ]
+printf '%s\n' session-ready >>"$LIVE_COMMAND_LOG"
+`
+	if err := os.WriteFile(startShell, []byte(startShellScript), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	rendered := renderHomeManagerShellActivationForTest(
+		t,
+		configHome,
+		stateHome,
+		absoluteTestPath(t, "../../../dots"),
+		hyprlandPackage,
+		systemdPackage,
+	)
+	cmd := exec.Command("bash", "-euo", "pipefail", "-c", rendered)
+	cmd.Env = []string{
+		"HOME=" + home,
+		"USER=tester",
+		"LOGNAME=tester",
+		"PATH=" + pathWithoutCommandsForTest(t, "hyprctl", "awk", "jq"),
+		"DRY_RUN_CMD=",
+		"LIVE_COMMAND_LOG=" + commandLog,
+		"WAYLAND_DISPLAY=wayland-test",
+		"EXPECTED_RUNTIME_DIR=" + runtimeDir,
+		"EXPECTED_SIGNATURE=" + signature,
+	}
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("normal Home Manager live sync did not build its exact session environment: %v\n%s", err, output)
+	}
+	if got := strings.TrimSpace(readContractFile(t, commandLog)); got != "session-ready" {
+		t.Fatalf("normal Home Manager live sync did not launch the shell in the selected session: %q", got)
 	}
 }
 
@@ -1471,9 +1614,9 @@ func TestHomeManagerLiveSyncConsumesDirectEnd4UpgradeProvenanceOnce(t *testing.T
 		`run_live_shell_command()`,
 		`"$activation_helper" run-with-runtime-hex`,
 		`"$wahrwelt_direct_end4_process_runtime_id"`,
-		`run_live_shell_command "$hyprctl_path" instances`,
-		`run_live_shell_command "$hyprctl_path" version`,
-		`run_live_shell_command "$hyprctl_path" reload`,
+		`run_live_shell_command "$hyprctl_path" -j instances`,
+		`run_live_hypr_command version`,
+		`run_live_hypr_command reload`,
 		`hyprctl_path="${pkgs.hyprland}/bin/hyprctl"`,
 		`"${pkgs.util-linux}/bin/setsid"`,
 		`"${pkgs.systemd}/bin/systemd-run"`,
@@ -1691,6 +1834,7 @@ let
     coreutils = %q;
     diffutils = %q;
     gawk = %q;
+    jq = %q;
     hyprland = builtins.path { path = builtins.toPath %q; name = "hyprland-live-sync-test"; };
     python3 = "/usr";
     systemd = builtins.path { path = builtins.toPath %q; name = "systemd-live-sync-test"; };
@@ -1704,6 +1848,7 @@ in module.home.activation.seedHyprShellRuntime + "\n" + module.home.activation.l
 		resolvedCommandPackageRoot(t, "mkdir"),
 		resolvedCommandPackageRoot(t, "cmp"),
 		resolvedCommandPackageRoot(t, "awk"),
+		resolvedCommandPackageRoot(t, "jq"),
 		hyprlandPackage,
 		systemdPackage,
 		resolvedCommandPackageRoot(t, "setsid"),

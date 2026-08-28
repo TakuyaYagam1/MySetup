@@ -465,9 +465,70 @@ in
                 $DRY_RUN_CMD "$@"
               fi
             }
+            select_live_hypr_signature() {
+              ${pkgs.jq}/bin/jq -er \
+                --arg existing "''${HYPRLAND_INSTANCE_SIGNATURE:-}" \
+                --arg socket "''${WAYLAND_DISPLAY:-}" '
+                  if type != "array" then empty
+                  else
+                    . as $instances
+                    | [$instances[]? | select(.instance == $existing) | .instance] | unique as $by_existing
+                    | [$instances[]? | select($socket != "" and .wl_socket == $socket) | .instance] | unique as $by_socket
+                    | [$instances[]? | .instance | select(type == "string" and length > 0)] | unique as $all
+                    | if $existing != "" and ($by_existing | length) == 1 then $by_existing[0]
+                      elif ($by_socket | length) == 1 then $by_socket[0]
+                      elif ($all | length) == 1 then $all[0]
+                      else empty
+                      end
+                  end
+                '
+            }
+            run_live_hypr_command() {
+              run_live_shell_command "$hyprctl_path" -i "$hypr_instance_signature" "$@"
+            }
             if [ -n "$hyprctl_path" ] && [ "''${hyprctl_path#/}" != "$hyprctl_path" ] && \
-              [ -x "$hyprctl_path" ] && run_live_shell_command "$hyprctl_path" instances >/dev/null 2>&1; then
-              hypr_version="$(run_live_shell_command "$hyprctl_path" version 2>/dev/null | ${pkgs.gawk}/bin/awk 'NR == 1 { print $2 }')"
+              [ -x "$hyprctl_path" ] && \
+              hypr_instances="$(run_live_shell_command "$hyprctl_path" -j instances 2>/dev/null)"; then
+              if ! hypr_instance_signature="$(
+                printf '%s\n' "$hypr_instances" | select_live_hypr_signature
+              )"; then
+                hypr_instance_signature=""
+              fi
+              case "$hypr_instance_signature" in
+                "" | *[!A-Za-z0-9_.-]*)
+                  echo "Skipping live Hyprland reload; no unique active instance was found." >&2
+                  hypr_instance_signature=""
+                  ;;
+              esac
+            else
+              hypr_instance_signature=""
+            fi
+            live_session_env=(
+              "${pkgs.coreutils}/bin/env"
+              "HYPRLAND_INSTANCE_SIGNATURE=$hypr_instance_signature"
+            )
+            if [ -n "$hypr_instance_signature" ] && \
+              [ -z "''${wahrwelt_direct_end4_process_runtime_hex:-}" ]; then
+              live_xdg_runtime_dir="''${XDG_RUNTIME_DIR:-/run/user/$UID}"
+              live_dbus_address="''${DBUS_SESSION_BUS_ADDRESS:-unix:path=$live_xdg_runtime_dir/bus}"
+              if [ "''${live_xdg_runtime_dir#/}" = "$live_xdg_runtime_dir" ]; then
+                echo "Skipping live Hyprland reload; the user runtime directory is unavailable." >&2
+                hypr_instance_signature=""
+              else
+                live_session_env+=(
+                  "XDG_RUNTIME_DIR=$live_xdg_runtime_dir"
+                  "DBUS_SESSION_BUS_ADDRESS=$live_dbus_address"
+                )
+              fi
+            fi
+            if [ -n "$hypr_instance_signature" ]; then
+              if ! hypr_version="$(
+                run_live_hypr_command version 2>/dev/null \
+                  | ${pkgs.gawk}/bin/awk 'NR == 1 { print $2 }'
+              )"; then
+                echo "Failed to query the selected Hyprland instance" >&2
+                exit 1
+              fi
               hypr_version="''${hypr_version#v}"
               hypr_major="''${hypr_version%%.*}"
               hypr_rest="''${hypr_version#*.}"
@@ -485,11 +546,12 @@ in
               esac
 
               if [ "$hypr_major" -gt 0 ] || [ "$hypr_minor" -ge 55 ]; then
-                if ! run_live_shell_command "$hyprctl_path" reload; then
+                if ! run_live_hypr_command reload; then
                   echo "Failed to reload the active Hyprland configuration" >&2
                   exit 1
                 fi
                 if run_live_shell_command \
+                  "''${live_session_env[@]}" \
                   "${pkgs.util-linux}/bin/setsid" \
                   "${pkgs.systemd}/bin/systemd-run" \
                   --user \
