@@ -21,16 +21,17 @@ let
 in
 buildNpmPackage' rec {
   pname = "omnirouter";
-  version = "3.8.49";
+  version = "3.8.50";
 
   src = fetchFromGitHub {
     owner = "diegosouzapw";
     repo = "OmniRoute";
-    rev = "v3.8.49";
-    hash = "sha256-nRLziV4NWPoa0ev57DV7jmAvLpL/1MP1EMZO2/drrTU=";
+    rev = "v3.8.50";
+    hash = "sha256-+2FMc9wrvPtQS3+mGsBVvKrd5RprYe/r/GJvjAVMBpc=";
   };
 
-  npmDepsHash = "sha256-R0u93MLUUWC8xFgq4S0Aj/7wg4pygTKwxP/eWkWMgCw=";
+  npmDepsFetcherVersion = 2;
+  npmDepsHash = "sha256-wa5vQMYugA8E7lXOh4lgNH7JNbKOinNaW6Zk8Mw2e8k=";
 
   nativeBuildInputs = [
     python311
@@ -55,10 +56,10 @@ buildNpmPackage' rec {
     # Turbopack's native memory use exceeds GitHub-hosted runner capacity on
     # current OmniRouter releases. Webpack is the upstream-supported fallback.
     OMNIROUTE_USE_TURBOPACK = "0";
-    # v3.8.49 reaches the 4 GiB V8 heap ceiling during the Webpack production
-    # pass. Keep the upstream-supported explicit heap setting below the
+    # v3.8.50 can exhaust a 6 GiB V8 heap during the Webpack production pass.
+    # Keep the upstream-supported explicit heap setting below the
     # GitHub-hosted runner's total memory limit.
-    OMNIROUTE_BUILD_MEMORY_MB = "6144";
+    OMNIROUTE_BUILD_MEMORY_MB = "6656";
     npm_config_arch = stdenv.hostPlatform.parsed.cpu.name;
     SHARP_IGNORE_GLOBAL_LIBVIPS = "0";
     ONNXRUNTIME_NODE_INSTALL = "skip";
@@ -84,6 +85,12 @@ buildNpmPackage' rec {
     export HUSKY_SKIP_INSTALL=1
     npm rebuild better-sqlite3 --build-from-source
     npm run build
+
+    # Next.js preserves this npm bin link as an absolute build-time path.
+    semverBin=.build/next/standalone/node_modules/global-agent/node_modules/.bin/semver
+    if [ -L "$semverBin" ]; then
+      ln -sfn ../semver/bin/semver.js "$semverBin"
+    fi
   '';
 
   installPhase = ''
