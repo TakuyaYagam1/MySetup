@@ -19,7 +19,7 @@ in
         backend = "docker";
 
         containers.portainer = {
-          image = "portainer/portainer-ce:2.39.6";
+          image = "portainer/portainer-ce:2.45.0";
           autoStart = true;
           ports = [
             "127.0.0.1:9443:9443"
