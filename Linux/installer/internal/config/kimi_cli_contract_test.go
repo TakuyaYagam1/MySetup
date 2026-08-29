@@ -15,8 +15,8 @@ func TestKimiCLIIsLimitedToDeveloperAndPersonalPresets(t *testing.T) {
 	}
 	developerInputs := presetInputs[developerInputsStart:personalInputsStart]
 	for _, want := range []string{
-		"kimi-cli = {",
-		`url = "github:MoonshotAI/kimi-cli";`,
+		"kimi-code = {",
+		`url = "github:MoonshotAI/kimi-code";`,
 		`inputs.nixpkgs.follows = "nixpkgs";`,
 	} {
 		if !strings.Contains(developerInputs, want) {
@@ -26,19 +26,19 @@ func TestKimiCLIIsLimitedToDeveloperAndPersonalPresets(t *testing.T) {
 
 	for _, preset := range []string{"developer", "personal"} {
 		flake := readKimiCLIContractFile(t, "../../../NixOS/presets/"+preset+"/flake.nix")
-		if !strings.Contains(flake, `url = "github:MoonshotAI/kimi-cli";`) {
+		if !strings.Contains(flake, `url = "github:MoonshotAI/kimi-code";`) {
 			t.Fatalf("%s preset must include the Kimi CLI flake input\n%s", preset, flake)
 		}
 	}
 	for _, preset := range []string{"minimal", "desktop"} {
 		flake := readKimiCLIContractFile(t, "../../../NixOS/presets/"+preset+"/flake.nix")
-		if strings.Contains(flake, "kimi-cli") {
+		if strings.Contains(flake, "kimi-code") {
 			t.Fatalf("%s preset must not include the Kimi CLI flake input\n%s", preset, flake)
 		}
 	}
 
 	overlay := readKimiCLIContractFile(t, "../../../NixOS/lib/flake-overlays.nix")
-	if !strings.Contains(overlay, "kimi-cli = inputs.kimi-cli.packages.${system}.default;") {
+	if !strings.Contains(overlay, "kimi-code = inputs.kimi-code.packages.${system}.default;") {
 		t.Fatalf("developer package overlay must expose Kimi CLI\n%s", overlay)
 	}
 
@@ -48,7 +48,7 @@ func TestKimiCLIIsLimitedToDeveloperAndPersonalPresets(t *testing.T) {
 	if devStart < 0 || personalStart < 0 || devStart >= personalStart {
 		t.Fatalf("could not isolate the developer package set\n%s", homePackages)
 	}
-	if !strings.Contains(homePackages[devStart:personalStart], "kimi-cli") {
+	if !strings.Contains(homePackages[devStart:personalStart], "kimi-code") {
 		t.Fatalf("Kimi CLI must be installed by developer and inherited by personal\n%s", homePackages)
 	}
 }
