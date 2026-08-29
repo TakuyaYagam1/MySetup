@@ -51,7 +51,7 @@ let
 
   desktopInputs = {
     caelestia-shell = {
-      url = "github:caelestia-dots/shell/v2.3.0";
+      url = "github:caelestia-dots/shell/v2.4.0";
       inputs = {
         caelestia-cli.follows = "caelestia-cli";
         nixpkgs.follows = "nixpkgs";
