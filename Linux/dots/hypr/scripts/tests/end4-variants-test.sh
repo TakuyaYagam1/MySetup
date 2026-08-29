@@ -79,15 +79,24 @@ assert_not_matches "$wahrwelt_end4_env_pattern" "ILLOGICAL_IMPULSE_DOTFILES_SOUR
 assert_not_matches "$wahrwelt_end4_env_pattern" "WAHRWELT_END4_PROFILE=caelestia" "Caelestia with stale generic End4 variables is not End4"
 
 printf -v env_padding '%080000d' 0
+env_match_ready="$test_root/env-match-ready"
 env -i \
   WAHRWELT_END4_PROFILE=end4-pc \
   "ZZZ_PADDING=$env_padding" \
-  "$(command -v sleep)" 30 &
+  WAHRWELT_TEST_ENV_READY="$env_match_ready" \
+  "$(command -v bash)" -c '
+    : >"$WAHRWELT_TEST_ENV_READY"
+    exec "$1" 30
+  ' _ "$(command -v sleep)" &
 env_match_pid=$!
-for _ in $(seq 1 50); do
-  [ -r "/proc/$env_match_pid/environ" ] && break
+for _ in $(seq 1 500); do
+  [ -e "$env_match_ready" ] && break
   command sleep 0.01
 done
+if [ ! -e "$env_match_ready" ]; then
+  printf 'FAIL: large environment fixture did not reach post-exec readiness\n' >&2
+  exit 1
+fi
 if ! wahrwelt_pid_has_env_regex "$env_match_pid" "$wahrwelt_end4_pc_env_pattern"; then
   printf 'FAIL: exact End4 marker before a large environment payload was not detected under pipefail\n' >&2
   exit 1
