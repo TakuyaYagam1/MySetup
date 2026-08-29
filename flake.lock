@@ -449,6 +449,26 @@
         "type": "github"
       }
     },
+    "kimi-code": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1788000813,
+        "narHash": "sha256-M4nH8vrYiZUMfY+FK2IlWZAGzYJor8drcN2pzY+6rLc=",
+        "owner": "MoonshotAI",
+        "repo": "kimi-code",
+        "rev": "961927739ef34819d67d76fa5870cbe4ba7a01ff",
+        "type": "github"
+      },
+      "original": {
+        "owner": "MoonshotAI",
+        "repo": "kimi-code",
+        "type": "github"
+      }
+    },
     "lanzaboote": {
       "inputs": {
         "crane": "crane",
@@ -792,6 +812,7 @@
         "end4-pc": "end4-pc",
         "happ-nix": "happ-nix",
         "home-manager": "home-manager",
+        "kimi-code": "kimi-code",
         "lanzaboote": "lanzaboote",
         "neovim-nightly-overlay": "neovim-nightly-overlay",
         "nix-index-database": "nix-index-database",
