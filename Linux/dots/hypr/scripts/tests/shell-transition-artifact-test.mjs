@@ -111,6 +111,21 @@ for (const asset of ["caelestia.svg", "illogical-impulse.svg", "noctalia.svg"]) 
   assert.match(assetSource, /<svg\b/, `${asset} must remain an SVG in the transition artifact`);
 }
 
+const caelestiaLogoSource = fs.readFileSync(
+  path.join(artifact, "assets/caelestia.svg"), "utf8");
+assert.match(caelestiaLogoSource, /\.cls-1\s*\{\s*fill:\s*#fff;/,
+  "Caelestia transition logo must retain its light foreground colour");
+assert.match(caelestiaLogoSource, /\.cls-2\s*\{\s*fill:\s*#6ae5e1;/,
+  "Caelestia transition logo must retain its cyan accent colour");
+assert.equal((caelestiaLogoSource.match(/class="cls-1"/g) || []).length, 1,
+  "Caelestia transition logo must render one light planet path");
+assert.equal((caelestiaLogoSource.match(/class="cls-2"/g) || []).length, 4,
+  "Caelestia transition logo must render four cyan accent paths");
+assert.doesNotMatch(caelestiaLogoSource, /\bfill\s*=/i,
+  "Caelestia transition logo must not override its classes with fill attributes");
+assert.doesNotMatch(caelestiaLogoSource, /style="[^"]*fill:/,
+  "Caelestia transition logo must not override its visible brand palette");
+
 const shaderSource = fs.readFileSync(
   path.join(artifact, "shaders/honeycomb.frag"), "utf8");
 assert.match(shaderSource, /frozenAlpha \* globalFade/,
