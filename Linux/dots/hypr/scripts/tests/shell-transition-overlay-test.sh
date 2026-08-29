@@ -10,6 +10,7 @@ operations="$test_root/operations"
 instances="$test_root/instances"
 unrelated_state="$test_root/unrelated-state"
 status_count_file="$test_root/status-count"
+status_injection_file="$test_root/status-injection"
 clock_file="$test_root/monotonic-us"
 uptime_file="$test_root/uptime"
 wall_clock_file="$test_root/wall-clock"
@@ -31,6 +32,7 @@ layers_mode=ready
 : >"$wall_jumps"
 : >"$start_marker"
 : >"$launch_profile_file"
+: >"$status_injection_file"
 printf '%s\n' running >"$unrelated_state"
 printf '%s\n' 0 >"$status_count_file"
 printf '%s\n' 1000000 >"$clock_file"
@@ -82,6 +84,7 @@ reset_fixture() {
   : >"$instances"
   : >"$start_marker"
   : >"$launch_profile_file"
+  : >"$status_injection_file"
   unset WAHRWELT_SHELL_TRANSITION_TARGET_PROFILE
   printf '%s\n' running >"$unrelated_state"
   printf '%s\n' 0 >"$status_count_file"
@@ -162,7 +165,7 @@ sleep() {
 }
 
 qs_status() {
-  local id="$1" status_calls
+  local id="$1" status_calls status_injection
 
   instance_exists "$id" || return 1
   status_calls="$(cat "$status_count_file")"
@@ -171,6 +174,17 @@ qs_status() {
   if [ "$id" != "$owned_id" ]; then
     printf '%s\n' captured
     return 0
+  fi
+  if [ -s "$status_injection_file" ]; then
+    status_injection="$(cat "$status_injection_file")"
+    : >"$status_injection_file"
+    case "$status_injection" in
+      unavailable) return 1 ;;
+      malformed) printf '%s\n' 'incoming extra' ;;
+      aborted) printf '%s\n' aborted ;;
+      *) return 97 ;;
+    esac
+    return
   fi
   case "$status_mode" in
     captured) printf '%s\n' captured ;;
@@ -191,6 +205,37 @@ qs_status() {
     fixed) printf '%s\n' "$forced_status" ;;
     start-outgoing)
       [ -s "$start_marker" ] && printf '%s\n' outgoing || printf '%s\n' captured
+      ;;
+    start-confirm-unavailable-then-outgoing)
+      if [ ! -s "$start_marker" ]; then
+        printf '%s\n' captured
+      elif [ "$status_calls" -eq 2 ]; then
+        return 1
+      else
+        printf '%s\n' outgoing
+      fi
+      ;;
+    start-confirm-captured-then-outgoing)
+      if [ ! -s "$start_marker" ] || [ "$status_calls" -eq 2 ]; then
+        printf '%s\n' captured
+      else
+        printf '%s\n' outgoing
+      fi
+      ;;
+    start-confirm-unavailable-until-covered)
+      if [ ! -s "$start_marker" ]; then
+        printf '%s\n' captured
+      elif [ "$(cat "$clock_file")" -lt "$(($(cat "$start_marker") + 3100000))" ]; then
+        return 1
+      else
+        printf '%s\n' covered
+      fi
+      ;;
+    start-confirm-malformed)
+      [ -s "$start_marker" ] && printf '%s\n' 'outgoing extra' || printf '%s\n' captured
+      ;;
+    start-confirm-invalid)
+      [ -s "$start_marker" ] && printf '%s\n' incoming || printf '%s\n' captured
       ;;
     capture-delay-then-outgoing)
       if [ -s "$start_marker" ]; then
@@ -386,8 +431,15 @@ qs() {
       status) qs_status "$id" ;;
       start)
         instance_exists "$id" || return 1
-        [ "$start_mode" = success ] || return 1
-        cat "$clock_file" >"$start_marker"
+        case "$start_mode" in
+          success) cat "$clock_file" >"$start_marker" ;;
+          applied-timeout)
+            cat "$clock_file" >"$start_marker"
+            return 124
+            ;;
+          failure) return 1 ;;
+          *) return 97 ;;
+        esac
         ;;
       abort) instance_exists "$id" ;;
       *) return 97 ;;
@@ -664,13 +716,79 @@ assert_eq '' "${wahrwelt_shell_transition_cleanup_deadline_us:-}" \
   'failed exact start IPC retained the cleanup deadline'
 
 reset_fixture
+status_mode=start-outgoing
+start_mode=applied-timeout
+if ! wahrwelt_shell_transition_begin caelestia; then
+  fail 'begin aborted when timed-out start IPC had already entered outgoing'
+fi
+assert_eq 1 "$wahrwelt_shell_transition_active" \
+  'applied start IPC timeout did not activate the outgoing transition'
+assert_eq 1 "$(grep -Fxc \
+  $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tstart' \
+  "$operations" || true)" \
+  'applied start IPC timeout repeated the non-idempotent start command'
+[ -s "$instances" ] || fail 'applied start IPC timeout killed the owned instance'
+wahrwelt_shell_transition_abort
+
+reset_fixture
+status_mode=start-confirm-unavailable-then-outgoing
+if ! wahrwelt_shell_transition_begin caelestia; then
+  fail 'begin aborted after one transient post-start status timeout'
+fi
+assert_eq 1 "$wahrwelt_shell_transition_active" \
+  'transient post-start status timeout did not activate the transition'
+[ -s "$instances" ] || fail 'transient post-start status timeout killed the owned instance'
+wahrwelt_shell_transition_abort
+
+reset_fixture
+status_mode=start-confirm-captured-then-outgoing
+if ! wahrwelt_shell_transition_begin caelestia; then
+  fail 'begin aborted after one stale captured post-start status'
+fi
+assert_eq 1 "$wahrwelt_shell_transition_active" \
+  'stale captured post-start status did not activate the transition'
+[ -s "$instances" ] || fail 'stale captured post-start status killed the owned instance'
+wahrwelt_shell_transition_abort
+
+reset_fixture
+status_mode=start-confirm-unavailable-until-covered
+if ! wahrwelt_shell_transition_begin caelestia; then
+  fail 'begin rejected covered after post-start status timeouts consumed outgoing'
+fi
+assert_eq 1 "$wahrwelt_shell_transition_active" \
+  'advanced covered post-start state did not activate the transition'
+wahrwelt_shell_transition_wait_covered ||
+  fail 'advanced covered post-start state could not anchor visible deadlines'
+assert_eq covered "$(wahrwelt_shell_transition_status)" \
+  'advanced post-start state was not covered'
+wahrwelt_shell_transition_abort
+
+while read -r post_start_mode description; do
+  reset_fixture
+  status_mode="$post_start_mode"
+  if wahrwelt_shell_transition_begin caelestia; then
+    fail "begin accepted $description after successful start IPC"
+  fi
+  assert_eq 0 "$wahrwelt_shell_transition_active" \
+    "$description retained an active transition"
+  assert_eq 1000000 "$(cat "$clock_file")" \
+    "$description was retried instead of rejected immediately"
+  [ ! -s "$instances" ] || fail "$description retained the owned instance"
+done <<'EOF'
+start-confirm-malformed malformed-status-response
+start-confirm-invalid invalid-incoming-state
+EOF
+
+reset_fixture
 status_mode=captured
 if wahrwelt_shell_transition_begin caelestia; then
-  fail 'begin accepted captured after successful start IPC instead of outgoing'
+  fail 'begin accepted permanently captured state after successful start IPC'
 fi
-[ ! -s "$instances" ] || fail 'non-outgoing start retained the owned instance'
+[ ! -s "$instances" ] || fail 'permanently captured start retained the owned instance'
+assert_eq 5000000 "$(cat "$clock_file")" \
+  'permanently captured start did not consume the existing cover deadline'
 assert_eq '' "${wahrwelt_shell_transition_visible_deadline_us:-}" \
-  'non-outgoing start retained the visible deadline'
+  'permanently captured start retained the visible deadline'
 
 if ! declare -F wahrwelt_shell_transition_wait_covered >/dev/null; then
   fail 'wait_covered protocol function is missing'
@@ -873,6 +991,60 @@ end4-pc 5000000 11000000
 EOF
 
   reset_fixture
+  status_mode=timeline
+  wahrwelt_shell_transition_begin caelestia ||
+    fail 'transient incoming status fixture did not start'
+  wahrwelt_shell_transition_wait_covered ||
+    fail 'transient incoming status fixture did not reach covered'
+  advance_clock_us 3100000
+  printf '%s\n' unavailable >"$status_injection_file"
+  wahrwelt_shell_transition_wait_done ||
+    fail 'wait_done aborted after one transient incoming status timeout'
+  assert_eq 0 "$wahrwelt_shell_transition_active" \
+    'transient incoming status recovery left the transition active'
+  [ ! -s "$instances" ] ||
+    fail 'transient incoming status recovery retained the owned instance'
+  if grep -Fqx $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tabort' "$operations"; then
+    fail 'transient incoming status recovery sent abort IPC'
+  fi
+
+  reset_fixture
+  status_mode=timeline
+  wahrwelt_shell_transition_begin caelestia ||
+    fail 'malformed incoming status fixture did not start'
+  wahrwelt_shell_transition_wait_covered ||
+    fail 'malformed incoming status fixture did not reach covered'
+  advance_clock_us 3100000
+  fatal_status_observed_us="$(cat "$clock_file")"
+  printf '%s\n' malformed >"$status_injection_file"
+  if wahrwelt_shell_transition_wait_done; then
+    fail 'wait_done accepted a malformed incoming status response'
+  fi
+  assert_eq "$fatal_status_observed_us" "$(cat "$clock_file")" \
+    'malformed incoming status was retried instead of rejected immediately'
+  [ ! -s "$instances" ] || fail 'malformed incoming status retained the owned instance'
+  grep -Fqx $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tabort' "$operations" ||
+    fail 'malformed incoming status did not exact-abort the owned instance'
+
+  reset_fixture
+  status_mode=timeline
+  wahrwelt_shell_transition_begin caelestia ||
+    fail 'invalid incoming state fixture did not start'
+  wahrwelt_shell_transition_wait_covered ||
+    fail 'invalid incoming state fixture did not reach covered'
+  advance_clock_us 3100000
+  fatal_status_observed_us="$(cat "$clock_file")"
+  printf '%s\n' aborted >"$status_injection_file"
+  if wahrwelt_shell_transition_wait_done; then
+    fail 'wait_done accepted aborted as a valid incoming state'
+  fi
+  assert_eq "$fatal_status_observed_us" "$(cat "$clock_file")" \
+    'invalid incoming state was retried instead of rejected immediately'
+  [ ! -s "$instances" ] || fail 'invalid incoming state retained the owned instance'
+  grep -Fqx $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tabort' "$operations" ||
+    fail 'invalid incoming state did not exact-abort the owned instance'
+
+  reset_fixture
   status_mode=start-to-covered
   wahrwelt_shell_transition_begin caelestia || fail 'stuck timeline fixture did not start'
   wahrwelt_shell_transition_wait_covered || fail 'stuck timeline fixture did not reach covered'
@@ -905,10 +1077,13 @@ EOF
     fail 'late status failure fixture did not start'
   wahrwelt_shell_transition_wait_covered ||
     fail 'late status failure fixture did not reach covered'
+  anchored_cleanup_deadline="${wahrwelt_shell_transition_cleanup_deadline_us:-unset}"
   advance_clock_us 6000000
   if wahrwelt_shell_transition_wait_done; then
     fail 'late overlay disappearance was accepted without explicit done'
   fi
+  assert_eq "$anchored_cleanup_deadline" "$(cat "$clock_file")" \
+    'persistent status unavailability did not consume the anchored cleanup deadline'
   [ ! -s "$instances" ] || fail 'late overlay disappearance retained the owned instance'
   grep -Fqx $'qs\tipc\t-i\townednew01\tcall\tshellTransition\tabort' "$operations" ||
     fail 'late overlay disappearance did not exact-abort the owned instance'

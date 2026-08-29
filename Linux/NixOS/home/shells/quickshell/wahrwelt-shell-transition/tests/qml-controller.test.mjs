@@ -102,10 +102,15 @@ assert.match(
   /bridgeTicksConsumed\(controller\.transitionModel, root\.bridgeProgress\)[\s\S]*index < root\.consumedBridgeTicks/,
   "one discrete tick must be visibly consumed for each completed bridge second",
 );
-assert.doesNotMatch(
+assert.match(
   shellSource,
-  /\bbridgePulseCount\b|\breadonly property real pulse\b|Math\.cos/,
-  "the covered handoff must not restore the old full-screen pulse",
+  /id:\s*neutralVeilSource[\s\S]*readonly property real pulse:\s*0\.5\s*-\s*0\.5\s*\*\s*Math\.cos\(root\.bridgeProgress\s*\*\s*Math\.PI\s*\*\s*2\.0\s*\*\s*\(controller\.transitionModel\s*\?\s*controller\.transitionModel\.bridgeTickCount\s*:\s*0\)\)/,
+  "the opaque veil must complete one luminance pulse for every bridge tick",
+);
+assert.match(
+  shellSource,
+  /id:\s*neutralVeilSource[\s\S]*color:\s*Qt\.rgba\([\s\S]*neutralVeilSource\.pulse[\s\S]*1\.0\s*\)/,
+  "the bridge pulse must modulate the full-screen veil while keeping it opaque",
 );
 assert.doesNotMatch(
   shellSource,

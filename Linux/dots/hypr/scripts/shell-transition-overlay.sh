@@ -379,30 +379,42 @@ wahrwelt_shell_transition_begin() {
           }
           timeout "$command_timeout" qs ipc \
             -i "$wahrwelt_shell_transition_instance_id" \
-            call "$wahrwelt_shell_transition_target" start >/dev/null 2>&1 || {
-            wahrwelt_shell_transition_abort
-            return 1
-          }
-          command_timeout="$(
+            call "$wahrwelt_shell_transition_target" start >/dev/null 2>&1 || true
+          while command_timeout="$(
             wahrwelt_shell_transition_timeout_before \
               "$wahrwelt_shell_transition_cover_deadline_us" 75000
-          )" || {
-            wahrwelt_shell_transition_abort
-            return 1
-          }
-          status="$(
-            wahrwelt_shell_transition_status_with_timeout \
-              "$command_timeout" 2>/dev/null
-          )" || {
-            wahrwelt_shell_transition_abort
-            return 1
-          }
-          [ "$status" = outgoing ] || {
-            wahrwelt_shell_transition_abort
-            return 1
-          }
-          wahrwelt_shell_transition_active=1
-          return 0
+          )"; do
+            if status="$(
+              wahrwelt_shell_transition_status_with_timeout \
+                "$command_timeout" 2>/dev/null
+            )"; then
+              status_result=0
+            else
+              status_result=$?
+            fi
+            if [ "$status_result" -eq 2 ]; then
+              wahrwelt_shell_transition_abort
+              return 1
+            fi
+            if [ "$status_result" -eq 0 ]; then
+              case "$status" in
+                outgoing | covered)
+                  wahrwelt_shell_transition_active=1
+                  return 0
+                  ;;
+                captured)
+                  ;;
+                *)
+                  wahrwelt_shell_transition_abort
+                  return 1
+                  ;;
+              esac
+            fi
+            wahrwelt_shell_transition_sleep_before \
+              "$wahrwelt_shell_transition_cover_deadline_us" 50000 || break
+          done
+          wahrwelt_shell_transition_abort
+          return 1
           ;;
         capturing)
           ;;
@@ -593,7 +605,7 @@ wahrwelt_shell_transition_wait_covered() {
 }
 
 wahrwelt_shell_transition_wait_done() {
-  local status command_timeout
+  local status status_result command_timeout
 
   [ "$wahrwelt_shell_transition_active" -eq 1 ] || return 0
   if ! [[ "$wahrwelt_shell_transition_visible_deadline_us" =~ ^[0-9]+$ ]] ||
@@ -608,24 +620,31 @@ wahrwelt_shell_transition_wait_done() {
     wahrwelt_shell_transition_timeout_before \
       "$wahrwelt_shell_transition_cleanup_deadline_us" 75000
   )"; do
-    if ! status="$(
+    if status="$(
       wahrwelt_shell_transition_status_with_timeout "$command_timeout" 2>/dev/null
     )"; then
+      status_result=0
+    else
+      status_result=$?
+    fi
+    if [ "$status_result" -eq 2 ]; then
       wahrwelt_shell_transition_abort
       return 1
     fi
-    case "$status" in
-      done)
-        wahrwelt_shell_transition_complete
-        return 0
-        ;;
-      outgoing | covered | incoming | settling)
-        ;;
-      *)
-        wahrwelt_shell_transition_abort
-        return 1
-        ;;
-    esac
+    if [ "$status_result" -eq 0 ]; then
+      case "$status" in
+        done)
+          wahrwelt_shell_transition_complete
+          return 0
+          ;;
+        outgoing | covered | incoming | settling)
+          ;;
+        *)
+          wahrwelt_shell_transition_abort
+          return 1
+          ;;
+      esac
+    fi
     wahrwelt_shell_transition_sleep_before \
       "$wahrwelt_shell_transition_cleanup_deadline_us" 50000 || break
   done

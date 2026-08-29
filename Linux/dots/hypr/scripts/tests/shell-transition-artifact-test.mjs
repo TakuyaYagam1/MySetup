@@ -95,9 +95,14 @@ assert.match(shellSource,
 assert.match(shellSource,
   /id:\s*bridgeTicks[\s\S]*visible:\s*root\.transitionState === "covered"[\s\S]*bridgeTickCount/,
   "transition artifact must show the profile-specific graphical countdown below the logo");
-assert.doesNotMatch(shellSource,
-  /\bbridgePulseCount\b|\breadonly property real pulse\b|Math\.cos|\bText\s*\{/,
-  "transition artifact must not contain a full-screen pulse or countdown text");
+assert.match(shellSource,
+  /id:\s*neutralVeilSource[\s\S]*readonly property real pulse:\s*0\.5\s*-\s*0\.5\s*\*\s*Math\.cos\(root\.bridgeProgress\s*\*\s*Math\.PI\s*\*\s*2\.0\s*\*\s*\(controller\.transitionModel\s*\?\s*controller\.transitionModel\.bridgeTickCount\s*:\s*0\)\)/,
+  "transition artifact must pulse the opaque veil once for every bridge tick");
+assert.match(shellSource,
+  /id:\s*neutralVeilSource[\s\S]*color:\s*Qt\.rgba\([\s\S]*neutralVeilSource\.pulse[\s\S]*1\.0\s*\)/,
+  "transition artifact pulse must modulate the full-screen veil without reducing opacity");
+assert.doesNotMatch(shellSource, /\bText\s*\{/,
+  "transition artifact must keep the graphical countdown text-free");
 assert.match(shellSource, /easing\.type: Easing\.InOutCubic/,
   "shell cover and reveal must use a smooth eased curve");
 

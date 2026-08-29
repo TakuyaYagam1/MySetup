@@ -264,9 +264,20 @@ ShellRoot {
         id: neutralVeilSource
         anchors.fill: parent
 
+        readonly property real pulse: 0.5
+          - 0.5 * Math.cos(root.bridgeProgress * Math.PI * 2.0
+            * (controller.transitionModel
+              ? controller.transitionModel.bridgeTickCount
+              : 0))
+
         Rectangle {
           anchors.fill: parent
-          color: Qt.rgba(0.035, 0.043, 0.061, 1.0)
+          color: Qt.rgba(
+            0.035 + neutralVeilSource.pulse * 0.018,
+            0.043 + neutralVeilSource.pulse * 0.022,
+            0.061 + neutralVeilSource.pulse * 0.030,
+            1.0
+          )
         }
 
         Image {

@@ -80,6 +80,7 @@ assert_not_matches "$wahrwelt_end4_env_pattern" "WAHRWELT_END4_PROFILE=caelestia
 
 printf -v env_padding '%080000d' 0
 env_match_ready="$test_root/env-match-ready"
+env_match_program="$(readlink -e -- "$(command -v sleep)")"
 env -i \
   WAHRWELT_END4_PROFILE=end4-pc \
   "ZZZ_PADDING=$env_padding" \
@@ -89,11 +90,18 @@ env -i \
     exec "$1" 30
   ' _ "$(command -v sleep)" &
 env_match_pid=$!
+env_match_post_exec=0
+# The child publishes ready immediately before exec. Verify /proc/exe as well
+# so the environment reader never races the address-space replacement.
 for _ in $(seq 1 500); do
-  [ -e "$env_match_ready" ] && break
+  if [ -e "$env_match_ready" ] &&
+    [ "$(readlink -e -- "/proc/$env_match_pid/exe" 2>/dev/null || true)" = "$env_match_program" ]; then
+    env_match_post_exec=1
+    break
+  fi
   command sleep 0.01
 done
-if [ ! -e "$env_match_ready" ]; then
+if [ "$env_match_post_exec" -ne 1 ]; then
   printf 'FAIL: large environment fixture did not reach post-exec readiness\n' >&2
   exit 1
 fi
@@ -104,7 +112,7 @@ fi
 kill "$env_match_pid" 2>/dev/null || true
 wait "$env_match_pid" 2>/dev/null || true
 env_match_pid=""
-unset env_padding
+unset env_padding env_match_program env_match_post_exec
 
 legacy_entrypoint="$test_root/legacy-hyprland.lua"
 legacy_fixture_dir="$scripts_dir/../../../NixOS/home/migrations/v1_to_v2/hypr-runtime"
