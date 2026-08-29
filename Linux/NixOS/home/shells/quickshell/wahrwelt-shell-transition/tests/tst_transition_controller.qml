@@ -56,7 +56,7 @@ TestCase {
     controller.initialize(["DP-1"], "caelestia");
     controller.captureReady("DP-1");
     compare(controller.state, "captured");
-    compare(controller.captureWatchdogInterval, 1000);
+    compare(controller.captureWatchdogInterval, 5000);
     verify(controller.captureWatchdogRunning);
 
     verify(controller.beginTransition());
@@ -158,6 +158,29 @@ TestCase {
     verify(controller.coverFramePresented("HDMI-A-1"));
     compare(controller.state, "covered");
     compare(coveredSpy.count, 1);
+  }
+
+  function test_allScreensMustPresentTwoSettlingFramesBeforeDone() {
+    controller.initialize(["DP-1", "HDMI-A-1"], "caelestia");
+    controller.captureReady("DP-1");
+    controller.captureReady("HDMI-A-1");
+    verify(controller.beginTransition());
+    verify(controller.coverFramePresented("DP-1"));
+    verify(controller.coverFramePresented("DP-1"));
+    verify(controller.coverFramePresented("HDMI-A-1"));
+    verify(controller.coverFramePresented("HDMI-A-1"));
+    verify(controller.beginIncoming());
+    verify(controller.beginSettling());
+
+    verify(controller.settlingFramePresented("DP-1"));
+    verify(controller.settlingFramePresented("HDMI-A-1"));
+    verify(controller.settlingFramePresented("DP-1"));
+    compare(controller.state, "settling");
+    verify(controller.masterWatchdogRunning);
+
+    verify(controller.settlingFramePresented("HDMI-A-1"));
+    compare(controller.state, "done");
+    verify(!controller.masterWatchdogRunning);
   }
 
   function test_unknownCaptureScreenAbortsAndExits() {

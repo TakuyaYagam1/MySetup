@@ -17,6 +17,7 @@ wall_clock_file="$test_root/wall-clock"
 wall_jumps="$test_root/wall-jumps"
 start_marker="$test_root/start-marker"
 launch_profile_file="$test_root/launch-profile"
+list_failure_marker="$test_root/list-failure-marker"
 owned_id=ownednew01
 race_id=raceinst01
 status_mode=start-outgoing
@@ -26,6 +27,7 @@ launch_mode=success
 list_mode=normal
 launch_advance_us=0
 layers_mode=ready
+timeout_latency_us=0
 
 : >"$operations"
 : >"$instances"
@@ -84,6 +86,7 @@ reset_fixture() {
   : >"$instances"
   : >"$start_marker"
   : >"$launch_profile_file"
+  rm -f -- "$list_failure_marker"
   : >"$status_injection_file"
   unset WAHRWELT_SHELL_TRANSITION_TARGET_PROFILE
   printf '%s\n' running >"$unrelated_state"
@@ -98,6 +101,7 @@ reset_fixture() {
   list_mode=normal
   launch_advance_us=0
   layers_mode=ready
+  timeout_latency_us=0
   write_uptime
 }
 
@@ -143,6 +147,7 @@ list_instances_json() {
 
 timeout() {
   local duration="$1"
+  local duration_us
   shift
 
   {
@@ -150,6 +155,14 @@ timeout() {
     printf '\t%s' "$@"
     printf '\n'
   } >>"$operations"
+  if [ "${1:-}" = qs ] && [ "$timeout_latency_us" -gt 0 ]; then
+    duration_us="$(awk -v seconds="${duration%s}" 'BEGIN { printf "%.0f", seconds * 1000000 }')"
+    if [ "$duration_us" -lt "$timeout_latency_us" ]; then
+      advance_clock_us "$duration_us"
+      return 124
+    fi
+    advance_clock_us "$timeout_latency_us"
+  fi
   if [ "${1:-}" = qs ] && [[ " $* " == *' -d '* ]] && [ "$launch_advance_us" -gt 0 ]; then
     advance_clock_us "$launch_advance_us"
   fi
@@ -365,6 +378,13 @@ qs() {
         normal) list_instances_json ;;
         malformed) printf '%s\n' '{not-json' ;;
         failure) return 1 ;;
+        transient-empty)
+          if [ ! -e "$list_failure_marker" ]; then
+            : >"$list_failure_marker"
+            return 1
+          fi
+          list_instances_json
+          ;;
         fail-after-launch)
           [ -s "$instances" ] && return 1
           list_instances_json
@@ -502,6 +522,29 @@ for invalid_profile in '' end4-pC unknown 'end4/pc'; do
     fail "invalid destination profile ${invalid_profile:-empty} launched or cleaned an overlay"
   fi
 done
+
+reset_fixture
+timeout_latency_us=120000
+status_mode=start-outgoing
+if ! wahrwelt_shell_transition_begin caelestia; then
+  fail '120ms QuickShell control latency disabled an otherwise healthy transition'
+else
+  assert_eq 1 "$wahrwelt_shell_transition_active" \
+    '120ms QuickShell control latency did not activate the transition'
+  assert_eq "$owned_id" "$wahrwelt_shell_transition_instance_id" \
+    '120ms QuickShell control latency lost exact instance ownership'
+  wahrwelt_shell_transition_abort
+fi
+
+reset_fixture
+list_mode=transient-empty
+if ! wahrwelt_shell_transition_begin noctalia; then
+  fail 'one transient pre-launch list failure disabled a healthy transition'
+else
+  [ "$(grep -Fxc $'qs\t-c\twahrwelt-shell-transition\tlist\t-j' "$operations" || true)" -ge 4 ] ||
+    fail 'transient empty reconciliation did not require two trustworthy empty observations'
+  wahrwelt_shell_transition_abort
+fi
 
 for valid_id in a1b2c3d a1b2c3d4e5f6g7h8; do
   reset_fixture
@@ -771,7 +814,7 @@ while read -r post_start_mode description; do
   fi
   assert_eq 0 "$wahrwelt_shell_transition_active" \
     "$description retained an active transition"
-  assert_eq 1000000 "$(cat "$clock_file")" \
+  assert_eq "$(cat "$start_marker")" "$(cat "$clock_file")" \
     "$description was retried instead of rejected immediately"
   [ ! -s "$instances" ] || fail "$description retained the owned instance"
 done <<'EOF'

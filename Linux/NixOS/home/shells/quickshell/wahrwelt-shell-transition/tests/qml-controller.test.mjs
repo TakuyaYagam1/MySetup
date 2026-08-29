@@ -124,6 +124,31 @@ assert.match(
 );
 assert.match(
   shellSource,
+  /property int settleFrameSerial:\s*0/,
+  "each output must own a rendered settling-frame serial",
+);
+assert.match(
+  shellSource,
+  /property int settlingFramesPresented:\s*0/,
+  "each output must cap its own settling fence at two confirmed swaps",
+);
+assert.match(
+  shellSource,
+  /id:\s*neutralVeilEffect[\s\S]*centerX:\s*0\.5\s*\+\s*\(window\.settleFrameSerial\s*%\s*2\)\s*\*\s*0\.000001/,
+  "settling must dirty a uniform on the rendered veil without changing visible output",
+);
+assert.match(
+  shellSource,
+  /function requestSettlingFrame\(\)[\s\S]*settleFrameSerial\s*\+=\s*1[\s\S]*neutralVeilEffect\.Window\.window\.update\(\)/,
+  "each settling request must dirty the rendered veil before requesting a frame",
+);
+assert.match(
+  shellSource,
+  /root\.settleFenceArmed[\s\S]*const accepted = controller\.settlingFramePresented\(window\.modelData\.name\)[\s\S]*accepted[\s\S]*settlingFramesPresented\s*\+=\s*1[\s\S]*root\.transitionState === "settling"\s*&&\s*window\.settlingFramesPresented < 2[\s\S]*window\.requestSettlingFrame\(\)/,
+  "the settling fence must request newly dirtied frames only until two swaps are confirmed per output",
+);
+assert.match(
+  shellSource,
   /id:\s*doneExitTimer[\s\S]*interval:\s*2000[\s\S]*onTriggered:\s*Qt\.quit\(\)/,
   "done must remain observable for exact shell-side completion before bounded self-cleanup",
 );

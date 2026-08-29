@@ -251,10 +251,26 @@ func TestHomeManagerRuntimeActivationRejectsPostValidationWriter(t *testing.T) {
 		legacyPaths[1],
 	)
 	unknownContent := "-- post-lease separate-process writer\n"
+	writerReadyR, writerReadyW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = writerReadyR.Close()
+		_ = writerReadyW.Close()
+	})
 	writer := exec.Command("python3", "-I", "-S", "-c", `
 import os
 import sys
-fd = os.open(sys.argv[1], os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)
+flags = os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW
+try:
+    probe = os.open(sys.argv[1], flags | os.O_NONBLOCK)
+except BlockingIOError:
+    os.write(3, b"ready\n")
+else:
+    os.close(probe)
+    raise RuntimeError("runtime lease did not reject a conflicting nonblocking open")
+fd = os.open(sys.argv[1], flags)
 try:
     os.write(fd, sys.argv[2].encode())
     os.fchmod(fd, 0o600)
@@ -262,15 +278,34 @@ try:
 finally:
     os.close(fd)
 `, target, unknownContent)
+	writer.ExtraFiles = []*os.File{writerReadyW}
 	writerDone := make(chan error, 1)
 	if err := writer.Start(); err != nil {
 		t.Fatal(err)
 	}
+	_ = writerReadyW.Close()
 	go func() { writerDone <- writer.Wait() }()
+	writerReady := make(chan error, 1)
+	go func() {
+		defer writerReadyR.Close()
+		marker := make([]byte, len("ready\n"))
+		_, err := io.ReadFull(writerReadyR, marker)
+		if err == nil && string(marker) != "ready\n" {
+			err = fmt.Errorf("unexpected writer marker %q", marker)
+		}
+		writerReady <- err
+	}()
 	select {
+	case err := <-writerReady:
+		if err != nil {
+			t.Fatalf("writer did not observe the runtime lease: %v", err)
+		}
 	case err := <-writerDone:
-		t.Fatalf("writer was not blocked by the runtime lease: %v", err)
-	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("writer exited before observing the runtime lease: %v", err)
+	case <-time.After(5 * time.Second):
+		_ = writer.Process.Kill()
+		<-writerDone
+		t.Fatal("writer did not reach the runtime lease")
 	}
 	output := process.releaseExpectFailure(t)
 	if !strings.Contains(output, "ownership collision") {

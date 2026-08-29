@@ -1573,7 +1573,7 @@ set -euo pipefail
 [ "${HYPRLAND_INSTANCE_SIGNATURE:-}" = "$EXPECTED_SIGNATURE" ]
 actual_python="$(command -v python3 || true)"
 [ "$actual_python" = "$EXPECTED_BOOTSTRAP_PYTHON" ] || {
-  printf 'bootstrap python mismatch: got=%s want=%s\n' "$actual_python" "$EXPECTED_BOOTSTRAP_PYTHON" >&2
+  printf 'bootstrap python mismatch: got=%s want=%s path=%s\n' "$actual_python" "$EXPECTED_BOOTSTRAP_PYTHON" "$PATH" >&2
   exit 70
 }
 [ "${WAHRWELT_FS_HELPER:-}" = "$EXPECTED_FS_HELPER" ] || {
@@ -1614,10 +1614,15 @@ printf '%s\n' session-ready >>"$LIVE_COMMAND_LOG"
 		"EXPECTED_BOOTSTRAP_PYTHON=" + pythonPath,
 		"EXPECTED_FS_HELPER=" + fsHelperPath,
 	}
-	if output, err := cmd.CombinedOutput(); err != nil {
+	output, err := cmd.CombinedOutput()
+	if err != nil {
 		t.Fatalf("normal Home Manager live sync did not build its exact session environment: %v\n%s", err, output)
 	}
-	if got := strings.TrimSpace(readContractFile(t, commandLog)); got != "session-ready" {
+	commandLogContents, err := os.ReadFile(commandLog)
+	if err != nil {
+		t.Fatalf("normal Home Manager live sync did not write its command log: %v\n%s", err, output)
+	}
+	if got := strings.TrimSpace(string(commandLogContents)); got != "session-ready" {
 		t.Fatalf("normal Home Manager live sync did not launch the shell in the selected session: %q", got)
 	}
 }
@@ -2165,6 +2170,13 @@ func renderHomeManagerShellActivationWithBootstrapForTest(
 ) string {
 	t.Helper()
 	modulePath := absoluteTestPath(t, "../../../NixOS/home/shells/default.nix")
+	bashPackage := isolatedCommandPackageForTest(t, "bash")
+	coreutilsPackage := isolatedCommandPackageForTest(t, "env")
+	dbusPackage := isolatedCommandPackageForTest(t, "dbus-update-activation-environment")
+	diffutilsPackage := isolatedCommandPackageForTest(t, "cmp")
+	gawkPackage := isolatedCommandPackageForTest(t, "awk")
+	jqPackage := isolatedCommandPackageForTest(t, "jq")
+	utilLinuxPackage := isolatedCommandPackageForTest(t, "setsid")
 	helperRoot := t.TempDir()
 	bin := filepath.Join(helperRoot, "bin")
 	if err := os.MkdirAll(bin, 0o700); err != nil {
@@ -2215,16 +2227,16 @@ let
 in module.home.activation.seedHyprShellRuntime + "\n" + module.home.activation.liveSyncHyprShell
 	`, configHome, stateHome, dots,
 		fsHelperPackage,
-		resolvedCommandPackageRoot(t, "bash"),
-		resolvedCommandPackageRoot(t, "mkdir"),
-		resolvedCommandPackageRoot(t, "dbus-update-activation-environment"),
-		resolvedCommandPackageRoot(t, "cmp"),
-		resolvedCommandPackageRoot(t, "awk"),
-		resolvedCommandPackageRoot(t, "jq"),
+		bashPackage,
+		coreutilsPackage,
+		dbusPackage,
+		diffutilsPackage,
+		gawkPackage,
+		jqPackage,
 		hyprlandPackage,
 		pythonPackage,
 		systemdPackage,
-		resolvedCommandPackageRoot(t, "setsid"),
+		utilLinuxPackage,
 		helperRoot, modulePath)
 	rendered, err := exec.Command("nix", "eval", "--impure", "--raw", "--expr", expression).CombinedOutput()
 	if err != nil {
@@ -2571,6 +2583,29 @@ func resolvedCommandPackageRoot(t *testing.T, name string) string {
 		t.Fatalf("resolve %s package: %v", name, err)
 	}
 	return filepath.Dir(filepath.Dir(path))
+}
+
+func isolatedCommandPackageForTest(t *testing.T, names ...string) string {
+	t.Helper()
+	root := t.TempDir()
+	bin := filepath.Join(root, "bin")
+	if err := os.Mkdir(bin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range names {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			t.Fatalf("locate %s: %v", name, err)
+		}
+		path, err = filepath.Abs(path)
+		if err != nil {
+			t.Fatalf("resolve %s path: %v", name, err)
+		}
+		if err := os.Symlink(path, filepath.Join(bin, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
 }
 
 func renderHomeManagerRuntimeTransitionForTest(home, configHome, stateHome, cacheHome, helperRoot string) string {

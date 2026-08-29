@@ -212,6 +212,15 @@ ShellRoot {
 
       required property ShellScreen modelData
       property bool deliveredFrame: false
+      property int settleFrameSerial: 0
+      property int settlingFramesPresented: 0
+
+      function requestSettlingFrame() {
+        window.settleFrameSerial += 1;
+        if (neutralVeilEffect.Window.window) {
+          neutralVeilEffect.Window.window.update();
+        }
+      }
 
       screen: modelData
       visible: root.surfaceVisible
@@ -336,6 +345,7 @@ ShellRoot {
       }
 
       ShaderEffect {
+        id: neutralVeilEffect
         anchors.fill: parent
         visible: root.frameVisible
 
@@ -347,6 +357,7 @@ ShellRoot {
         property real cellSize: 0.04
         property real aspectRatio: width / Math.max(height, 1)
         property real centerX: 0.5
+          + (window.settleFrameSerial % 2) * 0.000001
         property real centerY: 0.5
 
         fragmentShader: Qt.resolvedUrl("shaders/honeycomb.frag.qsb")
@@ -384,10 +395,14 @@ ShellRoot {
               frameProbe.Window.window.update();
             }
           } else if (root.settleFenceArmed && root.transitionState === "settling") {
-            controller.settlingFramePresented(window.modelData.name);
-            if (root.transitionState === "settling") {
-              frameProbe.Window.window.update();
-            } else {
+            const accepted = controller.settlingFramePresented(window.modelData.name);
+            if (accepted) {
+              window.settlingFramesPresented += 1;
+            }
+            if (root.transitionState === "settling"
+                && window.settlingFramesPresented < 2) {
+              window.requestSettlingFrame();
+            } else if (root.transitionState !== "settling") {
               root.settleFenceArmed = false;
             }
           }
@@ -404,8 +419,8 @@ ShellRoot {
         }
 
         function onSettleFenceArmedChanged() {
-          if (root.settleFenceArmed && frameProbe.Window.window) {
-            frameProbe.Window.window.update();
+          if (root.settleFenceArmed) {
+            window.requestSettlingFrame();
           }
         }
       }

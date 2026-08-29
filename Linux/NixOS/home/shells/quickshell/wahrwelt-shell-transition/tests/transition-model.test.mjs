@@ -209,7 +209,8 @@ assert.equal(
   const model = transitionModel.create(["DP-1"], "caelestia");
   transitionModel.capture(model, "DP-1");
   assert.equal(transitionModel.status(model), "captured");
-  assert.equal(transitionModel.watchdogTimeoutMs(model), 1000);
+  assert.equal(transitionModel.watchdogTimeoutMs(model), 5000,
+    "captured must remain startable for the shell-side five-second capture deadline");
   assert.equal(transitionModel.expireWatchdog(model), true);
   assert.equal(transitionModel.status(model), "aborted");
 }
