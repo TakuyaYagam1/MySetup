@@ -37,7 +37,7 @@ let
     enable = true;
     package = noctaliaV5Package;
     systemd.enable = false;
-    validateConfig = true;
+    checkConfig = true;
     settings = {
       shell = {
         setup_wizard_enabled = false;

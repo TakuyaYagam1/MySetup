@@ -103,7 +103,6 @@ let
     };
     kimi-code = {
       url = "github:MoonshotAI/kimi-code";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 

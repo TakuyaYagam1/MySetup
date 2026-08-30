@@ -79,6 +79,7 @@ let
     else
       assert builtins.hasAttr "noctalia" programs;
       assert programs.noctalia.enable;
+      assert programs.noctalia.checkConfig;
       assert !builtins.hasAttr "noctalia-shell" programs;
       {
         inherit activation;

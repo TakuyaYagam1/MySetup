@@ -65,7 +65,6 @@
     };
     kimi-code = {
       url = "github:MoonshotAI/kimi-code";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
     happ-nix = {
       url = "github:DaHL-gh/happ-nix";
