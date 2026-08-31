@@ -7,9 +7,9 @@
 
 Personal system configuration for Linux (NixOS + Hyprland) and Windows (Komorebi + YASB).
 
-[![NixOS Rice & Dev Environment](assets/preview.png)](https://youtu.be/fgmueUOnfhk)
+[![NixOS Rice & Dev Environment](assets/preview.png)](https://youtu.be/pA6Xnz_d-KU)
 
-*[8-minute video tour](https://youtu.be/fgmueUOnfhk) - click the image above*
+*[8-minute video tour](https://youtu.be/pA6Xnz_d-KU) - click the image above*
 
 ---
 
@@ -49,9 +49,13 @@ square instead of a circle.
 
 ## Screenshots
 
-| caelestia-shell | noctalia v5 | noctalia v4 | End4 Official (Illogical Impulse) |
-| :---: | :---: | :---: | :---: |
-| ![caelestia-shell](assets/caelestia-shell.png) | ![noctalia v5](assets/noctalia-v5.png) | ![noctalia v4](assets/noctalia-v4.png) | ![end-4](assets/end-4.png) |
+| Caelestia | Noctalia v5 | Noctalia v4 |
+| :---: | :---: | :---: |
+| ![Caelestia](assets/caelestia.png) | ![Noctalia v5](assets/noctalia-v5.png) | ![Noctalia v4](assets/noctalia-v4.png) |
+
+| End4 Official (Illogical Impulse) | End4 pC |
+| :---: | :---: |
+| ![End4 Official](assets/end-4.png) | ![End4 pC](assets/end-4-pC.png) |
 
 | Zen Browser (Catppuccin chrome) | Zen + Sine mods | Neovim (LazyVim) |
 | :---: | :---: | :---: |
