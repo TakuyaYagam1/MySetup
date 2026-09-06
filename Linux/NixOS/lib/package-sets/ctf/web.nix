@@ -3,7 +3,7 @@
 with pkgs-stable;
 [
   arjun
-  (pkgs-stable.callPackage ../../../pkgs/burpsuitepro.nix { })
+  burpsuite
   cadaver
   cariddi
   commix
